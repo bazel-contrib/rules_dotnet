@@ -22,7 +22,7 @@ You can add this flag to your `.bazelrc` file to make it the default.
 
 ### Debug/Release configurations
 These rules follow the Bazel idiomatic way of handling compilation modes by reading the `--compilation_mode` flag.
-If the flag is set to either `dbg` or `fastbuild` the rules will compile with relase optimizations disabled.
+If the flag is set to either `dbg` or `fastbuild` the rules will compile with release optimizations disabled.
 If the flag is set to `opt` the rules will compile with the release optimizations enabled.
 
 By default Bazel sets the compilation mode to `fastbuild`.
