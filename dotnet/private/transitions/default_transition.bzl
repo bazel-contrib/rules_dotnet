@@ -16,18 +16,11 @@ load(
     "FRAMEWORK_COMPATIBILITY",
 )
 load("//dotnet/private/sdk:rids.bzl", "RUNTIME_GRAPH")
-load("//dotnet/private/transitions:common.bzl", "FRAMEWORK_COMPATABILITY_TRANSITION_OUTPUTS", "RID_COMPATABILITY_TRANSITION_OUTPUTS")
 
-def _impl(settings, _attr):
-    incoming_tfm = settings["//dotnet:target_framework"]
-
-    if incoming_tfm not in FRAMEWORK_COMPATABILITY_TRANSITION_OUTPUTS:
-        fail("Error setting dotnet:target_framework: invalid value '" + incoming_tfm + "'. Allowed values are " + str(FRAMEWORK_COMPATIBILITY.keys()))
-
-    transitioned_tfm = DEFAULT_TFM
-    runtime_identifier = DEFAULT_RID
-
-    return dicts.add({"//dotnet:target_framework": transitioned_tfm}, {"//dotnet:rid": runtime_identifier}, FRAMEWORK_COMPATABILITY_TRANSITION_OUTPUTS[transitioned_tfm], RID_COMPATABILITY_TRANSITION_OUTPUTS[runtime_identifier])
+def _impl(_settings, _attr):
+    default_framework_compatibility = {"//dotnet:framework_compatible_{}".format(framework): False for framework in FRAMEWORK_COMPATIBILITY.keys()}
+    default_rid_compatibility = {"//dotnet:rid_compatible_{}".format(rid): False for rid in RUNTIME_GRAPH.keys()}
+    return dicts.add({"//dotnet:target_framework": DEFAULT_TFM}, {"//dotnet:rid": DEFAULT_RID}, default_framework_compatibility, default_rid_compatibility)
 
 default_transition = transition(
     implementation = _impl,
