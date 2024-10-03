@@ -1,0 +1,20 @@
+load("@rules_dotnet//dotnet:defs.bzl", "csharp_library")
+
+csharp_library(
+    name = "generator",
+    srcs = [
+        "Generator.cs",
+    ],
+    analyzer_configs = [
+        ".analyzerconfig",
+    ],
+    is_analyzer = True,
+    is_language_specific_analyzer = True,
+    target_frameworks = ["netstandard2.0"],
+    visibility = ["//source_generators:__subpackages__"],
+    deps = [
+        "@paket.example_deps//microsoft.codeanalysis.analyzers",
+        "@paket.example_deps//microsoft.codeanalysis.common",
+        "@paket.example_deps//microsoft.codeanalysis.csharp",
+    ],
+)

@@ -86,6 +86,9 @@ def AssemblyAction(
         allow_unsafe_blocks,
         nullable,
         run_analyzers,
+        is_analyzer,
+        is_language_specific_analyzer,
+        analyzer_configs,
         compiler_options,
         is_windows):
     """Creates an action that runs the CSharp compiler with the specified inputs.
@@ -126,6 +129,9 @@ def AssemblyAction(
         allow_unsafe_blocks: Compiles the target with /unsafe
         nullable: Enable nullable context, or nullable warnings.
         run_analyzers: Enable analyzers.
+        is_analyzer: Whether or not the target is an analyzer.
+        is_language_specific_analyzer: Whether or not the target is a language specific analyzer.
+        analyzer_configs: List of analyzer configuration files.
         compiler_options: Additional options to pass to the compiler.
         is_windows: Whether or not the target is running on Windows.
     Returns:
@@ -138,6 +144,9 @@ def AssemblyAction(
         irefs,
         prefs,
         analyzers,
+        analyzers_csharp,
+        analyzers_fsharp,
+        analyzers_vb,
         transitive_compile_data,
         framework_files,
         exports_files,
@@ -163,12 +172,14 @@ def AssemblyAction(
     # Appsettings
     out_appsettings = copy_files_to_dir(target_name, actions, is_windows, appsetting_files, out_dir)
 
-    if len(internals_visible_to) == 0:
+    if len(internals_visible_to) == 0 or is_analyzer:
         _compile(
             actions,
             compiler_wrapper,
             additionalfiles,
             analyzers,
+            analyzers_csharp,
+            analyzer_configs,
             debug,
             default_lang_version,
             defines,
@@ -216,6 +227,8 @@ def AssemblyAction(
             compiler_wrapper,
             additionalfiles,
             analyzers,
+            analyzers_csharp,
+            analyzer_configs,
             debug,
             default_lang_version,
             defines,
@@ -252,6 +265,8 @@ def AssemblyAction(
             compiler_wrapper,
             additionalfiles,
             analyzers,
+            analyzers_csharp,
+            analyzer_configs,
             debug,
             default_lang_version,
             defines,
@@ -286,19 +301,25 @@ def AssemblyAction(
         name = assembly_name,
         version = "1.0.0",  #TODO: Maybe make this configurable?
         project_sdk = project_sdk,
-        refs = [out_ref],
+        refs = [out_ref] if not is_analyzer else [],
         irefs = [out_iref] if out_iref else [out_ref],
-        analyzers = [],
+        analyzers = [] if (not is_analyzer) or is_language_specific_analyzer else [out_dll],
+        analyzers_csharp = [out_dll] if is_language_specific_analyzer else [],
+        analyzers_fsharp = [],
+        analyzers_vb = [],
         internals_visible_to = internals_visible_to or [],
         compile_data = compile_data,
         exports = exports_files,
         transitive_refs = prefs,
         transitive_analyzers = analyzers,
+        transitive_analyzers_csharp = analyzers_csharp,
+        transitive_analyzers_fsharp = analyzers_fsharp,
+        transitive_analyzers_vb = analyzers_vb,
         transitive_compile_data = transitive_compile_data,
     ), DotnetAssemblyRuntimeInfo(
         name = assembly_name,
         version = "1.0.0",  #TODO: Maybe make this configurable?
-        libs = [out_dll],
+        libs = [out_dll] if not is_analyzer else [],
         pdbs = [out_pdb] if out_pdb else [],
         xml_docs = [out_xml] if out_xml else [],
         data = data,
@@ -314,6 +335,8 @@ def _compile(
         compiler_wrapper,
         additionalfiles,
         analyzer_assemblies,
+        analyzer_assemblies_csharp,
+        analyzer_configs,
         debug,
         default_lang_version,
         defines,
@@ -421,7 +444,9 @@ def _compile(
     # analyzers
     if run_analyzers:
         args.add_all(analyzer_assemblies, format_each = "/analyzer:%s")
+        args.add_all(analyzer_assemblies_csharp, format_each = "/analyzer:%s")
         args.add_all(additionalfiles, format_each = "/additionalfile:%s")
+        args.add_all(analyzer_configs, format_each = "/analyzerconfig:%s")
 
     # .cs files
     args.add_all(srcs)
@@ -446,7 +471,7 @@ def _compile(
 
     args.use_param_file("@%s", use_always = True)
 
-    direct_inputs = srcs + resources + additionalfiles + [toolchain.csharp_compiler.files_to_run.executable]
+    direct_inputs = srcs + resources + additionalfiles + analyzer_configs + [toolchain.csharp_compiler.files_to_run.executable]
     direct_inputs += [keyfile] if keyfile else []
 
     # dotnet.exe csc.dll /noconfig <other csc args>
@@ -456,7 +481,7 @@ def _compile(
         progress_message = "Compiling " + target_name + (" (internals ref-only dll)" if out_dll == None else ""),
         inputs = depset(
             direct = direct_inputs + framework_files + [compiler_wrapper, toolchain.runtime.files_to_run.executable],
-            transitive = [refs, analyzer_assemblies, toolchain.runtime.default_runfiles.files, toolchain.csharp_compiler.default_runfiles.files, compile_data],
+            transitive = [refs, analyzer_assemblies, analyzer_assemblies_csharp, toolchain.runtime.default_runfiles.files, toolchain.csharp_compiler.default_runfiles.files, compile_data],
         ),
         outputs = outputs,
         executable = compiler_wrapper,

@@ -1,0 +1,12 @@
+load("@rules_dotnet//dotnet:defs.bzl", "csharp_binary")
+
+csharp_binary(
+    name = "generator_usage",
+    srcs = [
+        "Main.cs",
+    ],
+    target_frameworks = ["net6.0"],
+    deps = [
+        "//source_generators/generator",
+    ],
+)

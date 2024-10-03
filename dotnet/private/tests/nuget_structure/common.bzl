@@ -49,6 +49,27 @@ def _nuget_structure_test_impl(ctx):
         "\nExpected analyzers:\n{}\nActual analyzers:\n{}".format(ctx.attr.expected_analyzers, analyzers_files),
     )
 
+    analyzers_csharp_files = _get_nuget_relative_paths(compile_provider.analyzers_csharp)
+    asserts.true(
+        env,
+        sorted(ctx.attr.expected_analyzers_csharp) == sorted(analyzers_csharp_files),
+        "\nExpected analyzers_csharp:\n{}\nActual analyzers_csharp:\n{}".format(ctx.attr.expected_analyzers_csharp, analyzers_csharp_files),
+    )
+
+    analyzers_fsharp_files = _get_nuget_relative_paths(compile_provider.analyzers_fsharp)
+    asserts.true(
+        env,
+        sorted(ctx.attr.expected_analyzers_fsharp) == sorted(analyzers_fsharp_files),
+        "\nExpected analyzers_fsharp:\n{}\nActual analyzers_fsharp:\n{}".format(ctx.attr.expected_analyzers_fsharp, analyzers_fsharp_files),
+    )
+
+    analyzers_vb_files = _get_nuget_relative_paths(compile_provider.analyzers_vb)
+    asserts.true(
+        env,
+        sorted(ctx.attr.expected_analyzers_vb) == sorted(analyzers_vb_files),
+        "\nExpected analyzers_vb:\n{}\nActual analyzers_vb:\n{}".format(ctx.attr.expected_analyzers_vb, analyzers_vb_files),
+    )
+
     data_files = _get_nuget_relative_paths(runtime_provider.data)
     asserts.true(
         env,
@@ -71,6 +92,9 @@ nuget_structure_test = analysistest.make(
         "expected_libs": attr.string_list(default = []),
         "expected_refs": attr.string_list(default = []),
         "expected_analyzers": attr.string_list(default = []),
+        "expected_analyzers_csharp": attr.string_list(default = []),
+        "expected_analyzers_fsharp": attr.string_list(default = []),
+        "expected_analyzers_vb": attr.string_list(default = []),
         "expected_data": attr.string_list(default = []),
         "expected_native": attr.string_list(default = []),
     },

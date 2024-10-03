@@ -249,7 +249,13 @@ def collect_compile_info(name, deps, targeting_pack, exports, strict_deps):
     direct_compile_data = []
     transitive_compile_data = []
     direct_analyzers = []
+    direct_analyzers_csharp = []
+    direct_analyzers_fsharp = []
+    direct_analyzers_vb = []
     transitive_analyzers = []
+    transitive_analyzers_csharp = []
+    transitive_analyzers_fsharp = []
+    transitive_analyzers_vb = []
 
     exports_files = []
 
@@ -272,6 +278,9 @@ def collect_compile_info(name, deps, targeting_pack, exports, strict_deps):
                 framework_files.extend(compile_info.irefs)
 
             direct_analyzers.extend(compile_info.analyzers)
+            direct_analyzers_csharp.extend(compile_info.analyzers_csharp)
+            direct_analyzers_fsharp.extend(compile_info.analyzers_fsharp)
+            direct_analyzers_vb.extend(compile_info.analyzers_vb)
             direct_compile_data.extend(compile_info.compile_data)
 
     for dep in deps:
@@ -295,6 +304,9 @@ def collect_compile_info(name, deps, targeting_pack, exports, strict_deps):
             direct_iref.extend(assembly.irefs if name in assembly.internals_visible_to else assembly.refs)
             direct_ref.extend(assembly.refs)
             direct_analyzers.extend(assembly.analyzers)
+            direct_analyzers_csharp.extend(assembly.analyzers_csharp)
+            direct_analyzers_fsharp.extend(assembly.analyzers_fsharp)
+            direct_analyzers_vb.extend(assembly.analyzers_vb)
             direct_compile_data.extend(assembly.compile_data)
 
         # We take all the exports of each dependency and add them
@@ -313,6 +325,9 @@ def collect_compile_info(name, deps, targeting_pack, exports, strict_deps):
                 if add_to_output:
                     transitive_ref.append(transitive_assembly)
             transitive_analyzers.append(assembly.transitive_analyzers)
+            transitive_analyzers_csharp.append(assembly.transitive_analyzers_csharp)
+            transitive_analyzers_fsharp.append(assembly.transitive_analyzers_fsharp)
+            transitive_analyzers_vb.append(assembly.transitive_analyzers_vb)
             transitive_compile_data.append(assembly.transitive_compile_data)
 
     for file in framework_list.values():
@@ -327,6 +342,9 @@ def collect_compile_info(name, deps, targeting_pack, exports, strict_deps):
         depset(direct = direct_iref, transitive = [depset(transitive_ref)]),
         depset(direct = direct_ref, transitive = [depset(transitive_ref)]),
         depset(direct = direct_analyzers, transitive = transitive_analyzers),
+        depset(direct = direct_analyzers_csharp, transitive = transitive_analyzers_csharp),
+        depset(direct = direct_analyzers_fsharp, transitive = transitive_analyzers_fsharp),
+        depset(direct = direct_analyzers_vb, transitive = transitive_analyzers_vb),
         depset(direct = direct_compile_data, transitive = transitive_compile_data),
         framework_files,
         exports_files,

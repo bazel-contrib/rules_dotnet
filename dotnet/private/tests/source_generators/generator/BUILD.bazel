@@ -1,0 +1,23 @@
+load("@rules_dotnet//dotnet:defs.bzl", "csharp_library")
+
+csharp_library(
+    name = "generator",
+    srcs = [
+        "Generator.cs",
+    ],
+    analyzer_configs = [
+        ".analyzerconfig",
+    ],
+    is_analyzer = True,
+    is_language_specific_analyzer = True,
+    target_frameworks = ["netstandard2.0"],
+    visibility = ["//dotnet/private/tests/source_generators:__subpackages__"],
+    # Treat this warning as an error so that we know that the analyzer config is working
+    # The error is: A project containing analyzers or source generators should specify the property '<EnforceExtendedAnalyzerRules>true</EnforceExtendedAnalyzerRules>'
+    warnings_as_errors = ["RS1036"],
+    deps = [
+        "@paket.rules_dotnet_dev_nuget_packages//microsoft.codeanalysis.analyzers",
+        "@paket.rules_dotnet_dev_nuget_packages//microsoft.codeanalysis.common",
+        "@paket.rules_dotnet_dev_nuget_packages//microsoft.codeanalysis.csharp",
+    ],
+)

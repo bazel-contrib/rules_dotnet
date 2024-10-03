@@ -8,11 +8,11 @@ Rule for compiling C# binaries.
 
 <pre>
 csharp_binary(<a href="#csharp_binary-name">name</a>, <a href="#csharp_binary-deps">deps</a>, <a href="#csharp_binary-srcs">srcs</a>, <a href="#csharp_binary-data">data</a>, <a href="#csharp_binary-resources">resources</a>, <a href="#csharp_binary-out">out</a>, <a href="#csharp_binary-additionalfiles">additionalfiles</a>, <a href="#csharp_binary-allow_unsafe_blocks">allow_unsafe_blocks</a>,
-              <a href="#csharp_binary-appsetting_files">appsetting_files</a>, <a href="#csharp_binary-compile_data">compile_data</a>, <a href="#csharp_binary-compiler_options">compiler_options</a>, <a href="#csharp_binary-defines">defines</a>, <a href="#csharp_binary-generate_documentation_file">generate_documentation_file</a>,
-              <a href="#csharp_binary-include_host_model_dll">include_host_model_dll</a>, <a href="#csharp_binary-internals_visible_to">internals_visible_to</a>, <a href="#csharp_binary-keyfile">keyfile</a>, <a href="#csharp_binary-langversion">langversion</a>, <a href="#csharp_binary-nowarn">nowarn</a>, <a href="#csharp_binary-nullable">nullable</a>,
-              <a href="#csharp_binary-project_sdk">project_sdk</a>, <a href="#csharp_binary-roll_forward_behavior">roll_forward_behavior</a>, <a href="#csharp_binary-run_analyzers">run_analyzers</a>, <a href="#csharp_binary-target_frameworks">target_frameworks</a>,
-              <a href="#csharp_binary-treat_warnings_as_errors">treat_warnings_as_errors</a>, <a href="#csharp_binary-warning_level">warning_level</a>, <a href="#csharp_binary-warnings_as_errors">warnings_as_errors</a>, <a href="#csharp_binary-warnings_not_as_errors">warnings_not_as_errors</a>,
-              <a href="#csharp_binary-winexe">winexe</a>)
+              <a href="#csharp_binary-analyzer_configs">analyzer_configs</a>, <a href="#csharp_binary-appsetting_files">appsetting_files</a>, <a href="#csharp_binary-compile_data">compile_data</a>, <a href="#csharp_binary-compiler_options">compiler_options</a>, <a href="#csharp_binary-defines">defines</a>,
+              <a href="#csharp_binary-generate_documentation_file">generate_documentation_file</a>, <a href="#csharp_binary-include_host_model_dll">include_host_model_dll</a>, <a href="#csharp_binary-internals_visible_to">internals_visible_to</a>, <a href="#csharp_binary-keyfile">keyfile</a>,
+              <a href="#csharp_binary-langversion">langversion</a>, <a href="#csharp_binary-nowarn">nowarn</a>, <a href="#csharp_binary-nullable">nullable</a>, <a href="#csharp_binary-project_sdk">project_sdk</a>, <a href="#csharp_binary-roll_forward_behavior">roll_forward_behavior</a>, <a href="#csharp_binary-run_analyzers">run_analyzers</a>,
+              <a href="#csharp_binary-target_frameworks">target_frameworks</a>, <a href="#csharp_binary-treat_warnings_as_errors">treat_warnings_as_errors</a>, <a href="#csharp_binary-warning_level">warning_level</a>, <a href="#csharp_binary-warnings_as_errors">warnings_as_errors</a>,
+              <a href="#csharp_binary-warnings_not_as_errors">warnings_not_as_errors</a>, <a href="#csharp_binary-winexe">winexe</a>)
 </pre>
 
 Compile a C# exe
@@ -30,6 +30,7 @@ Compile a C# exe
 | <a id="csharp_binary-out"></a>out |  File name, without extension, of the built assembly.   | String | optional |  `""`  |
 | <a id="csharp_binary-additionalfiles"></a>additionalfiles |  Extra files to configure analyzers.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
 | <a id="csharp_binary-allow_unsafe_blocks"></a>allow_unsafe_blocks |  Allow compiling unsafe code. It true, /unsafe is passed to the compiler.   | Boolean | optional |  `False`  |
+| <a id="csharp_binary-analyzer_configs"></a>analyzer_configs |  A list of analyzer configuration files. See: https://learn.microsoft.com/en-us/dotnet/fundamentals/code-analysis/configuration-files   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
 | <a id="csharp_binary-appsetting_files"></a>appsetting_files |  A list of appsettings files to include in the output directory.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
 | <a id="csharp_binary-compile_data"></a>compile_data |  Additional compile time files.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
 | <a id="csharp_binary-compiler_options"></a>compiler_options |  Additional options to pass to the compiler. This attribute should only be used if the compiler flag has not already been exposed as an attribute.   | List of strings | optional |  `[]`  |

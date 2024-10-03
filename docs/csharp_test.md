@@ -11,10 +11,11 @@ a Bazel test.
 
 <pre>
 csharp_test(<a href="#csharp_test-name">name</a>, <a href="#csharp_test-deps">deps</a>, <a href="#csharp_test-srcs">srcs</a>, <a href="#csharp_test-data">data</a>, <a href="#csharp_test-resources">resources</a>, <a href="#csharp_test-out">out</a>, <a href="#csharp_test-additionalfiles">additionalfiles</a>, <a href="#csharp_test-allow_unsafe_blocks">allow_unsafe_blocks</a>,
-            <a href="#csharp_test-appsetting_files">appsetting_files</a>, <a href="#csharp_test-compile_data">compile_data</a>, <a href="#csharp_test-compiler_options">compiler_options</a>, <a href="#csharp_test-defines">defines</a>, <a href="#csharp_test-generate_documentation_file">generate_documentation_file</a>,
-            <a href="#csharp_test-internals_visible_to">internals_visible_to</a>, <a href="#csharp_test-keyfile">keyfile</a>, <a href="#csharp_test-langversion">langversion</a>, <a href="#csharp_test-nowarn">nowarn</a>, <a href="#csharp_test-nullable">nullable</a>, <a href="#csharp_test-project_sdk">project_sdk</a>,
-            <a href="#csharp_test-roll_forward_behavior">roll_forward_behavior</a>, <a href="#csharp_test-run_analyzers">run_analyzers</a>, <a href="#csharp_test-target_frameworks">target_frameworks</a>, <a href="#csharp_test-treat_warnings_as_errors">treat_warnings_as_errors</a>,
-            <a href="#csharp_test-warning_level">warning_level</a>, <a href="#csharp_test-warnings_as_errors">warnings_as_errors</a>, <a href="#csharp_test-warnings_not_as_errors">warnings_not_as_errors</a>, <a href="#csharp_test-winexe">winexe</a>)
+            <a href="#csharp_test-analyzer_configs">analyzer_configs</a>, <a href="#csharp_test-appsetting_files">appsetting_files</a>, <a href="#csharp_test-compile_data">compile_data</a>, <a href="#csharp_test-compiler_options">compiler_options</a>, <a href="#csharp_test-defines">defines</a>,
+            <a href="#csharp_test-generate_documentation_file">generate_documentation_file</a>, <a href="#csharp_test-internals_visible_to">internals_visible_to</a>, <a href="#csharp_test-keyfile">keyfile</a>, <a href="#csharp_test-langversion">langversion</a>, <a href="#csharp_test-nowarn">nowarn</a>, <a href="#csharp_test-nullable">nullable</a>,
+            <a href="#csharp_test-project_sdk">project_sdk</a>, <a href="#csharp_test-roll_forward_behavior">roll_forward_behavior</a>, <a href="#csharp_test-run_analyzers">run_analyzers</a>, <a href="#csharp_test-target_frameworks">target_frameworks</a>,
+            <a href="#csharp_test-treat_warnings_as_errors">treat_warnings_as_errors</a>, <a href="#csharp_test-warning_level">warning_level</a>, <a href="#csharp_test-warnings_as_errors">warnings_as_errors</a>, <a href="#csharp_test-warnings_not_as_errors">warnings_not_as_errors</a>,
+            <a href="#csharp_test-winexe">winexe</a>)
 </pre>
 
 Compiles a C# executable and runs it as a test
@@ -32,6 +33,7 @@ Compiles a C# executable and runs it as a test
 | <a id="csharp_test-out"></a>out |  File name, without extension, of the built assembly.   | String | optional |  `""`  |
 | <a id="csharp_test-additionalfiles"></a>additionalfiles |  Extra files to configure analyzers.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
 | <a id="csharp_test-allow_unsafe_blocks"></a>allow_unsafe_blocks |  Allow compiling unsafe code. It true, /unsafe is passed to the compiler.   | Boolean | optional |  `False`  |
+| <a id="csharp_test-analyzer_configs"></a>analyzer_configs |  A list of analyzer configuration files. See: https://learn.microsoft.com/en-us/dotnet/fundamentals/code-analysis/configuration-files   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
 | <a id="csharp_test-appsetting_files"></a>appsetting_files |  A list of appsettings files to include in the output directory.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
 | <a id="csharp_test-compile_data"></a>compile_data |  Additional compile time files.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
 | <a id="csharp_test-compiler_options"></a>compiler_options |  Additional options to pass to the compiler. This attribute should only be used if the compiler flag has not already been exposed as an attribute.   | List of strings | optional |  `[]`  |
