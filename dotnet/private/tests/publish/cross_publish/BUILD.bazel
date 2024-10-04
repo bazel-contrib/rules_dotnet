@@ -1,3 +1,11 @@
+load("@bazel_skylib//:bzl_library.bzl", "bzl_library")
 load(":tests.bzl", "tests")
 
 tests()
+
+bzl_library(
+    name = "tests",
+    srcs = ["tests.bzl"],
+    visibility = ["//dotnet:__subpackages__"],
+    deps = ["//dotnet:defs"],
+)

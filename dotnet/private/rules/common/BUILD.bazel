@@ -32,3 +32,10 @@ bzl_library(
         "@bazel_skylib//lib:dicts",
     ],
 )
+
+bzl_library(
+    name = "compile_info",
+    srcs = ["compile_info.bzl"],
+    visibility = ["//dotnet:__subpackages__"],
+    deps = ["//dotnet/private:providers"],
+)
