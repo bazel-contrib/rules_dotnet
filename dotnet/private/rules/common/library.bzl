@@ -2,6 +2,10 @@
 
 load("@bazel_skylib//rules:common_settings.bzl", "BuildSettingInfo")
 load("//dotnet/private:common.bzl", "collect_transitive_runfiles")
+load(
+    "//dotnet/private/rules/common:compile_info.bzl",
+    "gather_compile_info"
+)
 
 def build_library(ctx, compile_action):
     """Builds a .Net library from a compilation action
@@ -21,9 +25,12 @@ def build_library(ctx, compile_action):
 
     (compile_provider, runtime_provider) = compile_action(ctx, tfm)
 
+    compile_info_provider = gather_compile_info(ctx)
+
     return [
         compile_provider,
         runtime_provider,
+        compile_info_provider,
         DefaultInfo(
             files = depset(runtime_provider.libs + runtime_provider.xml_docs),
             default_runfiles = collect_transitive_runfiles(

@@ -89,3 +89,24 @@ DotnetApphostPackInfo = provider(
         "apphost": "File: The apphost file",
     },
 )
+
+DotnetCompileInfo = provider(
+    doc = "Information about how a .Net target is to be compiled",
+    fields = {
+        "label": "Label: The label of the target",
+        "srcs": "list[File]: sources to be compiled",
+        "deps": "list[DotnetCompileDepVariantInfo]: The direct dependencies of the target",
+        "transitive_deps": "depset[DotnetCompileDepVariantInfo]: The transitive dependencies of the target",
+    },
+)
+
+DotnetCompileDepVariantInfo = provider(
+    doc = "A wrapper provider for a compilation dependency. The dependency can be a project " +
+          "dependency, in which case the `dotnet_compile_info` will be populated" +
+          "or a NuGet dependency, in which case `dotnet_assembly_compile_info` will be populated.",
+    fields = {
+        "label": "Label: The label of the dependency",
+        "dotnet_compile_info": "DotnetCompileInfo: The DotnetCompileInfo of a dependency",
+        "dotnet_assembly_compile_info": "DotnetAssemblyCompileInfo: The NuGet info of a dependency",
+    },
+)
