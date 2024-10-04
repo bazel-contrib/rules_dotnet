@@ -192,7 +192,39 @@ def _process_analyzer_file(groups, file):
         return
 
     group = groups["analyzers"]
-    group["dotnet"].append(file)
+
+    parts = file.split("/")
+
+    # The path format is analyzers/{framework_name}{version}/{supported_architecture}/{supported_language}/{analyzer_name}.dll
+    # Note: The only supported framework_name is `dotnet`
+
+    # Note: The `supported_architecture` part is not properly handled yet see: https://github.com/dotnet/sdk/issues/20355
+    # The tl;dr: Anaylzers can be built for different versions of roslyn and the `target_architecture` is strctured like this `roslyn<roslyn version>` e.g. `roslyn3.8`.
+    # When a NuGet package contains folders under analyzers with the pattern, roslyn<major-version>.<minor-version>,
+    # the folder with the highest version that is less than or equal to the current Microsoft.CodeAnalysis <major>.<minor> version should be used.
+    # For now we add the latest version of the lowest version of of the package to stay the most compatible.
+
+    # The analyzers can be either language specific or not. If they are not language specific the path will be analyzers/dotnet/{analyzer_name}.dll
+    # if the analyzers are language specific the path will be analyzers/dotnet/{cs,vb,fs}/{analyzer_name}.dll
+    if len(parts) == 3:
+        group["dotnet"].append(file)
+    elif len(parts) == 4:
+        lang = parts[2]
+        group["dotnet/{}".format(lang)].append(file)
+    elif len(parts) == 5:
+        lang = parts[3]
+        supported_architecture = parts[2]
+
+        # Use this as a marker for the lowest version of the dll
+        if not group.get("dotnet/{}/lowest".format(lang)):
+            group["dotnet/{}/lowest".format(lang)] = file
+            group["dotnet/{}".format(lang)].append(file)
+        else:
+            # If the current version is lower than the version we have stored we replace it
+            current_lowest_version = group["dotnet/{}/lowest".format(lang)].split("/")[2]
+            if supported_architecture < current_lowest_version:
+                group["dotnet/{}/lowest".format(lang, supported_architecture)] = file
+                group["dotnet/{}".format(lang)].append(file)
 
     return
 
@@ -338,9 +370,11 @@ def _nuget_archive_impl(ctx):
     groups = {
         # See https://learn.microsoft.com/en-us/nuget/guides/analyzers-conventions
         # Example: analyzers/dotnet/cs/System.Runtime.CSharp.Analyzers.dll
-        # NB: The analyzers supports is not fully implemented yet
         "analyzers": {
             "dotnet": [],
+            "dotnet/cs": [],
+            "dotnet/fs": [],
+            "dotnet/vb": [],
         },
         # See: https://devblogs.microsoft.com/nuget/nuget-contentfiles-demystified/
         # NB: Only the any group is supported at the moment
@@ -453,6 +487,9 @@ load("@rules_dotnet//dotnet/private/rules/nuget:nuget_archive.bzl", "tfm_filegro
         _create_framework_select("libs", libs) or "filegroup(name = \"libs\", srcs = [])",
         _create_framework_select("refs", refs) or "filegroup(name = \"refs\", srcs = [])",
         "filegroup(name = \"analyzers\", srcs = [%s])" % ",".join(["\n  \"%s\"" % a for a in groups.get("analyzers")["dotnet"]]),
+        "filegroup(name = \"analyzers_csharp\", srcs = [%s])" % ",".join(["\n  \"%s\"" % a for a in groups.get("analyzers")["dotnet/cs"]]),
+        "filegroup(name = \"analyzers_fsharp\", srcs = [%s])" % ",".join(["\n  \"%s\"" % a for a in groups.get("analyzers")["dotnet/fs"]]),
+        "filegroup(name = \"analyzers_vb\", srcs = [%s])" % ",".join(["\n  \"%s\"" % a for a in groups.get("analyzers")["dotnet/vb"]]),
         "filegroup(name = \"data\", srcs = [])",
         _create_rid_native_select("native", native) or "filegroup(name = \"native\", srcs = [])",
         "filegroup(name = \"content_files\", srcs = [%s])" % ",".join(["\n  \"%s\"" % a for a in groups.get("contentFiles")["any"]]),

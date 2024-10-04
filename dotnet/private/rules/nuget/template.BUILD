@@ -5,6 +5,9 @@ package(default_visibility = ["//visibility:public"])
 import_library(
     name = "{VERSION}",
     analyzers = ["@{PREFIX}.{ID_LOWER}.v{VERSION}//:analyzers"],
+    analyzers_csharp = ["@{PREFIX}.{ID_LOWER}.v{VERSION}//:analyzers_csharp"],
+    analyzers_fsharp = ["@{PREFIX}.{ID_LOWER}.v{VERSION}//:analyzers_fsharp"],
+    analyzers_vb = ["@{PREFIX}.{ID_LOWER}.v{VERSION}//:analyzers_vb"],
     data = ["@{PREFIX}.{ID_LOWER}.v{VERSION}//:data"],
     framework_list = {FRAMEWORK_LIST},
     library_name = "{ID}",

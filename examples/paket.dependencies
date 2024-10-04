@@ -6,12 +6,7 @@ group example_deps
     nuget Expecto 9.0.4
     nuget FSharp.Core 6.0.3
     nuget FSharp.Data 5.0.2
-    nuget NETStandard.Library 2.0.3
-    nuget Microsoft.NETCore.App.Ref 6.0.8
-    nuget Microsoft.NETCore.App.Runtime.win-x64 6.0.8
-    nuget Microsoft.NETCore.App.Runtime.linux-x64 6.0.8
-    nuget Microsoft.NETCore.App.Runtime.osx-x64 6.0.8
-    nuget Microsoft.AspNetCore.App.Ref 6.0.8
-    nuget Microsoft.AspNetCore.App.Runtime.win-x64 6.0.8
-    nuget Microsoft.AspNetCore.App.Runtime.linux-x64 6.0.8
-    nuget Microsoft.AspNetCore.App.Runtime.osx-x64 6.0.8
+    nuget Microsoft.CodeAnalysis.Common 4.9.2
+    nuget Microsoft.CodeAnalysis.Analyzers 3.3.4
+    nuget Microsoft.CodeAnalysis.CSharp 4.9.2
+

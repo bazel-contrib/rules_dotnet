@@ -1,0 +1,11 @@
+load("@rules_dotnet//dotnet:defs.bzl", "csharp_nunit_test")
+
+csharp_nunit_test(
+    name = "generator_usage",
+    srcs = ["Test.cs"],
+    target_frameworks = ["net8.0"],
+    deps = [
+        "//dotnet/private/tests/source_generators/generator",
+        "@paket.rules_dotnet_dev_nuget_packages//system.text.json",
+    ],
+)

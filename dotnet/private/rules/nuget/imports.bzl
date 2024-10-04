@@ -15,6 +15,9 @@ def _import_library(ctx):
         _irefs,
         prefs,
         analyzers,
+        analyzers_csharp,
+        analyzers_fsharp,
+        analyzers_vb,
         _compile_data,
         _framework_files,
         _exports,
@@ -40,11 +43,17 @@ def _import_library(ctx):
         refs = ctx.files.refs,
         irefs = ctx.files.refs,
         analyzers = ctx.files.analyzers,
+        analyzers_csharp = ctx.files.analyzers_csharp,
+        analyzers_fsharp = ctx.files.analyzers_fsharp,
+        analyzers_vb = ctx.files.analyzers_vb,
         compile_data = [],
         exports = [],
         transitive_compile_data = depset([]),
         transitive_refs = prefs,
         transitive_analyzers = analyzers,
+        transitive_analyzers_csharp = analyzers_csharp,
+        transitive_analyzers_fsharp = analyzers_fsharp,
+        transitive_analyzers_vb = analyzers_vb,
         internals_visible_to = [],
     )
 
@@ -97,6 +106,21 @@ import_library = rule(
             allow_files = True,  # [".dll"] currently does not work with empty file groups
             allow_empty = True,
         ),
+        "analyzers_csharp": attr.label_list(
+            doc = "Static C# analyzer DLLs",
+            allow_files = True,  # [".dll"] currently does not work with empty file groups
+            allow_empty = True,
+        ),
+        "analyzers_fsharp": attr.label_list(
+            doc = "Static F# analyzer DLLs",
+            allow_files = True,  # [".dll"] currently does not work with empty file groups
+            allow_empty = True,
+        ),
+        "analyzers_vb": attr.label_list(
+            doc = "Static VB analyzer DLLs",
+            allow_files = True,  # [".dll"] currently does not work with empty file groups
+            allow_empty = True,
+        ),
         "refs": attr.label_list(
             doc = "Compile time DLLs",
             allow_files = True,  # [".dll"] currently does not work with empty file groups
@@ -140,11 +164,17 @@ def _import_dll(ctx):
         refs = [ctx.file.dll],
         irefs = [],
         analyzers = [],
+        analyzers_csharp = [],
+        analyzers_fsharp = [],
+        analyzers_vb = [],
         compile_data = [],
         exports = [],
         transitive_compile_data = depset([]),
         transitive_refs = depset([]),
         transitive_analyzers = depset([]),
+        transitive_analyzers_csharp = depset([]),
+        transitive_analyzers_fsharp = depset([]),
+        transitive_analyzers_vb = depset([]),
         internals_visible_to = [],
     )
     assembly_runtime_info = DotnetAssemblyRuntimeInfo(
