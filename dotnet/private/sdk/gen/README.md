@@ -11,4 +11,7 @@ It does the following:
 
 To run the program simply run the `update-sdk.sh` script
 
+# References
+* https://github.com/dotnet/designs/blob/main/accepted/2019/targeting-packs-and-runtime-packs.md
+* https://github.com/dotnet/designs/blob/main/accepted/2020/targeting-packs/targeting-packs.md
 
