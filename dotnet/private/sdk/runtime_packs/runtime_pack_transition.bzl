@@ -11,8 +11,8 @@ def _impl(settings, attr):
     supported_tfms = runtime_pack_lookup_table.get(project_sdk)
     if supported_tfms:
         supported_rids = supported_tfms.get(incoming_target_framework)
-        highest_compatible_rid = get_highest_compatible_runtime_identifier(incoming_rid, supported_rids.keys())
         if supported_rids:
+            highest_compatible_rid = get_highest_compatible_runtime_identifier(incoming_rid, supported_rids.keys())
             runtime_pack = supported_rids.get(highest_compatible_rid)
             if runtime_pack:
                 return {"//dotnet/private/sdk/runtime_packs:runtime_pack": runtime_pack}
