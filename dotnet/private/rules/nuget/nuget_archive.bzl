@@ -364,7 +364,7 @@ def _nuget_archive_impl(ctx):
     for name in names:
         ctx.symlink(file_name, name)
 
-    files = sorted(_read_dir(ctx, ".").replace(str(ctx.path(".")) + "/", "").splitlines())
+    all_files = sorted(_read_dir(ctx, ".").replace(str(ctx.path(".")) + "/", "").splitlines())
 
     # The NuGet package format
     groups = {
@@ -400,7 +400,7 @@ def _nuget_archive_impl(ctx):
         },
     }
 
-    for file in files:
+    for file in all_files:
         file = _sanitize_path(file)
         i = file.find("/")
         key = file[:i]
@@ -493,6 +493,7 @@ load("@rules_dotnet//dotnet/private/rules/nuget:nuget_archive.bzl", "tfm_filegro
         "filegroup(name = \"data\", srcs = [])",
         _create_rid_native_select("native", native) or "filegroup(name = \"native\", srcs = [])",
         "filegroup(name = \"content_files\", srcs = [%s])" % ",".join(["\n  \"%s\"" % a for a in groups.get("contentFiles")["any"]]),
+        "filegroup(name = \"files\", srcs = [%s])" % ",".join(["\n  \"%s\"" % _sanitize_path(a) for a in all_files]),
         "exports_files([\"%s\"])" % nupkg_name,
     ]))
 

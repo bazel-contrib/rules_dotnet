@@ -38,6 +38,7 @@ def _nuget_repo_impl(ctx):
         ctx.file("{}/BUILD.bazel".format(name.lower()), r"""package(default_visibility = ["//visibility:public"])
 alias(name = "{name}", actual = "//{id}/{version}")
 alias(name = "content_files", actual = "@{prefix}.{id}.v{version}//:content_files")
+alias(name = "files", actual = "@{prefix}.{id}.v{version}//:files")
 """.format(prefix = _GLOBAL_NUGET_PREFIX, name = name.lower(), id = id.lower(), version = version))
 
 _nuget_repo = repository_rule(
