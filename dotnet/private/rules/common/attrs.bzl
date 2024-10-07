@@ -162,6 +162,10 @@ BINARY_COMMON_ATTRS = {
         # in their appsetting_files and we want the TFM graphs to be disconnected
         cfg = default_transition,
     ),
+    "envs": attr.string_dict(
+        doc = "A dictionary of environment variables to set when the binary is run. Supports make variable expansion",
+        default = {},
+    ),
     "_bash_runfiles": attr.label(
         default = "@bazel_tools//tools/bash/runfiles",
         allow_single_file = True,

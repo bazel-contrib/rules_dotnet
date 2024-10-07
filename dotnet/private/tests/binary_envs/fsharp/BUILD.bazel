@@ -1,0 +1,23 @@
+"Test that environment variables are passed to the binary"
+
+load(
+    "//dotnet:defs.bzl",
+    "fsharp_nunit_test",
+)
+
+fsharp_nunit_test(
+    name = "lib_test",
+    srcs = ["Test.fs"],
+    data = [
+        "//dotnet/private/tests/binary_envs:test.txt",
+    ],
+    envs = {
+        "NOT_TEMPLATED": "not_templated",
+        "TEMPLATED_FILE": "$(execpath //dotnet/private/tests/binary_envs:test.txt)",
+        "TEMPLATED_VARIABLE": "$(DOTNET_BIN)",
+    },
+    target_frameworks = ["net6.0"],
+    deps = [
+        "@paket.rules_dotnet_dev_nuget_packages//fsharp.core",
+    ],
+)

@@ -44,3 +44,10 @@ bzl_library(
     visibility = ["//dotnet:__subpackages__"],
     deps = [":common"],
 )
+
+bzl_library(
+    name = "analyzers",
+    srcs = ["analyzers.bzl"],
+    visibility = ["//dotnet:__subpackages__"],
+    deps = [":common"],
+)

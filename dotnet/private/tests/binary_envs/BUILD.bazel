@@ -1,0 +1,4 @@
+exports_files(
+    ["test.txt"],
+    visibility = ["//dotnet/private/tests/binary_envs:__subpackages__"],
+)

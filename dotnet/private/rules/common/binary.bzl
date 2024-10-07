@@ -2,6 +2,7 @@
 Base rule for building .Net binaries
 """
 
+load("@aspect_bazel_lib//lib:expand_make_vars.bzl", "expand_locations", "expand_variables")
 load("@bazel_skylib//rules:common_settings.bzl", "BuildSettingInfo")
 load(
     "//dotnet/private:common.bzl",
@@ -136,4 +137,4 @@ def build_binary(ctx, compile_action):
         runtime_pack_info = ctx.attr._runtime_pack[0][DotnetRuntimePackInfo],
     )
 
-    return [default_info, dotnet_binary_info, compile_provider, runtime_provider]
+    return [default_info, dotnet_binary_info, compile_provider, runtime_provider, RunEnvironmentInfo(environment = {key: expand_variables(ctx, expand_locations(ctx, value, ctx.attr.data)) for key, value in ctx.attr.envs.items()})]
