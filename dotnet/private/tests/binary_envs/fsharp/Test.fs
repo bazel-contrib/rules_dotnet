@@ -14,4 +14,4 @@ type Tests() =
             Environment.GetEnvironmentVariable("TEMPLATED_FILE")
         )
 
-        Assert.IsTrue(Environment.GetEnvironmentVariable("TEMPLATED_VARIABLE").EndsWith("/dotnet"))
+        Assert.AreEqual("8.0.402", Environment.GetEnvironmentVariable("TEMPLATED_VARIABLE"))

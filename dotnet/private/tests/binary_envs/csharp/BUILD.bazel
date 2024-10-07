@@ -14,7 +14,7 @@ csharp_nunit_test(
     envs = {
         "NOT_TEMPLATED": "not_templated",
         "TEMPLATED_FILE": "$(execpath //dotnet/private/tests/binary_envs:test.txt)",
-        "TEMPLATED_VARIABLE": "$(DOTNET_BIN)",
+        "TEMPLATED_VARIABLE": "$(DOTNET_SDK_VERSION)",
     },
     target_frameworks = ["net6.0"],
 )
