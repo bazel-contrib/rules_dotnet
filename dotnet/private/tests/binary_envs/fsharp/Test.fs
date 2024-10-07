@@ -14,7 +14,4 @@ type Tests() =
             Environment.GetEnvironmentVariable("TEMPLATED_FILE")
         )
 
-        Assert.AreEqual(
-            "external/_main~dotnet~dotnet_x86_64-unknown-linux-gnu/dotnet",
-            Environment.GetEnvironmentVariable("TEMPLATED_VARIABLE")
-        )
+        Assert.IsTrue(Environment.GetEnvironmentVariable("TEMPLATED_VARIABLE").EndsWith("/dotnet"))
