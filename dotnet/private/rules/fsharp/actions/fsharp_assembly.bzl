@@ -118,7 +118,7 @@ def AssemblyAction(
         keyfile: Specifies a strong name key file of the assembly.
         langversion: Specify language version: Default, ISO-1, ISO-2, 3, 4, 5, 6, 7, 7.1, 7.2, 7.3, or Latest
         resources: The list of resouces to be embedded in the assembly.
-        srcs: The list of source (.cs) files that are processed to create the assembly.
+        srcs: The list of source (.fs) files that are processed to create the assembly.
         data: List of files that are a direct runtime dependency
         appsetting_files: List of appsettings files to include in the output.
         compile_data: List of files that are a direct compile time dependency

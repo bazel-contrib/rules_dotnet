@@ -13,6 +13,10 @@ load(
     "to_rlocation_path",
 )
 load("//dotnet/private:providers.bzl", "DotnetApphostPackInfo", "DotnetBinaryInfo", "DotnetRuntimePackInfo")
+load(
+    "//dotnet/private/rules/common:compile_info.bzl",
+    "gather_compile_info"
+)
 
 def _create_launcher(ctx, runfiles, executable):
     runtime = ctx.toolchains["//dotnet:toolchain_type"].runtime
@@ -136,4 +140,6 @@ def build_binary(ctx, compile_action):
         runtime_pack_info = ctx.attr._runtime_pack[0][DotnetRuntimePackInfo],
     )
 
-    return [default_info, dotnet_binary_info, compile_provider, runtime_provider]
+    compile_info_provider = gather_compile_info(ctx)
+
+    return [default_info, dotnet_binary_info, compile_provider, runtime_provider, compile_info_provider]
