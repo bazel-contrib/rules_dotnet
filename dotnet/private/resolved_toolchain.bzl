@@ -4,7 +4,7 @@
 DOC = """\
 Exposes a concrete toolchain which is the result of Bazel resolving the
 toolchain for the execution or target platform.
-Workaround for https://github.com/bazelbuild/bazel/issues/14009
+Workaround for https://github.com/bazel-contrib/bazel/issues/14009
 """
 
 # Forward all the providers

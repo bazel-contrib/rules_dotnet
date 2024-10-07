@@ -8,7 +8,7 @@
         }
     ],
     "repository": [
-        "github:bazelbuild/rules_dotnet"
+        "github:bazel-contrib/rules_dotnet"
     ],
     "versions": [],
     "yanked_versions": {}

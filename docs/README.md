@@ -47,7 +47,7 @@ will do their best to guide if needed.
 
 The minimal supported Bazel version is 7.0.0 and bzlmod has to enabled.
 
-From the release you wish to use: https://github.com/bazelbuild/rules_dotnet/releases copy the WORKSPACE snippet into your WORKSPACE file.
+From the release you wish to use: https://github.com/bazel-contrib/rules_dotnet/releases copy the WORKSPACE snippet into your WORKSPACE file.
 
 If you are using Windows you need to make sure that symlinks and runfiles are enabled.
 You can do that by adding the following snippet to your `.bazelrc` file:
