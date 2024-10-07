@@ -370,6 +370,7 @@ RUNTIME_GRAPH = {
     "linux-musl-armv6": ["linux-musl", "linux-armv6", "linux", "unix-armv6", "unix", "any", "base"],
     "linux-musl-ppc64le": ["linux-musl", "linux-ppc64le", "linux", "unix-ppc64le", "unix", "any", "base"],
     "linux-musl-riscv64": ["linux-musl", "linux-riscv64", "linux", "unix-riscv64", "unix", "any", "base"],
+    "linux-musl-loongarch64": ["linux-musl", "linux-loongarch64", "linux", "unix-loongarch64", "unix", "any", "base"],
     "linux-musl-s390x": ["linux-musl", "linux-s390x", "linux", "unix-s390x", "unix", "any", "base"],
     "linux-musl-x64": ["linux-musl", "linux-x64", "linux", "unix-x64", "unix", "any", "base"],
     "linux-musl-x86": ["linux-musl", "linux-x86", "linux", "unix-x86", "unix", "any", "base"],

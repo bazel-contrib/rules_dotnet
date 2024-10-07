@@ -153,19 +153,19 @@
     "net6.0": [
       {
         "id": "Microsoft.NETCore.App.Ref",
-        "version": "6.0.28"
+        "version": "6.0.33"
       }
     ],
     "net7.0": [
       {
         "id": "Microsoft.NETCore.App.Ref",
-        "version": "7.0.17"
+        "version": "7.0.20"
       }
     ],
     "net8.0": [
       {
         "id": "Microsoft.NETCore.App.Ref",
-        "version": "8.0.3"
+        "version": "8.0.8"
       }
     ]
   },
@@ -223,31 +223,31 @@
     "net6.0": [
       {
         "id": "Microsoft.AspNetCore.App.Ref",
-        "version": "6.0.28"
+        "version": "6.0.33"
       },
       {
         "id": "Microsoft.NETCore.App.Ref",
-        "version": "6.0.28"
+        "version": "6.0.33"
       }
     ],
     "net7.0": [
       {
         "id": "Microsoft.AspNetCore.App.Ref",
-        "version": "7.0.17"
+        "version": "7.0.20"
       },
       {
         "id": "Microsoft.NETCore.App.Ref",
-        "version": "7.0.17"
+        "version": "7.0.20"
       }
     ],
     "net8.0": [
       {
         "id": "Microsoft.AspNetCore.App.Ref",
-        "version": "8.0.3"
+        "version": "8.0.8"
       },
       {
         "id": "Microsoft.NETCore.App.Ref",
-        "version": "8.0.3"
+        "version": "8.0.8"
       }
     ]
   }
