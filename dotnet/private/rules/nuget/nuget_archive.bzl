@@ -142,10 +142,18 @@ def _process_build_file(groups, file):
     tfm = file[tfm_start:tfm_end]
     file_type = file[tfm_end + 1:file.find("/", tfm_end + 1)]
 
+    # Handle .NETFramework
+    if tfm == ".NETFramework":
+        version_start = file.find("/", tfm_start) + 1
+        version = file[version_start:file.find("/", version_start + 1)]
+        tfm = version.replace("v", "net").replace(".", "")
+        file_type = "ref"
+
     if tfm not in FRAMEWORK_COMPATIBILITY:
         return
 
-    if not file.endswith(".dll") or file.endswith(".resources.dll"):
+    # See https://github.com/bazel-contrib/rules_dotnet/issues/405
+    if not file.endswith(".dll") or file.endswith(".resources.dll") or file.endswith("System.EnterpriseServices.Thunk.dll") or file.endswith("System.EnterpriseServices.Wrapper.dll"):
         return
 
     group = groups["build"]

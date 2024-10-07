@@ -3,6 +3,7 @@ load("@bazel_skylib//rules:select_file.bzl", "select_file")
 load(":analyzers.bzl", "analyzers_structure")
 load(":resolution.bzl", "resolution_structure")
 load(":runtimes.bzl", "runtimes_structure")
+load(":targetingpacks.bzl", "targetingpacks_structure")
 load(":typeproviders.bzl", "typeproviders_structure")
 
 typeproviders_structure()
@@ -12,6 +13,8 @@ runtimes_structure()
 resolution_structure()
 
 analyzers_structure()
+
+targetingpacks_structure()
 
 bzl_library(
     name = "common",
@@ -35,6 +38,13 @@ bzl_library(
 bzl_library(
     name = "typeproviders",
     srcs = ["typeproviders.bzl"],
+    visibility = ["//visibility:public"],
+    deps = [":common"],
+)
+
+bzl_library(
+    name = "targetingpacks",
+    srcs = ["targetingpacks.bzl"],
     visibility = ["//visibility:public"],
     deps = [":common"],
 )
