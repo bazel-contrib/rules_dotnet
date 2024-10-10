@@ -7,6 +7,8 @@ Rule for compiling C# binaries.
 ## csharp_binary
 
 <pre>
+load("@rules_dotnet//dotnet/private/rules/csharp:binary.bzl", "csharp_binary")
+
 csharp_binary(<a href="#csharp_binary-name">name</a>, <a href="#csharp_binary-deps">deps</a>, <a href="#csharp_binary-srcs">srcs</a>, <a href="#csharp_binary-data">data</a>, <a href="#csharp_binary-resources">resources</a>, <a href="#csharp_binary-out">out</a>, <a href="#csharp_binary-additionalfiles">additionalfiles</a>, <a href="#csharp_binary-allow_unsafe_blocks">allow_unsafe_blocks</a>,
               <a href="#csharp_binary-analyzer_configs">analyzer_configs</a>, <a href="#csharp_binary-appsetting_files">appsetting_files</a>, <a href="#csharp_binary-compile_data">compile_data</a>, <a href="#csharp_binary-compiler_options">compiler_options</a>, <a href="#csharp_binary-defines">defines</a>, <a href="#csharp_binary-envs">envs</a>,
               <a href="#csharp_binary-generate_documentation_file">generate_documentation_file</a>, <a href="#csharp_binary-include_host_model_dll">include_host_model_dll</a>, <a href="#csharp_binary-internals_visible_to">internals_visible_to</a>, <a href="#csharp_binary-keyfile">keyfile</a>,

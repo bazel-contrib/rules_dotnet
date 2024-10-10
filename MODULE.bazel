@@ -28,16 +28,16 @@ use_repo(runtime_packs_extension, "dotnet.runtime_packs")
 apphost_packs_extension = use_extension("//dotnet/private/sdk/apphost_packs:dotnet.apphost_packs_extension.bzl", "apphost_packs_extension")
 use_repo(apphost_packs_extension, "dotnet.apphost_packs")
 
-bazel_dep(name = "bazel_skylib", version = "1.6.0")
+bazel_dep(name = "bazel_skylib", version = "1.7.1")
 bazel_dep(name = "platforms", version = "0.0.10")
-bazel_dep(name = "stardoc", version = "0.6.2")
 bazel_dep(name = "aspect_bazel_lib", version = "2.9.1")
 
 # Dev dependencies
-bazel_dep(name = "rules_pkg", version = "0.10.1", dev_dependency = True)
-bazel_dep(name = "gazelle", version = "0.33.0", dev_dependency = True, repo_name = "bazel_gazelle")
-bazel_dep(name = "bazel_skylib_gazelle_plugin", version = "1.6.0", dev_dependency = True)
-bazel_dep(name = "rules_cc", version = "0.0.9", dev_dependency = True)
+bazel_dep(name = "stardoc", version = "0.7.1", dev_dependency = True)
+bazel_dep(name = "rules_pkg", version = "1.0.1", dev_dependency = True)
+bazel_dep(name = "gazelle", version = "0.39.1", dev_dependency = True, repo_name = "bazel_gazelle")
+bazel_dep(name = "bazel_skylib_gazelle_plugin", version = "1.7.1", dev_dependency = True)
+bazel_dep(name = "rules_cc", version = "0.0.12", dev_dependency = True)
 bazel_dep(name = "rules_testing", version = "0.6.0", dev_dependency = True)
 
 rules_dotnet_dev_nuget_packages_extension = use_extension("//dotnet:paket.rules_dotnet_dev_nuget_packages_extension.bzl", "rules_dotnet_dev_nuget_packages_extension", dev_dependency = True)

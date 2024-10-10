@@ -10,6 +10,8 @@ a Bazel test.
 ## csharp_test
 
 <pre>
+load("@rules_dotnet//dotnet/private/rules/csharp:test.bzl", "csharp_test")
+
 csharp_test(<a href="#csharp_test-name">name</a>, <a href="#csharp_test-deps">deps</a>, <a href="#csharp_test-srcs">srcs</a>, <a href="#csharp_test-data">data</a>, <a href="#csharp_test-resources">resources</a>, <a href="#csharp_test-out">out</a>, <a href="#csharp_test-additionalfiles">additionalfiles</a>, <a href="#csharp_test-allow_unsafe_blocks">allow_unsafe_blocks</a>,
             <a href="#csharp_test-analyzer_configs">analyzer_configs</a>, <a href="#csharp_test-appsetting_files">appsetting_files</a>, <a href="#csharp_test-compile_data">compile_data</a>, <a href="#csharp_test-compiler_options">compiler_options</a>, <a href="#csharp_test-defines">defines</a>, <a href="#csharp_test-envs">envs</a>,
             <a href="#csharp_test-generate_documentation_file">generate_documentation_file</a>, <a href="#csharp_test-internals_visible_to">internals_visible_to</a>, <a href="#csharp_test-keyfile">keyfile</a>, <a href="#csharp_test-langversion">langversion</a>, <a href="#csharp_test-nowarn">nowarn</a>, <a href="#csharp_test-nullable">nullable</a>,

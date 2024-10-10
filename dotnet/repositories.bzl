@@ -50,15 +50,6 @@ filegroup(
     visibility = ["//visibility:public"],
 )
 
-filegroup(
-    name = "apphost",
-    srcs = glob([
-        "sdk/**/AppHostTemplate/apphost.exe", # windows
-        "sdk/**/AppHostTemplate/apphost",
-    ]),
-    visibility = ["//visibility:public"],
-)
-
 import_dll(
     name = "host_model",
     version = "{runtime_version}",
@@ -69,10 +60,13 @@ filegroup(
     name = "fsc_binary",
     # We glob both fsc.dll and fsc.exe for backwards compatibility
     # Pre .Net 5.0 the file was called fsc.exe but has been changed to fsc.dll
-    srcs = glob([
-        "sdk/**/FSharp/fsc.dll*",
-        "sdk/**/FSharp/fsc.exe*",
-    ]),
+    srcs = glob(
+        [
+            "sdk/**/FSharp/fsc.dll*",
+            "sdk/**/FSharp/fsc.exe*",
+        ],
+        allow_empty = True,
+    ) or fail("glob is empty"),
     data = glob([
         "host/**/*",
         "sdk/{sdk_version}/FSharp/**/*.dll",
@@ -87,7 +81,6 @@ dotnet_toolchain(
     runtime = ":runtime",
     csharp_compiler = ":csc_binary",
     fsharp_compiler = ":fsc_binary",
-    apphost = ":apphost",
     host_model = ":host_model",
     sdk_version = "{sdk_version}",
     runtime_version = "{runtime_version}",

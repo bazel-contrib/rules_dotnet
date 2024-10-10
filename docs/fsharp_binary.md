@@ -7,6 +7,8 @@ Rule for compiling F# binaries.
 ## fsharp_binary
 
 <pre>
+load("@rules_dotnet//dotnet/private/rules/fsharp:binary.bzl", "fsharp_binary")
+
 fsharp_binary(<a href="#fsharp_binary-name">name</a>, <a href="#fsharp_binary-deps">deps</a>, <a href="#fsharp_binary-srcs">srcs</a>, <a href="#fsharp_binary-data">data</a>, <a href="#fsharp_binary-resources">resources</a>, <a href="#fsharp_binary-out">out</a>, <a href="#fsharp_binary-appsetting_files">appsetting_files</a>, <a href="#fsharp_binary-compile_data">compile_data</a>,
               <a href="#fsharp_binary-compiler_options">compiler_options</a>, <a href="#fsharp_binary-defines">defines</a>, <a href="#fsharp_binary-envs">envs</a>, <a href="#fsharp_binary-generate_documentation_file">generate_documentation_file</a>, <a href="#fsharp_binary-internals_visible_to">internals_visible_to</a>,
               <a href="#fsharp_binary-keyfile">keyfile</a>, <a href="#fsharp_binary-langversion">langversion</a>, <a href="#fsharp_binary-nowarn">nowarn</a>, <a href="#fsharp_binary-project_sdk">project_sdk</a>, <a href="#fsharp_binary-roll_forward_behavior">roll_forward_behavior</a>, <a href="#fsharp_binary-target_frameworks">target_frameworks</a>,

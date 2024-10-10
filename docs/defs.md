@@ -9,6 +9,8 @@ Users should not load files under "/dotnet"
 ## csharp_binary
 
 <pre>
+load("@rules_dotnet//dotnet:defs.bzl", "csharp_binary")
+
 csharp_binary(<a href="#csharp_binary-name">name</a>, <a href="#csharp_binary-deps">deps</a>, <a href="#csharp_binary-srcs">srcs</a>, <a href="#csharp_binary-data">data</a>, <a href="#csharp_binary-resources">resources</a>, <a href="#csharp_binary-out">out</a>, <a href="#csharp_binary-additionalfiles">additionalfiles</a>, <a href="#csharp_binary-allow_unsafe_blocks">allow_unsafe_blocks</a>,
               <a href="#csharp_binary-analyzer_configs">analyzer_configs</a>, <a href="#csharp_binary-appsetting_files">appsetting_files</a>, <a href="#csharp_binary-compile_data">compile_data</a>, <a href="#csharp_binary-compiler_options">compiler_options</a>, <a href="#csharp_binary-defines">defines</a>, <a href="#csharp_binary-envs">envs</a>,
               <a href="#csharp_binary-generate_documentation_file">generate_documentation_file</a>, <a href="#csharp_binary-include_host_model_dll">include_host_model_dll</a>, <a href="#csharp_binary-internals_visible_to">internals_visible_to</a>, <a href="#csharp_binary-keyfile">keyfile</a>,
@@ -61,6 +63,8 @@ Compile a C# exe
 ## csharp_library
 
 <pre>
+load("@rules_dotnet//dotnet:defs.bzl", "csharp_library")
+
 csharp_library(<a href="#csharp_library-name">name</a>, <a href="#csharp_library-deps">deps</a>, <a href="#csharp_library-srcs">srcs</a>, <a href="#csharp_library-data">data</a>, <a href="#csharp_library-resources">resources</a>, <a href="#csharp_library-out">out</a>, <a href="#csharp_library-additionalfiles">additionalfiles</a>, <a href="#csharp_library-allow_unsafe_blocks">allow_unsafe_blocks</a>,
                <a href="#csharp_library-analyzer_configs">analyzer_configs</a>, <a href="#csharp_library-compile_data">compile_data</a>, <a href="#csharp_library-compiler_options">compiler_options</a>, <a href="#csharp_library-defines">defines</a>, <a href="#csharp_library-exports">exports</a>,
                <a href="#csharp_library-generate_documentation_file">generate_documentation_file</a>, <a href="#csharp_library-internals_visible_to">internals_visible_to</a>, <a href="#csharp_library-is_analyzer">is_analyzer</a>,
@@ -111,6 +115,8 @@ Compile a C# DLL
 ## csharp_test
 
 <pre>
+load("@rules_dotnet//dotnet:defs.bzl", "csharp_test")
+
 csharp_test(<a href="#csharp_test-name">name</a>, <a href="#csharp_test-deps">deps</a>, <a href="#csharp_test-srcs">srcs</a>, <a href="#csharp_test-data">data</a>, <a href="#csharp_test-resources">resources</a>, <a href="#csharp_test-out">out</a>, <a href="#csharp_test-additionalfiles">additionalfiles</a>, <a href="#csharp_test-allow_unsafe_blocks">allow_unsafe_blocks</a>,
             <a href="#csharp_test-analyzer_configs">analyzer_configs</a>, <a href="#csharp_test-appsetting_files">appsetting_files</a>, <a href="#csharp_test-compile_data">compile_data</a>, <a href="#csharp_test-compiler_options">compiler_options</a>, <a href="#csharp_test-defines">defines</a>, <a href="#csharp_test-envs">envs</a>,
             <a href="#csharp_test-generate_documentation_file">generate_documentation_file</a>, <a href="#csharp_test-internals_visible_to">internals_visible_to</a>, <a href="#csharp_test-keyfile">keyfile</a>, <a href="#csharp_test-langversion">langversion</a>, <a href="#csharp_test-nowarn">nowarn</a>, <a href="#csharp_test-nullable">nullable</a>,
@@ -162,6 +168,8 @@ Compiles a C# executable and runs it as a test
 ## fsharp_binary
 
 <pre>
+load("@rules_dotnet//dotnet:defs.bzl", "fsharp_binary")
+
 fsharp_binary(<a href="#fsharp_binary-name">name</a>, <a href="#fsharp_binary-deps">deps</a>, <a href="#fsharp_binary-srcs">srcs</a>, <a href="#fsharp_binary-data">data</a>, <a href="#fsharp_binary-resources">resources</a>, <a href="#fsharp_binary-out">out</a>, <a href="#fsharp_binary-appsetting_files">appsetting_files</a>, <a href="#fsharp_binary-compile_data">compile_data</a>,
               <a href="#fsharp_binary-compiler_options">compiler_options</a>, <a href="#fsharp_binary-defines">defines</a>, <a href="#fsharp_binary-envs">envs</a>, <a href="#fsharp_binary-generate_documentation_file">generate_documentation_file</a>, <a href="#fsharp_binary-internals_visible_to">internals_visible_to</a>,
               <a href="#fsharp_binary-keyfile">keyfile</a>, <a href="#fsharp_binary-langversion">langversion</a>, <a href="#fsharp_binary-nowarn">nowarn</a>, <a href="#fsharp_binary-project_sdk">project_sdk</a>, <a href="#fsharp_binary-roll_forward_behavior">roll_forward_behavior</a>, <a href="#fsharp_binary-target_frameworks">target_frameworks</a>,
@@ -207,6 +215,8 @@ Compile a F# exe
 ## fsharp_library
 
 <pre>
+load("@rules_dotnet//dotnet:defs.bzl", "fsharp_library")
+
 fsharp_library(<a href="#fsharp_library-name">name</a>, <a href="#fsharp_library-deps">deps</a>, <a href="#fsharp_library-srcs">srcs</a>, <a href="#fsharp_library-data">data</a>, <a href="#fsharp_library-resources">resources</a>, <a href="#fsharp_library-out">out</a>, <a href="#fsharp_library-compile_data">compile_data</a>, <a href="#fsharp_library-compiler_options">compiler_options</a>, <a href="#fsharp_library-defines">defines</a>,
                <a href="#fsharp_library-exports">exports</a>, <a href="#fsharp_library-generate_documentation_file">generate_documentation_file</a>, <a href="#fsharp_library-internals_visible_to">internals_visible_to</a>, <a href="#fsharp_library-keyfile">keyfile</a>, <a href="#fsharp_library-langversion">langversion</a>,
                <a href="#fsharp_library-nowarn">nowarn</a>, <a href="#fsharp_library-project_sdk">project_sdk</a>, <a href="#fsharp_library-target_frameworks">target_frameworks</a>, <a href="#fsharp_library-treat_warnings_as_errors">treat_warnings_as_errors</a>, <a href="#fsharp_library-warning_level">warning_level</a>,
@@ -248,6 +258,8 @@ Compile a F# DLL
 ## fsharp_test
 
 <pre>
+load("@rules_dotnet//dotnet:defs.bzl", "fsharp_test")
+
 fsharp_test(<a href="#fsharp_test-name">name</a>, <a href="#fsharp_test-deps">deps</a>, <a href="#fsharp_test-srcs">srcs</a>, <a href="#fsharp_test-data">data</a>, <a href="#fsharp_test-resources">resources</a>, <a href="#fsharp_test-out">out</a>, <a href="#fsharp_test-appsetting_files">appsetting_files</a>, <a href="#fsharp_test-compile_data">compile_data</a>,
             <a href="#fsharp_test-compiler_options">compiler_options</a>, <a href="#fsharp_test-defines">defines</a>, <a href="#fsharp_test-envs">envs</a>, <a href="#fsharp_test-generate_documentation_file">generate_documentation_file</a>, <a href="#fsharp_test-internals_visible_to">internals_visible_to</a>,
             <a href="#fsharp_test-keyfile">keyfile</a>, <a href="#fsharp_test-langversion">langversion</a>, <a href="#fsharp_test-nowarn">nowarn</a>, <a href="#fsharp_test-project_sdk">project_sdk</a>, <a href="#fsharp_test-roll_forward_behavior">roll_forward_behavior</a>, <a href="#fsharp_test-target_frameworks">target_frameworks</a>,
@@ -293,6 +305,8 @@ Compile a F# executable and runs it as a test
 ## import_dll
 
 <pre>
+load("@rules_dotnet//dotnet:defs.bzl", "import_dll")
+
 import_dll(<a href="#import_dll-name">name</a>, <a href="#import_dll-data">data</a>, <a href="#import_dll-dll">dll</a>, <a href="#import_dll-version">version</a>)
 </pre>
 
@@ -314,6 +328,8 @@ Imports a DLL
 ## import_library
 
 <pre>
+load("@rules_dotnet//dotnet:defs.bzl", "import_library")
+
 import_library(<a href="#import_library-name">name</a>, <a href="#import_library-deps">deps</a>, <a href="#import_library-data">data</a>, <a href="#import_library-analyzers">analyzers</a>, <a href="#import_library-analyzers_csharp">analyzers_csharp</a>, <a href="#import_library-analyzers_fsharp">analyzers_fsharp</a>, <a href="#import_library-analyzers_vb">analyzers_vb</a>,
                <a href="#import_library-framework_list">framework_list</a>, <a href="#import_library-library_name">library_name</a>, <a href="#import_library-libs">libs</a>, <a href="#import_library-native">native</a>, <a href="#import_library-nupkg">nupkg</a>, <a href="#import_library-refs">refs</a>, <a href="#import_library-sha512">sha512</a>,
                <a href="#import_library-targeting_pack_overrides">targeting_pack_overrides</a>, <a href="#import_library-version">version</a>)
@@ -349,6 +365,8 @@ Creates a target for a static DLL for a specific target framework
 ## publish_binary
 
 <pre>
+load("@rules_dotnet//dotnet:defs.bzl", "publish_binary")
+
 publish_binary(<a href="#publish_binary-name">name</a>, <a href="#publish_binary-binary">binary</a>, <a href="#publish_binary-roll_forward_behavior">roll_forward_behavior</a>, <a href="#publish_binary-runtime_identifier">runtime_identifier</a>, <a href="#publish_binary-self_contained">self_contained</a>,
                <a href="#publish_binary-target_framework">target_framework</a>)
 </pre>
@@ -373,6 +391,8 @@ Publish a .Net binary
 ## csharp_nunit_test
 
 <pre>
+load("@rules_dotnet//dotnet:defs.bzl", "csharp_nunit_test")
+
 csharp_nunit_test(<a href="#csharp_nunit_test-kwargs">kwargs</a>)
 </pre>
 
@@ -391,6 +411,8 @@ csharp_nunit_test(<a href="#csharp_nunit_test-kwargs">kwargs</a>)
 ## fsharp_nunit_test
 
 <pre>
+load("@rules_dotnet//dotnet:defs.bzl", "fsharp_nunit_test")
+
 fsharp_nunit_test(<a href="#fsharp_nunit_test-kwargs">kwargs</a>)
 </pre>
 
@@ -409,6 +431,8 @@ fsharp_nunit_test(<a href="#fsharp_nunit_test-kwargs">kwargs</a>)
 ## nuget_repo
 
 <pre>
+load("@rules_dotnet//dotnet:defs.bzl", "nuget_repo")
+
 nuget_repo(<a href="#nuget_repo-name">name</a>, <a href="#nuget_repo-packages">packages</a>)
 </pre>
 
@@ -428,6 +452,8 @@ nuget_repo(<a href="#nuget_repo-name">name</a>, <a href="#nuget_repo-packages">p
 ## nuget_archive
 
 <pre>
+load("@rules_dotnet//dotnet:defs.bzl", "nuget_archive")
+
 nuget_archive(<a href="#nuget_archive-name">name</a>, <a href="#nuget_archive-id">id</a>, <a href="#nuget_archive-netrc">netrc</a>, <a href="#nuget_archive-repo_mapping">repo_mapping</a>, <a href="#nuget_archive-sha512">sha512</a>, <a href="#nuget_archive-sources">sources</a>, <a href="#nuget_archive-version">version</a>)
 </pre>
 

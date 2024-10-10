@@ -7,6 +7,8 @@ Rule for compiling C# libraries.
 ## csharp_library
 
 <pre>
+load("@rules_dotnet//dotnet/private/rules/csharp:library.bzl", "csharp_library")
+
 csharp_library(<a href="#csharp_library-name">name</a>, <a href="#csharp_library-deps">deps</a>, <a href="#csharp_library-srcs">srcs</a>, <a href="#csharp_library-data">data</a>, <a href="#csharp_library-resources">resources</a>, <a href="#csharp_library-out">out</a>, <a href="#csharp_library-additionalfiles">additionalfiles</a>, <a href="#csharp_library-allow_unsafe_blocks">allow_unsafe_blocks</a>,
                <a href="#csharp_library-analyzer_configs">analyzer_configs</a>, <a href="#csharp_library-compile_data">compile_data</a>, <a href="#csharp_library-compiler_options">compiler_options</a>, <a href="#csharp_library-defines">defines</a>, <a href="#csharp_library-exports">exports</a>,
                <a href="#csharp_library-generate_documentation_file">generate_documentation_file</a>, <a href="#csharp_library-internals_visible_to">internals_visible_to</a>, <a href="#csharp_library-is_analyzer">is_analyzer</a>,

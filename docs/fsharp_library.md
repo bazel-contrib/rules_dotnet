@@ -7,6 +7,8 @@ Rule for compiling F# libraries.
 ## fsharp_library
 
 <pre>
+load("@rules_dotnet//dotnet/private/rules/fsharp:library.bzl", "fsharp_library")
+
 fsharp_library(<a href="#fsharp_library-name">name</a>, <a href="#fsharp_library-deps">deps</a>, <a href="#fsharp_library-srcs">srcs</a>, <a href="#fsharp_library-data">data</a>, <a href="#fsharp_library-resources">resources</a>, <a href="#fsharp_library-out">out</a>, <a href="#fsharp_library-compile_data">compile_data</a>, <a href="#fsharp_library-compiler_options">compiler_options</a>, <a href="#fsharp_library-defines">defines</a>,
                <a href="#fsharp_library-exports">exports</a>, <a href="#fsharp_library-generate_documentation_file">generate_documentation_file</a>, <a href="#fsharp_library-internals_visible_to">internals_visible_to</a>, <a href="#fsharp_library-keyfile">keyfile</a>, <a href="#fsharp_library-langversion">langversion</a>,
                <a href="#fsharp_library-nowarn">nowarn</a>, <a href="#fsharp_library-project_sdk">project_sdk</a>, <a href="#fsharp_library-target_frameworks">target_frameworks</a>, <a href="#fsharp_library-treat_warnings_as_errors">treat_warnings_as_errors</a>, <a href="#fsharp_library-warning_level">warning_level</a>,

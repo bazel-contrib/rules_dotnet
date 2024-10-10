@@ -52,11 +52,6 @@ def _dotnet_toolchain_impl(ctx):
     if not ctx.attr.fsharp_compiler and not ctx.attr.fsharp_compiler_path:
         fail("Must set one of fsharp_compiler or fsharp_compiler_path.")
 
-    if ctx.attr.apphost and ctx.attr.apphost_path:
-        fail("Can only set one of apphost or apphost_path but both were set.")
-    if not ctx.attr.apphost and not ctx.attr.apphost_path:
-        fail("Must set one of apphost or apphost_path.")
-
     runtime_files = []
     runtime_path = ctx.attr.runtime_path
 
@@ -65,9 +60,6 @@ def _dotnet_toolchain_impl(ctx):
 
     fsharp_compiler_files = []
     fsharp_compiler_path = ctx.attr.fsharp_compiler_path
-
-    apphost_files = []
-    apphost_path = ctx.attr.apphost_path
 
     if ctx.attr.runtime:
         runtime_files = ctx.attr.runtime.files.to_list() + ctx.attr.runtime.default_runfiles.files.to_list()
@@ -81,10 +73,6 @@ def _dotnet_toolchain_impl(ctx):
         fsharp_compiler_files = ctx.attr.fsharp_compiler.files.to_list() + ctx.attr.fsharp_compiler.default_runfiles.files.to_list()
         fsharp_compiler_path = _to_manifest_path(ctx, fsharp_compiler_files[0])
 
-    if ctx.attr.apphost:
-        apphost_files = ctx.attr.apphost.files.to_list()
-        apphost_path = _to_manifest_path(ctx, apphost_files[0])
-
     # Make the $(tool_BIN) variable available in places like genrules.
     # See https://docs.bazel.build/versions/main/be/make-variables.html#custom_variables
     template_variables = platform_common.TemplateVariableInfo({
@@ -97,8 +85,8 @@ def _dotnet_toolchain_impl(ctx):
     })
 
     default = DefaultInfo(
-        files = depset(runtime_files + csharp_compiler_files + fsharp_compiler_files + apphost_files),
-        runfiles = ctx.runfiles(files = runtime_files + csharp_compiler_files + fsharp_compiler_files + apphost_files),
+        files = depset(runtime_files + csharp_compiler_files + fsharp_compiler_files),
+        runfiles = ctx.runfiles(files = runtime_files + csharp_compiler_files + fsharp_compiler_files),
     )
 
     dotnetinfo = DotnetInfo(
@@ -108,8 +96,6 @@ def _dotnet_toolchain_impl(ctx):
         csharp_compiler_files = csharp_compiler_files,
         fsharp_compiler_path = fsharp_compiler_path,
         fsharp_compiler_files = fsharp_compiler_files,
-        apphost_path = apphost_path,
-        apphost_files = apphost_files,
         sdk_version = ctx.attr.sdk_version,
         runtime_version = ctx.attr.runtime_version,
         runtime_tfm = ctx.attr.runtime_tfm,
@@ -126,7 +112,6 @@ def _dotnet_toolchain_impl(ctx):
         runtime = ctx.attr.runtime,
         csharp_compiler = ctx.attr.csharp_compiler,
         fsharp_compiler = ctx.attr.fsharp_compiler,
-        apphost = ctx.file.apphost,
         host_model = ctx.attr.host_model,
         strict_deps = ctx.attr._strict_deps,
     )
@@ -167,15 +152,6 @@ dotnet_toolchain = rule(
         ),
         "fsharp_compiler_path": attr.string(
             doc = "Path to the F# compiler binary. Do not set if `fsharp_compiler` is set",
-            mandatory = False,
-        ),
-        "apphost": attr.label(
-            doc = "The apphost binary",
-            mandatory = False,
-            allow_single_file = True,
-        ),
-        "apphost_path": attr.string(
-            doc = "Path to the apphost binary. Do not set if `apphost` is set",
             mandatory = False,
         ),
         "host_model": attr.label(

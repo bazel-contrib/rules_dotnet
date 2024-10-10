@@ -10,6 +10,8 @@ a Bazel test.
 ## fsharp_test
 
 <pre>
+load("@rules_dotnet//dotnet/private/rules/fsharp:test.bzl", "fsharp_test")
+
 fsharp_test(<a href="#fsharp_test-name">name</a>, <a href="#fsharp_test-deps">deps</a>, <a href="#fsharp_test-srcs">srcs</a>, <a href="#fsharp_test-data">data</a>, <a href="#fsharp_test-resources">resources</a>, <a href="#fsharp_test-out">out</a>, <a href="#fsharp_test-appsetting_files">appsetting_files</a>, <a href="#fsharp_test-compile_data">compile_data</a>,
             <a href="#fsharp_test-compiler_options">compiler_options</a>, <a href="#fsharp_test-defines">defines</a>, <a href="#fsharp_test-envs">envs</a>, <a href="#fsharp_test-generate_documentation_file">generate_documentation_file</a>, <a href="#fsharp_test-internals_visible_to">internals_visible_to</a>,
             <a href="#fsharp_test-keyfile">keyfile</a>, <a href="#fsharp_test-langversion">langversion</a>, <a href="#fsharp_test-nowarn">nowarn</a>, <a href="#fsharp_test-project_sdk">project_sdk</a>, <a href="#fsharp_test-roll_forward_behavior">roll_forward_behavior</a>, <a href="#fsharp_test-target_frameworks">target_frameworks</a>,
