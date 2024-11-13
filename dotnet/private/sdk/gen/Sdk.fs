@@ -10,7 +10,7 @@ open System.Collections.Generic
 open NuGet.RuntimeModel
 open System.Net.Http
 
-let private supportedChannels = [ "6.0"; "7.0"; "8.0" ]
+let private supportedChannels = [ "6.0"; "7.0"; "8.0"; "9.0" ]
 
 type File =
     { [<JsonPropertyName "name">]
