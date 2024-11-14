@@ -15,10 +15,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # Disable the build since we use the Bazel CI for it anyways. We were also hitting issues with
-      # the disks on the Github runner being too small for the build
-      # - name: Test
-      #   run: bazel test //...
+      - name: Test
+        run: cd e2e/smoke && bazel test //...
 
       - name: Build release artifacts and prepare release notes
         run: |
