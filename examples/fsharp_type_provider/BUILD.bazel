@@ -6,7 +6,7 @@ load(
 fsharp_nunit_test(
     name = "fsharp_type_provider",
     srcs = ["Main.fs"],
-    target_frameworks = ["net6.0"],
+    target_frameworks = ["net9.0"],
     deps = [
         "//fsharp_type_provider/type_provider_lib",
         "@paket.example_deps//fsharp.core",

@@ -7,7 +7,7 @@ load(
 csharp_nunit_test(
     name = "lib_test",
     srcs = ["libtest.cs"],
-    target_frameworks = ["net6.0"],
+    target_frameworks = ["net9.0"],
     deps = [
         ":lib",
     ],

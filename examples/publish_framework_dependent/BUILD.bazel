@@ -7,7 +7,7 @@ load(
 csharp_binary(
     name = "hello",
     srcs = ["hello.cs"],
-    target_frameworks = ["net6.0"],
+    target_frameworks = ["net9.0"],
     deps = [
     ],
 )
@@ -19,5 +19,5 @@ publish_binary(
     name = "publish_dependent",
     binary = ":hello",
     self_contained = False,
-    target_framework = "net6.0",
+    target_framework = "net9.0",
 )

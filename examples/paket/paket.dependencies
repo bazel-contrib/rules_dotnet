@@ -1,9 +1,9 @@
-framework: net6.0
+framework: net9.0
 source https://api.nuget.org/v3/index.json
 
 nuget Argu 6.1.1
 nuget FSharp.Data 4.2.8
-nuget FSharp.Core 6.0.3
+nuget FSharp.Core 9.0.100
 nuget Microsoft.NETCore.App.Ref 6.0.5
 
 group othergroup
@@ -12,6 +12,6 @@ group othergroup
 
     nuget Argu 6.1.1
     nuget FSharp.Data 4.2.8
-    nuget FSharp.Core 6.0.3
+    nuget FSharp.Core 9.0.100
     nuget Microsoft.NETCore.App.Ref 6.0.5
 
