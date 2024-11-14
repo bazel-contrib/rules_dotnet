@@ -10,8 +10,26 @@ on:
 
 jobs:
   release:
-    uses: bazel-contrib/.github/.github/workflows/release_ruleset.yaml@v7
-    with:
-      release_files: rules_dotnet-*.tar.gz
-      prerelease: false
-      mount_bazel_caches: false
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Disable the build since we use the Bazel CI for it anyways. We were also hitting issues with
+      # the disks on the Github runner being too small for the build
+      # - name: Test
+      #   run: bazel test //...
+
+      - name: Build release artifacts and prepare release notes
+        run: |
+          .github/workflows/release_prep.sh ${{ env.GITHUB_REF_NAME }} > release_notes.txt
+
+      - name: Release
+        uses: softprops/action-gh-release@v1
+        with:
+          prerelease: false
+          # Use GH feature to populate the changelog automatically
+          generate_release_notes: true
+          body_path: release_notes.txt
+          fail_on_unmatched_files: true
+          files: rules_dotnet-*.tar.gz
