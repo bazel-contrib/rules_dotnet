@@ -1,6 +1,0 @@
-startup --windows_enable_symlinks
-common --enable_runfiles
-common --incompatible_strict_action_env
-
-# Disable bzlmod lock file since it's not stable enough yet
-common --lockfile_mode=off
