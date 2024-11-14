@@ -7,7 +7,7 @@ matrix:
   working_directory: ["", "examples"]
   strict_deps: ["--@rules_dotnet//dotnet/settings:strict_deps=true", "--@rules_dotnet//dotnet/settings:strict_deps=false"]
   flag_combo: [["--enable_bzlmod", "--@rules_dotnet//dotnet/settings:strict_deps=true"], ["--enable_bzlmod", "--@rules_dotnet//dotnet/settings:strict_deps=false"]]
-  e2e_working_directory: ["e2e/net6.0", "e2e/net7.0", "e2e/net8.0"]
+  e2e_working_directory: ["e2e/net8.0", "e2e/net9.0"]
 
 tasks:
   test_all:

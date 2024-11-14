@@ -1,7 +1,7 @@
 "rules_dotnet examples"
 
 module(
-    name = "e2e_net6.0",
+    name = "e2e_net8.0",
     version = "0.0.0",
     compatibility_level = 1,
 )
@@ -13,7 +13,7 @@ local_path_override(
 )
 
 dotnet = use_extension("@rules_dotnet//dotnet:extensions.bzl", "dotnet")
-dotnet.toolchain(dotnet_version = "6.0.417")
+dotnet.toolchain(dotnet_version = "9.0.100")
 use_repo(dotnet, "dotnet_toolchains")
 
 register_toolchains("@dotnet_toolchains//:all")

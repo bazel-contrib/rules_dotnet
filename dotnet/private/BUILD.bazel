@@ -130,9 +130,3 @@ bzl_library(
     srcs = ["toolchains_repo.bzl"],
     visibility = ["//dotnet:__subpackages__"],
 )
-
-bzl_library(
-    name = "versions",
-    srcs = ["versions.bzl"],
-    visibility = ["//dotnet:__subpackages__"],
-)

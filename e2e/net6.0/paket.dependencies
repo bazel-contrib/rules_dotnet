@@ -1,6 +1,0 @@
-framework: net6.0
-storage: none
-source https://api.nuget.org/v3/index.json
-
-nuget FSharp.Core 6.0.7
-nuget Microsoft.NETCore.App.Ref 6.0.25

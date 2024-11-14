@@ -10,7 +10,7 @@ fsharp_test(
         "test.fs",
         "main.fs",
     ],
-    target_frameworks = ["net6.0"],
+    target_frameworks = ["net9.0"],
     deps = [
         "@paket.example_deps//expecto",
         "@paket.example_deps//fsharp.core",

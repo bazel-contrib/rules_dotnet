@@ -92,35 +92,35 @@
   "net6.0": {
     "linux-x64": {
       "id": "Microsoft.NETCore.App.Host.linux-x64",
-      "version": "6.0.33"
+      "version": "6.0.36"
     },
     "linux-arm64": {
       "id": "Microsoft.NETCore.App.Host.linux-arm64",
-      "version": "6.0.33"
+      "version": "6.0.36"
     },
     "linux-musl-x64": {
       "id": "Microsoft.NETCore.App.Host.linux-musl-x64",
-      "version": "6.0.33"
+      "version": "6.0.36"
     },
     "linux-musl-arm64": {
       "id": "Microsoft.NETCore.App.Host.linux-musl-arm64",
-      "version": "6.0.33"
+      "version": "6.0.36"
     },
     "osx-x64": {
       "id": "Microsoft.NETCore.App.Host.osx-x64",
-      "version": "6.0.33"
+      "version": "6.0.36"
     },
     "osx-arm64": {
       "id": "Microsoft.NETCore.App.Host.osx-arm64",
-      "version": "6.0.33"
+      "version": "6.0.36"
     },
     "win-x64": {
       "id": "Microsoft.NETCore.App.Host.win-x64",
-      "version": "6.0.33"
+      "version": "6.0.36"
     },
     "win-arm64": {
       "id": "Microsoft.NETCore.App.Host.win-arm64",
-      "version": "6.0.33"
+      "version": "6.0.36"
     }
   },
   "net7.0": {
@@ -160,35 +160,69 @@
   "net8.0": {
     "linux-x64": {
       "id": "Microsoft.NETCore.App.Host.linux-x64",
-      "version": "8.0.8"
+      "version": "8.0.11"
     },
     "linux-arm64": {
       "id": "Microsoft.NETCore.App.Host.linux-arm64",
-      "version": "8.0.8"
+      "version": "8.0.11"
     },
     "linux-musl-x64": {
       "id": "Microsoft.NETCore.App.Host.linux-musl-x64",
-      "version": "8.0.8"
+      "version": "8.0.11"
     },
     "linux-musl-arm64": {
       "id": "Microsoft.NETCore.App.Host.linux-musl-arm64",
-      "version": "8.0.8"
+      "version": "8.0.11"
     },
     "osx-x64": {
       "id": "Microsoft.NETCore.App.Host.osx-x64",
-      "version": "8.0.8"
+      "version": "8.0.11"
     },
     "osx-arm64": {
       "id": "Microsoft.NETCore.App.Host.osx-arm64",
-      "version": "8.0.8"
+      "version": "8.0.11"
     },
     "win-x64": {
       "id": "Microsoft.NETCore.App.Host.win-x64",
-      "version": "8.0.8"
+      "version": "8.0.11"
     },
     "win-arm64": {
       "id": "Microsoft.NETCore.App.Host.win-arm64",
-      "version": "8.0.8"
+      "version": "8.0.11"
+    }
+  },
+  "net9.0": {
+    "linux-x64": {
+      "id": "Microsoft.NETCore.App.Host.linux-x64",
+      "version": "9.0.0"
+    },
+    "linux-arm64": {
+      "id": "Microsoft.NETCore.App.Host.linux-arm64",
+      "version": "9.0.0"
+    },
+    "linux-musl-x64": {
+      "id": "Microsoft.NETCore.App.Host.linux-musl-x64",
+      "version": "9.0.0"
+    },
+    "linux-musl-arm64": {
+      "id": "Microsoft.NETCore.App.Host.linux-musl-arm64",
+      "version": "9.0.0"
+    },
+    "osx-x64": {
+      "id": "Microsoft.NETCore.App.Host.osx-x64",
+      "version": "9.0.0"
+    },
+    "osx-arm64": {
+      "id": "Microsoft.NETCore.App.Host.osx-arm64",
+      "version": "9.0.0"
+    },
+    "win-x64": {
+      "id": "Microsoft.NETCore.App.Host.win-x64",
+      "version": "9.0.0"
+    },
+    "win-arm64": {
+      "id": "Microsoft.NETCore.App.Host.win-arm64",
+      "version": "9.0.0"
     }
   }
 }

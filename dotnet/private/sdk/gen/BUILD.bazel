@@ -12,7 +12,7 @@ fsharp_binary(
         "Sdk.fs",
         "Main.fs",
     ],
-    target_frameworks = ["net8.0"],
+    target_frameworks = ["net9.0"],
     visibility = ["//visibility:public"],
     deps = [
         "@paket.paket2bazel_dependencies//argu",

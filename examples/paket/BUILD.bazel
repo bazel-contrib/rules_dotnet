@@ -7,7 +7,7 @@ fsharp_binary(
         "Main.fs",
     ],
     tags = ["requires-network"],
-    target_frameworks = ["net6.0"],
+    target_frameworks = ["net9.0"],
     deps = [
         "@paket.main//argu",
         "@paket.main//fsharp.core",
@@ -23,7 +23,7 @@ fsharp_binary(
         "Main.fs",
     ],
     tags = ["requires-network"],
-    target_frameworks = ["net6.0"],
+    target_frameworks = ["net9.0"],
     deps = [
         "@paket.othergroup//argu",
         "@paket.othergroup//fsharp.core",

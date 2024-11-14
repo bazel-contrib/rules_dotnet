@@ -9,7 +9,7 @@ fsharp_library(
     # Files used by type providers at compile time need to be put here
     compile_data = ["foo.json"],
     internals_visible_to = ["lib_test"],
-    target_frameworks = ["net6.0"],
+    target_frameworks = ["net9.0"],
     visibility = ["//fsharp_type_provider:__subpackages__"],
     deps = [
         "@paket.example_deps//fsharp.core",

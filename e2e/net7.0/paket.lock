@@ -1,6 +1,0 @@
-STORAGE: NONE
-RESTRICTION: == net7.0
-NUGET
-  remote: https://api.nuget.org/v3/index.json
-    FSharp.Core (7.0.402)
-    Microsoft.NETCore.App.Ref (7.0.14)

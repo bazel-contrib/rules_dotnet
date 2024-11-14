@@ -30,6 +30,7 @@ targeting_pack_lookup_table = {
         "net6.0": "//dotnet/private/sdk/targeting_packs:default_net6.0",
         "net7.0": "//dotnet/private/sdk/targeting_packs:default_net7.0",
         "net8.0": "//dotnet/private/sdk/targeting_packs:default_net8.0",
+        "net9.0": "//dotnet/private/sdk/targeting_packs:default_net9.0",
     },
     "web": {
         "netcoreapp2.1": "//dotnet/private/sdk/targeting_packs:web_netcoreapp2.1",
@@ -40,5 +41,6 @@ targeting_pack_lookup_table = {
         "net6.0": "//dotnet/private/sdk/targeting_packs:web_net6.0",
         "net7.0": "//dotnet/private/sdk/targeting_packs:web_net7.0",
         "net8.0": "//dotnet/private/sdk/targeting_packs:web_net8.0",
+        "net9.0": "//dotnet/private/sdk/targeting_packs:web_net9.0",
     },
 }
