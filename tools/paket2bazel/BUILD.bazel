@@ -9,7 +9,7 @@ fsharp_binary(
         "Gen.fs",
         "Main.fs",
     ],
-    target_frameworks = ["net8.0"],
+    target_frameworks = ["net9.0"],
     deps = [
         "//dotnet/private/sdk/gen",
         "@paket.paket2bazel_dependencies//argu",
@@ -28,6 +28,6 @@ publish_binary(
     name = "paket2bazel",
     binary = ":paket2bazel_bin",
     self_contained = True,
-    target_framework = "net8.0",
+    target_framework = "net9.0",
     visibility = ["//visibility:public"],
 )

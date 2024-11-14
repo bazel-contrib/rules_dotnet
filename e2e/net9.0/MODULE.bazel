@@ -1,0 +1,26 @@
+"rules_dotnet examples"
+
+module(
+    name = "e2e_net8.0",
+    version = "0.0.0",
+    compatibility_level = 1,
+)
+
+bazel_dep(name = "rules_dotnet", version = "0.0.0")
+local_path_override(
+    module_name = "rules_dotnet",
+    path = "../..",
+)
+
+dotnet = use_extension("@rules_dotnet//dotnet:extensions.bzl", "dotnet")
+dotnet.toolchain(dotnet_version = "9.0.100")
+use_repo(dotnet, "dotnet_toolchains")
+
+register_toolchains("@dotnet_toolchains//:all")
+
+main_extension = use_extension("//:paket.main_extension.bzl", "main_extension")
+use_repo(main_extension, "paket.main")
+
+# This is only required because rules_cc is required for the Bazel CI RBE config
+# If you are using the e2e tests as an example for your own project, you can remove this
+bazel_dep(name = "rules_cc", version = "0.0.9", dev_dependency = True)

@@ -7,12 +7,6 @@
       "commands": [
         "paket"
       ]
-    },
-    "fantomas": {
-      "version": "6.3.0",
-      "commands": [
-        "fantomas"
-      ]
     }
   }
 }
