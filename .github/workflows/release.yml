@@ -15,8 +15,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Test
-        run: cd e2e/smoke && bazel test //...
+      # Disabling for now because we are getting disk space issues on the GH runners
+      # We already run all of our tests with Bazel CI
+      # - name: Test
+      #   run: cd e2e/smoke && bazel test //...
 
       - name: Build release artifacts and prepare release notes
         run: |
