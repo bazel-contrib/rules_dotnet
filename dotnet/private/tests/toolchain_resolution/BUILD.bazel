@@ -72,7 +72,7 @@ genrule(
 assert_contains(
     name = "check_dotnet_sdk_version_output",
     actual = ":dotnet_sdk_version",
-    expected = "8.0.402",
+    expected = "9.0.100",
 )
 
 genrule(
@@ -90,7 +90,7 @@ genrule(
 assert_contains(
     name = "check_dotnet_runtime_version_output",
     actual = ":dotnet_runtime_version",
-    expected = "8.0.8",
+    expected = "9.0.0",
 )
 
 genrule(
@@ -108,5 +108,5 @@ genrule(
 assert_contains(
     name = "check_dotnet_runtime_tfm_output",
     actual = ":dotnet_runtime_tfm",
-    expected = "net8.0",
+    expected = "net9.0",
 )
