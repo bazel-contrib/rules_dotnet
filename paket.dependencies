@@ -34,6 +34,6 @@ group rules_dotnet_nuget_packages
     framework: net9.0
     source https://api.nuget.org/v3/index.json
 
-    nuget NUnit 3.12.0
-    nuget NUnitLite 3.12.0
+    nuget NUnit 3.14.0
+    nuget NUnitLite 3.14.0
 
