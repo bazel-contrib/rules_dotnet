@@ -611,14 +611,20 @@ def tfm_filegroup(name, tfms):
         if net:
             native.alias(
                 name = "%s_net" % name,
-                actual = select({"@rules_dotnet//dotnet:tfm_%s" % tfm: target for (tfm, target) in net}),
+                actual = select(
+                    {"@rules_dotnet//dotnet:tfm_%s" % tfm: target for (tfm, target) in net} |
+                    {"//conditions:default": ":%s_std" % name},
+                ),
                 visibility = ["//visibility:public"],
             )
 
         if cor:
             native.alias(
                 name = "%s_cor" % name,
-                actual = select({"@rules_dotnet//dotnet:tfm_%s" % tfm: target for (tfm, target) in cor}),
+                actual = select(
+                    {"@rules_dotnet//dotnet:tfm_%s" % tfm: target for (tfm, target) in cor} |
+                    {"//conditions:default": ":%s_std" % name},
+                ),
                 visibility = ["//visibility:public"],
             )
 
