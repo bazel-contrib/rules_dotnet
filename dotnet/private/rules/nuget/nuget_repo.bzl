@@ -20,8 +20,8 @@ def _nuget_repo_impl(ctx):
         sha512 = package["sha512"]
         deps = package["dependencies"]
 
-        targeting_pack_overrides = ctx.attr.targeting_pack_overrides[id.lower()]
-        framework_list = ctx.attr.framework_list[id.lower()]
+        targeting_pack_overrides = ctx.attr.targeting_pack_overrides["{}|{}".format(id.lower(), version)]
+        framework_list = ctx.attr.framework_list["{}|{}".format(id.lower(), version)]
 
         ctx.template("{}/{}/BUILD.bazel".format(id.lower(), version), ctx.attr._template, {
             "{PREFIX}": _GLOBAL_NUGET_PREFIX,
@@ -90,6 +90,6 @@ def nuget_repo(name, packages):
         name = name,
         repo_name = name,
         packages = [json.encode(package) for package in packages],
-        targeting_pack_overrides = {"{}".format(package["id"].lower()): package["targeting_pack_overrides"] for package in packages},
-        framework_list = {"{}".format(package["id"].lower()): package["framework_list"] for package in packages},
+        targeting_pack_overrides = {"{}|{}".format(package["id"].lower(), package["version"]): package["targeting_pack_overrides"] for package in packages},
+        framework_list = {"{}|{}".format(package["id"].lower(), package["version"]): package["framework_list"] for package in packages},
     )

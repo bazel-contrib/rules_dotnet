@@ -100,6 +100,50 @@ nuget_structure_test = analysistest.make(
     },
 )
 
+def _nuget_targeting_pack_overrides_test_impl(ctx):
+    env = analysistest.begin(ctx)
+
+    target_under_test = analysistest.target_under_test(env)
+    nuget_provider = target_under_test[NuGetInfo]
+
+    targeting_pack_overrides = nuget_provider.targeting_pack_overrides
+    asserts.true(
+        env,
+        sorted(ctx.attr.expected_targeting_pack_overrides) == sorted(targeting_pack_overrides),
+        "\nExpected targeting_pack_overrides:\n{}\nActual targeting_pack_overrides:\n{}".format(ctx.attr.expected_targeting_pack_overrides, targeting_pack_overrides),
+    )
+
+    return analysistest.end(env)
+
+nuget_targeting_pack_overrides_test = analysistest.make(
+    _nuget_targeting_pack_overrides_test_impl,
+    attrs = {
+        "expected_targeting_pack_overrides": attr.string_dict(default = {}),
+    },
+)
+
+def _nuget_framework_list_test_impl(ctx):
+    env = analysistest.begin(ctx)
+
+    target_under_test = analysistest.target_under_test(env)
+    nuget_provider = target_under_test[NuGetInfo]
+
+    framework_list = nuget_provider.framework_list
+    asserts.true(
+        env,
+        sorted(ctx.attr.expected_framework_list) == sorted(framework_list),
+        "\nExpected framework_list:\n{}\nActual framework_list:\n{}".format(ctx.attr.expected_framework_list, framework_list),
+    )
+
+    return analysistest.end(env)
+
+nuget_framework_list_test = analysistest.make(
+    _nuget_framework_list_test_impl,
+    attrs = {
+        "expected_framework_list": attr.string_dict(default = {}),
+    },
+)
+
 def _nuget_test_wrapper(ctx):
     return [ctx.attr.package[0][DotnetAssemblyCompileInfo], ctx.attr.package[0][DotnetAssemblyRuntimeInfo], ctx.attr.package[0][NuGetInfo]]
 

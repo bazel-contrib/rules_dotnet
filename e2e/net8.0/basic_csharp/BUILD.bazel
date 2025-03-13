@@ -29,5 +29,9 @@ csharp_library(
     srcs = ["lib.cs"],
     internals_visible_to = ["lib_test"],
     target_frameworks = ["net8.0"],
-    deps = [],
+    deps = [
+        # This package only supports net9.0 and netstandard2.0 TFMs.
+        # rules_dotnet should be able to fall back to netstandard2.0.
+        "@paket.main//microsoft.net.stringtools",
+    ],
 )

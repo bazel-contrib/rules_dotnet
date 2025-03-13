@@ -4,3 +4,5 @@ source https://api.nuget.org/v3/index.json
 
 nuget FSharp.Core 8.0.100
 nuget Microsoft.NETCore.App.Ref 8.0.0
+# Used for testing of the .NET Standard fallback.
+nuget Microsoft.NET.StringTools 17.13.9
