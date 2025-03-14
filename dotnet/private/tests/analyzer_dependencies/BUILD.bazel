@@ -1,0 +1,3 @@
+load(":analyzer_dependencies.bzl", "test_analyzer_dependencies")
+
+test_analyzer_dependencies()
