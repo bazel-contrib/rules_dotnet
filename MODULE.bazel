@@ -39,6 +39,11 @@ bazel_dep(name = "gazelle", version = "0.39.1", dev_dependency = True, repo_name
 bazel_dep(name = "bazel_skylib_gazelle_plugin", version = "1.7.1", dev_dependency = True)
 bazel_dep(name = "rules_cc", version = "0.0.12", dev_dependency = True)
 bazel_dep(name = "rules_testing", version = "0.6.0", dev_dependency = True)
+bazel_dep(name = "dotnet_test_resources_other_repo", version = "", dev_dependency = True)
+local_path_override(
+    module_name = "dotnet_test_resources_other_repo",
+    path = "dotnet/private/tests/resources/other_repo",
+)
 
 rules_dotnet_dev_nuget_packages_extension = use_extension("//dotnet:paket.rules_dotnet_dev_nuget_packages_extension.bzl", "rules_dotnet_dev_nuget_packages_extension", dev_dependency = True)
 use_repo(rules_dotnet_dev_nuget_packages_extension, "paket.rules_dotnet_dev_nuget_packages")
