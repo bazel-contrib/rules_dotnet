@@ -13,6 +13,7 @@ load(
     "is_core_framework",
     "is_greater_or_equal_framework",
     "is_standard_framework",
+    "map_resource_arg",
     "use_highentropyva",
 )
 load(
@@ -74,6 +75,7 @@ def _should_output_ref_assembly(toolchain):
 def AssemblyAction(
         actions,
         compiler_wrapper,
+        label,
         debug,
         defines,
         deps,
@@ -109,6 +111,7 @@ def AssemblyAction(
     Args:
         actions: Bazel module providing functions to create actions.
         compiler_wrapper: The wrapper script that invokes the F# compiler.
+        label: The label of the target. This is used to determine the relative path of embedded resources.
         debug: Emits debugging information.
         defines: The list of conditional compilation symbols.
         deps: The list of other libraries to be linked in to the assembly.
@@ -177,6 +180,7 @@ def AssemblyAction(
         _compile(
             actions,
             compiler_wrapper,
+            label,
             debug,
             defines,
             keyfile,
@@ -217,6 +221,7 @@ def AssemblyAction(
         _compile(
             actions,
             compiler_wrapper,
+            label,
             debug,
             defines,
             keyfile,
@@ -248,6 +253,7 @@ def AssemblyAction(
             _compile(
                 actions,
                 compiler_wrapper,
+                label,
                 debug,
                 defines,
                 keyfile,
@@ -310,6 +316,7 @@ def AssemblyAction(
 def _compile(
         actions,
         compiler_wrapper,
+        label,
         debug,
         defines,
         keyfile,
@@ -407,7 +414,7 @@ def _compile(
     args.add_all(srcs)
 
     # resources
-    args.add_all(resources, format_each = "--resource:%s")
+    args.add_all(resources, map_each = lambda r: map_resource_arg(r, label, out_dll.basename if out_dll != None else None, language = "fsharp"), allow_closure = True)
 
     # defines
     args.add_all(defines, format_each = "-d:%s")
