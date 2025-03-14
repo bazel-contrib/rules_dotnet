@@ -17,6 +17,7 @@ def _compile_action(ctx, tfm):
     return AssemblyAction(
         ctx.actions,
         ctx.executable._compiler_wrapper_bat if ctx.target_platform_has_constraint(ctx.attr._windows_constraint[platform_common.ConstraintValueInfo]) else ctx.executable._compiler_wrapper_sh,
+        label = ctx.label,
         additionalfiles = ctx.files.additionalfiles,
         debug = is_debug(ctx),
         defines = ctx.attr.defines,

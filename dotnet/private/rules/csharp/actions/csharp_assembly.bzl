@@ -10,6 +10,7 @@ load(
     "framework_preprocessor_symbols",
     "generate_warning_args",
     "get_framework_version_info",
+    "map_resource_arg",
     "use_highentropyva",
 )
 load(
@@ -55,6 +56,7 @@ def _write_internals_visible_to_csharp(actions, label_name, dll_name, others):
 def AssemblyAction(
         actions,
         compiler_wrapper,
+        label,
         additionalfiles,
         debug,
         defines,
@@ -98,6 +100,7 @@ def AssemblyAction(
     Args:
         actions: Bazel module providing functions to create actions.
         compiler_wrapper: The wrapper script that invokes the C# compiler.
+        label: The label of the target. This is used to determine the relative path of embedded resources.
         additionalfiles: Names additional files that don't directly affect code generation but may be used by analyzers for producing errors or warnings.
         debug: Emits debugging information.
         defines: The list of conditional compilation symbols.
@@ -176,6 +179,7 @@ def AssemblyAction(
         _compile(
             actions,
             compiler_wrapper,
+            label,
             additionalfiles,
             analyzers,
             analyzers_csharp,
@@ -225,6 +229,7 @@ def AssemblyAction(
         _compile(
             actions,
             compiler_wrapper,
+            label,
             additionalfiles,
             analyzers,
             analyzers_csharp,
@@ -263,6 +268,7 @@ def AssemblyAction(
         _compile(
             actions,
             compiler_wrapper,
+            label,
             additionalfiles,
             analyzers,
             analyzers_csharp,
@@ -333,6 +339,7 @@ def AssemblyAction(
 def _compile(
         actions,
         compiler_wrapper,
+        label,
         additionalfiles,
         analyzer_assemblies,
         analyzer_assemblies_csharp,
@@ -452,7 +459,7 @@ def _compile(
     args.add_all(srcs)
 
     # resources
-    args.add_all(resources, format_each = "/resource:%s")
+    args.add_all(resources, map_each = lambda r: map_resource_arg(r, label, out_dll.basename if out_dll != None else None, language = "csharp"), allow_closure = True)
 
     # defines
     args.add_all(defines, format_each = "/d:%s")
