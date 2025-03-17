@@ -1,0 +1,43 @@
+load("//dotnet:defs.bzl", "csharp_test", "fsharp_test")
+load(
+    ":embedded_resource_path.bzl",
+    "test_embedded_resource_path_csharp",
+    "test_embedded_resource_path_fsharp",
+    "test_path_from_other_repo_should_stay_as_basename",
+    "test_path_from_parent_package_should_stay_as_basename",
+    "test_path_from_unrelated_package_should_stay_as_basename",
+)
+
+exports_files(
+    ["file.txt"],
+    visibility = ["//visibility:public"],
+)
+
+test_embedded_resource_path_csharp()
+
+test_embedded_resource_path_fsharp()
+
+test_path_from_other_repo_should_stay_as_basename()
+
+test_path_from_parent_package_should_stay_as_basename()
+
+test_path_from_unrelated_package_should_stay_as_basename()
+
+csharp_test(
+    name = "test_embedded_resource_runtime_csharp",
+    srcs = ["EmbeddedResource.cs"],
+    out = "EmbeddedResource.Library",
+    resources = ["nested/path/to/resource.txt"],
+    target_frameworks = ["net9.0"],
+)
+
+fsharp_test(
+    name = "test_embedded_resource_runtime_fsharp",
+    srcs = ["EmbeddedResource.fs"],
+    out = "EmbeddedResource.Library",
+    resources = ["nested/path/to/resource.txt"],
+    target_frameworks = ["net9.0"],
+    deps = [
+        "@paket.rules_dotnet_dev_nuget_packages//fsharp.core",
+    ],
+)

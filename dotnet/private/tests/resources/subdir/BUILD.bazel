@@ -1,0 +1,19 @@
+load("//dotnet:defs.bzl", "csharp_library")
+
+package(default_visibility = ["//visibility:public"])
+
+csharp_library(
+    name = "parent_lib",
+    srcs = ["Hello.cs"],
+    out = "EmbeddedResource.Library",
+    resources = ["//dotnet/private/tests/resources:file.txt"],
+    target_frameworks = ["net9.0"],
+)
+
+csharp_library(
+    name = "unrelated_lib",
+    srcs = ["Hello.cs"],
+    out = "EmbeddedResource.Library",
+    resources = ["//dotnet/private/tests/resources/other_dir:file.txt"],
+    target_frameworks = ["net9.0"],
+)

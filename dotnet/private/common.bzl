@@ -717,3 +717,52 @@ def copy_files_to_dir(target_name, actions, is_windows, files, out_dir):
             tools = [copy_script],
         )
     return outputs
+
+_RESOURCE_TEMPLATE_CSHARP = "/resource:{}"
+_RESOURCE_TEMPLATE_FSHARP = "--resource:{}"
+
+def map_resource_arg(file, target_label, out_dll, language):
+    """Map an embedded resource file to a resource argument for the compiler.
+
+    Args:
+        file: (File) The file to embed.
+        target_label: (Label) The label of the target that is embedding the resource.
+        out_dll: (str) The output dll file, if one exists.
+        language: (str) The language of the target that is embedding the resource. Possible values are "csharp" or "fsharp".
+
+    Returns:
+        The resource argument to pass to the compiler.
+    """
+    if language == "csharp":
+        base_resource_fmt = _RESOURCE_TEMPLATE_CSHARP
+    elif language == "fsharp":
+        base_resource_fmt = _RESOURCE_TEMPLATE_FSHARP
+    else:
+        fail("Unsupported language: {}", language)
+
+    base_resource_arg = base_resource_fmt.format(file.path)
+
+    # We can only determine the embedded resource's name if we have a DLL to embed it in.
+    if out_dll == None or not out_dll.endswith(".dll"):
+        return base_resource_arg
+
+    # When the file is not within a project directory, MSBuild falls back to
+    # the basename of the file.
+    simple_resource_name = "{}.{}".format(out_dll[:-4], file.basename)
+
+    if file.owner != None and file.owner.repo_name != target_label.repo_name:
+        # Fallback to the basename if the file comes from a different repository.
+        resource_name = simple_resource_name
+    if not file.short_path.startswith(target_label.package):
+        # Fallback to the basename if the file is not in the target's package, because
+        # the path will not be normalized.
+        resource_name = simple_resource_name
+    else:
+        # Packages/Foo.Bar/BUILD.bazel importing Packages/Foo.Bar/a/b/c.txt -> a/b/c.txt
+        relative_path = file.short_path[len(target_label.package) + 1:]
+
+        # Foo.Bar.dll and a/b/c.txt -> Foo.Bar.a.b.c.txt
+        parts = relative_path.split("/")
+        resource_name = "{}.{}".format(out_dll[:-4], ".".join(parts))
+
+    return base_resource_arg + "," + resource_name
