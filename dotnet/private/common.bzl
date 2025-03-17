@@ -507,16 +507,36 @@ def framework_preprocessor_symbols(tfm):
     Returns:
         A list of preprocessor symbols.
     """
-    # TODO: All built in preprocessor directives: https://docs.microsoft.com/en-us/dotnet/csharp/language-reference/preprocessor-directives
 
-    specific = tfm.upper().replace(".", "_")
+    # BFS to recursively find all frameworks that are compatible with the target framework
+    compatible_frameworks = []
+    unvisited_frameworks = [tfm]
+    for _ in range(2147483647):
+        if not unvisited_frameworks:
+            break
+
+        framework = unvisited_frameworks.pop(0)
+        if framework in compatible_frameworks:
+            continue
+
+        compatible_frameworks.append(framework)
+        unvisited_frameworks.extend(FRAMEWORK_COMPATIBILITY[framework])
+
+    defines = [tfm.upper().replace(".", "_")]
 
     if tfm.startswith("netstandard"):
-        return ["NETSTANDARD", specific]
+        defines.append("NETSTANDARD")
     elif tfm.startswith("netcoreapp"):
-        return ["NETCOREAPP", specific]
-    else:
-        return ["NETFRAMEWORK", specific]
+        defines.append("NETCOREAPP")
+    elif tfm.startswith("net"):
+        defines.append("NETFRAMEWORK")
+
+    for framework in compatible_frameworks:
+        # net8.0 -> NET8_0_OR_GREATER
+        # net461 -> NET461_OR_GREATER
+        defines.append(framework.upper().replace(".", "_") + "_OR_GREATER")
+
+    return defines
 
 # For deps.json spec see: https://github.com/dotnet/sdk/blob/main/documentation/specs/runtime-configuration-file.md
 def generate_depsjson(
