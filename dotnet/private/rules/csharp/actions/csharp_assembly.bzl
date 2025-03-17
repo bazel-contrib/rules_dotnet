@@ -52,6 +52,24 @@ def _write_internals_visible_to_csharp(actions, label_name, dll_name, others):
 
     return output
 
+def _collect_analyzer_dependencies(deps):
+    """Collect the runtime libraries of this analyzer. These will be passed to the compiler.
+
+    Args:
+        deps: The list of dependencies of the analyzer.
+
+    Returns:
+        The list of analyzer dependencies.
+    """
+
+    dlls = []
+    for dep in deps:
+        runtime_info = dep[DotnetAssemblyRuntimeInfo]
+
+        # FIXME: Should this respect `not strict_deps`?
+        dlls.extend(runtime_info.libs)
+    return dlls
+
 # buildifier: disable=unnamed-macro
 def AssemblyAction(
         actions,
@@ -160,6 +178,12 @@ def AssemblyAction(
         exports,
         strict_deps,
     )
+
+    if (is_analyzer or is_language_specific_analyzer) and target_framework != "netstandard2.0":
+        fail("Analyzers must have `target_frameworks = [\"netstandard2.0\"]`.")
+
+    # TODO: Ensure that all the analyzer DLLs also target netstandard2.0.
+    analyzer_dlls = _collect_analyzer_dependencies(deps) if (is_analyzer or is_language_specific_analyzer) else []
 
     defines = framework_preprocessor_symbols(target_framework) + defines
 
@@ -309,8 +333,8 @@ def AssemblyAction(
         project_sdk = project_sdk,
         refs = [out_ref] if not is_analyzer else [],
         irefs = [out_iref] if out_iref else [out_ref],
-        analyzers = [] if (not is_analyzer) or is_language_specific_analyzer else [out_dll],
-        analyzers_csharp = [out_dll] if is_language_specific_analyzer else [],
+        analyzers = [] if (not is_analyzer) or is_language_specific_analyzer else ([out_dll] + analyzer_dlls),
+        analyzers_csharp = ([out_dll] + analyzer_dlls) if is_language_specific_analyzer else [],
         analyzers_fsharp = [],
         analyzers_vb = [],
         internals_visible_to = internals_visible_to or [],
@@ -325,7 +349,7 @@ def AssemblyAction(
     ), DotnetAssemblyRuntimeInfo(
         name = assembly_name,
         version = "1.0.0",  #TODO: Maybe make this configurable?
-        libs = [out_dll] if not is_analyzer else [],
+        libs = [out_dll] if not (is_analyzer or is_language_specific_analyzer) else [],
         pdbs = [out_pdb] if out_pdb else [],
         xml_docs = [out_xml] if out_xml else [],
         data = data,
