@@ -8,6 +8,7 @@ load("//dotnet/private:providers.bzl", "DotnetBinaryInfo")
 ACTION_ARGS_TEST_ARGS = {
     "action_mnemonic": attr.string(),
     "expected_partial_args": attr.string_list(),
+    "expected_nonexistent_partial_args": attr.string_list(),
 }
 
 # We also expose the implementation so that it can be used for testing
@@ -38,6 +39,11 @@ def action_args_test_impl(ctx):
 
         if found_arg == None:
             fail("No match for arg: {}".format(expected_arg))
+
+    for unexpected_arg in ctx.attr.expected_nonexistent_partial_args:
+        for actual_arg in action_under_test.argv:
+            if actual_arg == unexpected_arg:
+                fail("Expected arg not to be present: {}".format(unexpected_arg))
 
     return analysistest.end(env)
 
