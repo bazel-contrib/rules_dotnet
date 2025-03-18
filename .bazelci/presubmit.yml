@@ -3,14 +3,29 @@ buildifier:
   version: 7.1.0
 
 matrix:
-  platform: ["windows", "ubuntu2004", "rbe_ubuntu1604", "macos", "macos_arm64", "ubuntu2004_arm64", "windows_arm64"]
+  bazel: ["7.x", "8.x"]
+  platform:
+    [
+      "windows",
+      "ubuntu2004",
+      "rbe_ubuntu1604",
+      "macos",
+      "macos_arm64",
+      "ubuntu2004_arm64",
+      "windows_arm64",
+    ]
   working_directory: ["", "examples"]
-  flag_combo: [["--@rules_dotnet//dotnet/settings:strict_deps=true"], ["--@rules_dotnet//dotnet/settings:strict_deps=false"]]
+  flag_combo:
+    [
+      ["--@rules_dotnet//dotnet/settings:strict_deps=true"],
+      ["--@rules_dotnet//dotnet/settings:strict_deps=false"],
+    ]
   e2e_working_directory: ["e2e/net8.0", "e2e/net9.0"]
 
 tasks:
   test_all:
     name: Build and test
+    bazel: ${{ bazel }}
     platform: ${{ platform }}
     working_directory: ${{ working_directory }}
     include_json_profile:
@@ -24,6 +39,7 @@ tasks:
     test_flags: ${{ flag_combo }}
   e2e:
     name: ${{ e2e_working_directory }}
+    bazel: ${{ bazel }}
     platform: ${{ platform }}
     working_directory: ${{ e2e_working_directory }}
     include_json_profile:
