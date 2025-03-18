@@ -32,6 +32,7 @@ csharp_binary(
 pkg_tar(
     name = "tar",
     srcs = [":framework_dependent"],
+    include_runfiles = True,
     mode = "0755",
     package_dir = "/",
     strip_prefix = select(

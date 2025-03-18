@@ -27,7 +27,7 @@ def _get_assembly_files(assembly_info, transitive_runtime_deps):
         data += dep.data
     return (libs, native, data, appsetting_files)
 
-def _copy_to_publish(ctx, runtime_identifier, runtime_pack_info, binary_info, assembly_info, transitive_runtime_deps, repo_mapping_manifest):
+def _copy_to_publish(ctx, runtime_identifier, runtime_pack_info, binary_info, assembly_info, transitive_runtime_deps):
     is_windows = ctx.target_platform_has_constraint(ctx.attr._windows_constraint[platform_common.ConstraintValueInfo])
     inputs = [binary_info.dll]
     main_dll_copy = ctx.actions.declare_file(
@@ -63,23 +63,15 @@ def _copy_to_publish(ctx, runtime_identifier, runtime_pack_info, binary_info, as
     # the runfiles lib. End users should not expect files in the `data` attribute
     # to be resolvable by relative paths. They need to use the runfiles lib.
     #
-    # Since we want the published binary and all it's files to be easily extracted
-    # into e.g. a tar/zip/docker we manually create the runfiles structure because
-    # there are many sharp edges with extracting runfiles from Bazel. By manually
-    # creating the runfiles structure the runfiles are just normal files in the
-    # DefaultInfo provider and can thus be easily forwarded to filegroups/tars/containers.
+    # The end-user will have to use rules that also pull the runfiles. For examples if
+    # they use rules_pkg they have to use `include_runfiles` on the pkt_tar rule.
     #
     # The runfiles library follows the spec and tries to find a `<DLL>.runfiles` directory
     # next to the the DLL based on argv0 of the running process if
     # RUNFILES_DIR/RUNFILES_MANIFEST_FILE/RUNFILES_MANIFEST_ONLY is not set).
+    runfiles = []
     for file in data:
-        inputs.append(file)
-        manifest_path = to_rlocation_path(ctx, file)
-        output = ctx.actions.declare_file(
-            "{}/publish/{}/{}.runfiles/{}".format(ctx.label.name, runtime_identifier, paths.replace_extension(binary_info.dll.basename, ""), manifest_path),
-        )
-        outputs.append(output)
-        _copy_file(script_body, file, output, is_windows = is_windows)
+        runfiles.append(file)
 
     for file in appsetting_files:
         inputs.append(file)
@@ -88,16 +80,6 @@ def _copy_to_publish(ctx, runtime_identifier, runtime_pack_info, binary_info, as
         )
         outputs.append(output)
         _copy_file(script_body, file, output, is_windows = is_windows)
-
-    # The repo mapping manifest is not part of the runfiles by default so we
-    # copy it to the runfiles directory manually.
-    if repo_mapping_manifest:
-        inputs.append(repo_mapping_manifest)
-        output = ctx.actions.declare_file(
-            "{}/publish/{}/{}.runfiles/_repo_mapping".format(ctx.label.name, runtime_identifier, paths.replace_extension(binary_info.dll.basename, "")),
-        )
-        outputs.append(output)
-        _copy_file(script_body, repo_mapping_manifest, output, is_windows = is_windows)
 
     # In case the publish is self-contained there needs to be a runtime pack available
     # with the runtime dependencies that are required for the targeted runtime.
@@ -129,7 +111,7 @@ def _copy_to_publish(ctx, runtime_identifier, runtime_pack_info, binary_info, as
         tools = [copy_script],
     )
 
-    return (main_dll_copy, outputs)
+    return (main_dll_copy, outputs, runfiles)
 
 def _create_shim_exe(ctx, apphost_pack_info, dll):
     windows_constraint = ctx.attr._windows_constraint[platform_common.ConstraintValueInfo]
@@ -171,8 +153,6 @@ def _generate_depsjson(
     )
 
 def _publish_binary_impl(ctx):
-    repo_mapping_manifest = ctx.attr.binary[0][DefaultInfo].files_to_run.repo_mapping_manifest
-
     assembly_compile_info = ctx.attr.binary[0][DotnetAssemblyCompileInfo]
     assembly_runtime_info = ctx.attr.binary[0][DotnetAssemblyRuntimeInfo]
     binary_info = ctx.attr.binary[0][DotnetBinaryInfo]
@@ -184,14 +164,13 @@ def _publish_binary_impl(ctx):
     runtime_identifier = ctx.attr.runtime_identifier if ctx.attr.runtime_identifier else binary_info.runtime_pack_info.runtime_identifier
     roll_forward_behavior = ctx.attr.roll_forward_behavior
 
-    (main_dll, runfiles) = _copy_to_publish(
+    (main_dll, outputs, runfiles) = _copy_to_publish(
         ctx,
         runtime_identifier,
         runtime_pack_info,
         binary_info,
         assembly_runtime_info,
         transitive_runtime_deps,
-        repo_mapping_manifest,
     )
 
     apphost_shim = _create_shim_exe(ctx, binary_info.apphost_pack_info, main_dll)
@@ -225,8 +204,8 @@ def _publish_binary_impl(ctx):
     return [
         DefaultInfo(
             executable = apphost_shim,
-            files = depset([apphost_shim, main_dll, runtimeconfig, depsjson] + runfiles),
-            runfiles = ctx.runfiles(files = [apphost_shim, main_dll, runtimeconfig, depsjson] + runfiles),
+            files = depset([apphost_shim, main_dll, runtimeconfig, depsjson] + outputs),
+            runfiles = ctx.runfiles(files = [apphost_shim, main_dll, runtimeconfig, depsjson] + outputs + runfiles),
         ),
     ]
 

@@ -17,6 +17,7 @@ TOOLCHAIN_LOCATION=$(dirname "$1")
 # not work?
 DOTNET_ROOT="../${TOOLCHAIN_LOCATION#'external/'}/"
 export DOTNET_ROOT
+ls -la ./../_main/dotnet/private/tests/publish
 
 if [[ "$OSTYPE" == "linux-gnu"* ]]; then
     tar -xvf ./dotnet/private/tests/publish/framework_dependent/tar.tar
