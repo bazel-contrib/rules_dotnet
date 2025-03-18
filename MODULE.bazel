@@ -39,6 +39,7 @@ bazel_dep(name = "gazelle", version = "0.42.0", dev_dependency = True, repo_name
 bazel_dep(name = "bazel_skylib_gazelle_plugin", version = "1.7.1", dev_dependency = True)
 bazel_dep(name = "rules_cc", version = "0.1.1", dev_dependency = True)
 bazel_dep(name = "rules_testing", version = "0.7.0", dev_dependency = True)
+bazel_dep(name = "bazel_ci_rules", version = "1.0.0", dev_dependency = True)
 bazel_dep(name = "dotnet_test_resources_other_repo", version = "", dev_dependency = True)
 local_path_override(
     module_name = "dotnet_test_resources_other_repo",
@@ -47,3 +48,6 @@ local_path_override(
 
 rules_dotnet_dev_nuget_packages_extension = use_extension("//dotnet:paket.rules_dotnet_dev_nuget_packages_extension.bzl", "rules_dotnet_dev_nuget_packages_extension", dev_dependency = True)
 use_repo(rules_dotnet_dev_nuget_packages_extension, "paket.rules_dotnet_dev_nuget_packages")
+
+internal_dev_deps = use_extension("//dotnet:internal_dev_deps.bzl", "internal_dev_deps", dev_dependency = True)
+use_repo(internal_dev_deps, "buildkite_config")
