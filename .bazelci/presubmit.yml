@@ -14,7 +14,6 @@ matrix:
       "ubuntu2004_arm64",
       "windows_arm64",
     ]
-  working_directory: ["", "examples"]
   flag_combo:
     [
       ["--@rules_dotnet//dotnet/settings:strict_deps=true"],
@@ -27,7 +26,7 @@ tasks:
     name: Build and test
     bazel: ${{ bazel }}
     platform: ${{ platform }}
-    working_directory: ${{ working_directory }}
+    working_directory: ""
     include_json_profile:
       - build
       - test
@@ -37,6 +36,20 @@ tasks:
     test_targets:
       - "//..."
       - "-//docs/..."
+    build_flags: ${{ flag_combo }}
+    test_flags: ${{ flag_combo }}
+  examples:
+    name: Build and test
+    bazel: ${{ bazel }}
+    platform: ${{ platform }}
+    working_directory: "examples"
+    include_json_profile:
+      - build
+      - test
+    build_targets:
+      - "//..."
+    test_targets:
+      - "//..."
     build_flags: ${{ flag_combo }}
     test_flags: ${{ flag_combo }}
   docs:
