@@ -11,7 +11,7 @@ This rule is a macro that has the same attributes as `csharp_test`
 <pre>
 load("@rules_dotnet//dotnet/private/rules/csharp:nunit_test.bzl", "csharp_nunit_test")
 
-csharp_nunit_test(<a href="#csharp_nunit_test-kwargs">kwargs</a>)
+csharp_nunit_test(<a href="#csharp_nunit_test-kwargs">**kwargs</a>)
 </pre>
 
 

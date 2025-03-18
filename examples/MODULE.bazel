@@ -6,6 +6,13 @@ module(
     compatibility_level = 1,
 )
 
+# Only needed to make the Bazel CI RBE config work. Not needed for using rules_dotnet.
+bazel_dep(name = "bazel_ci_rules", version = "1.0.0", dev_dependency = True)
+bazel_dep(name = "platforms", version = "0.0.10", dev_dependency = True)
+
+internal_dev_deps = use_extension("//:internal_dev_deps.bzl", "internal_dev_deps", dev_dependency = True)
+use_repo(internal_dev_deps, "buildkite_config")
+
 bazel_dep(name = "rules_dotnet", version = "0.0.0")
 local_path_override(
     module_name = "rules_dotnet",

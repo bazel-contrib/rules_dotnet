@@ -12,8 +12,12 @@ export RUNFILES_MANIFEST_ONLY=""
 # this way the framework dependent publish will use the
 # dotnet installation that is located there to run the
 # binary.
-DOTNET_ROOT="$(dirname "$1")/"
+TOOLCHAIN_LOCATION=$(dirname "$1")
+# TODO: Figure out why this is needed. Should the DOTNET_BIN make variable
+# not work?
+DOTNET_ROOT="../${TOOLCHAIN_LOCATION#'external/'}/"
 export DOTNET_ROOT
+ls -la ./../_main/dotnet/private/tests/publish
 
 if [[ "$OSTYPE" == "linux-gnu"* ]]; then
     tar -xvf ./dotnet/private/tests/publish/framework_dependent/tar.tar

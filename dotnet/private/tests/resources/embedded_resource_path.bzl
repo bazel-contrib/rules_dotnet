@@ -47,11 +47,15 @@ def test_path_from_other_repo_should_stay_as_basename():
         target_frameworks = ["net9.0"],
     )
 
+    external_workspace_root = Label("@dotnet_test_resources_other_repo//:file.txt").workspace_root
+
     action_args_test(
         name = "path_from_other_repo_csharp_action_args_test",
         target_under_test = ":path_from_other_repo_csharp_lib",
         action_mnemonic = "CSharpCompile",
-        expected_partial_args = ["/resource:external/dotnet_test_resources_other_repo~/file.txt,EmbeddedResource.Library.file.txt"],
+        expected_partial_args = [
+            "/resource:{}/file.txt,EmbeddedResource.Library.file.txt".format(external_workspace_root),
+        ],
     )
 
 # buildifier: disable=unnamed-macro
