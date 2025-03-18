@@ -33,10 +33,21 @@ tasks:
       - test
     build_targets:
       - "//..."
+      - "-//docs/..."
     test_targets:
       - "//..."
+      - "-//docs/..."
     build_flags: ${{ flag_combo }}
     test_flags: ${{ flag_combo }}
+  docs:
+    name: Docs
+    bazel: 8.x
+    platform: ubuntu2004
+    working_directory: ""
+    build_targets:
+      - "//docs/..."
+    test_targets:
+      - "//docs/..."
   e2e:
     name: ${{ e2e_working_directory }}
     bazel: ${{ bazel }}
