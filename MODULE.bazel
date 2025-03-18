@@ -33,12 +33,12 @@ bazel_dep(name = "platforms", version = "0.0.10")
 bazel_dep(name = "aspect_bazel_lib", version = "2.9.1")
 
 # Dev dependencies
-bazel_dep(name = "stardoc", version = "0.7.1", dev_dependency = True)
-bazel_dep(name = "rules_pkg", version = "1.0.1", dev_dependency = True)
-bazel_dep(name = "gazelle", version = "0.39.1", dev_dependency = True, repo_name = "bazel_gazelle")
+bazel_dep(name = "stardoc", version = "0.8.0", dev_dependency = True)
+bazel_dep(name = "rules_pkg", version = "1.1.0", dev_dependency = True)
+bazel_dep(name = "gazelle", version = "0.42.0", dev_dependency = True, repo_name = "bazel_gazelle")
 bazel_dep(name = "bazel_skylib_gazelle_plugin", version = "1.7.1", dev_dependency = True)
-bazel_dep(name = "rules_cc", version = "0.0.12", dev_dependency = True)
-bazel_dep(name = "rules_testing", version = "0.6.0", dev_dependency = True)
+bazel_dep(name = "rules_cc", version = "0.1.1", dev_dependency = True)
+bazel_dep(name = "rules_testing", version = "0.7.0", dev_dependency = True)
 bazel_dep(name = "dotnet_test_resources_other_repo", version = "", dev_dependency = True)
 local_path_override(
     module_name = "dotnet_test_resources_other_repo",

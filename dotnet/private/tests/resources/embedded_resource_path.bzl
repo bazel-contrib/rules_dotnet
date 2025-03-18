@@ -51,7 +51,7 @@ def test_path_from_other_repo_should_stay_as_basename():
         name = "path_from_other_repo_csharp_action_args_test",
         target_under_test = ":path_from_other_repo_csharp_lib",
         action_mnemonic = "CSharpCompile",
-        expected_partial_args = ["/resource:external/dotnet_test_resources_other_repo~/file.txt,EmbeddedResource.Library.file.txt"],
+        expected_partial_args = ["/resource:external/dotnet_test_resources_other_repo+/file.txt,EmbeddedResource.Library.file.txt"],
     )
 
 # buildifier: disable=unnamed-macro

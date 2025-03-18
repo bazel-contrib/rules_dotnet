@@ -393,7 +393,7 @@ Publish a .Net binary
 <pre>
 load("@rules_dotnet//dotnet:defs.bzl", "csharp_nunit_test")
 
-csharp_nunit_test(<a href="#csharp_nunit_test-kwargs">kwargs</a>)
+csharp_nunit_test(<a href="#csharp_nunit_test-kwargs">**kwargs</a>)
 </pre>
 
 
@@ -413,7 +413,7 @@ csharp_nunit_test(<a href="#csharp_nunit_test-kwargs">kwargs</a>)
 <pre>
 load("@rules_dotnet//dotnet:defs.bzl", "fsharp_nunit_test")
 
-fsharp_nunit_test(<a href="#fsharp_nunit_test-kwargs">kwargs</a>)
+fsharp_nunit_test(<a href="#fsharp_nunit_test-kwargs">**kwargs</a>)
 </pre>
 
 
