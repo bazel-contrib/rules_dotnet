@@ -11,7 +11,7 @@ permutations = [
     ("osx-x64", "'Mach-O'", "'x86_64'"),
     ("osx-arm64", "'Mach-O'", "'arm64'"),
     ("win-x64", "'PE32+'", "'x86-64'"),
-    ("win-arm64", "'PE32+'", "'Aarch64'"),
+    ("win-arm64", "'PE32+'", "'ARM64'"),
     ("linux-musl-x64", "'ELF 64-bit'", "'x86-64'"),
     ("linux-musl-arm64", "'ELF 64-bit'", "'aarch64'"),
     # The permutations below are to verify that if we use a higher level rid like `fedora-x64` or `alpine-x64`
