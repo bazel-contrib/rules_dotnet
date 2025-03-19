@@ -723,6 +723,7 @@ def copy_files_to_dir(target_name, actions, is_windows, files, out_dir):
             inputs = inputs,
             executable = copy_script,
             tools = [copy_script],
+            toolchain = None,
         )
     return outputs
 
