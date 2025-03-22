@@ -205,7 +205,7 @@ def _publish_binary_impl(ctx):
         DefaultInfo(
             executable = apphost_shim,
             files = depset([apphost_shim, main_dll, runtimeconfig, depsjson] + outputs),
-            runfiles = ctx.runfiles(files = [apphost_shim, main_dll, runtimeconfig, depsjson] + outputs + runfiles),
+            runfiles = ctx.runfiles(files = runfiles),
         ),
     ]
 
