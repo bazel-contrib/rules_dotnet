@@ -340,7 +340,7 @@ def AssemblyAction(
         internals_visible_to = internals_visible_to or [],
         compile_data = compile_data,
         exports = exports_files,
-        transitive_refs = prefs,
+        transitive_refs = prefs if not (is_analyzer or is_language_specific_analyzer) else depset(),
         transitive_analyzers = analyzers,
         transitive_analyzers_csharp = analyzers_csharp,
         transitive_analyzers_fsharp = analyzers_fsharp,
@@ -355,7 +355,10 @@ def AssemblyAction(
         data = data,
         appsetting_files = depset(out_appsettings),
         native = [],
-        deps = depset([dep[DotnetAssemblyRuntimeInfo] for dep in deps] + [toolchain.host_model[DotnetAssemblyRuntimeInfo]] if include_host_model_dll else [dep[DotnetAssemblyRuntimeInfo] for dep in deps], transitive = [dep[DotnetAssemblyRuntimeInfo].deps for dep in deps]),
+        deps = depset(
+            [dep[DotnetAssemblyRuntimeInfo] for dep in deps] + [toolchain.host_model[DotnetAssemblyRuntimeInfo]] if include_host_model_dll else [dep[DotnetAssemblyRuntimeInfo] for dep in deps],
+            transitive = [dep[DotnetAssemblyRuntimeInfo].deps for dep in deps],
+        ) if not (is_analyzer or is_language_specific_analyzer) else depset(),
         nuget_info = None,
         direct_deps_depsjson_fragment = {dep[DotnetAssemblyRuntimeInfo].name: dep[DotnetAssemblyRuntimeInfo].version for dep in deps},
     ))
