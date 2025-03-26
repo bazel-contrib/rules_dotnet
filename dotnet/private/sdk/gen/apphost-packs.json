@@ -160,69 +160,69 @@
   "net8.0": {
     "linux-x64": {
       "id": "Microsoft.NETCore.App.Host.linux-x64",
-      "version": "8.0.11"
+      "version": "8.0.14"
     },
     "linux-arm64": {
       "id": "Microsoft.NETCore.App.Host.linux-arm64",
-      "version": "8.0.11"
+      "version": "8.0.14"
     },
     "linux-musl-x64": {
       "id": "Microsoft.NETCore.App.Host.linux-musl-x64",
-      "version": "8.0.11"
+      "version": "8.0.14"
     },
     "linux-musl-arm64": {
       "id": "Microsoft.NETCore.App.Host.linux-musl-arm64",
-      "version": "8.0.11"
+      "version": "8.0.14"
     },
     "osx-x64": {
       "id": "Microsoft.NETCore.App.Host.osx-x64",
-      "version": "8.0.11"
+      "version": "8.0.14"
     },
     "osx-arm64": {
       "id": "Microsoft.NETCore.App.Host.osx-arm64",
-      "version": "8.0.11"
+      "version": "8.0.14"
     },
     "win-x64": {
       "id": "Microsoft.NETCore.App.Host.win-x64",
-      "version": "8.0.11"
+      "version": "8.0.14"
     },
     "win-arm64": {
       "id": "Microsoft.NETCore.App.Host.win-arm64",
-      "version": "8.0.11"
+      "version": "8.0.14"
     }
   },
   "net9.0": {
     "linux-x64": {
       "id": "Microsoft.NETCore.App.Host.linux-x64",
-      "version": "9.0.0"
+      "version": "9.0.3"
     },
     "linux-arm64": {
       "id": "Microsoft.NETCore.App.Host.linux-arm64",
-      "version": "9.0.0"
+      "version": "9.0.3"
     },
     "linux-musl-x64": {
       "id": "Microsoft.NETCore.App.Host.linux-musl-x64",
-      "version": "9.0.0"
+      "version": "9.0.3"
     },
     "linux-musl-arm64": {
       "id": "Microsoft.NETCore.App.Host.linux-musl-arm64",
-      "version": "9.0.0"
+      "version": "9.0.3"
     },
     "osx-x64": {
       "id": "Microsoft.NETCore.App.Host.osx-x64",
-      "version": "9.0.0"
+      "version": "9.0.3"
     },
     "osx-arm64": {
       "id": "Microsoft.NETCore.App.Host.osx-arm64",
-      "version": "9.0.0"
+      "version": "9.0.3"
     },
     "win-x64": {
       "id": "Microsoft.NETCore.App.Host.win-x64",
-      "version": "9.0.0"
+      "version": "9.0.3"
     },
     "win-arm64": {
       "id": "Microsoft.NETCore.App.Host.win-arm64",
-      "version": "9.0.0"
+      "version": "9.0.3"
     }
   }
 }

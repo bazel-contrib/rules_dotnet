@@ -261,10 +261,10 @@ def targetingpacks_structure():
     )
 
     nuget_test_wrapper(
-        name = "microsoft.aspnetcore.app.ref.v8.0.11",
+        name = "microsoft.aspnetcore.app.ref.v8.0.14",
         target_framework = "net8.0",
         runtime_identifier = "linux-x64",
-        package = "@dotnet.targeting_packs//microsoft.aspnetcore.app.ref.v8.0.11",
+        package = "@dotnet.targeting_packs//microsoft.aspnetcore.app.ref.v8.0.14",
     )
 
     # This test is to ensure that different targeting packs in the same repo do not override each other.
@@ -272,7 +272,7 @@ def targetingpacks_structure():
     # of older versions, which caused issues when targeting older TFMs.
     nuget_targeting_pack_overrides_test(
         name = "nuget_targeting_pack_overrides_different_targeting_pack_overrides_in_the_same_repo_should_not_override_each_other",
-        target_under_test = ":microsoft.aspnetcore.app.ref.v8.0.11",
+        target_under_test = ":microsoft.aspnetcore.app.ref.v8.0.14",
         expected_targeting_pack_overrides = {
             "microsoft.extensions.caching.abstractions": "8.0.0",
             "microsoft.extensions.caching.memory": "8.0.0",
@@ -417,7 +417,7 @@ def targetingpacks_structure():
 
     nuget_framework_list_test(
         name = "nuget_framework_list_different_framework_lists_in_the_same_repo_should_not_override_each_other",
-        target_under_test = ":microsoft.aspnetcore.app.ref.v8.0.11",
+        target_under_test = ":microsoft.aspnetcore.app.ref.v8.0.14",
         expected_framework_list = {
             "microsoft.aspnetcore.antiforgery": "8.0.0.0",
             "microsoft.aspnetcore.authentication.abstractions": "8.0.0.0",
