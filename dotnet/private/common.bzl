@@ -215,7 +215,7 @@ def _format_ref_with_overrides(assembly):
     return "-r:" + assembly.path
 
 def format_ref_arg(args, refs):
-    """Takes 
+    """Takes
 
     Args:
         args: The args object that will be sent into the compilation action
@@ -602,7 +602,9 @@ def generate_depsjson(
             library_fragment["hashPath"] = "{}.{}.nupkg.sha512".format(runtime_dep.name.lower(), runtime_dep.version)
 
         target_fragment = {
-            "runtime": {dll.basename if not use_relative_paths else to_rlocation_path(ctx, dll): {} for dll in runtime_dep.libs},
+            "runtime": {(dll.basename if not use_relative_paths else to_rlocation_path(ctx, dll)): {
+                "assemblyVersion": runtime_dep.version + ".0",
+            } for dll in runtime_dep.libs},
             "native": {native_file.basename if not use_relative_paths else to_rlocation_path(ctx, native_file): {} for native_file in runtime_dep.native},
             "dependencies": runtime_dep.direct_deps_depsjson_fragment,
         }
