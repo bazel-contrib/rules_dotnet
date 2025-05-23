@@ -7,10 +7,12 @@ csharp_binary(
     name = "app_to_publish",
     srcs = ["Main.cs"],
     data = ["nested/runfiles/data-file"],
+    project_sdk = "web",
     target_frameworks = ["net6.0"],
     visibility = ["//dotnet/private/tests/publish:__subpackages__"],
     deps = [
         "//tools/runfiles",
         "@paket.rules_dotnet_dev_nuget_packages//libgit2sharp",
+        "@paket.rules_dotnet_dev_nuget_packages//system.io.pipelines",
     ],
 )

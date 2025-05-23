@@ -3,18 +3,30 @@ Rules for compiling F# binaries.
 """
 
 load("@bazel_skylib//lib:paths.bzl", "paths")
+load("@bazel_skylib//lib:sets.bzl", "sets")
 load("@bazel_skylib//lib:shell.bzl", "shell")
 load("//dotnet/private:common.bzl", "generate_depsjson", "generate_runtimeconfig")
 load("//dotnet/private:providers.bzl", "DotnetAssemblyCompileInfo", "DotnetAssemblyRuntimeInfo", "DotnetBinaryInfo")
 load("//dotnet/private/transitions:default_transition.bzl", "default_transition")
 load("//dotnet/private/transitions:tfm_transition.bzl", "tfm_transition")
 
-def _copy_file(script_body, src, dst, is_windows):
+def _copy_file(script_body, copied_files, src, dst, is_windows):
+    if sets.contains(copied_files, dst.path):
+        # If a file has already been copied, we don't need to copy it again.
+        # This can happen, for example, when a user-specified dependency holds
+        # an assembly with the same name as a targeting pack-provided one, in
+        # which case the user-specified one should take precedence.
+        return
+    sets.insert(copied_files, dst.path)
+
     if is_windows:
         script_body.append("if not exist \"{dir}\" @mkdir \"{dir}\" >NUL".format(dir = dst.dirname.replace("/", "\\")))
+        script_body.append("if exist \"{dst}\" (@echo \"File {dst} already exists, refusing to overwrite\" && exit 1)".format(dst = dst.path.replace("/", "\\")))
         script_body.append("@copy /Y \"{src}\" \"{dst}\" >NUL".format(src = src.path.replace("/", "\\"), dst = dst.path.replace("/", "\\")))
     else:
-        script_body.append("mkdir -p {dir} && cp -f {src} {dst}".format(dir = shell.quote(dst.dirname), src = shell.quote(src.path), dst = shell.quote(dst.path)))
+        script_body.append("mkdir -p {dir}".format(dir = shell.quote(dst.dirname)))
+        script_body.append("[ -f {dst} ] && (echo \"File {dst} already exists, refusing to overwrite\" && exit 1)".format(dst = shell.quote(dst.path)))
+        script_body.append("cp -f {src} {dst}".format(dir = shell.quote(dst.dirname), src = shell.quote(src.path), dst = shell.quote(dst.path)))
 
 def _get_assembly_files(assembly_info, transitive_runtime_deps):
     libs = [] + assembly_info.libs
@@ -35,8 +47,9 @@ def _copy_to_publish(ctx, runtime_identifier, runtime_pack_info, binary_info, as
     )
     outputs = [main_dll_copy]
     script_body = ["@echo off"] if is_windows else ["#! /usr/bin/env bash", "set -eou pipefail"]
+    copied_files = sets.make()
 
-    _copy_file(script_body, binary_info.dll, main_dll_copy, is_windows = is_windows)
+    _copy_file(script_body, copied_files, binary_info.dll, main_dll_copy, is_windows = is_windows)
 
     (libs, native, data, appsetting_files) = _get_assembly_files(assembly_info, transitive_runtime_deps)
 
@@ -47,7 +60,7 @@ def _copy_to_publish(ctx, runtime_identifier, runtime_pack_info, binary_info, as
         )
         outputs.append(output)
         inputs.append(file)
-        _copy_file(script_body, file, output, is_windows = is_windows)
+        _copy_file(script_body, copied_files, file, output, is_windows = is_windows)
 
     # When publishing a self-contained binary, we need to copy the native DLLs to the
     # publish directory as well.
@@ -57,7 +70,7 @@ def _copy_to_publish(ctx, runtime_identifier, runtime_pack_info, binary_info, as
             "{}/publish/{}/{}".format(ctx.label.name, runtime_identifier, file.basename),
         )
         outputs.append(output)
-        _copy_file(script_body, file, output, is_windows = is_windows)
+        _copy_file(script_body, copied_files, file, output, is_windows = is_windows)
 
     # The data files put into the publish folder in a structure that works with
     # the runfiles lib. End users should not expect files in the `data` attribute
@@ -79,7 +92,7 @@ def _copy_to_publish(ctx, runtime_identifier, runtime_pack_info, binary_info, as
             "{}/publish/{}/{}".format(ctx.label.name, runtime_identifier, file.basename),
         )
         outputs.append(output)
-        _copy_file(script_body, file, output, is_windows = is_windows)
+        _copy_file(script_body, copied_files, file, output, is_windows = is_windows)
 
     # In case the publish is self-contained there needs to be a runtime pack available
     # with the runtime dependencies that are required for the targeted runtime.
@@ -95,7 +108,7 @@ def _copy_to_publish(ctx, runtime_identifier, runtime_pack_info, binary_info, as
                 output = ctx.actions.declare_file(file.basename, sibling = main_dll_copy)
                 outputs.append(output)
                 inputs.append(file)
-                _copy_file(script_body, file, output, is_windows = is_windows)
+                _copy_file(script_body, copied_files, file, output, is_windows = is_windows)
 
     copy_script = ctx.actions.declare_file(ctx.label.name + ".copy.bat" if is_windows else ctx.label.name + ".copy.sh")
     ctx.actions.write(
