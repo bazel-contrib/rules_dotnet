@@ -29,6 +29,8 @@ group rules_dotnet_dev_nuget_packages
     nuget Microsoft.CodeAnalysis.Analyzers 3.3.4
     nuget Microsoft.CodeAnalysis.CSharp 4.9.2
     nuget Microsoft.NETFramework.ReferenceAssemblies.net48 1.0.3
+    # NOTE: Used by publish_binary self_contained tests
+    nuget System.IO.Pipelines ~> 9.0.0
 
 group rules_dotnet_nuget_packages
     framework: net9.0

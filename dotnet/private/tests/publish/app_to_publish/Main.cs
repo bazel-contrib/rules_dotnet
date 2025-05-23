@@ -4,6 +4,7 @@ using System;
 using System.IO;
 using System.Diagnostics;
 using System.Linq;
+using System.IO.Pipelines;
 
 namespace AppToPublish
 {
@@ -34,8 +35,10 @@ namespace AppToPublish
             {
                 Console.WriteLine("Got excpected RepositoryNotFoundException: " + e.Message);
             }
+
+            // Force System.IO.Pipelines to be loaded in (which should require the exact version
+            // we have compiled against, instead of the one included by the targeting pack)
+            var pipe = new Pipe();
         }
     }
 }
-
-
