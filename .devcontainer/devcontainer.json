@@ -50,7 +50,7 @@
 	"remoteUser": "vscode",
 	"features": {
 		"ghcr.io/devcontainers/features/dotnet:2.0.2": {
-			"version": "8.0.100"
+			"version": "9.0.300"
 		},
 		"ghcr.io/devcontainers/features/git:1.1.6": {
 			"version": "2.43.0"

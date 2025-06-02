@@ -79,9 +79,14 @@ let addExtensionFileContent (sb: StringBuilder) (repoName: string) (repoPrefix: 
 
     sb.Append("\n") |> ignore
     sb.Append("\n") |> ignore
-    sb.Append($"def _{repoName}_impl(_ctx):") |> ignore
+    sb.Append($"def _{repoName}_impl(module_ctx):") |> ignore
     sb.Append("\n") |> ignore
     sb.Append($"    _{repoName}()") |> ignore
+    sb.Append("\n") |> ignore
+
+    sb.Append($"    return module_ctx.extension_metadata(reproducible = True)")
+    |> ignore
+
     sb.Append("\n") |> ignore
     sb.Append("\n") |> ignore
     sb.Append($"{repoName}_extension = module_extension(") |> ignore

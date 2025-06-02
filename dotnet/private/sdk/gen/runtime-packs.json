@@ -236,49 +236,49 @@
       "linux-x64": [
         {
           "id": "Microsoft.NETCore.App.Runtime.linux-x64",
-          "version": "8.0.14"
+          "version": "8.0.16"
         }
       ],
       "linux-arm64": [
         {
           "id": "Microsoft.NETCore.App.Runtime.linux-arm64",
-          "version": "8.0.14"
+          "version": "8.0.16"
         }
       ],
       "linux-musl-x64": [
         {
           "id": "Microsoft.NETCore.App.Runtime.linux-musl-x64",
-          "version": "8.0.14"
+          "version": "8.0.16"
         }
       ],
       "linux-musl-arm64": [
         {
           "id": "Microsoft.NETCore.App.Runtime.linux-musl-arm64",
-          "version": "8.0.14"
+          "version": "8.0.16"
         }
       ],
       "osx-x64": [
         {
           "id": "Microsoft.NETCore.App.Runtime.osx-x64",
-          "version": "8.0.14"
+          "version": "8.0.16"
         }
       ],
       "osx-arm64": [
         {
           "id": "Microsoft.NETCore.App.Runtime.osx-arm64",
-          "version": "8.0.14"
+          "version": "8.0.16"
         }
       ],
       "win-x64": [
         {
           "id": "Microsoft.NETCore.App.Runtime.win-x64",
-          "version": "8.0.14"
+          "version": "8.0.16"
         }
       ],
       "win-arm64": [
         {
           "id": "Microsoft.NETCore.App.Runtime.win-arm64",
-          "version": "8.0.14"
+          "version": "8.0.16"
         }
       ]
     },
@@ -286,49 +286,49 @@
       "linux-x64": [
         {
           "id": "Microsoft.NETCore.App.Runtime.linux-x64",
-          "version": "9.0.3"
+          "version": "9.0.5"
         }
       ],
       "linux-arm64": [
         {
           "id": "Microsoft.NETCore.App.Runtime.linux-arm64",
-          "version": "9.0.3"
+          "version": "9.0.5"
         }
       ],
       "linux-musl-x64": [
         {
           "id": "Microsoft.NETCore.App.Runtime.linux-musl-x64",
-          "version": "9.0.3"
+          "version": "9.0.5"
         }
       ],
       "linux-musl-arm64": [
         {
           "id": "Microsoft.NETCore.App.Runtime.linux-musl-arm64",
-          "version": "9.0.3"
+          "version": "9.0.5"
         }
       ],
       "osx-x64": [
         {
           "id": "Microsoft.NETCore.App.Runtime.osx-x64",
-          "version": "9.0.3"
+          "version": "9.0.5"
         }
       ],
       "osx-arm64": [
         {
           "id": "Microsoft.NETCore.App.Runtime.osx-arm64",
-          "version": "9.0.3"
+          "version": "9.0.5"
         }
       ],
       "win-x64": [
         {
           "id": "Microsoft.NETCore.App.Runtime.win-x64",
-          "version": "9.0.3"
+          "version": "9.0.5"
         }
       ],
       "win-arm64": [
         {
           "id": "Microsoft.NETCore.App.Runtime.win-arm64",
-          "version": "9.0.3"
+          "version": "9.0.5"
         }
       ]
     }
@@ -708,81 +708,81 @@
       "linux-x64": [
         {
           "id": "Microsoft.AspNetCore.App.Runtime.linux-x64",
-          "version": "8.0.14"
+          "version": "8.0.16"
         },
         {
           "id": "Microsoft.NETCore.App.Runtime.linux-x64",
-          "version": "8.0.14"
+          "version": "8.0.16"
         }
       ],
       "linux-arm64": [
         {
           "id": "Microsoft.AspNetCore.App.Runtime.linux-arm64",
-          "version": "8.0.14"
+          "version": "8.0.16"
         },
         {
           "id": "Microsoft.NETCore.App.Runtime.linux-arm64",
-          "version": "8.0.14"
+          "version": "8.0.16"
         }
       ],
       "linux-musl-x64": [
         {
           "id": "Microsoft.AspNetCore.App.Runtime.linux-musl-x64",
-          "version": "8.0.14"
+          "version": "8.0.16"
         },
         {
           "id": "Microsoft.NETCore.App.Runtime.linux-musl-x64",
-          "version": "8.0.14"
+          "version": "8.0.16"
         }
       ],
       "linux-musl-arm64": [
         {
           "id": "Microsoft.AspNetCore.App.Runtime.linux-musl-arm64",
-          "version": "8.0.14"
+          "version": "8.0.16"
         },
         {
           "id": "Microsoft.NETCore.App.Runtime.linux-musl-arm64",
-          "version": "8.0.14"
+          "version": "8.0.16"
         }
       ],
       "osx-x64": [
         {
           "id": "Microsoft.AspNetCore.App.Runtime.osx-x64",
-          "version": "8.0.14"
+          "version": "8.0.16"
         },
         {
           "id": "Microsoft.NETCore.App.Runtime.osx-x64",
-          "version": "8.0.14"
+          "version": "8.0.16"
         }
       ],
       "osx-arm64": [
         {
           "id": "Microsoft.AspNetCore.App.Runtime.osx-arm64",
-          "version": "8.0.14"
+          "version": "8.0.16"
         },
         {
           "id": "Microsoft.NETCore.App.Runtime.osx-arm64",
-          "version": "8.0.14"
+          "version": "8.0.16"
         }
       ],
       "win-x64": [
         {
           "id": "Microsoft.AspNetCore.App.Runtime.win-x64",
-          "version": "8.0.14"
+          "version": "8.0.16"
         },
         {
           "id": "Microsoft.NETCore.App.Runtime.win-x64",
-          "version": "8.0.14"
+          "version": "8.0.16"
         }
       ],
       "win-arm64": [
         {
           "id": "Microsoft.AspNetCore.App.Runtime.win-arm64",
-          "version": "8.0.14"
+          "version": "8.0.16"
         },
         {
           "id": "Microsoft.NETCore.App.Runtime.win-arm64",
-          "version": "8.0.14"
+          "version": "8.0.16"
         }
       ]
     },
@@ -790,81 +790,81 @@
       "linux-x64": [
         {
           "id": "Microsoft.AspNetCore.App.Runtime.linux-x64",
-          "version": "9.0.3"
+          "version": "9.0.5"
         },
         {
           "id": "Microsoft.NETCore.App.Runtime.linux-x64",
-          "version": "9.0.3"
+          "version": "9.0.5"
         }
       ],
       "linux-arm64": [
         {
           "id": "Microsoft.AspNetCore.App.Runtime.linux-arm64",
-          "version": "9.0.3"
+          "version": "9.0.5"
         },
         {
           "id": "Microsoft.NETCore.App.Runtime.linux-arm64",
-          "version": "9.0.3"
+          "version": "9.0.5"
         }
       ],
       "linux-musl-x64": [
         {
           "id": "Microsoft.AspNetCore.App.Runtime.linux-musl-x64",
-          "version": "9.0.3"
+          "version": "9.0.5"
         },
         {
           "id": "Microsoft.NETCore.App.Runtime.linux-musl-x64",
-          "version": "9.0.3"
+          "version": "9.0.5"
         }
       ],
       "linux-musl-arm64": [
         {
           "id": "Microsoft.AspNetCore.App.Runtime.linux-musl-arm64",
-          "version": "9.0.3"
+          "version": "9.0.5"
         },
         {
           "id": "Microsoft.NETCore.App.Runtime.linux-musl-arm64",
-          "version": "9.0.3"
+          "version": "9.0.5"
         }
       ],
       "osx-x64": [
         {
           "id": "Microsoft.AspNetCore.App.Runtime.osx-x64",
-          "version": "9.0.3"
+          "version": "9.0.5"
         },
         {
           "id": "Microsoft.NETCore.App.Runtime.osx-x64",
-          "version": "9.0.3"
+          "version": "9.0.5"
         }
       ],
       "osx-arm64": [
         {
           "id": "Microsoft.AspNetCore.App.Runtime.osx-arm64",
-          "version": "9.0.3"
+          "version": "9.0.5"
         },
         {
           "id": "Microsoft.NETCore.App.Runtime.osx-arm64",
-          "version": "9.0.3"
+          "version": "9.0.5"
         }
       ],
       "win-x64": [
         {
           "id": "Microsoft.AspNetCore.App.Runtime.win-x64",
-          "version": "9.0.3"
+          "version": "9.0.5"
         },
         {
           "id": "Microsoft.NETCore.App.Runtime.win-x64",
-          "version": "9.0.3"
+          "version": "9.0.5"
         }
       ],
       "win-arm64": [
         {
           "id": "Microsoft.AspNetCore.App.Runtime.win-arm64",
-          "version": "9.0.3"
+          "version": "9.0.5"
         },
         {
           "id": "Microsoft.NETCore.App.Runtime.win-arm64",
-          "version": "9.0.3"
+          "version": "9.0.5"
         }
       ]
     }
