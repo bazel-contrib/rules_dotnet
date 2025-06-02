@@ -8,7 +8,7 @@ NUGET
     Expecto (9.0.4)
       FSharp.Core (>= 4.6)
       Mono.Cecil (>= 0.11.3)
-    FSharp.Core (9.0.100)
+    FSharp.Core (9.0.300)
     FSharp.Data (5.0.2)
       FSharp.Core (>= 5.0.1)
     Microsoft.CodeAnalysis.Analyzers (3.3.4)

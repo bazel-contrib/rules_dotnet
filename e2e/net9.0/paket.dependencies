@@ -2,4 +2,4 @@ framework: net9.0
 storage: none
 source https://api.nuget.org/v3/index.json
 
-nuget FSharp.Core 9.0.100
+nuget FSharp.Core 9.0.300

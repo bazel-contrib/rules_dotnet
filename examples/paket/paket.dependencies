@@ -3,7 +3,7 @@ source https://api.nuget.org/v3/index.json
 
 nuget Argu 6.1.1
 nuget FSharp.Data 4.2.8
-nuget FSharp.Core 9.0.100
+nuget FSharp.Core 9.0.300
 nuget Microsoft.NETCore.App.Ref 6.0.5
 
 group othergroup
@@ -12,6 +12,6 @@ group othergroup
 
     nuget Argu 6.1.1
     nuget FSharp.Data 4.2.8
-    nuget FSharp.Core 9.0.100
+    nuget FSharp.Core 9.0.300
     nuget Microsoft.NETCore.App.Ref 6.0.5
 

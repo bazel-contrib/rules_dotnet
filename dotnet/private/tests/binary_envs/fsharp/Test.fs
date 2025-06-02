@@ -14,4 +14,4 @@ type Tests() =
             Environment.GetEnvironmentVariable("TEMPLATED_FILE")
         )
 
-        Assert.AreEqual("9.0.100", Environment.GetEnvironmentVariable("TEMPLATED_VARIABLE"))
+        Assert.AreEqual("9.0.300", Environment.GetEnvironmentVariable("TEMPLATED_VARIABLE"))

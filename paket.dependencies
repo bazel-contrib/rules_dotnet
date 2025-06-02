@@ -3,7 +3,7 @@ group paket2bazel_dependencies
     framework: net9.0
     source https://api.nuget.org/v3/index.json
 
-    nuget FSharp.Core == 9.0.100 
+    nuget FSharp.Core == 9.0.300 
     nuget Argu 6.2.3
     nuget Paket.Core 9.0.0
     nuget NuGet.PackageManagement 6.12.1
@@ -20,7 +20,7 @@ group rules_dotnet_dev_nuget_packages
     nuget LibGit2Sharp 0.27.0-preview-0182
     nuget LibGit2Sharp.NativeBinaries 2.0.315-alpha.0.9
     nuget FSharp.Data 4.2.7
-    nuget FSharp.Core 9.0.100
+    nuget FSharp.Core 9.0.300
     nuget System.Security.Principal.Windows 5.0.0
     nuget Magick.NET.Core 12.2.2
     nuget System.Memory 4.5.5
