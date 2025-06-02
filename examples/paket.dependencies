@@ -4,7 +4,7 @@ group example_deps
     source https://api.nuget.org/v3/index.json
 
     nuget Expecto 9.0.4
-    nuget FSharp.Core 9.0.100
+    nuget FSharp.Core 9.0.300
     nuget FSharp.Data 5.0.2
     nuget Microsoft.CodeAnalysis.Common 4.9.2
     nuget Microsoft.CodeAnalysis.Analyzers 3.3.4

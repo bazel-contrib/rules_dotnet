@@ -10,7 +10,7 @@ NUGET
     Chessie (0.6)
       FSharp.Core (>= 4.0.1.7-alpha)
       NETStandard.Library (>= 1.6)
-    FSharp.Core (9.0.100)
+    FSharp.Core (9.0.300)
     Microsoft.CSharp (4.7)
     Microsoft.Extensions.FileProviders.Abstractions (8.0)
       Microsoft.Extensions.Primitives (>= 8.0)
@@ -93,7 +93,7 @@ GROUP rules_dotnet_dev_nuget_packages
 RESTRICTION: || (== net9.0) (== netstandard2.0) (== netstandard2.1)
 NUGET
   remote: https://api.nuget.org/v3/index.json
-    FSharp.Core (9.0.100)
+    FSharp.Core (9.0.300)
     FSharp.Data (4.2.7)
       FSharp.Core (>= 4.7.2)
     LibGit2Sharp (0.27.0-preview-0182)
