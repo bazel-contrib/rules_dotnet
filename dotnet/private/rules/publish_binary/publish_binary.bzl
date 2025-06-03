@@ -16,18 +16,30 @@ def _copy_file(script_body, src, dst, is_windows):
     else:
         script_body.append("mkdir -p {dir} && cp -f {src} {dst}".format(dir = shell.quote(dst.dirname), src = shell.quote(src.path), dst = shell.quote(dst.path)))
 
-def _get_assembly_files(assembly_info, transitive_runtime_deps):
+def _get_assembly_files(assembly_info, transitive_runtime_deps, deps_json_struct):
     libs = [] + assembly_info.libs
     native = [] + assembly_info.native
     data = [] + assembly_info.data
     appsetting_files = assembly_info.appsetting_files.to_list()
     for dep in transitive_runtime_deps:
-        libs += dep.libs
-        native += dep.native
+        # For each dependency we need to check in the deps.json struct if the files should be copied.
+        # If the file is to be copied it will be in the `native` or `runtime` attribute of the `target` for the dependency.
+        # A reason for the file not being in the deps.json is that the runtime pack might provide the file instead of the dependency.
+        target = deps_json_struct["targets"].items()[0][1].get("{}/{}".format(dep.name, dep.version))
+        if target:
+            if "native" in target:
+                for file in dep.native:
+                    if file.basename in target["native"]:
+                        native.append(file)
+            if "runtime" in target:
+                for file in dep.libs:
+                    if file.basename in target["runtime"]:
+                        libs.append(file)
+
         data += dep.data
     return (libs, native, data, appsetting_files)
 
-def _copy_to_publish(ctx, runtime_identifier, runtime_pack_info, binary_info, assembly_info, transitive_runtime_deps):
+def _copy_to_publish(ctx, runtime_identifier, runtime_pack_info, binary_info, assembly_info, transitive_runtime_deps, deps_json_struct):
     is_windows = ctx.target_platform_has_constraint(ctx.attr._windows_constraint[platform_common.ConstraintValueInfo])
     inputs = [binary_info.dll]
     main_dll_copy = ctx.actions.declare_file(
@@ -38,7 +50,7 @@ def _copy_to_publish(ctx, runtime_identifier, runtime_pack_info, binary_info, as
 
     _copy_file(script_body, binary_info.dll, main_dll_copy, is_windows = is_windows)
 
-    (libs, native, data, appsetting_files) = _get_assembly_files(assembly_info, transitive_runtime_deps)
+    (libs, native, data, appsetting_files) = _get_assembly_files(assembly_info, transitive_runtime_deps, deps_json_struct)
 
     # All managed DLLs are copied next to the app host in the publish directory
     for file in libs:
@@ -86,9 +98,25 @@ def _copy_to_publish(ctx, runtime_identifier, runtime_pack_info, binary_info, as
     # The runtime pack contents should always be copied to the root of the publish folder
     if runtime_pack_info:
         for runtime_pack in runtime_pack_info.assembly_runtime_infos:
+            # We need to go through the deps.json struct to determine which files should be copied.
+            # If a user provided dependency is overriding a DLL that is in the runtime pack then the
+            # DLL is omitted from the target for the runtime pack in the deps.json.
+            libs = []
+            native = []
+            target = deps_json_struct["targets"].items()[0][1].get("runtimepack.{}/{}".format(runtime_pack.name, runtime_pack.version))
+            if target:
+                if "native" in target:
+                    for file in runtime_pack.native:
+                        if file.basename in target["native"]:
+                            native.append(file)
+                if "runtime" in target:
+                    for file in runtime_pack.libs:
+                        if file.basename in target["runtime"]:
+                            libs.append(file)
+
             runtime_pack_files = depset(
-                runtime_pack.libs +
-                runtime_pack.native +
+                libs +
+                native +
                 runtime_pack.data,
             )
             for file in runtime_pack_files.to_list():
@@ -152,6 +180,8 @@ def _generate_depsjson(
         content = json.encode_indent(depsjson_struct),
     )
 
+    return depsjson_struct
+
 def _publish_binary_impl(ctx):
     assembly_compile_info = ctx.attr.binary[0][DotnetAssemblyCompileInfo]
     assembly_runtime_info = ctx.attr.binary[0][DotnetAssemblyRuntimeInfo]
@@ -164,22 +194,23 @@ def _publish_binary_impl(ctx):
     runtime_identifier = ctx.attr.runtime_identifier if ctx.attr.runtime_identifier else binary_info.runtime_pack_info.runtime_identifier
     roll_forward_behavior = ctx.attr.roll_forward_behavior
 
-    (main_dll, outputs, runfiles) = _copy_to_publish(
+    depsjson = ctx.actions.declare_file("{}/publish/{}/{}.deps.json".format(ctx.label.name, runtime_identifier, assembly_name))
+    depsjson_struct = _generate_depsjson(
         ctx,
-        runtime_identifier,
-        runtime_pack_info,
-        binary_info,
+        depsjson,
+        target_framework,
+        is_self_contained,
         assembly_runtime_info,
         transitive_runtime_deps,
+        runtime_pack_info,
     )
-
-    apphost_shim = _create_shim_exe(ctx, binary_info.apphost_pack_info, main_dll)
 
     runtimeconfig = ctx.actions.declare_file("{}/publish/{}/{}.runtimeconfig.json".format(
         ctx.label.name,
         runtime_identifier,
         assembly_name,
     ))
+
     _generate_runtimeconfig(
         ctx,
         runtimeconfig,
@@ -190,16 +221,17 @@ def _publish_binary_impl(ctx):
         runtime_pack_info,
     )
 
-    depsjson = ctx.actions.declare_file("{}/publish/{}/{}.deps.json".format(ctx.label.name, runtime_identifier, assembly_name))
-    _generate_depsjson(
+    (main_dll, outputs, runfiles) = _copy_to_publish(
         ctx,
-        depsjson,
-        target_framework,
-        is_self_contained,
+        runtime_identifier,
+        runtime_pack_info,
+        binary_info,
         assembly_runtime_info,
         transitive_runtime_deps,
-        runtime_pack_info,
+        depsjson_struct,
     )
+
+    apphost_shim = _create_shim_exe(ctx, binary_info.apphost_pack_info, main_dll)
 
     return [
         DefaultInfo(

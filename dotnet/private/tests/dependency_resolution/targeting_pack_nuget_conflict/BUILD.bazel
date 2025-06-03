@@ -1,0 +1,3 @@
+load(":tests.bzl", "tests")
+
+tests()

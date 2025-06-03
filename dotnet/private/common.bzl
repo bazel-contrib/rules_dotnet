@@ -550,6 +550,13 @@ def generate_depsjson(
     """
     version = "{}/{}".format(tfm_to_semver(target_framework), runtime_pack_info.runtime_identifier) if is_self_contained else "{}".format(tfm_to_semver(target_framework))
     runtime_target = ".NETCoreApp,Version=v{}".format(version)
+
+    # DLLs that are overidden by the runtime pack due to the runtime pack having a higher version than the user provided dependency.
+    runtime_pack_overrides = []
+
+    # User provided dependencies that provide same DLLs as the runtime pack, but with a higher version.
+    dep_overrides = []
+
     base = {
         "runtimeTarget": {
             "name": runtime_target,
@@ -563,6 +570,23 @@ def generate_depsjson(
     base["libraries"] = {}
 
     if is_self_contained:
+        # We need to filter out the runtime DLLs that are provided by the end user as a normal dependency
+        # We only filter the DLL out if the user provided dependency has a higher version than the runtime pack.
+        # This is the same behavior as in MSBuild. We only need to do this for self-contained binaries.
+        runtime_dlls = [
+            lib.basename.lower().replace(".dll", "")
+            for assembly_runtime_info in runtime_pack_info.assembly_runtime_infos
+            for lib in assembly_runtime_info.libs
+        ]
+        deps = [dep for dep in transitive_runtime_deps if dep.name.lower() in runtime_dlls]
+        for dep in deps:
+            # We can use the first assembly_runtime_info since all assembly_runtime_infos since all assembly_runtime_infos will
+            # have the same version for the same runtime pack.
+            if semver.to_comparable(dep.version) > semver.to_comparable(runtime_pack_info.assembly_runtime_infos[0].version, relaxed = True):
+                dep_overrides.append(dep.name.lower())
+            else:
+                runtime_pack_overrides.append(dep.name.lower())
+
         for assembly_runtime_info in runtime_pack_info.assembly_runtime_infos:
             runtime_pack_name = "runtimepack.{}/{}".format(assembly_runtime_info.name, assembly_runtime_info.version)
             base["libraries"][runtime_pack_name] = {
@@ -571,9 +595,10 @@ def generate_depsjson(
                 "sha512": "",
             }
             base["targets"][runtime_target][runtime_pack_name] = {
-                "runtime": {dll.basename: {} for dll in assembly_runtime_info.libs},
+                "runtime": {dll.basename: {} for dll in assembly_runtime_info.libs if dll.basename.lower().replace(".dll", "") not in dep_overrides},
                 "native": {native_file.basename: {} for native_file in assembly_runtime_info.native},
             }
+
         base["runtimes"] = {rid: RUNTIME_GRAPH[rid] for rid, supported_rids in RUNTIME_GRAPH.items() if runtime_pack_info.runtime_identifier in supported_rids or runtime_pack_info.runtime_identifier == rid}
 
     for runtime_dep in [target_assembly_runtime_info] + transitive_runtime_deps:
@@ -602,12 +627,15 @@ def generate_depsjson(
             library_fragment["hashPath"] = "{}.{}.nupkg.sha512".format(runtime_dep.name.lower(), runtime_dep.version)
 
         target_fragment = {
-            "runtime": {(dll.basename if not use_relative_paths else to_rlocation_path(ctx, dll)): {
-                "assemblyVersion": runtime_dep.version + ".0",
-            } for dll in runtime_dep.libs},
-            "native": {native_file.basename if not use_relative_paths else to_rlocation_path(ctx, native_file): {} for native_file in runtime_dep.native},
             "dependencies": runtime_dep.direct_deps_depsjson_fragment,
         }
+
+        # Do not add the `runtime` and `native` sections if the runtime pack overrides the dependency.
+        if runtime_dep.name.lower() not in runtime_pack_overrides:
+            target_fragment["runtime"] = {(dll.basename if not use_relative_paths else to_rlocation_path(ctx, dll)): {
+                "assemblyVersion": runtime_dep.version + ".0",
+            } for dll in runtime_dep.libs}
+            target_fragment["native"] = {native_file.basename if not use_relative_paths else to_rlocation_path(ctx, native_file): {} for native_file in runtime_dep.native}
 
         base["libraries"][library_name] = library_fragment
         base["targets"][runtime_target][library_name] = target_fragment
