@@ -104,19 +104,9 @@ def _replace_non_standard_tfm(tfm):
 
 # A resource assembly is located at lib/<tfm>/<locale>/<assembly>.resources.dll
 def _process_resource_assembly(groups, tfm, file):
-    # The locale is the part between the tfm and the assembly name
-    # i = file.find(tfm) + len(tfm) + 1
-    # j = file.find("/", i)
-    # locale = file[i:j]
-
     if groups["resource_assemblies"].get(tfm) == None:
-        # groups["resource_assemblies"][tfm] = {}
         groups["resource_assemblies"][tfm] = []
 
-    # if groups["resource_assemblies"][tfm].get(locale) == None:
-    #     groups["resource_assemblies"][tfm][locale] = []
-
-    # groups["resource_assemblies"][tfm][locale].append(file)
     groups["resource_assemblies"][tfm].append(file)
 
     return
