@@ -33,6 +33,7 @@ DotnetAssemblyRuntimeInfo = provider(
         "xml_docs": "list[File]: The XML documentation files of the assembly",
         "native": "list[File]: Native runtime files",
         "data": "list[File]: Runtime data files",
+        "resource_assemblies": "list[File]: Resource assemblies",
         "appsetting_files": "list[File]: Appsetting files",
         "nuget_info": "NugetInfo",
         "deps": "depset[DotnetAssemblyRuntimeInfo]: The direct and transitive runtime dependencies of the assembly",

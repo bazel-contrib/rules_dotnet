@@ -366,7 +366,7 @@ def collect_transitive_runfiles(ctx, assembly_runtime_info, deps):
     Returns:
         A runfiles object that includes the transitive dependencies of the target
     """
-    runfiles = ctx.runfiles(files = assembly_runtime_info.data + assembly_runtime_info.native + assembly_runtime_info.xml_docs + assembly_runtime_info.libs)
+    runfiles = ctx.runfiles(files = assembly_runtime_info.data + assembly_runtime_info.native + assembly_runtime_info.xml_docs + assembly_runtime_info.libs + assembly_runtime_info.resource_assemblies)
 
     transitive_runfiles = []
     for dep in deps:
@@ -526,6 +526,19 @@ def framework_preprocessor_symbols(tfm):
 
     return defines
 
+def _get_resource_assembly_locale(file):
+    """Gets the locale of a resource assembly file.
+
+    The locale is the path fragment before the file name:
+    e.g. <TFM>/<locale>/assembly.resources.dll
+
+    Args:
+        file: The resource assembly file.
+    Returns:
+        The locale of the resource assembly file.
+    """
+    return file.dirname.split("/")[-1]
+
 # For deps.json spec see: https://github.com/dotnet/sdk/blob/main/documentation/specs/runtime-configuration-file.md
 def generate_depsjson(
         ctx,
@@ -636,6 +649,10 @@ def generate_depsjson(
                 "assemblyVersion": runtime_dep.version + ".0",
             } for dll in runtime_dep.libs}
             target_fragment["native"] = {native_file.basename if not use_relative_paths else to_rlocation_path(ctx, native_file): {} for native_file in runtime_dep.native}
+
+            target_fragment["resources"] = {(resource_assembly.basename if not use_relative_paths else to_rlocation_path(ctx, resource_assembly)): {
+                "locale": _get_resource_assembly_locale(resource_assembly),
+            } for resource_assembly in runtime_dep.resource_assemblies}
 
         base["libraries"][library_name] = library_fragment
         base["targets"][runtime_target][library_name] = target_fragment

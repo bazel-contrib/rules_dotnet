@@ -1,0 +1,53 @@
+"Tests for targeting pack conflicts with user provided dependencies."
+
+load("@aspect_bazel_lib//lib:diff_test.bzl", "diff_test")
+load("@aspect_bazel_lib//lib:run_binary.bzl", "run_binary")
+load(
+    "//dotnet:defs.bzl",
+    "csharp_binary",
+    "publish_binary",
+)
+
+csharp_binary(
+    name = "main",
+    srcs = ["Main.cs"],
+    target_frameworks = ["net9.0"],
+    deps = [
+        "@paket.rules_dotnet_dev_nuget_packages//humanizer.core",
+        "@paket.rules_dotnet_dev_nuget_packages//humanizer.core.de",
+        "@paket.rules_dotnet_dev_nuget_packages//humanizer.core.es",
+    ],
+)
+
+run_binary(
+    name = "run_main",
+    outs = ["actual"],
+    args = ["$@"],
+    tool = ":main",
+)
+
+diff_test(
+    name = "diff_test_main",
+    file1 = ":actual",
+    file2 = "expected_output",
+)
+
+publish_binary(
+    name = "publish_main",
+    binary = ":main",
+    self_contained = True,
+    target_framework = "net9.0",
+)
+
+run_binary(
+    name = "run_publish_main",
+    outs = ["actual_publish"],
+    args = ["$@"],
+    tool = ":publish_main",
+)
+
+diff_test(
+    name = "diff_test_publish_main",
+    file1 = ":actual_publish",
+    file2 = "expected_output",
+)

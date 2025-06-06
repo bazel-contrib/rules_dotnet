@@ -61,6 +61,7 @@ def _import_library(ctx):
         name = ctx.attr.library_name,
         version = ctx.attr.version,
         libs = ctx.files.libs,
+        resource_assemblies = ctx.files.resource_assemblies,
         # TODO: PDBs from nuget packages should also be forwarded
         pdbs = [],
         xml_docs = [],
@@ -126,6 +127,11 @@ import_library = rule(
             allow_files = True,  # [".dll"] currently does not work with empty file groups
             allow_empty = True,
         ),
+        "resource_assemblies": attr.label_list(
+            doc = "Resource assemblies",
+            allow_files = True,  # [".dll"] currently does not work with empty file groups
+            allow_empty = True,
+        ),
         "deps": attr.label_list(
             doc = "Other DLLs that this DLL depends on.",
             providers = [DotnetAssemblyRuntimeInfo, DotnetAssemblyCompileInfo],
@@ -181,6 +187,7 @@ def _import_dll(ctx):
         name = ctx.file.dll.basename[:-4],
         version = ctx.attr.version,
         libs = [ctx.file.dll],
+        resource_assemblies = [],
         pdbs = [],
         xml_docs = [],
         native = [],

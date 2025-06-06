@@ -18,6 +18,7 @@ def _copy_file(script_body, src, dst, is_windows):
 
 def _get_assembly_files(assembly_info, transitive_runtime_deps, deps_json_struct):
     libs = [] + assembly_info.libs
+    resource_assemblies = [] + assembly_info.resource_assemblies
     native = [] + assembly_info.native
     data = [] + assembly_info.data
     appsetting_files = assembly_info.appsetting_files.to_list()
@@ -37,7 +38,8 @@ def _get_assembly_files(assembly_info, transitive_runtime_deps, deps_json_struct
                         libs.append(file)
 
         data += dep.data
-    return (libs, native, data, appsetting_files)
+        resource_assemblies += dep.resource_assemblies
+    return (libs, resource_assemblies, native, data, appsetting_files)
 
 def _copy_to_publish(ctx, runtime_identifier, runtime_pack_info, binary_info, assembly_info, transitive_runtime_deps, deps_json_struct):
     is_windows = ctx.target_platform_has_constraint(ctx.attr._windows_constraint[platform_common.ConstraintValueInfo])
@@ -50,13 +52,24 @@ def _copy_to_publish(ctx, runtime_identifier, runtime_pack_info, binary_info, as
 
     _copy_file(script_body, binary_info.dll, main_dll_copy, is_windows = is_windows)
 
-    (libs, native, data, appsetting_files) = _get_assembly_files(assembly_info, transitive_runtime_deps, deps_json_struct)
+    (libs, resource_assemblies, native, data, appsetting_files) = _get_assembly_files(assembly_info, transitive_runtime_deps, deps_json_struct)
 
     # All managed DLLs are copied next to the app host in the publish directory
     for file in libs:
         output = ctx.actions.declare_file(
             "{}/publish/{}/{}".format(ctx.label.name, runtime_identifier, file.basename),
         )
+        outputs.append(output)
+        inputs.append(file)
+        _copy_file(script_body, file, output, is_windows = is_windows)
+
+    # Resource assemblies are copied next to the app host in the publish directory in a folder
+    # that has the same name as the locale of the resource assembly.
+    # Example: `de/MyAssembly.resources.dll`
+    for file in resource_assemblies:
+        locale = file.dirname.split("/")[-1]
+        output_dir = "{}/publish/{}/{}/{}".format(ctx.label.name, runtime_identifier, locale, file.basename)
+        output = ctx.actions.declare_file(output_dir)
         outputs.append(output)
         inputs.append(file)
         _copy_file(script_body, file, output, is_windows = is_windows)

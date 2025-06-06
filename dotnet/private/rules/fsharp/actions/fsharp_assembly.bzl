@@ -303,6 +303,7 @@ def AssemblyAction(
         name = assembly_name,
         version = "1.0.0",  #TODO: Maybe make this configurable?
         libs = [out_dll],
+        resource_assemblies = [],
         pdbs = [out_pdb] if out_pdb else [],
         xml_docs = [out_xml] if out_xml else [],
         data = data,

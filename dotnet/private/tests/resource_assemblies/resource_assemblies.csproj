@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <EnableDefaultItems>false</EnableDefaultItems>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="Main.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Humanizer.Core" Version="3.0.0-beta.96" />
+    <PackageReference Include="Humanizer.Core.de" Version="3.0.0-beta.96" />
+    <PackageReference Include="Humanizer.Core.es" Version="3.0.0-beta.96" />
+  </ItemGroup>
+</Project>
