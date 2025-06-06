@@ -331,7 +331,7 @@ Imports a DLL
 load("@rules_dotnet//dotnet:defs.bzl", "import_library")
 
 import_library(<a href="#import_library-name">name</a>, <a href="#import_library-deps">deps</a>, <a href="#import_library-data">data</a>, <a href="#import_library-analyzers">analyzers</a>, <a href="#import_library-analyzers_csharp">analyzers_csharp</a>, <a href="#import_library-analyzers_fsharp">analyzers_fsharp</a>, <a href="#import_library-analyzers_vb">analyzers_vb</a>,
-               <a href="#import_library-framework_list">framework_list</a>, <a href="#import_library-library_name">library_name</a>, <a href="#import_library-libs">libs</a>, <a href="#import_library-native">native</a>, <a href="#import_library-nupkg">nupkg</a>, <a href="#import_library-refs">refs</a>, <a href="#import_library-sha512">sha512</a>,
+               <a href="#import_library-framework_list">framework_list</a>, <a href="#import_library-library_name">library_name</a>, <a href="#import_library-libs">libs</a>, <a href="#import_library-native">native</a>, <a href="#import_library-nupkg">nupkg</a>, <a href="#import_library-refs">refs</a>, <a href="#import_library-resource_assemblies">resource_assemblies</a>, <a href="#import_library-sha512">sha512</a>,
                <a href="#import_library-targeting_pack_overrides">targeting_pack_overrides</a>, <a href="#import_library-version">version</a>)
 </pre>
 
@@ -355,6 +355,7 @@ Creates a target for a static DLL for a specific target framework
 | <a id="import_library-native"></a>native |  Native runtime DLLs   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
 | <a id="import_library-nupkg"></a>nupkg |  The `.nupkg` file providing this import   | <a href="https://bazel.build/concepts/labels">Label</a> | optional |  `None`  |
 | <a id="import_library-refs"></a>refs |  Compile time DLLs   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
+| <a id="import_library-resource_assemblies"></a>resource_assemblies |  Resource assemblies   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
 | <a id="import_library-sha512"></a>sha512 |  The SHA512 sum of the NuGet package   | String | optional |  `""`  |
 | <a id="import_library-targeting_pack_overrides"></a>targeting_pack_overrides |  Targeting packs like e.g. Microsoft.NETCore.App.Ref have a PackageOverride.txt that includes a list of NuGet packages that should be omitted in a compiliation because they are included in the targeting pack   | <a href="https://bazel.build/rules/lib/dict">Dictionary: String -> String</a> | optional |  `{}`  |
 | <a id="import_library-version"></a>version |  The version of the library   | String | optional |  `""`  |
