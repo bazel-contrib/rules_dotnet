@@ -102,6 +102,25 @@ def _replace_non_standard_tfm(tfm):
 
     return tfm
 
+# A resource assembly is located at lib/<tfm>/<locale>/<assembly>.resources.dll
+def _process_resource_assembly(groups, tfm, file):
+    # The locale is the part between the tfm and the assembly name
+    # i = file.find(tfm) + len(tfm) + 1
+    # j = file.find("/", i)
+    # locale = file[i:j]
+
+    if groups["resource_assemblies"].get(tfm) == None:
+        # groups["resource_assemblies"][tfm] = {}
+        groups["resource_assemblies"][tfm] = []
+
+    # if groups["resource_assemblies"][tfm].get(locale) == None:
+    #     groups["resource_assemblies"][tfm][locale] = []
+
+    # groups["resource_assemblies"][tfm][locale].append(file)
+    groups["resource_assemblies"][tfm].append(file)
+
+    return
+
 # This function processes a package file that has the following format:
 # <group>/<tfm>/<file>
 def _process_group_with_tfm(groups, group_name, file):
@@ -114,7 +133,7 @@ def _process_group_with_tfm(groups, group_name, file):
         return
 
     # If the folder is empty we do nothing
-    if file.find("/", tfm_end + 1) != -1:
+    if file.endswith(tfm) or file.endswith(tfm + "/"):
         return
 
     group = groups[group_name]
@@ -128,7 +147,11 @@ def _process_group_with_tfm(groups, group_name, file):
     if file.endswith("_._"):
         return
 
-    if not file.endswith(".dll") or file.endswith(".resources.dll"):
+    if group_name == "lib" and file.endswith(".resources.dll"):
+        _process_resource_assembly(groups, tfm, file)
+        return
+
+    if not file.endswith(".dll"):
         return
 
     group[tfm].append(file)
@@ -284,7 +307,6 @@ def _process_runtimes_file(groups, file):
     return
 
 def _process_key_and_file(groups, key, file):
-    # todo resource dlls
     if key == "lib":
         _process_group_with_tfm(groups, key, file)
     elif key == "ref":
@@ -391,6 +413,9 @@ def _nuget_archive_impl(ctx):
         },
         # Format: lib/<TFM>/<assembly>.dll
         "lib": {},
+        # Resource assemblies: https://learn.microsoft.com/en-us/nuget/create-packages/creating-localized-packages
+        # Format: lib/<TFM>/<locale>/<assembly>.resources.<dll|xml>
+        "resource_assemblies": {},
         # Format: ref/<TFM>/<assembly>.dll
         "ref": {},
         # See https://github.com/fsharp/fslang-design/blob/main/tooling/FST-1003-loading-type-provider-design-time-components.md
@@ -494,6 +519,7 @@ load("@rules_dotnet//dotnet/private/rules/nuget:nuget_archive.bzl", "tfm_filegro
 """ + "\n".join([
         _create_framework_select("libs", libs) or "filegroup(name = \"libs\", srcs = [])",
         _create_framework_select("refs", refs) or "filegroup(name = \"refs\", srcs = [])",
+        _create_framework_select("resource_assemblies", groups["resource_assemblies"]) or "filegroup(name = \"resource_assemblies\", srcs = [])",
         "filegroup(name = \"analyzers\", srcs = [%s])" % ",".join(["\n  \"%s\"" % a for a in groups.get("analyzers")["dotnet"]]),
         "filegroup(name = \"analyzers_csharp\", srcs = [%s])" % ",".join(["\n  \"%s\"" % a for a in groups.get("analyzers")["dotnet/cs"]]),
         "filegroup(name = \"analyzers_fsharp\", srcs = [%s])" % ",".join(["\n  \"%s\"" % a for a in groups.get("analyzers")["dotnet/fs"]]),

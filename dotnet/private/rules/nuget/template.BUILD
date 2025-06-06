@@ -15,6 +15,7 @@ import_library(
     native = ["@{PREFIX}.{ID_LOWER}.v{VERSION}//:native"],
     nupkg = "@{PREFIX}.{ID_LOWER}.v{VERSION}//:{ID_LOWER}.{VERSION}.nupkg",
     refs = ["@{PREFIX}.{ID_LOWER}.v{VERSION}//:refs"],
+    resource_assemblies = ["@{PREFIX}.{ID_LOWER}.v{VERSION}//:resource_assemblies"],
     sha512 = "{SHA_512}",
     targeting_pack_overrides = {TARGETING_PACK_OVERRIDES},
     version = "{VERSION}",

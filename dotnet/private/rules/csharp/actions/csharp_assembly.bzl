@@ -350,6 +350,7 @@ def AssemblyAction(
         name = assembly_name,
         version = "1.0.0",  #TODO: Maybe make this configurable?
         libs = [out_dll] if not (is_analyzer or is_language_specific_analyzer) else [],
+        resource_assemblies = [],
         pdbs = [out_pdb] if out_pdb else [],
         xml_docs = [out_xml] if out_xml else [],
         data = data,
