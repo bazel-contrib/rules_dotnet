@@ -2,6 +2,7 @@ load("@bazel_skylib//:bzl_library.bzl", "bzl_library")
 load("@bazel_skylib//rules:select_file.bzl", "select_file")
 load(":analyzers.bzl", "analyzers_structure")
 load(":resolution.bzl", "resolution_structure")
+load(":resource_assemblies.bzl", "resource_assemblies")
 load(":runtimes.bzl", "runtimes_structure")
 load(":targetingpacks.bzl", "targetingpacks_structure")
 load(":typeproviders.bzl", "typeproviders_structure")
@@ -11,6 +12,8 @@ typeproviders_structure()
 runtimes_structure()
 
 resolution_structure()
+
+resource_assemblies()
 
 analyzers_structure()
 
