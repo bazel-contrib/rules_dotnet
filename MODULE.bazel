@@ -49,5 +49,8 @@ local_path_override(
 rules_dotnet_dev_nuget_packages_extension = use_extension("//dotnet:paket.rules_dotnet_dev_nuget_packages_extension.bzl", "rules_dotnet_dev_nuget_packages_extension", dev_dependency = True)
 use_repo(rules_dotnet_dev_nuget_packages_extension, "paket.rules_dotnet_dev_nuget_packages")
 
+rules_dotnet_nuget_resource_assemblies_tests_extension = use_extension("//dotnet:paket.rules_dotnet_nuget_resource_assemblies_tests_extension.bzl", "rules_dotnet_nuget_resource_assemblies_tests_extension", dev_dependency = True)
+use_repo(rules_dotnet_nuget_resource_assemblies_tests_extension, "paket.rules_dotnet_nuget_resource_assemblies_tests")
+
 internal_dev_deps = use_extension("//dotnet:internal_dev_deps.bzl", "internal_dev_deps", dev_dependency = True)
 use_repo(internal_dev_deps, "buildkite_config")

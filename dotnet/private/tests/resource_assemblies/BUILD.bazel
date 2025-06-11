@@ -13,9 +13,9 @@ csharp_binary(
     srcs = ["Main.cs"],
     target_frameworks = ["net9.0"],
     deps = [
-        "@paket.rules_dotnet_dev_nuget_packages//humanizer.core",
-        "@paket.rules_dotnet_dev_nuget_packages//humanizer.core.de",
-        "@paket.rules_dotnet_dev_nuget_packages//humanizer.core.es",
+        "@paket.rules_dotnet_nuget_resource_assemblies_tests//humanizer.core",
+        "@paket.rules_dotnet_nuget_resource_assemblies_tests//humanizer.core.de",
+        "@paket.rules_dotnet_nuget_resource_assemblies_tests//humanizer.core.es",
     ],
 )
 
