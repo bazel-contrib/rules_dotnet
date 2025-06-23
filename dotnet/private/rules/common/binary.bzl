@@ -41,7 +41,6 @@ def _create_launcher(ctx, runfiles, executable):
             },
             is_executable = True,
         )
-        runfiles.append(ctx.file._bash_runfiles)
 
     runfiles.extend(ctx.toolchains["//dotnet:toolchain_type"].dotnetinfo.runtime_files)
 
@@ -124,9 +123,12 @@ def build_binary(ctx, compile_action):
     if depsjson != None:
         additional_runfiles.append(depsjson)
 
+    runfiles = collect_transitive_runfiles(ctx, runtime_provider, ctx.attr.deps).merge(ctx.runfiles(files = additional_runfiles))
+    if not ctx.target_platform_has_constraint(ctx.attr._windows_constraint[platform_common.ConstraintValueInfo]):
+        runfiles = runfiles.merge(ctx.attr._bash_runfiles[DefaultInfo].default_runfiles)
     default_info = DefaultInfo(
         executable = launcher,
-        runfiles = collect_transitive_runfiles(ctx, runtime_provider, ctx.attr.deps).merge(ctx.runfiles(files = additional_runfiles)),
+        runfiles = runfiles,
         files = depset(default_info_files),
     )
 
