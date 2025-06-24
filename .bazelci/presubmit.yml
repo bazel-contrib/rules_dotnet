@@ -8,7 +8,7 @@ matrix:
     [
       "windows",
       "ubuntu2004",
-      "rbe_ubuntu1604",
+      "rbe_ubuntu2204",
       "macos",
       "macos_arm64",
       "ubuntu2004_arm64",
