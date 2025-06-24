@@ -4,3 +4,6 @@ common --incompatible_strict_action_env
 
 # Disable bzlmod lock file since it's not stable enough yet
 common --lockfile_mode=off
+
+# Make sure we are compatible with the migration of internal Bazel rules
+common --incompatible_disable_native_repo_rules

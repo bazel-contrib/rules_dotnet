@@ -14,6 +14,9 @@ common --experimental_collect_worker_data_in_profiler
 # Disable bzlmod lock file since it's not stable enough yet
 common --lockfile_mode=off
 
+# Make sure we are compatible with the migration of internal Bazel rules
+common --incompatible_disable_native_repo_rules
+
 # Load any settings specific to the current user.
 # .bazelrc.user should appear in .gitignore so that settings are not shared with team members
 # This needs to be last statement in this
