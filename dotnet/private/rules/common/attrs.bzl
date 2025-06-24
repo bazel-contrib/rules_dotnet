@@ -168,7 +168,6 @@ BINARY_COMMON_ATTRS = {
     ),
     "_bash_runfiles": attr.label(
         default = "@bazel_tools//tools/bash/runfiles",
-        allow_single_file = True,
     ),
     "_launcher_sh": attr.label(
         doc = "A template file for the launcher on Linux/MacOS",
