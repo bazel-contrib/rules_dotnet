@@ -30,6 +30,3 @@ try-import %workspace%/.bazelrc.user
 common --incompatible_disallow_empty_glob
 # Enable once our dependencies all support this
 # common --incompatible_auto_exec_groups
-
-# Make sure we are compatible with the migration of internal Bazel rules
-common --incompatible_disable_native_repo_rules
