@@ -45,6 +45,7 @@ filegroup(
     data = glob([
         "host/**/*",
         "sdk/**/*",
+        "shared/Microsoft.AspNetCore.App/**/*",
         "shared/Microsoft.NETCore.App/**/*",
     ]),
     visibility = ["//visibility:public"],
