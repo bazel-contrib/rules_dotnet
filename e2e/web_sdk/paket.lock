@@ -1,0 +1,5 @@
+STORAGE: NONE
+RESTRICTION: == net9.0
+NUGET
+  remote: https://api.nuget.org/v3/index.json
+    FSharp.Core (9.0.300)
