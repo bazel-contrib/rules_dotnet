@@ -212,6 +212,10 @@ def is_greater_or_equal_framework(tfm1, tfm2):
     return False
 
 def _format_ref_with_overrides(assembly):
+    # See https://github.com/bazel-contrib/rules_dotnet/issues/405
+    # The following files should not be passed as references to the compiler
+    if assembly.path.endswith("System.EnterpriseServices.Thunk.dll") or assembly.path.endswith("System.EnterpriseServices.Wrapper.dll"):
+        return None
     return "-r:" + assembly.path
 
 def format_ref_arg(args, refs):
