@@ -1,0 +1,25 @@
+load(
+    "//dotnet:defs.bzl",
+    "fsharp_library",
+    "fsharp_nunit_test",
+)
+
+fsharp_library(
+    name = "lib",
+    srcs = ["lib.fs"],
+    internals_visible_to = ["lib_test"],
+    target_frameworks = ["net48"],
+    deps = [
+        "@paket.rules_dotnet_dev_nuget_packages//fsharp.core",
+    ],
+)
+
+fsharp_nunit_test(
+    name = "lib_test",
+    srcs = ["libtest.fs"],
+    target_frameworks = ["net8.0"],
+    deps = [
+        ":lib",
+        "@paket.rules_dotnet_dev_nuget_packages//fsharp.core",
+    ],
+)

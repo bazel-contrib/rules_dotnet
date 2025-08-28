@@ -166,7 +166,7 @@ def _process_build_file(groups, file):
         return
 
     # See https://github.com/bazel-contrib/rules_dotnet/issues/405
-    if not file.endswith(".dll") or file.endswith(".resources.dll") or file.endswith("System.EnterpriseServices.Thunk.dll") or file.endswith("System.EnterpriseServices.Wrapper.dll"):
+    if not file.endswith(".dll") or file.endswith(".resources.dll"):
         return
 
     group = groups["build"]
