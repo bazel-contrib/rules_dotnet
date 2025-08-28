@@ -185,6 +185,8 @@ def targetingpacks_structure():
             "build/.NETFramework/v4.8/System.Drawing.Design.dll",
             "build/.NETFramework/v4.8/System.Drawing.dll",
             "build/.NETFramework/v4.8/System.Dynamic.dll",
+            "build/.NETFramework/v4.8/System.EnterpriseServices.Thunk.dll",
+            "build/.NETFramework/v4.8/System.EnterpriseServices.Wrapper.dll",
             "build/.NETFramework/v4.8/System.EnterpriseServices.dll",
             "build/.NETFramework/v4.8/System.IO.Compression.FileSystem.dll",
             "build/.NETFramework/v4.8/System.IO.Compression.dll",
