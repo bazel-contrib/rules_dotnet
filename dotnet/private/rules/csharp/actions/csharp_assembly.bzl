@@ -473,8 +473,15 @@ def _compile(
         args.add("/doc:" + out_xml.path)
         outputs.append(out_xml)
 
+    # See https://github.com/bazel-contrib/rules_dotnet/issues/405
+    filtered_framework_files = []
+    for f in framework_files:
+        if f.path.endswith("System.EnterpriseServices.Thunk.dll") or f.path.endswith("System.EnterpriseServices.Wrapper.dll"):
+            continue
+        filtered_framework_files.append(f)
+
     # assembly references
-    format_ref_arg(args, depset(framework_files, transitive = [refs]))
+    format_ref_arg(args, depset(filtered_framework_files, transitive = [refs]))
 
     # analyzers
     if run_analyzers:
