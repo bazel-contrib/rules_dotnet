@@ -109,19 +109,6 @@ bzl_library(
 exports_files(["defs.bzl"])
 
 bzl_library(
-    name = "internal_dev_deps",
-    srcs = ["internal_dev_deps.bzl"],
-    visibility = ["//visibility:public"],
-    deps = ["@bazel_ci_rules//:rbe_repo"],
-)
-
-bzl_library(
-    name = "paket.rules_dotnet_nuget_resource_assemblies_tests_extension",
-    srcs = ["paket.rules_dotnet_nuget_resource_assemblies_tests_extension.bzl"],
-    visibility = ["//visibility:public"],
-)
-
-bzl_library(
     name = "providers",
     srcs = ["providers.bzl"],
     visibility = ["//visibility:public"],
