@@ -1,11 +1,7 @@
 "Common functionality for nuget structure tests"
 
 load("@bazel_skylib//lib:unittest.bzl", "analysistest", "asserts")
-
-# buildifier: disable=bzl-visibility
 load("//dotnet:providers.bzl", "DotnetAssemblyCompileInfo", "DotnetAssemblyRuntimeInfo", "NuGetInfo")
-
-# buildifier: disable=bzl-visibility
 load("//dotnet/private:common.bzl", "get_nuget_relative_path")
 
 # buildifier: disable=bzl-visibility
