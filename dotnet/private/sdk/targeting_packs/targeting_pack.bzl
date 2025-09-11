@@ -1,6 +1,6 @@
 ".Net Targeting Pack"
 
-load("//dotnet/private:providers.bzl", "DotnetAssemblyCompileInfo", "DotnetAssemblyRuntimeInfo", "DotnetTargetingPackInfo", "NuGetInfo")
+load("//dotnet:providers.bzl", "DotnetAssemblyCompileInfo", "DotnetAssemblyRuntimeInfo", "DotnetTargetingPackInfo", "NuGetInfo")
 load("//dotnet/private/transitions:tfm_transition.bzl", "tfm_transition")
 
 def _targeting_pack_impl(ctx):

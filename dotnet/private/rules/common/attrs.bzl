@@ -1,7 +1,7 @@
 "The attributes used by binary/library/test rules"
 
 load("@bazel_skylib//lib:dicts.bzl", "dicts")
-load("//dotnet/private:providers.bzl", "DotnetAssemblyCompileInfo", "DotnetAssemblyRuntimeInfo")
+load("//dotnet:providers.bzl", "DotnetAssemblyCompileInfo", "DotnetAssemblyRuntimeInfo")
 load("//dotnet/private/sdk/apphost_packs:apphost_pack_transition.bzl", "apphost_pack_transition")
 load("//dotnet/private/sdk/runtime_packs:runtime_pack_transition.bzl", "runtime_pack_transition")
 load("//dotnet/private/sdk/targeting_packs:targeting_pack_transition.bzl", "targeting_pack_transition")
@@ -132,9 +132,9 @@ COMMON_ATTRS = {
 LIBRARY_COMMON_ATTRS = {
     "exports": attr.label_list(
         doc = """
-        List of targets to add to the dependencies of those that depend on this target. 
+        List of targets to add to the dependencies of those that depend on this target.
         Use this sparingly as it weakens the precision of the build graph.
-        
+
         This attribute does nothing if you don't have strict dependencies enabled.""",
         default = [],
         providers = [DotnetAssemblyCompileInfo, DotnetAssemblyRuntimeInfo],

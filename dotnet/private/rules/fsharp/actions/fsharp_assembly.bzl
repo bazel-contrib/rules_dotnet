@@ -3,6 +3,11 @@ Actions for compiling targets with C#.
 """
 
 load(
+    "//dotnet:providers.bzl",
+    "DotnetAssemblyCompileInfo",
+    "DotnetAssemblyRuntimeInfo",
+)
+load(
     "//dotnet/private:common.bzl",
     "collect_compile_info",
     "copy_files_to_dir",
@@ -15,11 +20,6 @@ load(
     "is_standard_framework",
     "map_resource_arg",
     "use_highentropyva",
-)
-load(
-    "//dotnet/private:providers.bzl",
-    "DotnetAssemblyCompileInfo",
-    "DotnetAssemblyRuntimeInfo",
 )
 
 def _format_targetprofile(tfm):

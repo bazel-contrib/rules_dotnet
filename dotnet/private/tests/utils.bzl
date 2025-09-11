@@ -3,7 +3,7 @@
 load("@bazel_skylib//lib:unittest.bzl", "analysistest")
 load("@bazel_skylib//rules:common_settings.bzl", "BuildSettingInfo")
 load("@rules_testing//lib:util.bzl", "TestingAspectInfo")
-load("//dotnet/private:providers.bzl", "DotnetBinaryInfo")
+load("//dotnet:providers.bzl", "DotnetBinaryInfo")
 
 ACTION_ARGS_TEST_ARGS = {
     "action_mnemonic": attr.string(),

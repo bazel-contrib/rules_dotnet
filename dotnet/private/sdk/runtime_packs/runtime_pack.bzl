@@ -1,6 +1,6 @@
 ".Net Runtime Pack"
 
-load("//dotnet/private:providers.bzl", "DotnetAssemblyCompileInfo", "DotnetAssemblyRuntimeInfo", "DotnetRuntimePackInfo", "NuGetInfo")
+load("//dotnet:providers.bzl", "DotnetAssemblyCompileInfo", "DotnetAssemblyRuntimeInfo", "DotnetRuntimePackInfo", "NuGetInfo")
 load("//dotnet/private/transitions:tfm_transition.bzl", "tfm_transition")
 
 def _runtime_pack_impl(ctx):

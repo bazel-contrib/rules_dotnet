@@ -5,7 +5,7 @@ bzl_library(
     srcs = ["fsharp_assembly.bzl"],
     visibility = ["//dotnet:__subpackages__"],
     deps = [
+        "//dotnet:providers",
         "//dotnet/private:common",
-        "//dotnet/private:providers",
     ],
 )

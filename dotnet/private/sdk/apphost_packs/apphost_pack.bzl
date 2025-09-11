@@ -1,6 +1,6 @@
 ".Net Runtime Pack"
 
-load("//dotnet/private:providers.bzl", "DotnetApphostPackInfo", "DotnetAssemblyRuntimeInfo")
+load("//dotnet:providers.bzl", "DotnetApphostPackInfo", "DotnetAssemblyRuntimeInfo")
 load("//dotnet/private/transitions:tfm_transition.bzl", "tfm_transition")
 
 def _apphost_pack_impl(ctx):

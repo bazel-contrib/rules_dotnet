@@ -3,7 +3,7 @@
 load("@bazel_skylib//lib:unittest.bzl", "analysistest")
 load("//dotnet:defs.bzl", "csharp_library")
 load(
-    "//dotnet/private:providers.bzl",
+    "//dotnet:providers.bzl",
     "DotnetAssemblyCompileInfo",
     "DotnetAssemblyRuntimeInfo",
 )

@@ -5,8 +5,8 @@ bzl_library(
     srcs = ["binary.bzl"],
     visibility = ["//dotnet:__subpackages__"],
     deps = [
+        "//dotnet:providers",
         "//dotnet/private:common",
-        "//dotnet/private:providers",
         "@bazel_skylib//rules:common_settings",
     ],
 )
@@ -23,7 +23,7 @@ bzl_library(
     srcs = ["attrs.bzl"],
     visibility = ["//dotnet:__subpackages__"],
     deps = [
-        "//dotnet/private:providers",
+        "//dotnet:providers",
         "//dotnet/private/sdk/apphost_packs:apphost_pack_transition",
         "//dotnet/private/sdk/runtime_packs:runtime_pack_transition",
         "//dotnet/private/sdk/targeting_packs:targeting_pack_transition",

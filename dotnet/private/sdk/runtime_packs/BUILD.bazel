@@ -38,7 +38,7 @@ bzl_library(
     visibility = ["//dotnet:__subpackages__"],
     deps = [
         ":runtime_pack_lookup_table",
-        "//dotnet/private:providers",
+        "//dotnet:providers",
     ],
 )
 

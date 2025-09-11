@@ -3,10 +3,10 @@
 load("@bazel_skylib//lib:unittest.bzl", "analysistest", "asserts")
 
 # buildifier: disable=bzl-visibility
-load("//dotnet/private:common.bzl", "get_nuget_relative_path")
+load("//dotnet:providers.bzl", "DotnetAssemblyCompileInfo", "DotnetAssemblyRuntimeInfo", "NuGetInfo")
 
 # buildifier: disable=bzl-visibility
-load("//dotnet/private:providers.bzl", "DotnetAssemblyCompileInfo", "DotnetAssemblyRuntimeInfo", "NuGetInfo")
+load("//dotnet/private:common.bzl", "get_nuget_relative_path")
 
 # buildifier: disable=bzl-visibility
 load("//dotnet/private/transitions:tfm_transition.bzl", "tfm_transition")

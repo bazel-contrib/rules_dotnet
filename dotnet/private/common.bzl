@@ -5,7 +5,7 @@ Rules for compatability resolution of dependencies for .NET frameworks.
 load("@bazel_skylib//lib:sets.bzl", "sets")
 load("@bazel_skylib//lib:shell.bzl", "shell")
 load(
-    "//dotnet/private:providers.bzl",
+    "//dotnet:providers.bzl",
     "DotnetAssemblyCompileInfo",
     "DotnetAssemblyRuntimeInfo",
     "DotnetDepVariantInfo",

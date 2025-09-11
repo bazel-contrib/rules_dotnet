@@ -4,8 +4,8 @@ Rules for compiling F# binaries.
 
 load("@bazel_skylib//lib:paths.bzl", "paths")
 load("@bazel_skylib//lib:shell.bzl", "shell")
+load("//dotnet:providers.bzl", "DotnetAssemblyCompileInfo", "DotnetAssemblyRuntimeInfo", "DotnetBinaryInfo")
 load("//dotnet/private:common.bzl", "generate_depsjson", "generate_runtimeconfig")
-load("//dotnet/private:providers.bzl", "DotnetAssemblyCompileInfo", "DotnetAssemblyRuntimeInfo", "DotnetBinaryInfo")
 load("//dotnet/private/transitions:default_transition.bzl", "default_transition")
 load("//dotnet/private/transitions:tfm_transition.bzl", "tfm_transition")
 
@@ -271,7 +271,7 @@ publish_binary = rule(
         "self_contained": attr.bool(
             doc = """
             Whether the binary should be self-contained.
-            
+
             If true, the binary will be published as a self-contained but you need to provide
             a runtime pack in the `runtime_packs` attribute. At some point the rules might
             resolve the runtime pack automatically.

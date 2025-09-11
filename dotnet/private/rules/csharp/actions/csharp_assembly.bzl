@@ -3,6 +3,11 @@ Actions for compiling targets with C#.
 """
 
 load(
+    "//dotnet:providers.bzl",
+    "DotnetAssemblyCompileInfo",
+    "DotnetAssemblyRuntimeInfo",
+)
+load(
     "//dotnet/private:common.bzl",
     "collect_compile_info",
     "copy_files_to_dir",
@@ -12,11 +17,6 @@ load(
     "get_framework_version_info",
     "map_resource_arg",
     "use_highentropyva",
-)
-load(
-    "//dotnet/private:providers.bzl",
-    "DotnetAssemblyCompileInfo",
-    "DotnetAssemblyRuntimeInfo",
 )
 
 def _write_internals_visible_to_csharp(actions, label_name, dll_name, others):

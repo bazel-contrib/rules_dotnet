@@ -1,3 +1,4 @@
+load("@bazel_skylib//:bzl_library.bzl", "bzl_library")
 load("//dotnet:defs.bzl", "csharp_test", "fsharp_test")
 load(
     ":embedded_resource_path.bzl",
@@ -39,5 +40,15 @@ fsharp_test(
     target_frameworks = ["net9.0"],
     deps = [
         "@paket.rules_dotnet_dev_nuget_packages//fsharp.core",
+    ],
+)
+
+bzl_library(
+    name = "embedded_resource_path",
+    srcs = ["embedded_resource_path.bzl"],
+    visibility = ["//dotnet:__subpackages__"],
+    deps = [
+        "//dotnet:defs",
+        "//dotnet/private/tests:utils",
     ],
 )

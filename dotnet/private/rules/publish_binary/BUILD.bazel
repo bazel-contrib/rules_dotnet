@@ -13,7 +13,7 @@ bzl_library(
         "//dotnet:__subpackages__",
     ],
     deps = [
-        "//dotnet/private:providers",
+        "//dotnet:providers",
         "//dotnet/private/sdk/runtime_packs:runtime_pack_transition",
         "//dotnet/private/transitions:default_transition",
         "//dotnet/private/transitions:tfm_transition",

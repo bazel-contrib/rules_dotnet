@@ -4,6 +4,7 @@ Base rule for building .Net binaries
 
 load("@aspect_bazel_lib//lib:expand_make_vars.bzl", "expand_locations", "expand_variables")
 load("@bazel_skylib//rules:common_settings.bzl", "BuildSettingInfo")
+load("//dotnet:providers.bzl", "DotnetApphostPackInfo", "DotnetBinaryInfo", "DotnetRuntimePackInfo")
 load(
     "//dotnet/private:common.bzl",
     "collect_transitive_runfiles",
@@ -13,7 +14,6 @@ load(
     "is_standard_framework",
     "to_rlocation_path",
 )
-load("//dotnet/private:providers.bzl", "DotnetApphostPackInfo", "DotnetBinaryInfo", "DotnetRuntimePackInfo")
 
 def _create_launcher(ctx, runfiles, executable):
     runtime = ctx.toolchains["//dotnet:toolchain_type"].runtime

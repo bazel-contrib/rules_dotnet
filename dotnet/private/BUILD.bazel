@@ -15,8 +15,8 @@ bzl_library(
     srcs = ["common.bzl"],
     visibility = ["//dotnet:__subpackages__"],
     deps = [
-        ":providers",
         ":semver",
+        "//dotnet:providers",
         "//dotnet/private/sdk:rids",
         "@bazel_skylib//lib:sets",
         "@bazel_skylib//lib:shell",
@@ -99,12 +99,6 @@ config_setting(
         "@platforms//os:windows",
     ],
     visibility = ["//visibility:public"],
-)
-
-bzl_library(
-    name = "providers",
-    srcs = ["providers.bzl"],
-    visibility = ["//dotnet:__subpackages__"],
 )
 
 bzl_library(

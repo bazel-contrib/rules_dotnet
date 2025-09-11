@@ -1,3 +1,15 @@
+load("@bazel_skylib//:bzl_library.bzl", "bzl_library")
 load(":tests.bzl", "appsettings_test_suite")
 
 appsettings_test_suite(name = "appsettings_test_suite")
+
+bzl_library(
+    name = "tests",
+    srcs = ["tests.bzl"],
+    visibility = ["//dotnet:__subpackages__"],
+    deps = [
+        "//dotnet:defs",
+        "//dotnet/private/tests:utils",
+        "@rules_testing//lib:analysis_test",
+    ],
+)

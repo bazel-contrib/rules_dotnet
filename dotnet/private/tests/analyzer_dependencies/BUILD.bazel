@@ -1,3 +1,15 @@
+load("@bazel_skylib//:bzl_library.bzl", "bzl_library")
 load(":analyzer_dependencies.bzl", "test_analyzer_dependencies")
 
 test_analyzer_dependencies()
+
+bzl_library(
+    name = "analyzer_dependencies",
+    srcs = ["analyzer_dependencies.bzl"],
+    visibility = ["//dotnet:__subpackages__"],
+    deps = [
+        "//dotnet:defs",
+        "//dotnet:providers",
+        "@bazel_skylib//lib:unittest",
+    ],
+)
