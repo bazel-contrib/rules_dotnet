@@ -396,7 +396,6 @@ def _compile(
         nullable,
         run_analyzers,
         compiler_options,
-        resources_namespace,
         out_dll = None,
         out_ref = None,
         out_pdb = None,
