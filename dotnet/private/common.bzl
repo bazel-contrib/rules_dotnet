@@ -820,7 +820,7 @@ def map_resource_arg(file, target_label, out_dll, language):
     elif file.owner != None and file.owner.repo_name != target_label.repo_name:
         # Fallback to the basename if the file comes from a different repository.
         resource_name = simple_resource_name
-    elif not file.short_path.startswith(target_label.package) and not file.short_path.startswith("bazel-bin/"+target_label.package):
+    elif not file.short_path.startswith(target_label.package) and not file.short_path.startswith("bazel-bin/" + target_label.package):
         # Fallback to the basename if the file is not in the target's package, because
         # the path will not be normalized.
         resource_name = simple_resource_name
