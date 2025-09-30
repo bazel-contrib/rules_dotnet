@@ -353,7 +353,7 @@ def AssemblyAction(
         resource_assemblies = [],
         pdbs = [out_pdb] if out_pdb else [],
         xml_docs = [out_xml] if out_xml else [],
-        data = data,
+        data = data + out_appsettings,
         appsetting_files = depset(out_appsettings),
         native = [],
         deps = depset(
@@ -396,6 +396,7 @@ def _compile(
         nullable,
         run_analyzers,
         compiler_options,
+        resources_namespace,
         out_dll = None,
         out_ref = None,
         out_pdb = None,
