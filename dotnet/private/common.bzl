@@ -271,6 +271,7 @@ def collect_compile_info(name, deps, targeting_pack, exports, strict_deps):
     targeting_pack_overrides = {}
     framework_list = {}
     framework_files = []
+    analyzer_dlls = []
 
     if targeting_pack:
         targeting_pack_info = targeting_pack[DotnetTargetingPackInfo]
@@ -285,6 +286,8 @@ def collect_compile_info(name, deps, targeting_pack, exports, strict_deps):
 
             if len(nuget_info.framework_list) == 0:
                 framework_files.extend(compile_info.irefs)
+
+            analyzer_dlls.extend([a.basename for a in compile_info.analyzers + compile_info.analyzers_csharp + compile_info.analyzers_fsharp + compile_info.analyzers_vb])
 
             direct_analyzers.extend(compile_info.analyzers)
             direct_analyzers_csharp.extend(compile_info.analyzers_csharp)
@@ -312,10 +315,35 @@ def collect_compile_info(name, deps, targeting_pack, exports, strict_deps):
         if add_to_output:
             direct_iref.extend(assembly.irefs if name in assembly.internals_visible_to else assembly.refs)
             direct_ref.extend(assembly.refs)
-            direct_analyzers.extend(assembly.analyzers)
-            direct_analyzers_csharp.extend(assembly.analyzers_csharp)
-            direct_analyzers_fsharp.extend(assembly.analyzers_fsharp)
-            direct_analyzers_vb.extend(assembly.analyzers_vb)
+
+            # Only add new analyzer DLLs that are not already in the list; for targets that use both
+            # a targetting pack and other framework dependencies we can end up with duplicates.
+            # eg:
+            # target_frameworks = ["net8.0"],
+            # deps = ["@paket.main//microsoft.aspnetcore.app.ref"],
+            # results in these duplicates:
+            # "Microsoft.AspNetCore.App.Analyzers.dll", 
+            # "Microsoft.AspNetCore.App.CodeFixes.dll", 
+            # "Microsoft.AspNetCore.Components.Analyzers.dll", 
+            # "Microsoft.AspNetCore.Http.RequestDelegateGenerator.dll", 
+            # "Microsoft.Extensions.Configuration.Binder.SourceGeneration.dll", 
+            # "Microsoft.Extensions.Logging.Generators.dll"
+            new_analyzers = [a for a in assembly.analyzers if a.basename not in analyzer_dlls]
+            direct_analyzers.extend(new_analyzers)
+            analyzer_dlls.extend([a.basename for a in new_analyzers])
+
+            new_analyzers = [a for a in assembly.analyzers_csharp if a.basename not in analyzer_dlls]
+            direct_analyzers_csharp.extend(new_analyzers)
+            analyzer_dlls.extend([a.basename for a in new_analyzers])
+
+            new_analyzers = [a for a in assembly.analyzers_fsharp if a.basename not in analyzer_dlls]
+            direct_analyzers_fsharp.extend(new_analyzers)
+            analyzer_dlls.extend([a.basename for a in new_analyzers])
+
+            new_analyzers = [a for a in assembly.analyzers_vb if a.basename not in analyzer_dlls]
+            direct_analyzers_vb.extend(new_analyzers)
+            analyzer_dlls.extend([a.basename for a in new_analyzers])
+
             direct_compile_data.extend(assembly.compile_data)
 
         # We take all the exports of each dependency and add them
@@ -333,10 +361,24 @@ def collect_compile_info(name, deps, targeting_pack, exports, strict_deps):
                     add_to_output = False
                 if add_to_output:
                     transitive_ref.append(transitive_assembly)
-            transitive_analyzers.append(assembly.transitive_analyzers)
-            transitive_analyzers_csharp.append(assembly.transitive_analyzers_csharp)
-            transitive_analyzers_fsharp.append(assembly.transitive_analyzers_fsharp)
-            transitive_analyzers_vb.append(assembly.transitive_analyzers_vb)
+
+            # avoid duplicate analyzers (see above)
+            new_analyzers = [a for a in assembly.transitive_analyzers.to_list() if a.basename not in analyzer_dlls]
+            transitive_analyzers.extend(new_analyzers)
+            analyzer_dlls.extend([a.basename for a in new_analyzers])
+
+            new_analyzers = [a for a in assembly.transitive_analyzers_csharp.to_list() if a.basename not in analyzer_dlls]
+            transitive_analyzers_csharp.extend(new_analyzers)
+            analyzer_dlls.extend([a.basename for a in new_analyzers])
+
+            new_analyzers = [a for a in assembly.transitive_analyzers_fsharp.to_list() if a.basename not in analyzer_dlls]
+            transitive_analyzers_fsharp.extend(new_analyzers)
+            analyzer_dlls.extend([a.basename for a in new_analyzers])
+
+            new_analyzers = [a for a in assembly.transitive_analyzers_vb.to_list() if a.basename not in analyzer_dlls]
+            transitive_analyzers_vb.extend(new_analyzers)
+            analyzer_dlls.extend([a.basename for a in new_analyzers])
+
             transitive_compile_data.append(assembly.transitive_compile_data)
 
     for file in framework_list.values():
