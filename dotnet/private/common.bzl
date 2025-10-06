@@ -364,19 +364,19 @@ def collect_compile_info(name, deps, targeting_pack, exports, strict_deps):
 
             # avoid duplicate analyzers (see above)
             new_analyzers = [a for a in assembly.transitive_analyzers.to_list() if a.basename not in analyzer_dlls]
-            transitive_analyzers.extend(new_analyzers)
+            transitive_analyzers.append(depset(new_analyzers))
             analyzer_dlls.extend([a.basename for a in new_analyzers])
 
             new_analyzers = [a for a in assembly.transitive_analyzers_csharp.to_list() if a.basename not in analyzer_dlls]
-            transitive_analyzers_csharp.extend(new_analyzers)
+            transitive_analyzers_csharp.append(depset(new_analyzers))
             analyzer_dlls.extend([a.basename for a in new_analyzers])
 
             new_analyzers = [a for a in assembly.transitive_analyzers_fsharp.to_list() if a.basename not in analyzer_dlls]
-            transitive_analyzers_fsharp.extend(new_analyzers)
+            transitive_analyzers_fsharp.append(depset(new_analyzers))
             analyzer_dlls.extend([a.basename for a in new_analyzers])
 
             new_analyzers = [a for a in assembly.transitive_analyzers_vb.to_list() if a.basename not in analyzer_dlls]
-            transitive_analyzers_vb.extend(new_analyzers)
+            transitive_analyzers_vb.append(depset(new_analyzers))
             analyzer_dlls.extend([a.basename for a in new_analyzers])
 
             transitive_compile_data.append(assembly.transitive_compile_data)
