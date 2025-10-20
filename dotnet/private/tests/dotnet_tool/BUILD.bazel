@@ -1,0 +1,54 @@
+load("@bazel_skylib//rules:write_file.bzl", "write_file")
+load(":dotnet_tool_test.bzl", "dotnet_tool_test")
+
+CSHARPIER_INPUT = """\
+using System;      static void Main() {Console.WriteLine("Hello, World!");}
+"""
+
+CSHARPIER_OUTPUT = """\
+using System;
+
+static void Main()
+{
+    Console.WriteLine("Hello, World!");
+}
+"""
+
+write_file(
+    name = "csharpier_input",
+    out = "CSharpierInput.cs",
+    content = [
+        CSHARPIER_INPUT,
+    ],
+)
+
+dotnet_tool_test(
+    name = "csharpier_test",
+    args = [
+        "format",
+        # On macOS creating cache directories fails due to permission issues.
+        "--no-cache",
+        "--write-stdout",
+        "RLOCATION:$(rlocationpath :csharpier_input)",
+    ],
+    expected_stdout_contains = CSHARPIER_OUTPUT,
+    target_compatible_with = select({
+        "@platforms//os:macos": [],
+        "@platforms//os:linux": [],
+        "//conditions:default": ["@platforms//:incompatible"],
+    }),
+    tool = "@paket.rules_dotnet_nuget_tool_tests//csharpier/tools:csharpier",
+    deps = [":csharpier_input"],
+)
+
+dotnet_tool_test(
+    name = "paket_test",
+    args = ["--version"],
+    expected_stdout_contains = "Paket version 9.0",
+    target_compatible_with = select({
+        "@platforms//os:macos": [],
+        "@platforms//os:linux": [],
+        "//conditions:default": ["@platforms//:incompatible"],
+    }),
+    tool = "@paket.rules_dotnet_nuget_tool_tests//paket/tools:paket",
+)

@@ -3,7 +3,7 @@ group paket2bazel_dependencies
     framework: net9.0
     source https://api.nuget.org/v3/index.json
 
-    nuget FSharp.Core == 9.0.300 
+    nuget FSharp.Core == 9.0.300
     nuget Argu 6.2.3
     nuget Paket.Core 9.0.0
     nuget NuGet.PackageManagement 6.12.1
@@ -46,3 +46,13 @@ group rules_dotnet_nuget_packages
     nuget NUnit 3.14.0
     nuget NUnitLite 3.14.0
 
+group rules_dotnet_nuget_tool_tests
+    framework: net9.0
+    source https://api.nuget.org/v3/index.json
+
+    # NOTE: Newer versions of csharpier include "net10.0" which is not yet
+    #       recognized by rules_dotnet.
+    nuget CSharpier 1.0.3
+    # Included to test older framework tools being supported by newer
+    # dotnet toolchains.
+    nuget Paket 9.0.2
