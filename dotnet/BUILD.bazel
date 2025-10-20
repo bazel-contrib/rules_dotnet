@@ -39,6 +39,7 @@ bzl_library(
         "//dotnet/private/rules/fsharp:library",
         "//dotnet/private/rules/fsharp:nunit_test",
         "//dotnet/private/rules/fsharp:test",
+        "//dotnet/private/rules/nuget:dotnet_tool",
         "//dotnet/private/rules/nuget:imports",
         "//dotnet/private/rules/nuget:nuget_archive",
         "//dotnet/private/rules/nuget:nuget_repo",

@@ -163,6 +163,39 @@ Compiles a C# executable and runs it as a test
 | <a id="csharp_test-winexe"></a>winexe |  If true, output a winexe-style executable, otherwiseoutput a console-style executable.   | Boolean | optional |  `False`  |
 
 
+<a id="dotnet_tool"></a>
+
+## dotnet_tool
+
+<pre>
+load("@rules_dotnet//dotnet:defs.bzl", "dotnet_tool")
+
+dotnet_tool(<a href="#dotnet_tool-name">name</a>, <a href="#dotnet_tool-deps">deps</a>, <a href="#dotnet_tool-entrypoint">entrypoint</a>, <a href="#dotnet_tool-runner">runner</a>, <a href="#dotnet_tool-target_frameworks">target_frameworks</a>)
+</pre>
+
+Run a .NET command-line tool hermetically via Bazel.
+
+This rule allows you to run a pre-built .NET command-line tool that has been packaged
+with NuGet. The tool is executed using the hermetic .NET runtime provided by `rules_dotnet`.
+
+This is a lower-level API that requires a manual specification of tool details.
+You should instead add the tool as a dependency to your Paket dependencies, and
+use paket2bazel to generate Bazel targets; any tools found within the Paket
+dependencies will automatically be exposed as Bazel targets in the resulting
+`nuget_repo` rule.
+
+**ATTRIBUTES**
+
+
+| Name  | Description | Type | Mandatory | Default |
+| :------------- | :------------- | :------------- | :------------- | :------------- |
+| <a id="dotnet_tool-name"></a>name |  A unique name for this target.   | <a href="https://bazel.build/concepts/labels#target-names">Name</a> | required |  |
+| <a id="dotnet_tool-deps"></a>deps |  The dependencies of the dotnet tool. Must include a DotnetToolInfo provider.   | <a href="https://bazel.build/concepts/labels">Label</a> | required |  |
+| <a id="dotnet_tool-entrypoint"></a>entrypoint |  The entrypoint of the dotnet tool (the dll to execute), keyed by the target framework.   | <a href="https://bazel.build/rules/lib/dict">Dictionary: String -> String</a> | required |  |
+| <a id="dotnet_tool-runner"></a>runner |  The runner to use to execute the tool, keyed by the target framework. Currently, only 'dotnet' is supported.   | <a href="https://bazel.build/rules/lib/dict">Dictionary: String -> String</a> | required |  |
+| <a id="dotnet_tool-target_frameworks"></a>target_frameworks |  The target frameworks this tool was built for.   | List of strings | required |  |
+
+
 <a id="fsharp_binary"></a>
 
 ## fsharp_binary

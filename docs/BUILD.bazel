@@ -69,6 +69,11 @@ stardoc_with_diff_test(
     bzl_library_target = "//dotnet/private/rules/nuget:nuget_repo",
 )
 
+stardoc_with_diff_test(
+    name = "dotnet_tool",
+    bzl_library_target = "//dotnet/private/rules/nuget:dotnet_tool",
+)
+
 ##############
 # Publishing
 ##############
