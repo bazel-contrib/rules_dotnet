@@ -26,6 +26,7 @@ bzl_library(
         "//dotnet:__subpackages__",
     ],
     deps = [
+        ":dotnet_tool",
         "//dotnet/private:common",
         "@bazel_tools//tools/build_defs/repo:utils.bzl",
     ],

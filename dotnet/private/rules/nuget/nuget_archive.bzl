@@ -15,6 +15,10 @@ load(
     "get_highest_compatible_target_framework",
 )
 load(
+    "//dotnet/private/rules/nuget:dotnet_tool.bzl",
+    "DotnetToolInfo",
+)
+load(
     "//dotnet/private/sdk:rids.bzl",
     "RUNTIME_GRAPH",
 )
@@ -82,6 +86,21 @@ def _create_rid_native_select(name, group):
 
     result.append("})")
 
+    return "".join(result)
+
+def _create_tools_select(tools):
+    if len(tools) == 0:
+        return None
+
+    result = ["tool_filegroup(\"tools\", {\n"]
+    for tfm, files in tools.items():
+        result.append(' "')
+        result.append(tfm)
+        result.append('": [')
+        result.append(",".join(["\n   \"{}\"".format(item) for item in files if not item.endswith("_._")]))
+        result.append("],\n")
+
+    result.append("})")
     return "".join(result)
 
 def _sanitize_path(file_path):
@@ -296,6 +315,20 @@ def _process_runtimes_file(groups, file):
 
     return
 
+# tools/<TFM>/any/...
+def _process_tools_file(groups, file):
+    parts = file.split("/")
+    if len(parts) < 4:
+        return
+
+    tfm = parts[1]
+    tfm_files = groups["tools"].setdefault(tfm, [])
+
+    if parts[2] != "any":
+        return
+
+    tfm_files.append(file)
+
 def _process_key_and_file(groups, key, file):
     if key == "lib":
         _process_group_with_tfm(groups, key, file)
@@ -311,6 +344,8 @@ def _process_key_and_file(groups, key, file):
         _process_runtimes_file(groups, file)
     elif key == "build":
         _process_build_file(groups, file)
+    elif key == "tools":
+        _process_tools_file(groups, file)
 
     return
 
@@ -421,6 +456,11 @@ def _nuget_archive_impl(ctx):
         #     currently we just blindly add the files to the lib or ref group depending on the folder name
         "build": {
         },
+        # See: https://github.com/dotnet/sdk/blob/master/documentation/general/tool-nuget-package-format.md
+        # Format: tools/<TFM>/any/...
+        # NB: Dotnet requires portable assemblies in the tools folder, so RID is always 'any'
+        "tools": {
+        },
     }
 
     for file in all_files:
@@ -505,7 +545,7 @@ def _nuget_archive_impl(ctx):
 
     ctx.file("BUILD.bazel", r"""package(default_visibility = ["//visibility:public"])
 exports_files(glob(["**"]))
-load("@rules_dotnet//dotnet/private/rules/nuget:nuget_archive.bzl", "tfm_filegroup", "rid_filegroup")
+load("@rules_dotnet//dotnet/private/rules/nuget:nuget_archive.bzl", "tfm_filegroup", "rid_filegroup", "tool_filegroup")
 """ + "\n".join([
         _create_framework_select("libs", libs, False) or "filegroup(name = \"libs\", srcs = [])",
         _create_framework_select("refs", refs, False) or "filegroup(name = \"refs\", srcs = [])",
@@ -522,6 +562,7 @@ load("@rules_dotnet//dotnet/private/rules/nuget:nuget_archive.bzl", "tfm_filegro
         _create_rid_native_select("native", native) or "filegroup(name = \"native\", srcs = [])",
         "filegroup(name = \"content_files\", srcs = [%s])" % ",".join(["\n  \"%s\"" % a for a in groups.get("contentFiles")["any"]]),
         "filegroup(name = \"files\", srcs = [%s])" % ",".join(["\n  \"%s\"" % _sanitize_path(a) for a in all_files]),
+        _create_tools_select(groups["tools"]) or "filegroup(name = \"tools\", srcs = [])",
         "exports_files([\"%s\"])" % nupkg_name,
     ]))
 
@@ -689,4 +730,36 @@ def rid_filegroup(name, files_per_rid):
         name = name,
         srcs = select(map),
         visibility = ["//visibility:public"],
+    )
+
+def _tool_filegroup_impl(ctx):
+    return [
+        DotnetToolInfo(
+            files_by_tfm = ctx.attr.tfms,
+        ),
+    ]
+
+_tool_filegroup_rule = rule(
+    implementation = _tool_filegroup_impl,
+    attrs = {
+        "tfms": attr.string_keyed_label_dict(
+            doc = "A mapping of target frameworks to tool filegroups.",
+            mandatory = True,
+        ),
+    },
+)
+
+# This function is public because it's used by the nuget_archive repository rule.
+# buildifier: disable=function-docstring
+def tool_filegroup(name, tools_by_tfm):
+    for tfm, files in tools_by_tfm.items():
+        native.filegroup(
+            name = "%s_%s" % (name, tfm),
+            srcs = files,
+            visibility = ["//visibility:public"],
+        )
+
+    return _tool_filegroup_rule(
+        name = name,
+        tfms = {tfm: ":%s_%s" % (name, tfm) for tfm in tools_by_tfm.keys()},
     )
