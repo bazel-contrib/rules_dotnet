@@ -1,7 +1,7 @@
 """These tests are for asserting that the dotnet toolchain can be resolved and used using template variables.
 """
 
-load("@aspect_bazel_lib//lib:testing.bzl", "assert_contains")
+load("@bazel_lib//lib:testing.bzl", "assert_contains")
 
 genrule(
     name = "dotnet_bin",
