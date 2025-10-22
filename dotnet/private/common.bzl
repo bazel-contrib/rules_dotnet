@@ -652,11 +652,25 @@ def generate_depsjson(
             target_fragment["runtime"] = {(dll.basename if not use_relative_paths else to_rlocation_path(ctx, dll)): {
                 "assemblyVersion": runtime_dep.version + ".0",
             } for dll in runtime_dep.libs}
-            target_fragment["native"] = {native_file.basename if not use_relative_paths else to_rlocation_path(ctx, native_file): {} for native_file in runtime_dep.native}
 
             target_fragment["resources"] = {(resource_assembly.basename if not use_relative_paths else to_rlocation_path(ctx, resource_assembly)): {
                 "locale": _get_resource_assembly_locale(resource_assembly),
             } for resource_assembly in runtime_dep.resource_assemblies}
+
+            # Handling of runtime files
+            # If the publish is self-contained we put the native files in the `native` section of the target fragment
+            # Otherwise we followe the conventions mentioned here: https://github.com/dotnet/sdk/blob/main/documentation/specs/runtime-configuration-file.md#framework-dependent-deployment-model
+            if is_self_contained:
+                target_fragment["native"] = {native_file.basename: {"fileVersion": "0.0.0.0"} for native_file in runtime_dep.native}
+            else:
+                target_fragment["runtimeTargets"] = {}
+                for native_file in runtime_dep.native:
+                    # The path of the native file is of the form:
+                    # <prefix>/runtimes/<rid>/<native/lib>/<file>
+                    rid = native_file.dirname.split("/")[-2]
+                    asset_type = "runtime" if native_file.dirname.split("/")[-1] == "lib" else "native"
+                    native_path = "runtimes/{}/{}/{}".format(rid, native_file.dirname.split("/")[-1], native_file.basename)
+                    target_fragment["runtimeTargets"][native_path] = {"rid": rid, "assetType": asset_type}
 
         base["libraries"][library_name] = library_fragment
         base["targets"][runtime_target][library_name] = target_fragment
