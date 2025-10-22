@@ -1,4 +1,4 @@
-load("@bazel_skylib//:bzl_library.bzl", "bzl_library")
+load("@bazel_lib//:bzl_library.bzl", "bzl_library")
 load(":runtime_pack.bzl", "runtime_pack")
 load(":runtime_packs.bzl", "runtime_packs")
 

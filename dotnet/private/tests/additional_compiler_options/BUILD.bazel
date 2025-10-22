@@ -1,4 +1,4 @@
-load("@bazel_skylib//:bzl_library.bzl", "bzl_library")
+load("@bazel_lib//:bzl_library.bzl", "bzl_library")
 load(":csharp_additional_compiler_options.bzl", "csharp_additional_compiler_options")
 load(":fsharp_additional_compiler_options.bzl", "fsharp_additional_compiler_options")
 

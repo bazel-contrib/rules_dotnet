@@ -63,26 +63,6 @@ More information on these flags can be found here:
 
 [--enable_runfiles](https://docs.bazel.build/versions/main/command-line-reference.html#flag--enable_runfiles)
 
-### C#
-
-[csharp_binary](./csharp_binary.md)
-
-[csharp_library](./csharp_library.md)
-
-[csharp_test](./csharp_test.md)
-
-[csharp_nunit_test](./csharp_nunit_test.md)
-
-### F#
-
-[fsharp_binary](./fsharp_binary.md)
-
-[fsharp_library](./fsharp_library.md)
-
-[fsharp_test](./fsharp_test.md)
-
-[fsharp_nunit_test](./fsharp_nunit_test.md)
-
 Various examples of how each rule can be used are in the [examples](../examples) folder.
 
 ## IDE Support
