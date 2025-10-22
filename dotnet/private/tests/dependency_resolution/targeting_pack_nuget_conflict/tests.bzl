@@ -1,7 +1,7 @@
 "Tests for targeting pack conflicts with user provided dependencies."
 
-load("@aspect_bazel_lib//lib:run_binary.bzl", "run_binary")
-load("@aspect_bazel_lib//lib:testing.bzl", "assert_contains")
+load("@bazel_lib//lib:run_binary.bzl", "run_binary")
+load("@bazel_lib//lib:testing.bzl", "assert_contains")
 load(
     "//dotnet:defs.bzl",
     "csharp_binary",
