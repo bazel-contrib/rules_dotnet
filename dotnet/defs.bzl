@@ -36,6 +36,10 @@ load(
     _fsharp_test = "fsharp_test",
 )
 load(
+    "//dotnet/private/rules/nuget:dotnet_tool.bzl",
+    _dotnet_tool = "dotnet_tool",
+)
+load(
     "//dotnet/private/rules/nuget:imports.bzl",
     _import_dll = "import_dll",
     _import_library = "import_library",
@@ -66,3 +70,4 @@ import_library = _import_library
 import_dll = _import_dll
 nuget_repo = _nuget_repo
 nuget_archive = _nuget_archive
+dotnet_tool = _dotnet_tool

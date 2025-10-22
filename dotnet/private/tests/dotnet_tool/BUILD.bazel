@@ -1,0 +1,33 @@
+load("@bazel_lib//lib:diff_test.bzl", "diff_test")
+
+genrule(
+    name = "csharpier_output",
+    srcs = [":csharpier_input.cs"],
+    outs = ["csharpier_actual.cs"],
+    cmd = "$(location @paket.rules_dotnet_nuget_tool_tests//csharpier/tools:csharpier) format --no-cache --write-stdout $(location :csharpier_input.cs) > $@",
+    tools = [
+        "@paket.rules_dotnet_nuget_tool_tests//csharpier/tools:csharpier",
+    ],
+)
+
+diff_test(
+    name = "diff_test_main",
+    file1 = ":csharpier_actual.cs",
+    file2 = ":csharpier_expected.cs",
+)
+
+genrule(
+    name = "paket_output",
+    srcs = [],
+    outs = ["paket_actual"],
+    cmd = "$(location @paket.rules_dotnet_nuget_tool_tests//paket/tools:paket) --help > $@",
+    tools = [
+        "@paket.rules_dotnet_nuget_tool_tests//paket/tools:paket",
+    ],
+)
+
+diff_test(
+    name = "diff_test_paket",
+    file1 = ":paket_expected",
+    file2 = ":paket_actual",
+)

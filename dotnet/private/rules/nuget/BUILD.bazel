@@ -19,6 +19,7 @@ bzl_library(
         "//dotnet:__subpackages__",
     ],
     deps = [
+        ":dotnet_tool",
         "//dotnet/private:common",
         "@bazel_tools//tools/build_defs/repo:utils.bzl",
     ],
@@ -34,4 +35,14 @@ bzl_library(
         "//dotnet/private/rules/nuget:nuget_archive",
         "@bazel_tools//tools/build_defs/repo:utils.bzl",
     ],
+)
+
+bzl_library(
+    name = "dotnet_tool",
+    srcs = ["dotnet_tool.bzl"],
+    visibility = [
+        "//docs:__subpackages__",
+        "//dotnet:__subpackages__",
+    ],
+    deps = ["//dotnet/private:common"],
 )

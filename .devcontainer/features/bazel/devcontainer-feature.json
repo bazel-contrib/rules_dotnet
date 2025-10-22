@@ -11,6 +11,7 @@
             "settings": {
                 "bazel.executable": "bazel",
                 "bazel.buildifierExecutable": "buildifier",
+                "bazel.buildifierFixOnFormat": true,
                 "bazel.lsp.enabled": true,
                 "bazel.lsp.command": "starpls",
                 "bazel.lsp.args": []

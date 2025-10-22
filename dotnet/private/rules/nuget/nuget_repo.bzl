@@ -23,6 +23,41 @@ def _nuget_repo_impl(ctx):
         targeting_pack_overrides = ctx.attr.targeting_pack_overrides["{}|{}".format(id.lower(), version)]
         framework_list = ctx.attr.framework_list["{}|{}".format(id.lower(), version)]
 
+        # name -> tfm -> tool
+        tools = {}
+
+        # NOTE: For backwards compatibility with older paket2bazel repositories,
+        #       allow "tools" to be optional.
+        for tfm, ts in package.get("tools", {}).items():
+            for tool in ts:
+                tools.setdefault(tool["name"], {})[tfm] = tool
+
+        tool_template = ctx.read(ctx.attr._tool_template)
+        tool_targets = []
+        for tool, tfms in tools.items():
+            entrypoint_by_tfm = []
+            runner_by_tfm = []
+
+            for tfm, tool in tfms.items():
+                entrypoint_by_tfm.append("\"{tfm}\": \"{entrypoint}\"".format(
+                    tfm = tfm,
+                    entrypoint = tool["entrypoint"],
+                ))
+                runner_by_tfm.append("\"{tfm}\": \"{runner}\"".format(
+                    tfm = tfm,
+                    runner = tool["runner"],
+                ))
+
+            tool_targets.append(tool_template.format(
+                NAME = tool["name"],
+                ENTRYPOINT_BY_TFM = ",\n".join(entrypoint_by_tfm),
+                RUNNER_BY_TFM = ",\n".join(runner_by_tfm),
+                TFMS = json.encode(tfms.keys()),
+                PREFIX = _GLOBAL_NUGET_PREFIX,
+                ID_LOWER = id.lower(),
+                VERSION = version,
+            ))
+
         ctx.template("{}/{}/BUILD.bazel".format(id.lower(), version), ctx.attr._template, {
             "{PREFIX}": _GLOBAL_NUGET_PREFIX,
             "{ID}": id,
@@ -31,6 +66,7 @@ def _nuget_repo_impl(ctx):
             "{DEPS}": _deps_select_statment(ctx, deps),
             "{TARGETING_PACK_OVERRIDES}": json.encode({override.lower().split("|")[0]: override.lower().split("|")[1] for override in targeting_pack_overrides}),
             "{FRAMEWORK_LIST}": json.encode({override.lower().split("|")[0]: override.lower().split("|")[1] for override in framework_list}),
+            "{TOOLS}": "\n\n".join(tool_targets),
             "{SHA_512}": sha512,
         })
 
@@ -40,6 +76,19 @@ alias(name = "{name}", actual = "//{id}/{version}")
 alias(name = "content_files", actual = "@{prefix}.{id}.v{version}//:content_files")
 alias(name = "files", actual = "@{prefix}.{id}.v{version}//:files")
 """.format(prefix = _GLOBAL_NUGET_PREFIX, name = name.lower(), id = id.lower(), version = version))
+
+        tool_aliases = []
+        for tool_name in tools:
+            tool_aliases.append(r"""alias(name = "{tool_name}", actual = "//{id}/{version}:tool_{tool_name}")""".format(
+                tool_name = tool_name,
+                id = id.lower(),
+                version = version,
+            ))
+
+        ctx.file("{}/tools/BUILD.bazel".format(name.lower()), r"""package(default_visibility = ["//visibility:public"])
+
+{tool_aliases}
+""".format(tool_aliases = "\n".join(tool_aliases)))
 
 _nuget_repo = repository_rule(
     _nuget_repo_impl,
@@ -62,6 +111,9 @@ _nuget_repo = repository_rule(
         ),
         "_template": attr.label(
             default = "//dotnet/private/rules/nuget:template.BUILD",
+        ),
+        "_tool_template": attr.label(
+            default = "//dotnet/private/rules/nuget:tool_template.BUILD",
         ),
     },
 )

@@ -1,4 +1,4 @@
-load("@rules_dotnet//dotnet:defs.bzl", "import_library")
+load("@rules_dotnet//dotnet:defs.bzl", "import_library", "dotnet_tool")
 
 package(default_visibility = ["//visibility:public"])
 
@@ -23,3 +23,5 @@ import_library(
         {DEPS},
     }),
 )
+
+{TOOLS}
