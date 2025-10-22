@@ -10,10 +10,6 @@ DotnetToolInfo = provider(
 )
 
 def _dotnet_tool_impl(ctx):
-    windows_constraint = ctx.attr._windows_constraint[platform_common.ConstraintValueInfo]
-    if ctx.target_platform_has_constraint(windows_constraint):
-        fail("The dotnet_tool rule currently does not support Windows targets.")
-
     toolchain = ctx.toolchains["//dotnet:toolchain_type"]
     runtime = toolchain.runtime
     dotnet_info = toolchain.dotnetinfo
@@ -37,16 +33,28 @@ def _dotnet_tool_impl(ctx):
     if filegroup == None:
         fail("Tool {} does not provide files for the target framework: {}".format(ctx.attr.name, framework))
 
-    launcher = ctx.actions.declare_file(ctx.label.name + ".sh")
-    ctx.actions.expand_template(
-        template = ctx.file._launcher_sh,
-        output = launcher,
-        substitutions = {
-            "TEMPLATED_dotnet": to_rlocation_path(ctx, runtime.files_to_run.executable),
-            "TEMPLATED_executable": executable,
-        },
-        is_executable = True,
-    )
+    windows_constraint = ctx.attr._windows_constraint[platform_common.ConstraintValueInfo]
+    launcher = ctx.actions.declare_file("{}.{}".format(ctx.label.name, "bat" if ctx.target_platform_has_constraint(windows_constraint) else "sh"))
+    if ctx.target_platform_has_constraint(windows_constraint):
+        ctx.actions.expand_template(
+            template = ctx.file._launcher_bat,
+            output = launcher,
+            substitutions = {
+                "TEMPLATED_dotnet": to_rlocation_path(ctx, runtime.files_to_run.executable),
+                "TEMPLATED_executable": executable,
+            },
+            is_executable = True,
+        )
+    else:
+        ctx.actions.expand_template(
+            template = ctx.file._launcher_sh,
+            output = launcher,
+            substitutions = {
+                "TEMPLATED_dotnet": to_rlocation_path(ctx, runtime.files_to_run.executable),
+                "TEMPLATED_executable": executable,
+            },
+            is_executable = True,
+        )
 
     runfiles = ctx.runfiles(files = filegroup[DefaultInfo].files.to_list() + dotnet_info.runtime_files)
     runfiles = runfiles.merge(ctx.attr._bash_runfiles[DefaultInfo].default_runfiles)
@@ -93,6 +101,11 @@ dependencies will automatically be exposed as Bazel targets in the resulting
         "_launcher_sh": attr.label(
             doc = "A template file for the launcher on Linux/MacOS",
             default = "//dotnet/private:launcher.sh.tpl",
+            allow_single_file = True,
+        ),
+        "_launcher_bat": attr.label(
+            doc = "A template file for the launcher on Windows",
+            default = "//dotnet/private:launcher.bat.tpl",
             allow_single_file = True,
         ),
         "_bash_runfiles": attr.label(default = "@rules_shell//shell/runfiles"),
