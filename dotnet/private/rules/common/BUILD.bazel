@@ -29,7 +29,7 @@ bzl_library(
         "//dotnet/private/sdk/targeting_packs:targeting_pack_transition",
         "//dotnet/private/transitions:default_transition",
         "//dotnet/private/transitions:tfm_transition",
-        "@aspect_bazel_lib//lib:expand_make_vars",
+        "@bazel_lib//lib:expand_make_vars",
         "@bazel_skylib//lib:dicts",
     ],
 )
