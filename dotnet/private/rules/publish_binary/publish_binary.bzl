@@ -24,7 +24,7 @@ def _get_assembly_files(assembly_info, transitive_runtime_deps, deps_json_struct
     appsetting_files = assembly_info.appsetting_files.to_list()
     for dep in transitive_runtime_deps:
         # For each dependency we need to check in the deps.json struct if the files should be copied.
-        # If the file is to be copied it will be in the `native` or `runtime` attribute of the `target` for the dependency.
+        # If the file is to be copied it will be in the `native`, `runtimeTargets` or `runtime` attribute of the `target` for the dependency.
         # A reason for the file not being in the deps.json is that the runtime pack might provide the file instead of the dependency.
         target = deps_json_struct["targets"].items()[0][1].get("{}/{}".format(dep.name, dep.version))
         if target:
@@ -32,6 +32,12 @@ def _get_assembly_files(assembly_info, transitive_runtime_deps, deps_json_struct
                 for file in dep.native:
                     if file.basename in target["native"]:
                         native.append(file)
+
+            if "runtimeTargets" in target:
+                for file in dep.native:
+                    if file.basename in target["runtimeTargets"].keys() and target["runtimeTargets"][file.basename]["assetType"] == "native":
+                        native.append(file)
+
             if "runtime" in target:
                 for file in dep.libs:
                     if file.basename in target["runtime"]:
@@ -41,7 +47,7 @@ def _get_assembly_files(assembly_info, transitive_runtime_deps, deps_json_struct
         resource_assemblies += dep.resource_assemblies
     return (libs, resource_assemblies, native, data, appsetting_files)
 
-def _copy_to_publish(ctx, runtime_identifier, runtime_pack_info, binary_info, assembly_info, transitive_runtime_deps, deps_json_struct):
+def _copy_to_publish(ctx, runtime_identifier, runtime_pack_info, binary_info, assembly_info, transitive_runtime_deps, deps_json_struct, is_self_contained):
     is_windows = ctx.target_platform_has_constraint(ctx.attr._windows_constraint[platform_common.ConstraintValueInfo])
     inputs = [binary_info.dll]
     main_dll_copy = ctx.actions.declare_file(
@@ -74,13 +80,19 @@ def _copy_to_publish(ctx, runtime_identifier, runtime_pack_info, binary_info, as
         inputs.append(file)
         _copy_file(script_body, file, output, is_windows = is_windows)
 
-    # When publishing a self-contained binary, we need to copy the native DLLs to the
-    # publish directory as well.
     for file in native:
-        inputs.append(file)
+        # If the publish is not self-contained we need to copy the native
+        # DLLs into the runtimes/{rid}/native/ folder structure
+        output_path = "{}/publish/{}/runtimes/{}/native/{}".format(ctx.label.name, runtime_identifier, file.dirname.split("/")[-2], file.basename)
+
+        # If the publish is self-contained we need to copy the native DLLs
+        # next to the main DLL in the publish folder
+        if is_self_contained:
+            output_path = "{}/publish/{}/{}".format(ctx.label.name, runtime_identifier, file.basename)
         output = ctx.actions.declare_file(
-            "{}/publish/{}/{}".format(ctx.label.name, runtime_identifier, file.basename),
+            output_path,
         )
+        inputs.append(file)
         outputs.append(output)
         _copy_file(script_body, file, output, is_windows = is_windows)
 
@@ -242,6 +254,7 @@ def _publish_binary_impl(ctx):
         assembly_runtime_info,
         transitive_runtime_deps,
         depsjson_struct,
+        is_self_contained,
     )
 
     apphost_shim = _create_shim_exe(ctx, binary_info.apphost_pack_info, main_dll)

@@ -10,5 +10,5 @@ csharp_nunit_test(
         "net6.0",
     ],
     visibility = ["//visibility:public"],
-    deps = ["@paket.rules_dotnet_dev_nuget_packages//libgit2sharp"],
+    deps = ["@paket.rules_dotnet_dev_nuget_packages//rocksdb"],
 )

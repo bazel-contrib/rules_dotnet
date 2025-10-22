@@ -13,7 +13,34 @@ load(
     "is_standard_framework",
     "to_rlocation_path",
 )
-load("//dotnet/private:providers.bzl", "DotnetApphostPackInfo", "DotnetBinaryInfo", "DotnetRuntimePackInfo")
+load("//dotnet/private:providers.bzl", "DotnetApphostPackInfo", "DotnetAssemblyRuntimeInfo", "DotnetBinaryInfo", "DotnetRuntimePackInfo")
+
+def _collect_native_dlls(assembly_runtime_info, deps):
+    """Collect the native DLLs of target and its dependencies.
+
+    Args:
+        assembly_runtime_info: The DotnetAssemblyRuntimeInfo provider for the target.
+        deps: Dependencies of the target.
+
+    Returns:
+        A list of native DLL files that includes the transitive dependencies of the target
+    """
+    native_dlls = assembly_runtime_info.native
+
+    for dep in deps:
+        native_dlls.extend(dep[DotnetAssemblyRuntimeInfo].native)
+        for transitive_dep in dep[DotnetAssemblyRuntimeInfo].deps.to_list():
+            native_dlls.extend(transitive_dep.native)
+
+    # Create a dict where the key is the RID and the value is the list of native DLLs for that RID
+    result = {}
+    for dll in native_dlls:
+        rid = dll.dirname.split("/")[-2]
+        if rid not in result:
+            result[rid] = []
+        result[rid].append(dll)
+
+    return result
 
 def _create_launcher(ctx, runfiles, executable):
     runtime = ctx.toolchains["//dotnet:toolchain_type"].runtime
@@ -124,6 +151,22 @@ def build_binary(ctx, compile_action):
         additional_runfiles.append(depsjson)
 
     runfiles = collect_transitive_runfiles(ctx, runtime_provider, ctx.attr.deps).merge(ctx.runfiles(files = additional_runfiles))
+
+    # Due to how the .Net runtime loads native DLLs we need make the native
+    # DLLs available in the application root directory with the folder structure:
+    # runtimes/{rid}/native/{dlls}
+    native_dlls = _collect_native_dlls(runtime_provider, ctx.attr.deps)
+    for (rid, native_files) in native_dlls.items():
+        for file in native_files:
+            output_path = "{}/{}/runtimes/{}/native/{}".format(ctx.label.name, tfm, rid, file.basename)
+            output = ctx.actions.declare_file(output_path)
+            ctx.actions.symlink(
+                output = output,
+                target_file = file,
+            )
+            default_info_files.append(output)
+            runfiles = runfiles.merge(ctx.runfiles(files = [output]))
+
     if not ctx.target_platform_has_constraint(ctx.attr._windows_constraint[platform_common.ConstraintValueInfo]):
         runfiles = runfiles.merge(ctx.attr._bash_runfiles[DefaultInfo].default_runfiles)
     default_info = DefaultInfo(
