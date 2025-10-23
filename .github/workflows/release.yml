@@ -8,28 +8,22 @@ on:
     tags:
       - "v*.*.*"
 
+permissions:
+  id-token: write
+  attestations: write
+  contents: write
+
 jobs:
   release:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      # Disabling for now because we are getting disk space issues on the GH runners
-      # We already run all of our tests with Bazel CI
-      # - name: Test
-      #   run: cd e2e/smoke && bazel test //...
-
-      - name: Build release artifacts and prepare release notes
-        run: |
-          .github/workflows/release_prep.sh ${{ env.GITHUB_REF_NAME }} > release_notes.txt
-
-      - name: Release
-        uses: softprops/action-gh-release@v1
-        with:
-          prerelease: false
-          # Use GH feature to populate the changelog automatically
-          generate_release_notes: true
-          body_path: release_notes.txt
-          fail_on_unmatched_files: true
-          files: rules_dotnet-*.tar.gz
+    uses: bazel-contrib/.github/.github/workflows/release_ruleset.yaml@v7.2.0
+    with:
+      prerelease: false
+      release_files: rules_dotnet-*.tar.gz
+      tag_name: ${{ inputs.tag_name || github.ref_name }}
+  publish:
+    needs: release
+    uses: ./.github/workflows/publish.yaml
+    with:
+      tag_name: ${{ inputs.tag_name || github.ref_name }}
+    secrets:
+      BCR_PUBLISH_TOKEN: ${{ secrets.BCR_PUBLISH_TOKEN }}
