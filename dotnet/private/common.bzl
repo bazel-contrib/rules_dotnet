@@ -22,7 +22,7 @@ def _collect_transitive():
         t[framework] = sets.union(sets.make([framework]), *[t[c] for c in compat])
     return t
 
-DEFAULT_TFM = "net9.0"
+DEFAULT_TFM = "net10.0"
 DEFAULT_RID = "base"
 
 # A dict of target frameworks to the set of other framworks it can compile
@@ -74,6 +74,7 @@ FRAMEWORK_COMPATIBILITY = {
     "net7.0": ["net6.0"],
     "net8.0": ["net7.0"],
     "net9.0": ["net8.0"],
+    "net10.0": ["net9.0"],
 }
 
 _subsystem_version = {
@@ -116,6 +117,7 @@ _subsystem_version = {
     "net7.0": None,
     "net8.0": None,
     "net9.0": None,
+    "net10.0": None,
 }
 
 _default_lang_version_csharp = {
@@ -158,6 +160,7 @@ _default_lang_version_csharp = {
     "net7.0": "11.0",
     "net8.0": "12.0",
     "net9.0": "13.0",
+    "net10.0": "14.0",
 }
 
 _net = FRAMEWORK_COMPATIBILITY.keys().index("net11")

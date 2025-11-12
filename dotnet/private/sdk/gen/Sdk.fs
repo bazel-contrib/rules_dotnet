@@ -10,7 +10,7 @@ open System.Collections.Generic
 open NuGet.RuntimeModel
 open System.Net.Http
 
-let private supportedChannels = [ "6.0"; "7.0"; "8.0"; "9.0" ]
+let private supportedChannels = [ "6.0"; "7.0"; "8.0"; "9.0"; "10.0" ]
 
 type File =
     { [<JsonPropertyName "name">]
@@ -68,7 +68,13 @@ let private downloadReleaseInfoForChannel channel =
 let private downloadRuntimes () =
     let httpClient = new HttpClient()
 
-    let json = httpClient.GetAsync("https://raw.githubusercontent.com/dotnet/runtime/main/src/libraries/Microsoft.NETCore.Platforms/src/runtime.json").Result.Content.ReadAsStringAsync().Result
+    let json =
+        httpClient
+            .GetAsync(
+                "https://raw.githubusercontent.com/dotnet/runtime/main/src/libraries/Microsoft.NETCore.Platforms/src/runtime.json"
+            )
+            .Result.Content.ReadAsStringAsync()
+            .Result
 
     JsonSerializer.Deserialize<Runtimes>(json)
 
