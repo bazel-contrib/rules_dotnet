@@ -9,7 +9,7 @@ fsharp_binary(
     name = "hello",
     srcs = ["hello.fs"],
     project_sdk = "web",
-    target_frameworks = ["net9.0"],
+    target_frameworks = ["net10.0"],
     deps = [
         ":lib",
         "@paket.main//fsharp.core",
@@ -20,7 +20,7 @@ fsharp_nunit_test(
     name = "lib_test",
     srcs = ["libtest.fs"],
     project_sdk = "web",
-    target_frameworks = ["net9.0"],
+    target_frameworks = ["net10.0"],
     deps = [
         ":lib",
         "@paket.main//fsharp.core",
@@ -32,7 +32,7 @@ fsharp_library(
     srcs = ["lib.fs"],
     internals_visible_to = ["lib_test"],
     project_sdk = "web",
-    target_frameworks = ["net9.0"],
+    target_frameworks = ["net10.0"],
     deps = [
         "@paket.main//fsharp.core",
     ],

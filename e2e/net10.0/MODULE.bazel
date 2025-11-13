@@ -1,7 +1,7 @@
 "rules_dotnet examples"
 
 module(
-    name = "e2e_smoke",
+    name = "e2e_net8.0",
     version = "0.0.0",
     compatibility_level = 1,
 )

@@ -198,7 +198,7 @@ def is_standard_framework(tfm):
 
 def is_core_framework(tfm):
     # TODO: Make this work with future versions
-    return tfm.startswith("netcoreapp") or tfm.startswith("net5.0") or tfm.startswith("net6.0") or tfm.startswith("net7.0") or tfm.startswith("net8.0") or tfm.startswith("net9.0")
+    return tfm.startswith("netcoreapp") or tfm.startswith("net5.0") or tfm.startswith("net6.0") or tfm.startswith("net7.0") or tfm.startswith("net8.0") or tfm.startswith("net9.0") or tfm.startswith("net10.0")
 
 def is_greater_or_equal_framework(tfm1, tfm2):
     """Returns true if tfm1 is greater or equal to tfm2
