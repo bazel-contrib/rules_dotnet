@@ -23,7 +23,7 @@ cat << EOF
 ## Using Bzlmod with Bazel 7 and above
 
 Requirements:
-* Bazel 7.0.0 or later
+* Bazel 8.0.0 or later
 * Bzlmod must be enabled
 
 1. Add to your \`MODULE.bazel\` file:
