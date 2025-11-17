@@ -52,7 +52,8 @@ let tfms =
       "net6.0"
       "net7.0"
       "net8.0"
-      "net9.0" ]
+      "net9.0"
+      "net10.0" ]
     |> Seq.map (fun f -> NuGetFramework.Parse(f))
 
 let getPackageFilePath (packageName: string) (packageVersion: string) =
@@ -166,7 +167,8 @@ let getTools (packageName: string) (packageVersion: string) (packageReader: Pack
             |> Option.map (fun packageTypesNode ->
                 packageTypesNode.ChildNodes
                 |> Seq.cast<XmlNode>
-                |> Seq.tryFind (fun node -> node.Name = "packageType" && node.Attributes.ItemOf("name").Value = "DotnetTool")
+                |> Seq.tryFind (fun node ->
+                    node.Name = "packageType" && node.Attributes.ItemOf("name").Value = "DotnetTool")
                 |> Option.isSome)
             |> Option.defaultValue false)
         |> Option.defaultValue false
@@ -180,25 +182,31 @@ let getTools (packageName: string) (packageVersion: string) (packageReader: Pack
                 fsg.Items
                 |> Seq.tryFind (fun f -> f.EndsWith("DotnetToolSettings.xml"))
                 |> Option.defaultWith (fun () -> failwith "DotnetToolSettings.xml not found in tool package")
-            let path = Path.Combine((getPackageFolderPath packageName packageVersion), dotnetToolSettingsFile)
+
+            let path =
+                Path.Combine((getPackageFolderPath packageName packageVersion), dotnetToolSettingsFile)
+
             let xmlDocument = XmlDocument()
             xmlDocument.Load(path)
 
             let root = xmlDocument.DocumentElement
-            if root.Attributes.ItemOf("Version").Value <> "1" then failwith "Unsupported DotnetToolSettings.xml version (expected version 1)"
+
+            if root.Attributes.ItemOf("Version").Value <> "1" then
+                failwith "Unsupported DotnetToolSettings.xml version (expected version 1)"
 
             let commands = root.FirstChild
-            if commands.Name <> "Commands" then failwith "Invalid DotnetToolSettings.xml format"
+
+            if commands.Name <> "Commands" then
+                failwith "Invalid DotnetToolSettings.xml format"
 
             let tools =
                 commands.ChildNodes
                 |> Seq.cast<XmlNode>
                 |> Seq.filter (fun node -> node.Name = "Command")
-                |> Seq.map (fun node -> {
-                    name = node.Attributes.ItemOf("Name").Value
-                    entrypoint = node.Attributes.ItemOf("EntryPoint").Value
-                    runner = node.Attributes.ItemOf("Runner").Value
-                })
+                |> Seq.map (fun node ->
+                    { name = node.Attributes.ItemOf("Name").Value
+                      entrypoint = node.Attributes.ItemOf("EntryPoint").Value
+                      runner = node.Attributes.ItemOf("Runner").Value })
 
             (fsg.TargetFramework.GetShortFolderName(), tools))
         |> Map.ofSeq

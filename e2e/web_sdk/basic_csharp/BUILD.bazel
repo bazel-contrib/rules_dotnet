@@ -10,7 +10,7 @@ csharp_binary(
     name = "hello",
     srcs = ["hello.cs"],
     project_sdk = "web",
-    target_frameworks = ["net9.0"],
+    target_frameworks = ["net10.0"],
     deps = [
         ":lib",
     ],
@@ -20,7 +20,7 @@ csharp_nunit_test(
     name = "lib_test",
     srcs = ["libtest.cs"],
     project_sdk = "web",
-    target_frameworks = ["net9.0"],
+    target_frameworks = ["net10.0"],
     deps = [
         ":lib",
     ],
@@ -31,6 +31,6 @@ csharp_library(
     srcs = ["lib.cs"],
     internals_visible_to = ["lib_test"],
     project_sdk = "web",
-    target_frameworks = ["net9.0"],
+    target_frameworks = ["net10.0"],
     deps = [],
 )

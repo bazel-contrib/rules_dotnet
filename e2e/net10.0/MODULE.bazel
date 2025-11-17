@@ -1,0 +1,29 @@
+"rules_dotnet examples"
+
+module(
+    name = "e2e_net8.0",
+    version = "0.0.0",
+    compatibility_level = 1,
+)
+
+bazel_dep(name = "rules_dotnet", version = "0.0.0")
+local_path_override(
+    module_name = "rules_dotnet",
+    path = "../..",
+)
+
+dotnet = use_extension("@rules_dotnet//dotnet:extensions.bzl", "dotnet")
+dotnet.toolchain(dotnet_version = "10.0.100")
+use_repo(dotnet, "dotnet_toolchains")
+
+register_toolchains("@dotnet_toolchains//:all")
+
+main_extension = use_extension("//:paket.main_extension.bzl", "main_extension")
+use_repo(main_extension, "paket.main")
+
+# Only needed to make the Bazel CI RBE config work. Not needed for using rules_dotnet.
+bazel_dep(name = "bazel_ci_rules", version = "1.0.0", dev_dependency = True)
+bazel_dep(name = "platforms", version = "0.0.10", dev_dependency = True)
+
+internal_dev_deps = use_extension("//:internal_dev_deps.bzl", "internal_dev_deps", dev_dependency = True)
+use_repo(internal_dev_deps, "buildkite_config")

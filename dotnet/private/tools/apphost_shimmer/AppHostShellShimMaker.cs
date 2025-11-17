@@ -19,7 +19,7 @@ namespace ApphostShimmer
             _apphost = apphost;
         }
 
-        public void CreateApphostShellShim(string entryPoint, string shimPath)
+        public void CreateApphostShellShim(string entryPoint, string shimPath, string targetRid)
         {
             var appHostDestinationFilePath = Path.GetFullPath(shimPath);
             string entryPointFullPath = Path.GetFullPath(entryPoint);
@@ -31,7 +31,7 @@ namespace ApphostShimmer
               appHostDestinationFilePath: appHostDestinationFilePath,
               appBinaryFilePath: appBinaryFilePath,
               windowsGraphicalUserInterface: false,
-              enableMacOSCodeSign: OperatingSystem.IsMacOS());
+              enableMacOSCodeSign: OperatingSystem.IsMacOS() && targetRid.StartsWith("osx"));
         }
     }
 }

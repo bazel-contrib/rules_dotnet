@@ -88,6 +88,7 @@ dotnet_toolchain(
     runtime_tfm = "{runtime_tfm}",
     csharp_default_version = "{csharp_default_version}",
     fsharp_default_version = "{fsharp_default_version}",
+    visibility = ["//visibility:public"],
 )
 """.format(
         sdk_version = repository_ctx.attr.dotnet_version,

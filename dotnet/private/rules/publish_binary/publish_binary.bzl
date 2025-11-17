@@ -166,7 +166,7 @@ def _copy_to_publish(ctx, runtime_identifier, runtime_pack_info, binary_info, as
 
     return (main_dll_copy, outputs, runfiles)
 
-def _create_shim_exe(ctx, apphost_pack_info, dll):
+def _create_shim_exe(ctx, apphost_pack_info, dll, runtime_identifier):
     windows_constraint = ctx.attr._windows_constraint[platform_common.ConstraintValueInfo]
 
     apphost = apphost_pack_info.apphost
@@ -174,7 +174,7 @@ def _create_shim_exe(ctx, apphost_pack_info, dll):
 
     ctx.actions.run(
         executable = ctx.attr._apphost_shimmer[0].files_to_run,
-        arguments = [apphost.path, dll.path, output.path],
+        arguments = [apphost.path, dll.path, output.path, runtime_identifier],
         inputs = depset([apphost, dll], transitive = [ctx.attr._apphost_shimmer[0].default_runfiles.files]),
         tools = [ctx.attr._apphost_shimmer[0].files, ctx.attr._apphost_shimmer[0].default_runfiles.files],
         outputs = [output],
@@ -257,7 +257,7 @@ def _publish_binary_impl(ctx):
         is_self_contained,
     )
 
-    apphost_shim = _create_shim_exe(ctx, binary_info.apphost_pack_info, main_dll)
+    apphost_shim = _create_shim_exe(ctx, binary_info.apphost_pack_info, main_dll, runtime_identifier)
 
     return [
         DefaultInfo(

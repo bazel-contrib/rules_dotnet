@@ -22,7 +22,7 @@ def _collect_transitive():
         t[framework] = sets.union(sets.make([framework]), *[t[c] for c in compat])
     return t
 
-DEFAULT_TFM = "net9.0"
+DEFAULT_TFM = "net10.0"
 DEFAULT_RID = "base"
 
 # A dict of target frameworks to the set of other framworks it can compile
@@ -74,6 +74,7 @@ FRAMEWORK_COMPATIBILITY = {
     "net7.0": ["net6.0"],
     "net8.0": ["net7.0"],
     "net9.0": ["net8.0"],
+    "net10.0": ["net9.0"],
 }
 
 _subsystem_version = {
@@ -116,48 +117,7 @@ _subsystem_version = {
     "net7.0": None,
     "net8.0": None,
     "net9.0": None,
-}
-
-_default_lang_version_csharp = {
-    "netstandard": "7.3",
-    "netstandard1.0": "7.3",
-    "netstandard1.1": "7.3",
-    "netstandard1.2": "7.3",
-    "netstandard1.3": "7.3",
-    "netstandard1.4": "7.3",
-    "netstandard1.5": "7.3",
-    "netstandard1.6": "7.3",
-    "netstandard2.0": "7.3",
-    "netstandard2.1": "7.3",
-    "net11": "7.3",
-    "net20": "7.3",
-    "net30": "7.3",
-    "net35": "7.3",
-    "net40": "7.3",
-    "net403": "7.3",
-    "net45": "7.3",
-    "net451": "7.3",
-    "net452": "7.3",
-    "net46": "7.3",
-    "net461": "7.3",
-    "net462": "7.3",
-    "net47": "7.3",
-    "net471": "7.3",
-    "net472": "7.3",
-    "net48": "7.3",
-    "net481": "7.3",
-    "netcoreapp1.0": "7.3",
-    "netcoreapp1.1": "7.3",
-    "netcoreapp2.0": "7.3",
-    "netcoreapp2.1": "7.3",
-    "netcoreapp2.2": "7.3",
-    "netcoreapp3.0": "8.0",
-    "netcoreapp3.1": "8.0",
-    "net5.0": "9.0",
-    "net6.0": "10.0",
-    "net7.0": "11.0",
-    "net8.0": "12.0",
-    "net9.0": "13.0",
+    "net10.0": None,
 }
 
 _net = FRAMEWORK_COMPATIBILITY.keys().index("net11")
@@ -195,7 +155,7 @@ def is_standard_framework(tfm):
 
 def is_core_framework(tfm):
     # TODO: Make this work with future versions
-    return tfm.startswith("netcoreapp") or tfm.startswith("net5.0") or tfm.startswith("net6.0") or tfm.startswith("net7.0") or tfm.startswith("net8.0") or tfm.startswith("net9.0")
+    return tfm.startswith("netcoreapp") or tfm.startswith("net5.0") or tfm.startswith("net6.0") or tfm.startswith("net7.0") or tfm.startswith("net8.0") or tfm.startswith("net9.0") or tfm.startswith("net10.0")
 
 def is_greater_or_equal_framework(tfm1, tfm2):
     """Returns true if tfm1 is greater or equal to tfm2
@@ -210,6 +170,12 @@ def is_greater_or_equal_framework(tfm1, tfm2):
     if keys.index(tfm1) >= keys.index(tfm2):
         return True
     return False
+
+def get_toolchain(ctx):
+    if hasattr(ctx.attr, "dotnet_toolchain") and ctx.attr.dotnet_toolchain != None:
+        return ctx.attr.dotnet_toolchain[platform_common.ToolchainInfo]
+
+    return ctx.toolchains["//dotnet:toolchain_type"]
 
 def _format_ref_with_overrides(assembly):
     # See https://github.com/bazel-contrib/rules_dotnet/issues/405
@@ -384,10 +350,7 @@ def collect_transitive_runfiles(ctx, assembly_runtime_info, deps):
     return runfiles.merge_all(transitive_runfiles)
 
 def get_framework_version_info(tfm):
-    return (
-        _subsystem_version[tfm],
-        _default_lang_version_csharp[tfm],
-    )
+    return _subsystem_version[tfm]
 
 def get_highest_compatible_target_framework(incoming_tfm, tfms):
     """Returns the highest compatible framework version for the incoming_tfm.

@@ -146,7 +146,7 @@ def AssemblyAction(
     """
 
     assembly_name = target_name if out == "" else out
-    (subsystem_version, _default_lang_version) = get_framework_version_info(target_framework)
+    subsystem_version = get_framework_version_info(target_framework)
     (
         irefs,
         prefs,

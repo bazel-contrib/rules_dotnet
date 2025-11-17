@@ -1,6 +1,6 @@
 """Rule that allows running .NET command-line tools hermetically within Bazel."""
 
-load("//dotnet/private:common.bzl", "get_highest_compatible_target_framework", "to_rlocation_path")
+load("//dotnet/private:common.bzl", "get_highest_compatible_target_framework", "get_toolchain", "to_rlocation_path")
 
 DotnetToolInfo = provider(
     doc = "Provider for grouping .NET tools by target framework.",
@@ -10,7 +10,8 @@ DotnetToolInfo = provider(
 )
 
 def _dotnet_tool_impl(ctx):
-    toolchain = ctx.toolchains["//dotnet:toolchain_type"]
+    toolchain = get_toolchain(ctx)
+
     runtime = toolchain.runtime
     dotnet_info = toolchain.dotnetinfo
 
