@@ -20,6 +20,9 @@ jobs:
       prerelease: false
       release_files: rules_dotnet-*.tar.gz
       tag_name: ${{ inputs.tag_name || github.ref_name }}
+      # We don't run tests here because rules_dotnet has access to the Bazel CI
+      # The free Github runners also don't have large enough disks to run the full test suite
+      bazel_test_command: "true"
   publish:
     needs: release
     uses: ./.github/workflows/publish.yml
