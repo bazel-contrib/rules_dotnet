@@ -103,6 +103,12 @@ COMMON_ATTRS = {
         mandatory = False,
         default = [],
     ),
+    "dotnet_toolchain": attr.label(
+        doc = """The .Net toolchain to use for this target.
+
+        Typically this is left unset so that Bazel automatically selects the right toolchain.
+        """,
+    ),
     "_target_framework": attr.label(
         default = "//dotnet:target_framework",
     ),

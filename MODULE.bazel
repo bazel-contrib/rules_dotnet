@@ -9,7 +9,16 @@ module(
 
 dotnet = use_extension("@rules_dotnet//dotnet:extensions.bzl", "dotnet")
 dotnet.toolchain(dotnet_version = "10.0.100")
+dotnet.toolchain(name = "apphost", dotnet_version = "10.0.100")
 use_repo(dotnet, "dotnet_toolchains")
+
+# These toolchains are used to build the apphost shimmer
+use_repo(dotnet, "apphost_x86_64-unknown-linux-gnu")
+use_repo(dotnet, "apphost_arm64-unknown-linux-gnu")
+use_repo(dotnet, "apphost_aarch64-apple-darwin")
+use_repo(dotnet, "apphost_x86_64-apple-darwin")
+use_repo(dotnet, "apphost_x86_64-pc-windows-msvc")
+use_repo(dotnet, "apphost_arm64-pc-windows-msvc")
 
 register_toolchains("@dotnet_toolchains//:all")
 

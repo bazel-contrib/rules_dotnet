@@ -160,7 +160,7 @@ def AssemblyAction(
     """
 
     assembly_name = target_name if out == "" else out
-    (subsystem_version, default_lang_version) = get_framework_version_info(target_framework)
+    subsystem_version = get_framework_version_info(target_framework)
     (
         irefs,
         prefs,
@@ -209,7 +209,6 @@ def AssemblyAction(
             analyzers_csharp,
             analyzer_configs,
             debug,
-            default_lang_version,
             defines,
             keyfile,
             langversion,
@@ -259,7 +258,6 @@ def AssemblyAction(
             analyzers_csharp,
             analyzer_configs,
             debug,
-            default_lang_version,
             defines,
             keyfile,
             langversion,
@@ -298,7 +296,6 @@ def AssemblyAction(
             analyzers_csharp,
             analyzer_configs,
             debug,
-            default_lang_version,
             defines,
             keyfile,
             langversion,
@@ -373,7 +370,6 @@ def _compile(
         analyzer_assemblies_csharp,
         analyzer_configs,
         debug,
-        default_lang_version,
         defines,
         keyfile,
         langversion,
@@ -443,7 +439,7 @@ def _compile(
     )
 
     args.add("/target:" + target)
-    args.add("/langversion:" + (langversion or default_lang_version))
+    args.add("/langversion:" + langversion)
 
     if debug:
         args.add("/debug+")
