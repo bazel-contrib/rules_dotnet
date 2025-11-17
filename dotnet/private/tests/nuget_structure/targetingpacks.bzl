@@ -268,7 +268,6 @@ def targetingpacks_structure():
         runtime_identifier = "linux-x64",
         package = "@dotnet.targeting_packs//microsoft.aspnetcore.app.ref.v8.0.22",
     )
-    
 
     # This test is to ensure that different targeting packs in the same repo do not override each other.
     # Previously, newer versions like microsoft.aspnetcore.app.ref.v9.0.x would override the targeting packs
