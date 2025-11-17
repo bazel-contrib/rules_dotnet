@@ -20,8 +20,7 @@ jobs:
       prerelease: false
       release_files: rules_dotnet-*.tar.gz
       tag_name: ${{ inputs.tag_name || github.ref_name }}
-      # Disable the cache due to the runners running out of disk space
-      mount_bazel_caches: false
+      bazel_test_command: bazel test //dotnet/private/tests/...
   publish:
     needs: release
     uses: ./.github/workflows/publish.yml
