@@ -54,4 +54,18 @@ let main argv =
         (Path.Combine(sdkFolder, "apphost_packs", "apphost_packs.bzl"))
 
     ApphostPacks.generateApphostPacksNugetRepo apphostPacksFile (Path.Combine(sdkFolder, "apphost_packs"))
+
+    // Generate the crossgen2 pack targets
+    let crossgen2PacksFile = Path.Combine(sdkFolder, "gen", "crossgen2-packs.json")
+    Crossgen2Packs.updateCrossgen2Packs crossgen2PacksFile
+
+    Crossgen2Packs.writeCrossgen2PackLookupTable
+        crossgen2PacksFile
+        (Path.Combine(sdkFolder, "crossgen2_packs", "crossgen2_pack_lookup_table.bzl"))
+
+    Crossgen2Packs.generateCrossgen2PackTargets
+        crossgen2PacksFile
+        (Path.Combine(sdkFolder, "crossgen2_packs", "crossgen2_packs.bzl"))
+
+    Crossgen2Packs.generateCrossgen2PacksNugetRepo crossgen2PacksFile (Path.Combine(sdkFolder, "crossgen2_packs"))
     0

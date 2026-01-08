@@ -1,0 +1,66 @@
+load("@bazel_lib//:bzl_library.bzl", "bzl_library")
+load(":crossgen2_pack.bzl", "crossgen2_pack")
+load(":crossgen2_packs.bzl", "crossgen2_packs")
+
+crossgen2_packs()
+
+label_setting(
+    name = "crossgen2_pack",
+    build_setting_default = ":empty_pack",
+    visibility = ["//visibility:public"],
+)
+
+# This target is only for the default value of the label setting
+# and the transition should always transition from it to something else
+crossgen2_pack(
+    name = "empty_pack",
+    pack = None,
+    visibility = ["//visibility:public"],
+)
+
+bzl_library(
+    name = "crossgen2_pack_transition",
+    srcs = ["crossgen2_pack_transition.bzl"],
+    visibility = ["//dotnet:__subpackages__"],
+    deps = [
+        ":crossgen2_pack_lookup_table",
+        "//dotnet/private:common",
+    ],
+)
+
+bzl_library(
+    name = "dotnet.crossgen2_packs",
+    srcs = ["dotnet.crossgen2_packs.bzl"],
+    visibility = ["//dotnet:__subpackages__"],
+    deps = ["@rules_dotnet//dotnet:defs"],
+)
+
+bzl_library(
+    name = "dotnet.crossgen2_packs_extension",
+    srcs = ["dotnet.crossgen2_packs_extension.bzl"],
+    visibility = ["//dotnet:__subpackages__"],
+    deps = [":dotnet.crossgen2_packs"],
+)
+
+bzl_library(
+    name = "crossgen2_pack_lookup_table",
+    srcs = ["crossgen2_pack_lookup_table.bzl"],
+    visibility = ["//dotnet:__subpackages__"],
+)
+
+bzl_library(
+    name = "crossgen2_pack_bzl",
+    srcs = ["crossgen2_pack.bzl"],
+    visibility = ["//dotnet:__subpackages__"],
+    deps = [
+        "//dotnet/private:providers",
+        "//dotnet/private/transitions:tfm_transition",
+    ],
+)
+
+bzl_library(
+    name = "crossgen2_packs",
+    srcs = ["crossgen2_packs.bzl"],
+    visibility = ["//dotnet:__subpackages__"],
+    deps = [":crossgen2_pack_bzl"],
+)

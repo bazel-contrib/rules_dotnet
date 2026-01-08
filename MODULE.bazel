@@ -40,6 +40,9 @@ use_repo(runtime_packs_extension, "dotnet.runtime_packs")
 apphost_packs_extension = use_extension("@rules_dotnet//dotnet/private/sdk/apphost_packs:dotnet.apphost_packs_extension.bzl", "apphost_packs_extension")
 use_repo(apphost_packs_extension, "dotnet.apphost_packs")
 
+crossgen2_packs_extension = use_extension("@rules_dotnet//dotnet/private/sdk/crossgen2_packs:dotnet.crossgen2_packs_extension.bzl", "crossgen2_packs_extension")
+use_repo(crossgen2_packs_extension, "dotnet.crossgen2_packs")
+
 bazel_dep(name = "bazel_skylib", version = "1.7.1")
 bazel_dep(name = "platforms", version = "1.0.0")
 bazel_dep(name = "bazel_lib", version = "3.0.0")

@@ -8,6 +8,7 @@
     <Compile Include="NugetHelpers.fs" />
     <Compile Include="NugetRepo.fs" />
     <Compile Include="ApphostPacks.fs" />
+    <Compile Include="Crossgen2Packs.fs" />
     <Compile Include="RuntimePacks.fs" />
     <Compile Include="TargetingPacks.fs" />
     <Compile Include="Sdk.fs" />
