@@ -35,6 +35,7 @@ bzl_library(
         "//dotnet/private/rules/csharp:library",
         "//dotnet/private/rules/csharp:nunit_test",
         "//dotnet/private/rules/csharp:test",
+        "//dotnet/private/rules/dotnet_projects:generated_props",
         "//dotnet/private/rules/fsharp:binary",
         "//dotnet/private/rules/fsharp:library",
         "//dotnet/private/rules/fsharp:nunit_test",
@@ -84,7 +85,11 @@ bzl_library(
     name = "extensions",
     srcs = ["extensions.bzl"],
     visibility = ["//visibility:public"],
-    deps = [":repositories"],
+    deps = [
+        ":repositories",
+        "//dotnet/private/rules/dotnet_projects:dotnet_projects_repo",
+        "//dotnet/private/rules/dotnet_projects:tfm_utils",
+    ],
 )
 
 bzl_library(

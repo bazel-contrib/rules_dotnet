@@ -1,0 +1,29 @@
+# This BUILD file demonstrates using the fsproj auto-integration with .NET 10.0
+# The targets are generated from the .fsproj files in this directory
+
+load("@dotnet_projects//basic_fsharp:MyFsApp.fsproj.bzl", app_targets = "auto_dotnet_targets")
+load("@dotnet_projects//basic_fsharp:MyFsLibrary.fsproj.bzl", lib_targets = "auto_dotnet_targets")
+load("@rules_dotnet//dotnet:defs.bzl", "fsharp_nunit_test")
+
+# Create the library target from MyFsLibrary.fsproj
+lib_targets(
+    name = "MyFsLibrary",
+    visibility = ["//visibility:public"],
+)
+
+# Create the binary target from MyFsApp.fsproj
+app_targets(
+    name = "MyFsApp",
+    visibility = ["//visibility:public"],
+)
+
+# Test target using fsharp_nunit_test (NUnit is built into the rule)
+fsharp_nunit_test(
+    name = "MyFsLibrary.Tests",
+    srcs = ["libtest.fs"],
+    target_frameworks = ["net10.0"],
+    deps = [
+        ":MyFsLibrary",
+        "@paket.main//fsharp.core",
+    ],
+)

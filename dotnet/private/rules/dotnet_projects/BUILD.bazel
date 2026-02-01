@@ -1,0 +1,55 @@
+load("@bazel_skylib//:bzl_library.bzl", "bzl_library")
+
+bzl_library(
+    name = "parser",
+    srcs = ["parser.bzl"],
+    visibility = ["//dotnet:__subpackages__"],
+    deps = [
+        "@xml.bzl//:xml",
+    ],
+)
+
+bzl_library(
+    name = "nuget_collector",
+    srcs = ["nuget_collector.bzl"],
+    visibility = ["//dotnet:__subpackages__"],
+)
+
+bzl_library(
+    name = "generator",
+    srcs = ["generator.bzl"],
+    visibility = ["//dotnet:__subpackages__"],
+    deps = [
+        ":parser",
+        "@bazel_skylib//lib:paths",
+    ],
+)
+
+bzl_library(
+    name = "tfm_utils",
+    srcs = ["tfm_utils.bzl"],
+    visibility = ["//dotnet:__subpackages__"],
+)
+
+bzl_library(
+    name = "dotnet_projects_repo",
+    srcs = ["dotnet_projects_repo.bzl"],
+    visibility = ["//dotnet:__subpackages__"],
+    deps = [
+        ":generator",
+        ":nuget_collector",
+        ":parser",
+        ":tfm_utils",
+        "@bazel_lib//lib:glob_match",
+    ],
+)
+
+bzl_library(
+    name = "generated_props",
+    srcs = ["generated_props.bzl"],
+    visibility = ["//visibility:public"],
+    deps = [
+        "@bazel_lib//lib:write_source_files",
+        "@xml.bzl//:xml",
+    ],
+)

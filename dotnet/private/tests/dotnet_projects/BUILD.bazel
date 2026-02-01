@@ -1,0 +1,12 @@
+load(":generator_test.bzl", "generator_test_suite")
+load(":nuget_collector_test.bzl", "nuget_collector_test_suite")
+load(":parser_test.bzl", "parser_test_suite")
+load(":tfm_utils_test.bzl", "tfm_utils_test_suite")
+
+parser_test_suite(name = "parser_test")
+
+nuget_collector_test_suite(name = "nuget_collector_test")
+
+generator_test_suite(name = "generator_test")
+
+tfm_utils_test_suite(name = "tfm_utils_test")

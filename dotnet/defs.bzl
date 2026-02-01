@@ -20,6 +20,11 @@ load(
     _csharp_test = "csharp_test",
 )
 load(
+    "//dotnet/private/rules/dotnet_projects:generated_props.bzl",
+    _dotnet_generated_props = "dotnet_generated_props",
+    _dotnet_generated_props_test = "dotnet_generated_props_test",
+)
+load(
     "//dotnet/private/rules/fsharp:binary.bzl",
     _fsharp_binary = "fsharp_binary",
 )
@@ -71,3 +76,5 @@ import_dll = _import_dll
 nuget_repo = _nuget_repo
 nuget_archive = _nuget_archive
 dotnet_tool = _dotnet_tool
+dotnet_generated_props = _dotnet_generated_props
+dotnet_generated_props_test = _dotnet_generated_props_test

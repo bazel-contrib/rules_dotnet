@@ -1,0 +1,5 @@
+framework: net8.0
+storage: none
+source https://api.nuget.org/v3/index.json
+
+nuget FSharp.Core 8.0.400

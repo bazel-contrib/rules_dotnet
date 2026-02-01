@@ -1,0 +1,26 @@
+# This BUILD file demonstrates using the csproj auto-integration with .NET 10.0
+# The targets are generated from the .csproj files in this directory
+
+load("@dotnet_projects//basic_csharp:MyApp.csproj.bzl", app_targets = "auto_dotnet_targets")
+load("@dotnet_projects//basic_csharp:MyLibrary.csproj.bzl", lib_targets = "auto_dotnet_targets")
+load("@rules_dotnet//dotnet:defs.bzl", "csharp_nunit_test")
+
+# Create the library target from MyLibrary.csproj
+lib_targets(
+    name = "MyLibrary",
+    visibility = ["//visibility:public"],
+)
+
+# Create the binary target from MyApp.csproj
+app_targets(
+    name = "MyApp",
+    visibility = ["//visibility:public"],
+)
+
+# Test target using csharp_nunit_test (NUnit is built into the rule)
+csharp_nunit_test(
+    name = "MyLibrary.Tests",
+    srcs = ["libtest.cs"],
+    target_frameworks = ["net10.0"],
+    deps = [":MyLibrary"],
+)
