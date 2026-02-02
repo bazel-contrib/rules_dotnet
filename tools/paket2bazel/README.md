@@ -26,6 +26,8 @@ After generating the `paket.lock` file, you can then generate the required Bazel
 bazel run @rules_dotnet//tools/paket2bazel -- --dependencies-file $(pwd)/paket.dependencies  --output-folder $(pwd)/deps
 ```
 
+Add an empty `BUILD` file to `($pwd)` so that Bazel recognizes the folder as part of its domain.
+
 Now there should be a `paket.bzl` and `paket.extensions.bzl` in the root folder. This may also appear as `paket.main.bzl` and `paket.main_extensions.bzl` where each group is labeled in the same pattern.
 
 In your `MODULE.bazel` file, the following exposes the dependencies for consumption in BUILD files:
