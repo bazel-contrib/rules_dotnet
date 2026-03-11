@@ -53,7 +53,7 @@ set DOTNET_CLI_TELEMETRY_OPTOUT="1"
 
 set dotnet_executable="TEMPLATED_dotnet"
 call :rlocation "TEMPLATED_dotnet" dotnet_executable
-for %%F in (%dotnet_executable%) do set DOTNET_ROOT=%%~dpF
+for %%F in ("%dotnet_executable%") do set DOTNET_ROOT=%%~dpF
 
 call :rlocation "TEMPLATED_executable" run_script
 set args=%*

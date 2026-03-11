@@ -5,6 +5,7 @@ genrule(
     srcs = [":csharpier_input.cs"],
     outs = ["csharpier_actual.cs"],
     cmd = "$(location @paket.rules_dotnet_nuget_tool_tests//csharpier/tools:csharpier) format --no-cache --write-stdout $(location :csharpier_input.cs) > $@",
+    cmd_bat = "call $(location @paket.rules_dotnet_nuget_tool_tests//csharpier/tools:csharpier) format --no-cache --write-stdout $(location :csharpier_input.cs) > $@",
     tools = [
         "@paket.rules_dotnet_nuget_tool_tests//csharpier/tools:csharpier",
     ],
@@ -21,6 +22,7 @@ genrule(
     srcs = [],
     outs = ["paket_actual"],
     cmd = "$(location @paket.rules_dotnet_nuget_tool_tests//paket/tools:paket) --help > $@",
+    cmd_bat = "call $(location @paket.rules_dotnet_nuget_tool_tests//paket/tools:paket) --help > $@",
     tools = [
         "@paket.rules_dotnet_nuget_tool_tests//paket/tools:paket",
     ],

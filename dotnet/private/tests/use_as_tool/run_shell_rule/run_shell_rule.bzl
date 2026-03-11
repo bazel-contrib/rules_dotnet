@@ -3,10 +3,10 @@
 def _run_shell_rule_impl(ctx):
     output = ctx.actions.declare_file("{}_out".format(ctx.label.name))
 
-    ctx.actions.run_shell(
+    ctx.actions.run(
         outputs = [output],
-        command = "./{} {}".format(ctx.executable.tool.path, output.path),
-        tools = [ctx.executable.tool],
+        executable = ctx.executable.tool,
+        arguments = [output.path],
     )
 
     return [DefaultInfo(files = depset([output]))]
