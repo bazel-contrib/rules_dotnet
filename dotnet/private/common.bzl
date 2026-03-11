@@ -264,7 +264,7 @@ def collect_compile_info(name, deps, targeting_pack, exports, strict_deps):
         add_to_output = True
         if assembly.name.lower() in targeting_pack_overrides:
             if semver.to_comparable(assembly.version) > semver.to_comparable(targeting_pack_overrides[assembly.name.lower()], relaxed = True):
-                framework_list.pop(assembly.name.lower())
+                framework_list.pop(assembly.name.lower(), None)
                 add_to_output = True
             else:
                 add_to_output = False
