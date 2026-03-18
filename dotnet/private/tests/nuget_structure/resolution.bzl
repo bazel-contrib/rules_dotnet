@@ -7,10 +7,9 @@ load("//dotnet/private:common.bzl", "collect_compile_info")
 
 # buildifier: disable=bzl-visibility
 load("//dotnet/private:providers.bzl", "DotnetAssemblyCompileInfo", "DotnetTargetingPackInfo", "NuGetInfo")
-
 load("//dotnet/private/tests/nuget_structure:common.bzl", "nuget_structure_test", "nuget_test_wrapper")
 
-def _mock_dep_impl(ctx):
+def _mock_dep_impl(_ctx):
     return [DotnetAssemblyCompileInfo(
         name = "package.with.override.only",
         version = "8.0.0",
