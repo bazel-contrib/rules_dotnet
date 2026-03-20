@@ -1,5 +1,5 @@
 using System;
-using System.System.Security.Cryptography.Xml
+using System.Security.Cryptography.Xml;
 
 namespace Lib
 {
@@ -7,8 +7,8 @@ namespace Lib
     {
         public static String GetValue()
         {
-            System.Security.Cryptography.Xml.EncryptedXml e = new System.Security.Cryptography.Xml.EncryptedXml();
-            return e.GetXml().OuterXml;
+            // It doesn't matter what we do here.  It just needs to compile.
+            return new KeyInfoName().GetXml().OuterXml;
         }
     }
 }
