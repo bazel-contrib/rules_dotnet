@@ -1,17 +1,6 @@
 load(
     "//dotnet:defs.bzl",
-    "csharp_library",
     "csharp_nunit_test",
-)
-
-csharp_library(
-    name = "Program",
-    srcs = ["program.cs"],
-    target_frameworks = ["net8.0"],
-    treat_warnings_as_errors = True,
-    deps = [
-        "@paket.rules_dotnet_framework_override_not_provided_tests//system.security.cryptography.xml",
-    ],
 )
 
 csharp_nunit_test(
@@ -20,5 +9,5 @@ csharp_nunit_test(
     srcs = ["test.cs"],
     target_frameworks = ["net8.0"],
     treat_warnings_as_errors = True,
-    deps = [":Program"],
+    deps = ["@paket.rules_dotnet_framework_override_not_provided_tests//system.security.cryptography.xml"],
 )
