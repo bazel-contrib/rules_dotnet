@@ -264,7 +264,22 @@ def collect_compile_info(name, deps, targeting_pack, exports, strict_deps):
         add_to_output = True
         if assembly.name.lower() in targeting_pack_overrides:
             if semver.to_comparable(assembly.version) > semver.to_comparable(targeting_pack_overrides[assembly.name.lower()], relaxed = True):
-                framework_list.pop(assembly.name.lower())
+                # The `targeting_pack_overrides` specify minimum versions for assemblies. The
+                # `framework_list` specifies reference assemblies that will be included even if
+                # not listed by the Bazel target as an explicit dependency. When the user
+                # provides their own explicit assembly dependency that is newer than the minimum
+                # version, we must remove the automatically-provided reference assembly from
+                # `framework_list` to avoid conflicts.
+                #
+                # We pass `None` to make the pop() a no-op if the assembly doesn't exist in
+                # `framework_list`. It is okay if `targeting_pack_overrides` specifies a minimum
+                # version but `framework_list` did not actually automatically include that
+                # assembly. Not all assemblies in the former list are in the latter list for all
+                # possible `project_sdk` values. For example, System.Security.Cryptography.Xml
+                # must be at least version 4.4.0 for net8.0, but the default net8.0 framework
+                # does not provide it automatically: only the `project_sdk = "web"` (ASP.NET)
+                # framework does.
+                framework_list.pop(assembly.name.lower(), None)
                 add_to_output = True
             else:
                 add_to_output = False

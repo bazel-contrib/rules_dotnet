@@ -1,0 +1,13 @@
+load(
+    "//dotnet:defs.bzl",
+    "csharp_nunit_test",
+)
+
+csharp_nunit_test(
+    name = "ProgramTest",
+    size = "small",
+    srcs = ["test.cs"],
+    target_frameworks = ["net8.0"],
+    treat_warnings_as_errors = True,
+    deps = ["@paket.rules_dotnet_framework_override_not_provided_tests//system.security.cryptography.xml"],
+)

@@ -47,6 +47,12 @@ group rules_dotnet_nuget_packages
     nuget NUnit 3.14.0
     nuget NUnitLite 3.14.0
 
+group rules_dotnet_framework_override_not_provided_tests
+    framework: net8.0
+    source https://api.nuget.org/v3/index.json
+
+    nuget System.Security.Cryptography.Xml 9.0.0
+
 group rules_dotnet_nuget_tool_tests
     framework: net9.0
     source https://api.nuget.org/v3/index.json
