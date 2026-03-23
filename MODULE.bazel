@@ -8,10 +8,10 @@ module(
 )
 
 dotnet = use_extension("@rules_dotnet//dotnet:extensions.bzl", "dotnet")
-dotnet.toolchain(dotnet_version = "10.0.100")
+dotnet.toolchain(dotnet_version = "10.0.201")
 dotnet.toolchain(
     name = "dotnet_apphost",
-    dotnet_version = "10.0.100",
+    dotnet_version = "10.0.201",
 )
 use_repo(dotnet, "dotnet_toolchains")
 

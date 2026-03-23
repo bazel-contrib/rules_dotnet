@@ -3,7 +3,7 @@ group paket2bazel_dependencies
     framework: net10.0
     source https://api.nuget.org/v3/index.json
 
-    nuget FSharp.Core 10.0.100
+    nuget FSharp.Core 10.1.201
     nuget Argu 6.2.3
     nuget Paket.Core 10.0.0-alpha011
     nuget NuGet.PackageManagement 7.0.0
