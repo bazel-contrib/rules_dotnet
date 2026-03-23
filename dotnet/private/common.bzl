@@ -640,6 +640,10 @@ def generate_depsjson(
             # Otherwise we followe the conventions mentioned here: https://github.com/dotnet/sdk/blob/main/documentation/specs/runtime-configuration-file.md#framework-dependent-deployment-model
             if is_self_contained:
                 target_fragment["native"] = {native_file.basename: {"fileVersion": "0.0.0.0"} for native_file in runtime_dep.native}
+            elif runtime_dep.nuget_info == None or runtime_dep.nuget_info.nupkg == None:
+                # For non self-contained binaries that are not from a NuGet package, assume we built
+                # them and point to their relative location within the execroot.
+                target_fragment["native"] = {(native_file.basename if not use_relative_paths else to_rlocation_path(ctx, native_file)): {"fileVersion": "0.0.0.0"} for native_file in runtime_dep.native}
             else:
                 target_fragment["runtimeTargets"] = {}
                 for native_file in runtime_dep.native:
