@@ -1,0 +1,66 @@
+load("@rules_cc//cc:defs.bzl", "cc_library", "cc_shared_library")
+load(
+    "//dotnet:defs.bzl",
+    "csharp_binary",
+    "csharp_nunit_test",
+    "import_library",
+    "publish_binary",
+)
+
+# Build a trivial library for testing.
+cc_library(
+    name = "native_static",
+    srcs = ["native.c"],
+    # The library would work on all OSes, but limiting it to Linux keeps the runtime environment
+    # dependencies minimal for these tests.  The rules_dotnet devcontainer already has gcc.
+    target_compatible_with = select({
+        "@platforms//os:linux": [],
+        "//conditions:default": ["@platforms//:incompatible"],
+    }),
+)
+
+# We want only the shared library (and not the static library) to be a dependency of the dotnet
+# program.
+cc_shared_library(
+    name = "native",
+    deps = [":native_static"],
+)
+
+# Allow that shared library to be imported as a dotnet dependency.
+import_library(
+    name = "library",
+    library_name = "native",
+    native = [":native"],
+)
+
+# This test uses that native library directly as a dependency to ensure that the `.deps.json`
+# properly points to it instead of trying to find it in a NuGet-relative directory.
+csharp_nunit_test(
+    name = "ProgramTest",
+    size = "small",
+    srcs = ["test.cs"],
+    target_frameworks = ["net8.0"],
+    treat_warnings_as_errors = True,
+    deps = [":library"],
+)
+
+# Produce a self-contained binary so we can make sure that publishing works with a local native
+# library dependency.
+csharp_binary(
+    name = "Program",
+    srcs = ["program.cs"],
+    target_frameworks = ["net8.0"],
+    treat_warnings_as_errors = True,
+    deps = [":library"],
+)
+
+# The `.deps.json` in the publish directory will point to the local copy of the native library, not
+# the one that the NUnit tests point to.  Thus, the published program will work, too, if you go into
+# the published directory and run it, or copy that published directory elsewhere and run it.
+publish_binary(
+    name = "Program_publish",
+    binary = ":Program",
+    runtime_identifier = "linux-arm64",
+    self_contained = True,
+    target_framework = "net8.0",
+)
