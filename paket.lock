@@ -10,7 +10,7 @@ NUGET
     Chessie (0.6)
       FSharp.Core (>= 4.0.1.7-alpha)
       NETStandard.Library (>= 1.6)
-    FSharp.Core (10.0.100)
+    FSharp.Core (10.1.201)
     Microsoft.Extensions.FileProviders.Abstractions (8.0)
       Microsoft.Extensions.Primitives (>= 8.0)
     Microsoft.Extensions.FileSystemGlobbing (8.0)
