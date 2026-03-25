@@ -1,6 +1,26 @@
+load("@rules_cc//cc:defs.bzl", "cc_library", "cc_shared_library")
 load(
     "//dotnet:defs.bzl",
     "csharp_binary",
+    "import_library",
+)
+
+# Build a trivial library for testing.
+cc_library(
+    name = "native_static",
+    srcs = ["native.c"],
+)
+
+cc_shared_library(
+    name = "native",
+    deps = [":native_static"],
+)
+
+# Allow that shared library to be imported as a dotnet dependency.
+import_library(
+    name = "lib_with_native",
+    library_name = "native",
+    native = [":native"],
 )
 
 csharp_binary(
@@ -10,6 +30,7 @@ csharp_binary(
     target_frameworks = ["net6.0"],
     visibility = ["//dotnet/private/tests/publish:__subpackages__"],
     deps = [
+        ":lib_with_native",
         "//tools/runfiles",
         "@paket.rules_dotnet_dev_nuget_packages//libgit2sharp",
     ],

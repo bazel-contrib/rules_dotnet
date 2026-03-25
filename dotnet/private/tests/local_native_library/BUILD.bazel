@@ -1,10 +1,8 @@
 load("@rules_cc//cc:defs.bzl", "cc_library", "cc_shared_library")
 load(
     "//dotnet:defs.bzl",
-    "csharp_binary",
     "csharp_nunit_test",
     "import_library",
-    "publish_binary",
 )
 
 # Build a trivial library for testing.
@@ -36,31 +34,10 @@ import_library(
 # This test uses that native library directly as a dependency to ensure that the `.deps.json`
 # properly points to it instead of trying to find it in a NuGet-relative directory.
 csharp_nunit_test(
-    name = "ProgramTest",
+    name = "test",
     size = "small",
     srcs = ["test.cs"],
     target_frameworks = ["net8.0"],
     treat_warnings_as_errors = True,
     deps = [":library"],
-)
-
-# Produce a self-contained binary so we can make sure that publishing works with a local native
-# library dependency.
-csharp_binary(
-    name = "Program",
-    srcs = ["program.cs"],
-    target_frameworks = ["net8.0"],
-    treat_warnings_as_errors = True,
-    deps = [":library"],
-)
-
-# The `.deps.json` in the publish directory will point to the local copy of the native library, not
-# the one that the NUnit tests point to.  Thus, the published program will work, too, if you go into
-# the published directory and run it, or copy that published directory elsewhere and run it.
-publish_binary(
-    name = "Program_publish",
-    binary = ":Program",
-    runtime_identifier = "linux-arm64",
-    self_contained = True,
-    target_framework = "net8.0",
 )
