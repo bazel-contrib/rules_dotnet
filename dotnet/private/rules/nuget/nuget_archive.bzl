@@ -495,7 +495,7 @@ def _nuget_archive_impl(ctx):
         build_file_license = 'license(name = "license", license_kinds = ["@rules_license//licenses/spdx:%s"], license_text = "%s")' % (nuspec_license, license_file)
         build_file_default_package_metadata = '[":package_info", ":license"]'
     else:
-        build_file_license = '# Could not find license info'
+        build_file_license = "# Could not find license info"
         build_file_default_package_metadata = '[":package_info"]'
 
     for file in all_files:
