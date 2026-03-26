@@ -482,7 +482,7 @@ def _nuget_archive_impl(ctx):
         },
     }
 
-    nuspec_file = [f for f in all_files if f.lower() == ctx.attr.id + ".nuspec"][0]
+    nuspec_file = [f for f in all_files if f.lower().lstrip("./") == ctx.attr.id + ".nuspec"][0]
     nuspec_data = ctx.read(nuspec_file)
     nuspec_id = _xml_extract(nuspec_data, "<id>", "</id>")
     nuspec_version = _xml_extract(nuspec_data, "<version>", "</version>")
