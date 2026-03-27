@@ -10,7 +10,7 @@ namespace AppToPublish
 {
     public static class Program
     {
-        [DllImport("native", ExactSpelling = false)]
+        [DllImport("native")]
         private static extern int return42();
 
         public static void Main()

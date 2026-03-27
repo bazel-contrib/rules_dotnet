@@ -1,0 +1,3 @@
+LIBRARY   native
+EXPORTS
+   return42   @1

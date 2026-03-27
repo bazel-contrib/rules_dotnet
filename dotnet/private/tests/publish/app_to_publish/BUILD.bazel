@@ -13,6 +13,7 @@ cc_library(
 
 cc_shared_library(
     name = "native",
+    win_def_file = "native.def",
     deps = [":native_static"],
 )
 
