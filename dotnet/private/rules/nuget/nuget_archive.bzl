@@ -400,6 +400,25 @@ def _get_auth_dict(ctx, netrc, urls):
 
     return cred_dict
 
+def _xml_extract(text, start, end):
+    if start not in text or end not in text:
+        return None
+    start_index = text.index(start) + len(start)
+    end_index = text.index(end, start_index)
+    return text[start_index:end_index].strip()
+
+def _find_license_file(files):
+    for file in files:
+        if file.startswith("LICENSE"):
+            return file
+    for file in files:
+        if file.startswith("COPYING"):
+            return file
+    for file in files:
+        if file.startswith("README"):
+            return file
+    return None
+
 def _nuget_archive_impl(ctx):
     # First get the auth dict for the package sources since the sources can be different than the
     # package base url when using NuGet V3 feeds.
@@ -462,6 +481,22 @@ def _nuget_archive_impl(ctx):
         "tools": {
         },
     }
+
+    nuspec_file = [f for f in all_files if f.lower().lstrip("./") == ctx.attr.id + ".nuspec"][0]
+    nuspec_data = ctx.read(nuspec_file)
+    nuspec_id = _xml_extract(nuspec_data, "<id>", "</id>")
+    nuspec_version = _xml_extract(nuspec_data, "<version>", "</version>")
+    nuspec_project_url = _xml_extract(nuspec_data, "<projectUrl>", "</projectUrl>")
+    nuspec_license = _xml_extract(nuspec_data, "<license type=\"expression\">", "</license>")
+    license_file = _find_license_file(all_files)
+
+    build_file_package_info = 'package_info(name = "package_info", package_name = "%s", package_url = "%s", package_version = "%s")' % (nuspec_id, nuspec_project_url, nuspec_version)
+    if nuspec_license and license_file:
+        build_file_license = 'license(name = "license", license_kinds = ["@rules_license//licenses/spdx:%s"], license_text = "%s")' % (nuspec_license, license_file)
+        build_file_default_package_metadata = '[":package_info", ":license"]'
+    else:
+        build_file_license = "# Could not find license info"
+        build_file_default_package_metadata = '[":package_info"]'
 
     for file in all_files:
         file = _sanitize_path(file)
@@ -543,10 +578,17 @@ def _nuget_archive_impl(ctx):
             combined_tfm_and_rid = "{}_{}".format(tfm, rid)
             libs[combined_tfm_and_rid] = tfm_files
 
-    ctx.file("BUILD.bazel", r"""package(default_visibility = ["//visibility:public"])
+    ctx.file("BUILD.bazel", r"""load("@rules_license//rules:license.bzl", "license")
+load("@rules_license//rules:package_info.bzl", "package_info")
+package(
+    default_visibility = ["//visibility:public"],
+    default_package_metadata = %s,
+)
+%s
+%s
 exports_files(glob(["**"]))
 load("@rules_dotnet//dotnet/private/rules/nuget:nuget_archive.bzl", "tfm_filegroup", "rid_filegroup", "tool_filegroup")
-""" + "\n".join([
+""" % (build_file_default_package_metadata, build_file_package_info, build_file_license) + "\n".join([
         _create_framework_select("libs", libs, False) or "filegroup(name = \"libs\", srcs = [])",
         _create_framework_select("refs", refs, False) or "filegroup(name = \"refs\", srcs = [])",
         # Packages can have runtime DLLs foa a TFM and resource assemblies
