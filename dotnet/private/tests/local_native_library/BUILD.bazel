@@ -9,12 +9,6 @@ load(
 cc_library(
     name = "native_static",
     srcs = ["native.c"],
-    # The library would work on all OSes, but limiting it to Linux keeps the runtime environment
-    # dependencies minimal for these tests.  The rules_dotnet devcontainer already has gcc.
-    target_compatible_with = select({
-        "@platforms//os:linux": [],
-        "//conditions:default": ["@platforms//:incompatible"],
-    }),
 )
 
 # We want only the shared library (and not the static library) to be a dependency of the dotnet

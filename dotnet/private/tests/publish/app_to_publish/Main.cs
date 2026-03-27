@@ -10,7 +10,7 @@ namespace AppToPublish
 {
     public static class Program
     {
-        [DllImport("native", CallingConvention = CallingConvention.StdCall)]
+        [DllImport("native", ExactSpelling = false)]
         private static extern int return42();
 
         public static void Main()

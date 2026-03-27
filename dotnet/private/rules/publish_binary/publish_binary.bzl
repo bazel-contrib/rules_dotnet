@@ -102,7 +102,8 @@ def _copy_to_publish(ctx, runtime_identifier, runtime_pack_info, binary_info, as
             # things work.
             #
             file.dirname.split("/")[-2] if file.is_source else runtime_identifier,
-            file.basename)
+            file.basename,
+        )
 
         # If the publish is self-contained we need to copy the native DLLs
         # next to the main DLL in the publish folder
