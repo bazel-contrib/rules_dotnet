@@ -349,7 +349,7 @@ def _process_key_and_file(groups, key, file):
 
     return
 
-def _get_package_urls(rctx, sources, auth, package_id, package_version):
+def _get_package_urls(rctx, sources, auth, index_integrity, package_id, package_version):
     base_addresses = {}
     package_urls = []
 
@@ -361,7 +361,7 @@ def _get_package_urls(rctx, sources, auth, package_id, package_version):
         # and the url schema for the package contents will be:
         # {base_address}/{lower_id}/{lower_version}/{lower_id}.{lower_version}.nupkg
         if source.endswith("index.json"):
-            rctx.download(source, auth = auth, output = "index.json")
+            rctx.download(source, auth = auth, output = "index.json", integrity = index_integrity)
             index = json.decode(rctx.read("index.json"))
             rctx.delete("index.json")
             for resource in index["resources"]:
@@ -404,7 +404,7 @@ def _nuget_archive_impl(ctx):
     # First get the auth dict for the package sources since the sources can be different than the
     # package base url when using NuGet V3 feeds.
     auth = _get_auth_dict(ctx, ctx.attr.netrc, ctx.attr.sources)
-    urls = _get_package_urls(ctx, ctx.attr.sources, auth, ctx.attr.id, ctx.attr.version)
+    urls = _get_package_urls(ctx, ctx.attr.sources, auth, ctx.attr.index_integrity, ctx.attr.id, ctx.attr.version)
 
     # Then get the auth dict for the package base urls
     auth = _get_auth_dict(ctx, ctx.attr.netrc, urls)
@@ -574,6 +574,7 @@ nuget_archive = repository_rule(
         "id": attr.string(),
         "version": attr.string(),
         "sha512": attr.string(),
+        "index_integrity": attr.string(),
     },
 )
 
