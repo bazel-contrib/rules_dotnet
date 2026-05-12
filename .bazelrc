@@ -30,3 +30,5 @@ try-import %workspace%/.bazelrc.user
 common --incompatible_disallow_empty_glob
 # Enable once our dependencies all support this
 # common --incompatible_auto_exec_groups
+
+build --workspace_status_command=test.sh
