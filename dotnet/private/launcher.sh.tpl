@@ -32,4 +32,4 @@ export DOTNET_NOLOGO="1"
 export DOTNET_CLI_TELEMETRY_OPTOUT="1"
 export DOTNET_ROOT="$(dirname $(rlocation TEMPLATED_dotnet))"
 
-exec $(rlocation TEMPLATED_dotnet) exec $(rlocation TEMPLATED_executable) "$@"
+exec $(rlocation TEMPLATED_dotnet) exec --additionalprobingpath "${RUNFILES_DIR}" $(rlocation TEMPLATED_executable) "$@"

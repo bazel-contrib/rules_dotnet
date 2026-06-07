@@ -62,4 +62,4 @@ if defined args (
   set args=!args:\=\\\\!
   set args=!args:"=\"!
 )
-"!dotnet_executable!" exec "!run_script!" !args!
+"!dotnet_executable!" exec --additionalprobingpath "%RUNFILES_DIR%" "!run_script!" !args!
