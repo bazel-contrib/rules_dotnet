@@ -2,10 +2,7 @@ module NugetRepo
 
 open System.Text
 open System.IO
-open System.Collections.Generic
-open System.Text.Json
-open System.Text.Json.Serialization
-open System.Text.Encodings.Web
+open Thoth.Json.Core
 
 type NugetRepoTool =
     { name: string
@@ -19,16 +16,70 @@ type NugetRepoPackage =
       sha512: string
       sources: string seq
       netrc: string option
-      dependencies: Dictionary<string, string seq>
+      dependencies: Map<string, string seq>
       targeting_pack_overrides: string seq
       framework_list: string seq
-      tools: Dictionary<string, NugetRepoTool seq> }
+      tools: Map<string, NugetRepoTool seq> }
+
+let private encodeStringSeq values =
+    values
+    |> Seq.map Encode.string
+    |> Seq.toList
+    |> Encode.list
+
+let private encodeMap encodeValue values =
+    values
+    |> Map.toList
+    |> List.map (fun (key, value) -> key, encodeValue value)
+    |> Encode.object
+
+let private encodeTool (tool: NugetRepoTool) =
+    Encode.object [
+        yield "name", Encode.string tool.name
+        yield "entrypoint", Encode.string tool.entrypoint
+        yield "runner", Encode.string tool.runner
+    ]
+
+let private encodePackage (package: NugetRepoPackage) =
+    Encode.object [
+        yield "name", Encode.string package.name
+        yield "id", Encode.string package.id
+        yield "version", Encode.string package.version
+        yield "sha512", Encode.string package.sha512
+        yield "sources", encodeStringSeq package.sources
+
+        match package.netrc with
+        | Some netrc -> yield "netrc", Encode.string netrc
+        | None -> ()
+
+        yield "dependencies", encodeMap encodeStringSeq package.dependencies
+        yield "targeting_pack_overrides", encodeStringSeq package.targeting_pack_overrides
+        yield "framework_list", encodeStringSeq package.framework_list
+
+        yield
+            "tools",
+            package.tools
+            |> encodeMap (fun tools ->
+                tools
+                |> Seq.map encodeTool
+                |> Seq.toList
+                |> Encode.list)
+    ]
+
+let private toGeneratedJson value =
+    value
+    |> Encode.toString 0
+    // The replacements are so that the Bazel formatter does not have anything to format.
+    |> fun json ->
+        json
+            .Replace("\":\"", "\": \"")
+            .Replace("\",\"", "\", \"")
+            .Replace("\":[", "\": [")
+            .Replace("],", "], ")
+            .Replace("\":{", "\": {")
+            .Replace("},", "}, ")
 
 let generateTarget (packages: NugetRepoPackage seq) (repoName: string) (repoPrefix: string) =
-    let jsonOptions = JsonSerializerOptions()
-    jsonOptions.DefaultIgnoreCondition <- JsonIgnoreCondition.WhenWritingNull
-    jsonOptions.Encoder <- JavaScriptEncoder.UnsafeRelaxedJsonEscaping
-
     let i = "    "
     let sb = new StringBuilder()
     sb.Append($"{i}nuget_repo(\n") |> ignore
@@ -40,17 +91,7 @@ let generateTarget (packages: NugetRepoPackage seq) (repoName: string) (repoPref
     for package in packages do
         sb.Append($"{i}        ") |> ignore
 
-        sb.Append(
-            JsonSerializer
-                .Serialize(package, jsonOptions)
-                // The replacements are so that the Bazel formatter does not have anything to format
-                .Replace("\":\"", "\": \"")
-                .Replace("\",\"", "\", \"")
-                .Replace("\":[", "\": [")
-                .Replace("],", "], ")
-                .Replace("\":{", "\": {")
-                .Replace("},", "}, ")
-        )
+        sb.Append(package |> encodePackage |> toGeneratedJson)
         |> ignore
 
         sb.Append(",\n") |> ignore

@@ -4,3 +4,4 @@ group paket2bazel_dependencies
     Paket.Core
     NuGet.PackageManagement
     System.Text.Json
+    Thoth.Json.System.Text.Json
