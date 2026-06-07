@@ -138,10 +138,10 @@ let generateTargetingPacksNugetRepo (targetingPacksFile: string) (outputFolder: 
               sha512 = packageInfo.sha512sri
               sources = [ NugetHelpers.nugetV3Feed ]
               netrc = None
-              dependencies = Map.empty
+              dependencies = Dictionary<string, string seq>()
               targeting_pack_overrides = packageInfo.overrides
               framework_list = packageInfo.frameworkList
-              tools = Map.empty })
+              tools = Dictionary() })
 
     NugetRepo.generateBazelFiles "targeting_packs" repoPackages outputFolder "dotnet."
     ()

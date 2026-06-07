@@ -27,6 +27,5 @@ fsharp_binary(
         "@paket.paket2bazel_dependencies//nuget.versioning",
         "@paket.paket2bazel_dependencies//paket.core",
         "@paket.paket2bazel_dependencies//system.text.json",
-        "@paket.paket2bazel_dependencies//thoth.json.system.text.json",
     ],
 )
