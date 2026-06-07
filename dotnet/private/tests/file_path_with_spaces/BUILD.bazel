@@ -1,0 +1,30 @@
+load("@bazel_lib//:bzl_library.bzl", "bzl_library")
+load(":csharp_file_path_with_spaces.bzl", "csharp_file_path_args_with_spaces")
+load(":fsharp_file_path_with_spaces.bzl", "fsharp_file_path_args_with_spaces")
+
+csharp_file_path_args_with_spaces()
+
+fsharp_file_path_args_with_spaces()
+
+bzl_library(
+    name = "csharp_file_path_with_spaces",
+    srcs = ["csharp_file_path_with_spaces.bzl"],
+    visibility = ["//dotnet:__subpackages__"],
+    deps = [
+        "//dotnet:defs",
+        "//dotnet/private/tests:utils",
+        "@bazel_skylib//lib:unittest",
+    ],
+)
+
+bzl_library(
+    name = "fsharp_file_path_with_spaces",
+    srcs = ["fsharp_file_path_with_spaces.bzl"],
+    visibility = ["//dotnet:__subpackages__"],
+    deps = [
+        "//dotnet:defs",
+        "//dotnet/private/tests:utils",
+        "@bazel_skylib//lib:unittest",
+    ],
+)
+
