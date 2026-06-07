@@ -6,7 +6,6 @@ load(
     "//dotnet/private:common.bzl",
     "collect_compile_info",
     "copy_files_to_dir",
-    "format_ref_arg",
     "framework_preprocessor_symbols",
     "generate_warning_args",
     "get_framework_version_info",
@@ -21,6 +20,17 @@ load(
     "DotnetAssemblyCompileInfo",
     "DotnetAssemblyRuntimeInfo",
 )
+
+def _format_ref_with_overrides(assembly):
+    # See https://github.com/bazel-contrib/rules_dotnet/issues/405
+    # The following files should not be passed as references to the compiler
+    if assembly.path.endswith("System.EnterpriseServices.Thunk.dll") or assembly.path.endswith("System.EnterpriseServices.Wrapper.dll"):
+        return None
+    return "-r:" + assembly.path
+
+def format_ref_arg(args, refs):
+    args.add_all(refs, map_each = _format_ref_with_overrides)
+    return args
 
 def _format_targetprofile(tfm):
     if is_standard_framework(tfm):

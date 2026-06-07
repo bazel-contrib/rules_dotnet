@@ -177,26 +177,11 @@ def get_toolchain(ctx):
 
     return ctx.toolchains["//dotnet:toolchain_type"]
 
-def _format_ref_with_overrides(assembly):
-    # See https://github.com/bazel-contrib/rules_dotnet/issues/405
-    # The following files should not be passed as references to the compiler
-    if assembly.path.endswith("System.EnterpriseServices.Thunk.dll") or assembly.path.endswith("System.EnterpriseServices.Wrapper.dll"):
-        return None
-    return "-r:" + assembly.path
-
-def format_ref_arg(args, refs):
-    """Takes
-
-    Args:
-        args: The args object that will be sent into the compilation action
-        refs: List of all references that are being sent into the compilation action
-    Returns:
-        The updated args object
-    """
-
-    args.add_all(refs, map_each = _format_ref_with_overrides)
-
-    return args
+def _has_whitespace(s):
+    for char in [" ", "\t", "\n", "\r"]:
+        if char in s:
+            return True
+    return False
 
 def _find_ref_by_file_name(refs, file_name):
     for ref in refs:
@@ -795,7 +780,10 @@ def map_resource_arg(file, target_label, out_dll, language):
     else:
         fail("Unsupported language: {}", language)
 
-    base_resource_arg = base_resource_fmt.format(file.path)
+    if _has_whitespace(file.path) and language == "csharp":
+        base_resource_arg = base_resource_fmt.format("\"" + file.path + "\"")
+    else:
+        base_resource_arg = base_resource_fmt.format(file.path)
 
     # We can only determine the embedded resource's name if we have a DLL to embed it in.
     if out_dll == None or not out_dll.endswith(".dll"):
@@ -808,7 +796,7 @@ def map_resource_arg(file, target_label, out_dll, language):
     if file.owner != None and file.owner.repo_name != target_label.repo_name:
         # Fallback to the basename if the file comes from a different repository.
         resource_name = simple_resource_name
-    if not file.short_path.startswith(target_label.package):
+    elif not file.short_path.startswith(target_label.package):
         # Fallback to the basename if the file is not in the target's package, because
         # the path will not be normalized.
         resource_name = simple_resource_name
