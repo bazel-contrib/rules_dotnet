@@ -1,6 +1,6 @@
 "Test utilities"
 
-load("@bazel_skylib//lib:unittest.bzl", "analysistest")
+load("@bazel_skylib//lib:unittest.bzl", "analysistest", "asserts")
 load("@bazel_skylib//rules:common_settings.bzl", "BuildSettingInfo")
 load("@rules_testing//lib:util.bzl", "TestingAspectInfo")
 load("//dotnet/private:providers.bzl", "DotnetBinaryInfo")
@@ -80,3 +80,30 @@ def get_target_rid(target):
         return target[TestingAspectInfo].attrs.binary[0][DotnetBinaryInfo].runtime_pack_info.runtime_identifier
 
     fail("Could not determine target runtime identifier")
+
+RUN_ENVIRONMENT_INFO_TEST_ARGS = {
+    "expected_inherited_environment": attr.string_list(),
+}
+
+def _run_environment_info_test_impl(ctx):
+    env = analysistest.begin(ctx)
+    target = analysistest.target_under_test(env)
+
+    if RunEnvironmentInfo not in target:
+        fail("Target does not return RunEnvironmentInfo provider")
+
+    run_env_info = target[RunEnvironmentInfo]
+
+    for expected in ctx.attr.expected_inherited_environment:
+        asserts.true(
+            env,
+            expected in run_env_info.inherited_environment,
+            "Expected inherited environment variable '{}' to be in '{}'".format(expected, run_env_info.inherited_environment),
+        )
+
+    return analysistest.end(env)
+
+run_environment_info_test = analysistest.make(
+    _run_environment_info_test_impl,
+    attrs = RUN_ENVIRONMENT_INFO_TEST_ARGS,
+)
