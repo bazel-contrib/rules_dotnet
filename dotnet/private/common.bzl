@@ -808,4 +808,7 @@ def map_resource_arg(file, target_label, out_dll, language):
         parts = relative_path.split("/")
         resource_name = "{}.{}".format(out_dll[:-4], ".".join(parts))
 
+    if _has_whitespace(resource_name) and language == "csharp":
+        resource_name = "\"" + resource_name + "\""
+
     return base_resource_arg + "," + resource_name
