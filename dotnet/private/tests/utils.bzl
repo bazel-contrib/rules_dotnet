@@ -9,6 +9,7 @@ ACTION_ARGS_TEST_ARGS = {
     "action_mnemonic": attr.string(),
     "expected_partial_args": attr.string_list(),
     "expected_nonexistent_partial_args": attr.string_list(),
+    "expected_args_containing": attr.string_list(),
 }
 
 # We also expose the implementation so that it can be used for testing
@@ -44,6 +45,16 @@ def action_args_test_impl(ctx):
         for actual_arg in action_under_test.argv:
             if actual_arg == unexpected_arg:
                 fail("Expected arg not to be present: {}".format(unexpected_arg))
+
+    for needle in ctx.attr.expected_args_containing:
+        found_arg = None
+        for actual_arg in action_under_test.argv:
+            if needle in actual_arg:
+                found_arg = actual_arg
+                break
+
+        if found_arg == None:
+            fail("No arg containing substring: {}".format(needle))
 
     return analysistest.end(env)
 
