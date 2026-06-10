@@ -27,4 +27,3 @@ bzl_library(
         "@bazel_skylib//lib:unittest",
     ],
 )
-

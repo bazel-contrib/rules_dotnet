@@ -21,5 +21,3 @@ def fsharp_file_path_args_with_spaces():
             "dotnet/private/tests/file_path_with_spaces/api tests/test.fs",
         ],
     )
-
-
