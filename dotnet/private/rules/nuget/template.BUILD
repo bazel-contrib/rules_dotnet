@@ -1,4 +1,4 @@
-load("@rules_dotnet//dotnet:defs.bzl", "import_library", "dotnet_tool")
+load("@rules_dotnet//dotnet:defs.bzl", "dotnet_tool", "import_library")
 
 package(default_visibility = ["//visibility:public"])
 
