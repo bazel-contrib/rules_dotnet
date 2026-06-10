@@ -3,7 +3,9 @@
 load(
     "//dotnet:defs.bzl",
     "csharp_nunit_test",
+    "csharp_test",
 )
+load("//dotnet/private/tests:utils.bzl", "run_environment_info_test")
 
 csharp_nunit_test(
     name = "test",
@@ -17,4 +19,17 @@ csharp_nunit_test(
         "TEMPLATED_VARIABLE": "$(DOTNET_SDK_VERSION)",
     },
     target_frameworks = ["net6.0"],
+)
+
+csharp_test(
+    name = "inherited_env_test_bin",
+    srcs = ["Inherit.cs"],
+    env_inherit = ["INHERITED_VAR"],
+    target_frameworks = ["net6.0"],
+)
+
+run_environment_info_test(
+    name = "env_inherit_test",
+    expected_inherited_environment = ["INHERITED_VAR"],
+    target_under_test = ":inherited_env_test_bin",
 )
