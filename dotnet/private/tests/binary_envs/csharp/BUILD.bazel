@@ -30,6 +30,6 @@ csharp_test(
 
 run_environment_info_test(
     name = "env_inherit_test",
-    target_under_test = ":inherited_env_test_bin",
     expected_inherited_environment = ["INHERITED_VAR"],
+    target_under_test = ":inherited_env_test_bin",
 )
