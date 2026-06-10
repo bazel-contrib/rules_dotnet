@@ -7,11 +7,11 @@ matrix:
   platform:
     [
       "windows",
-      "ubuntu2004",
-      "rbe_ubuntu2204",
+      "ubuntu2404",
+      "rbe_ubuntu2404",
       "macos",
       "macos_arm64",
-      "ubuntu2004_arm64",
+      "ubuntu2404_arm64",
       "windows_arm64",
     ]
   flag_combo:
