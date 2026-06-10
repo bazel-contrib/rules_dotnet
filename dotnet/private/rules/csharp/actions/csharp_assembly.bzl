@@ -6,6 +6,9 @@ load(
     "//dotnet/private:common.bzl",
     "collect_compile_info",
     "copy_files_to_dir",
+    "format_arg",
+    "format_file_path",
+    "format_ref_arg",
     "framework_preprocessor_symbols",
     "generate_warning_args",
     "get_framework_version_info",
@@ -18,22 +21,6 @@ load(
     "DotnetAssemblyRuntimeInfo",
 )
 
-def _has_whitespace(s):
-    for char in [" ", "\t", "\n", "\r"]:
-        if char in s:
-            return True
-    return False
-
-def format_arg(prefix, val):
-    if _has_whitespace(val):
-        return prefix + "\"" + val + "\""
-    return prefix + val
-
-def format_file_path(file):
-    if _has_whitespace(file.path):
-        return "\"" + file.path + "\""
-    return file.path
-
 def format_analyzer(file):
     return format_arg("/analyzer:", file.path)
 
@@ -42,17 +29,6 @@ def format_additionalfile(file):
 
 def format_analyzerconfig(file):
     return format_arg("/analyzerconfig:", file.path)
-
-def _format_ref_with_overrides(assembly):
-    # See https://github.com/bazel-contrib/rules_dotnet/issues/405
-    # The following files should not be passed as references to the compiler
-    if assembly.path.endswith("System.EnterpriseServices.Thunk.dll") or assembly.path.endswith("System.EnterpriseServices.Wrapper.dll"):
-        return None
-    return format_arg("-r:", assembly.path)
-
-def format_ref_arg(args, refs):
-    args.add_all(refs, map_each = _format_ref_with_overrides)
-    return args
 
 def _write_internals_visible_to_csharp(actions, label_name, dll_name, others):
     """Write a .cs file containing InternalsVisibleTo attributes.

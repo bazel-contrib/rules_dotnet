@@ -190,6 +190,27 @@ def _find_ref_by_file_name(refs, file_name):
 
     return None
 
+def _format_ref_with_overrides(assembly):
+    # See https://github.com/bazel-contrib/rules_dotnet/issues/405
+    # The following files should not be passed as references to the compiler
+    if assembly.path.endswith("System.EnterpriseServices.Thunk.dll") or assembly.path.endswith("System.EnterpriseServices.Wrapper.dll"):
+        return None
+    return format_arg("-r:", assembly.path)
+
+def format_ref_arg(args, refs):
+    args.add_all(refs, map_each = _format_ref_with_overrides)
+    return args
+
+def format_file_path(file):
+    if _has_whitespace(file.path):
+        return "\"" + file.path + "\""
+    return file.path
+
+def format_arg(prefix, val):
+    if _has_whitespace(val):
+        return prefix + "\"" + val + "\""
+    return prefix + val
+
 def collect_compile_info(name, deps, targeting_pack, exports, strict_deps):
     """Determine the transitive dependencies by the target framework.
 

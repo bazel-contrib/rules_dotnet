@@ -21,6 +21,11 @@ load(
     "DotnetAssemblyRuntimeInfo",
 )
 
+# Unlike the C# compiler, the F# compiler reads each line of a multiline
+# response file as a single literal argument and does not strip surrounding
+# double quotes from flag values. Quoting paths therefore breaks fsc (the
+# quotes become part of the path). Paths with spaces work without quoting
+# because the response file already preserves the whole line as one argument.
 def _format_ref_with_overrides(assembly):
     # See https://github.com/bazel-contrib/rules_dotnet/issues/405
     # The following files should not be passed as references to the compiler
