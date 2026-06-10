@@ -28,5 +28,7 @@ try-import %workspace%/.bazelrc.user
 
 # Bazel 8 flags that will be flipped
 common --incompatible_disallow_empty_glob
-# Enable once our dependencies all support this
-# common --incompatible_auto_exec_groups
+
+# This flag will probably be flipped in Bazel 9
+# https://github.com/bazel-contrib/rules_dotnet/issues/457
+common --incompatible_auto_exec_groups
