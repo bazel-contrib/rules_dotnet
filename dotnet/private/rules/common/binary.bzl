@@ -44,7 +44,8 @@ def _collect_native_dlls(assembly_runtime_info, deps):
     return result
 
 def _create_launcher(ctx, runfiles, executable):
-    runtime = get_toolchain(ctx).runtime
+    toolchain = get_toolchain(ctx)
+    runtime = toolchain.target_runtime
     windows_constraint = ctx.attr._windows_constraint[platform_common.ConstraintValueInfo]
 
     launcher = ctx.actions.declare_file("{}.{}".format(executable.basename, "bat" if ctx.target_platform_has_constraint(windows_constraint) else "sh"), sibling = executable)
@@ -70,7 +71,7 @@ def _create_launcher(ctx, runfiles, executable):
             is_executable = True,
         )
 
-    runfiles.extend(get_toolchain(ctx).dotnetinfo.runtime_files)
+    runfiles.extend(toolchain.dotnetinfo.target_runtime_files)
 
     return launcher
 

@@ -54,6 +54,13 @@ assert_contains(
     expected = "Hello World!",
 )
 
+sh_test(
+    name = "relocated_runfiles_test",
+    srcs = ["relocated_runfiles_test.sh"],
+    args = ["$(rootpath :main)"],
+    data = [":main"],
+)
+
 # Also test that self contained binaries are also usable as tools in custom rules
 publish_binary(
     name = "publish_self_contained",

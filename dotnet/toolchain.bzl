@@ -9,6 +9,10 @@ DotnetInfo = provider(
         "runtime_files": """Files required in runfiles to make the dotnet executable available.
 
 May be empty if the runtime_path points to a locally installed tool binary.""",
+        "target_runtime_path": "Path to the dotnet executable for target binaries",
+        "target_runtime_files": """Files required in runfiles to make the target dotnet executable available.
+
+May be empty if target_runtime_path points to a locally installed tool binary.""",
         "csharp_compiler_path": "Path to the C# compiler executable",
         "csharp_compiler_files": """Files required in runfiles to make the C# compiler executable available.
 
@@ -41,6 +45,8 @@ def _dotnet_toolchain_impl(ctx):
         fail("Can only set one of runtime or runtime_path but both were set.")
     if not ctx.attr.runtime and not ctx.attr.runtime_path:
         fail("Must set one of runtime or runtime_path.")
+    if ctx.attr.target_runtime and ctx.attr.target_runtime_path:
+        fail("Can only set one of target_runtime or target_runtime_path but both were set.")
 
     if ctx.attr.csharp_compiler and ctx.attr.csharp_compiler_path:
         fail("Can only set one of csharp_compiler or csharp_compiler_path but both were set.")
@@ -54,6 +60,8 @@ def _dotnet_toolchain_impl(ctx):
 
     runtime_files = []
     runtime_path = ctx.attr.runtime_path
+    target_runtime_files = []
+    target_runtime_path = ctx.attr.target_runtime_path
 
     csharp_compiler_files = []
     csharp_compiler_path = ctx.attr.csharp_compiler_path
@@ -64,6 +72,13 @@ def _dotnet_toolchain_impl(ctx):
     if ctx.attr.runtime:
         runtime_files = ctx.attr.runtime.files.to_list() + ctx.attr.runtime.default_runfiles.files.to_list()
         runtime_path = _to_manifest_path(ctx, runtime_files[0])
+
+    if ctx.attr.target_runtime:
+        target_runtime_files = ctx.attr.target_runtime.files.to_list() + ctx.attr.target_runtime.default_runfiles.files.to_list()
+        target_runtime_path = _to_manifest_path(ctx, target_runtime_files[0])
+    else:
+        target_runtime_files = runtime_files
+        target_runtime_path = runtime_path
 
     if ctx.attr.csharp_compiler:
         csharp_compiler_files = ctx.attr.csharp_compiler.files.to_list() + ctx.attr.csharp_compiler.default_runfiles.files.to_list()
@@ -92,6 +107,8 @@ def _dotnet_toolchain_impl(ctx):
     dotnetinfo = DotnetInfo(
         runtime_path = runtime_path,
         runtime_files = runtime_files,
+        target_runtime_path = target_runtime_path,
+        target_runtime_files = target_runtime_files,
         csharp_compiler_path = csharp_compiler_path,
         csharp_compiler_files = csharp_compiler_files,
         fsharp_compiler_path = fsharp_compiler_path,
@@ -110,6 +127,7 @@ def _dotnet_toolchain_impl(ctx):
         dotnetinfo = dotnetinfo,
         template_variables = template_variables,
         runtime = ctx.attr.runtime,
+        target_runtime = ctx.attr.target_runtime or ctx.attr.runtime,
         csharp_compiler = ctx.attr.csharp_compiler,
         fsharp_compiler = ctx.attr.fsharp_compiler,
         host_model = ctx.attr.host_model,
@@ -132,6 +150,16 @@ dotnet_toolchain = rule(
         ),
         "runtime_path": attr.string(
             doc = "Path to the dotnet CLI. Do not set if `runtime` is set",
+            mandatory = False,
+        ),
+        "target_runtime": attr.label(
+            doc = "The dotnet CLI used by target binaries. Defaults to runtime.",
+            mandatory = False,
+            executable = True,
+            cfg = "target",
+        ),
+        "target_runtime_path": attr.string(
+            doc = "Path to the dotnet CLI used by target binaries. Defaults to runtime_path.",
             mandatory = False,
         ),
         "csharp_compiler": attr.label(

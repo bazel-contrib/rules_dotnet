@@ -1,0 +1,64 @@
+load("//dotnet:toolchain.bzl", "dotnet_toolchain")
+load(":target_runtime_test.bzl", "fake_executable", "resolved_target_runtime_test", "target_runtime_test")
+
+platform(
+    name = "windows_x64",
+    constraint_values = [
+        "@platforms//os:windows",
+        "@platforms//cpu:x86_64",
+    ],
+)
+
+config_setting(
+    name = "target_windows",
+    constraint_values = [
+        "@platforms//os:windows",
+        "@platforms//cpu:x86_64",
+    ],
+)
+
+fake_executable(
+    name = "runtime_host",
+)
+
+fake_executable(
+    name = "runtime_windows",
+)
+
+filegroup(
+    name = "host_model",
+    srcs = ["host_model.dll"],
+)
+
+dotnet_toolchain(
+    name = "fake_dotnet_toolchain",
+    runtime = ":runtime_host",
+    target_runtime = select({
+        ":target_windows": ":runtime_windows",
+        "//conditions:default": ":runtime_host",
+    }),
+    csharp_compiler = ":runtime_host",
+    fsharp_compiler = ":runtime_host",
+    host_model = ":host_model",
+    sdk_version = "0.0.0",
+    runtime_version = "0.0.0",
+    runtime_tfm = "net0.0",
+    csharp_default_version = "0.0",
+    fsharp_default_version = "0.0",
+)
+
+toolchain(
+    name = "fake_registered_toolchain",
+    toolchain = ":fake_dotnet_toolchain",
+    toolchain_type = "//dotnet:toolchain_type",
+)
+
+target_runtime_test(
+    name = "target_runtime_uses_target_platform",
+    toolchain_under_test = ":fake_dotnet_toolchain",
+)
+
+resolved_target_runtime_test(
+    name = "resolved_target_runtime_uses_target_platform",
+    tags = ["manual"],
+)
