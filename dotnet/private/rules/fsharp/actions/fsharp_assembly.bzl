@@ -2,7 +2,6 @@
 Actions for compiling targets with C#.
 """
 
-load("@bazel_skylib//lib:shell.bzl", "shell")
 load(
     "//dotnet/private:common.bzl",
     "collect_compile_info",
