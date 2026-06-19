@@ -4,3 +4,7 @@ common --incompatible_strict_action_env
 
 # Disable bzlmod lock file since it's not stable enough yet
 common --lockfile_mode=off
+
+# This flag will probably be flipped in Bazel 9
+# https://github.com/bazel-contrib/rules_dotnet/issues/457
+common --incompatible_auto_exec_groups
