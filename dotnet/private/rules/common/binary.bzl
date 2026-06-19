@@ -96,7 +96,9 @@ def build_binary(ctx, compile_action):
     (compile_provider, runtime_provider) = compile_action(ctx, tfm)
     dll = runtime_provider.libs[0]
     default_info_files = [dll] + runtime_provider.xml_docs + runtime_provider.appsetting_files.to_list()
-    additional_runfiles = []
+
+    # appsetting_files must be in runfiles (not just DefaultInfo) so they're present when the target runs from an isolated runfiles tree (RBE/sandbox).
+    additional_runfiles = runtime_provider.appsetting_files.to_list()
 
     launcher = _create_launcher(ctx, additional_runfiles, dll)
 
