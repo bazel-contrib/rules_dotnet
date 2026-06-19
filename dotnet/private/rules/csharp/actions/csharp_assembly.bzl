@@ -20,18 +20,6 @@ load(
     "DotnetAssemblyRuntimeInfo",
 )
 
-def format_analyzer(file):
-    return "/analyzer:" + shell.quote(file.path)
-
-def format_additionalfile(file):
-    return "/additionalfile:" + shell.quote(file.path)
-
-def format_analyzerconfig(file):
-    return "/analyzerconfig:" + shell.quote(file.path)
-
-def format_file_path(file):
-    return shell.quote(file.path)
-
 def _write_internals_visible_to_csharp(actions, label_name, dll_name, others):
     """Write a .cs file containing InternalsVisibleTo attributes.
 
@@ -469,17 +457,17 @@ def _compile(
 
     # outputs
     if out_dll != None:
-        args.add("/out:" + shell.quote(out_dll.path))
-        args.add("/refout:" + shell.quote(out_ref.path))
-        args.add("/pdb:" + shell.quote(out_pdb.path))
+        args.add(out_dll.path, format = "/out:%s")
+        args.add(out_ref.path, format = "/refout:%s")
+        args.add(out_pdb.path, format = "/pdb:%s")
         outputs = [out_dll, out_ref, out_pdb]
     else:
         args.add("/refonly")
-        args.add("/out:" + shell.quote(out_ref.path))
+        args.add(out_ref.path, format = "/out:%s")
         outputs = [out_ref]
 
     if out_xml != None:
-        args.add("/doc:" + shell.quote(out_xml.path))
+        args.add(out_xml.path, format = "/doc:%s")
         outputs.append(out_xml)
 
     # assembly references
@@ -487,13 +475,13 @@ def _compile(
 
     # analyzers
     if run_analyzers:
-        args.add_all(analyzer_assemblies, map_each = format_analyzer)
-        args.add_all(analyzer_assemblies_csharp, map_each = format_analyzer)
-        args.add_all(additionalfiles, map_each = format_additionalfile)
-        args.add_all(analyzer_configs, map_each = format_analyzerconfig)
+        args.add_all(analyzer_assemblies, format_each = "/analyzer:%s")
+        args.add_all(analyzer_assemblies_csharp, format_each = "/analyzer:%s")
+        args.add_all(additionalfiles, format_each = "/additionalfile:%s")
+        args.add_all(analyzer_configs, format_each = "/analyzerconfig:%s")
 
     # .cs files
-    args.add_all(srcs, map_each = format_file_path)
+    args.add_all(srcs)
 
     # resources
     args.add_all(resources, map_each = lambda r: map_resource_arg(r, label, out_dll.basename if out_dll != None else None, language = "csharp"), allow_closure = True)
@@ -503,7 +491,7 @@ def _compile(
 
     # keyfile
     if keyfile != None:
-        args.add("/keyfile:" + shell.quote(keyfile.path))
+        args.add(keyfile.path, format = "/keyfile:%s")
 
     # Additional compiler flags
     for option in compiler_options:

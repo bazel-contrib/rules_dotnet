@@ -23,9 +23,6 @@ load(
     "DotnetAssemblyRuntimeInfo",
 )
 
-def format_file_path(file):
-    return shell.quote(file.path)
-
 def _format_targetprofile(tfm):
     if is_standard_framework(tfm):
         return "--targetprofile:netstandard"
@@ -395,28 +392,28 @@ def _compile(
 
     # outputs
     if out_dll != None:
-        args.add("--out:" + shell.quote(out_dll.path))
-        args.add("--pdb:" + shell.quote(out_pdb.path))
+        args.add(out_dll.path, format = "--out:%s")
+        args.add(out_pdb.path, format = "--pdb:%s")
         outputs = [out_dll, out_pdb]
 
         if out_ref != None:
-            args.add("--refout:" + shell.quote(out_ref.path))
+            args.add(out_ref.path, format = "--refout:%s")
             outputs.append(out_ref)
 
     else:
         args.add("--refonly")
-        args.add("--out:" + shell.quote(out_ref.path))
+        args.add(out_ref.path, format = "--out:%s")
         outputs = [out_ref]
 
     if out_xml != None:
-        args.add("--doc:" + shell.quote(out_xml.path))
+        args.add(out_xml.path, format = "--doc:%s")
         outputs.append(out_xml)
 
     # assembly references
     format_ref_arg(args, depset(framework_files, transitive = [refs]))
 
     # .fs files
-    args.add_all(srcs, map_each = format_file_path)
+    args.add_all(srcs)
 
     # resources
     args.add_all(resources, map_each = lambda r: map_resource_arg(r, label, out_dll.basename if out_dll != None else None, language = "fsharp"), allow_closure = True)
@@ -426,7 +423,7 @@ def _compile(
 
     # keyfile
     if keyfile != None:
-        args.add("--keyfile:" + shell.quote(keyfile.path))
+        args.add(keyfile.path, format = "--keyfile:%s")
 
     # Additional compiler options
     for option in compiler_options:
