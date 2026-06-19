@@ -138,9 +138,9 @@ COMMON_ATTRS = {
 LIBRARY_COMMON_ATTRS = {
     "exports": attr.label_list(
         doc = """
-        List of targets to add to the dependencies of those that depend on this target. 
+        List of targets to add to the dependencies of those that depend on this target.
         Use this sparingly as it weakens the precision of the build graph.
-        
+
         This attribute does nothing if you don't have strict dependencies enabled.""",
         default = [],
         providers = [DotnetAssemblyCompileInfo, DotnetAssemblyRuntimeInfo],
@@ -171,6 +171,14 @@ BINARY_COMMON_ATTRS = {
     "envs": attr.string_dict(
         doc = "A dictionary of environment variables to set when the binary is run. Supports make variable expansion",
         default = {},
+    ),
+    "env_inherit": attr.string_list(
+        doc = "A list of environment variable names that are inherited from the external/client " +
+              "environment when the binary or test is run. Unlike `envs` " +
+              "(which sets static values), these forward the value present in the invoking " +
+              "environment at run/test time, so secrets and host-specific paths are not baked into " +
+              "the build graph.",
+        default = [],
     ),
     "_bash_runfiles": attr.label(
         default = "@rules_shell//shell/runfiles",

@@ -391,21 +391,21 @@ def _compile(
 
     # outputs
     if out_dll != None:
-        args.add("--out:" + out_dll.path)
-        args.add("--pdb:" + out_pdb.path)
+        args.add(out_dll.path, format = "--out:%s")
+        args.add(out_pdb.path, format = "--pdb:%s")
         outputs = [out_dll, out_pdb]
 
         if out_ref != None:
-            args.add("--refout:" + out_ref.path)
+            args.add(out_ref.path, format = "--refout:%s")
             outputs.append(out_ref)
 
     else:
         args.add("--refonly")
-        args.add("--out:" + out_ref.path)
+        args.add(out_ref.path, format = "--out:%s")
         outputs = [out_ref]
 
     if out_xml != None:
-        args.add("--doc:" + out_xml.path)
+        args.add(out_xml.path, format = "--doc:%s")
         outputs.append(out_xml)
 
     # assembly references
@@ -422,7 +422,7 @@ def _compile(
 
     # keyfile
     if keyfile != None:
-        args.add("--keyfile:" + keyfile.path)
+        args.add(keyfile.path, format = "--keyfile:%s")
 
     # Additional compiler options
     for option in compiler_options:
