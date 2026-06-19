@@ -7,7 +7,7 @@ def _internal_dev_deps_impl(mctx):
 
     rbe_preconfig(
         name = "buildkite_config",
-        toolchain = "ubuntu1804-bazel-java11",
+        toolchain = "ubuntu2204",
     )
 
 internal_dev_deps = module_extension(
