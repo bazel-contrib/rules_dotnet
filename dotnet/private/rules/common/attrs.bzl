@@ -3,6 +3,7 @@
 load("@bazel_skylib//lib:dicts.bzl", "dicts")
 load("//dotnet/private:providers.bzl", "DotnetAssemblyCompileInfo", "DotnetAssemblyRuntimeInfo")
 load("//dotnet/private/sdk/apphost_packs:apphost_pack_transition.bzl", "apphost_pack_transition")
+load("//dotnet/private/sdk/crossgen2_packs:crossgen2_pack_transition.bzl", "crossgen2_pack_transition")
 load("//dotnet/private/sdk/runtime_packs:runtime_pack_transition.bzl", "runtime_pack_transition")
 load("//dotnet/private/sdk/targeting_packs:targeting_pack_transition.bzl", "targeting_pack_transition")
 load("//dotnet/private/transitions:default_transition.bzl", "default_transition")
@@ -109,6 +110,9 @@ COMMON_ATTRS = {
         Typically this is left unset so that Bazel automatically selects the right toolchain.
         """,
     ),
+    "_ready_to_run": attr.label(
+        default = "//dotnet:ready_to_run",
+    ),
     "_target_framework": attr.label(
         default = "//dotnet:target_framework",
     ),
@@ -131,6 +135,14 @@ COMMON_ATTRS = {
     "_targeting_pack": attr.label(
         default = "//dotnet/private/sdk/targeting_packs:targeting_pack",
         cfg = targeting_pack_transition,
+    ),
+    "_runtime_pack": attr.label(
+        default = "//dotnet/private/sdk/runtime_packs:runtime_pack",
+        cfg = runtime_pack_transition,
+    ),
+    "_crossgen2_pack": attr.label(
+        default = "//dotnet/private/sdk/crossgen2_packs:crossgen2_pack",
+        cfg = crossgen2_pack_transition,
     ),
 }
 
@@ -188,10 +200,6 @@ BINARY_COMMON_ATTRS = {
     "_apphost_pack": attr.label(
         default = "//dotnet/private/sdk/apphost_packs:apphost_pack",
         cfg = apphost_pack_transition,
-    ),
-    "_runtime_pack": attr.label(
-        default = "//dotnet/private/sdk/runtime_packs:runtime_pack",
-        cfg = runtime_pack_transition,
     ),
 }
 

@@ -43,14 +43,7 @@ bzl_library(
 )
 
 bzl_library(
-    name = "crossgen2_pack_lookup_table",
-    srcs = ["crossgen2_pack_lookup_table.bzl"],
-    visibility = ["//dotnet:__subpackages__"],
-)
-
-bzl_library(
     name = "crossgen2_pack_bzl",
-    srcs = ["crossgen2_pack.bzl"],
     visibility = ["//dotnet:__subpackages__"],
     deps = [
         "//dotnet/private:providers",
@@ -63,4 +56,10 @@ bzl_library(
     srcs = ["crossgen2_packs.bzl"],
     visibility = ["//dotnet:__subpackages__"],
     deps = [":crossgen2_pack_bzl"],
+)
+
+bzl_library(
+    name = "crossgen2_pack_lookup_table",
+    srcs = ["crossgen2_pack_lookup_table.bzl"],
+    visibility = ["//dotnet:__subpackages__"],
 )
