@@ -60,10 +60,10 @@ local_path_override(
 
 rbe = use_extension("@bazel_ci_rules//:rbe_config.bzl", "rbe_config_extension", dev_dependency = True)
 rbe.config(
-    name = "rbe_ubuntu",
+    name = "buildkite_config",
     preset = "ubuntu",
 )
-use_repo(rbe, "rbe_ubuntu")
+use_repo(rbe, "buildkite_config")
 
 rules_dotnet_dev_nuget_packages_extension = use_extension("@rules_dotnet//dotnet:paket.rules_dotnet_dev_nuget_packages_extension.bzl", "rules_dotnet_dev_nuget_packages_extension", dev_dependency = True)
 use_repo(rules_dotnet_dev_nuget_packages_extension, "paket.rules_dotnet_dev_nuget_packages")
