@@ -54,7 +54,7 @@ def action_args_test_impl(ctx):
                 break
 
         if found_arg == None:
-            fail("No arg containing substring: {}".format(needle))
+            fail("No arg containing substring: {}. Available args: {}".format(needle, action_under_test.argv))
 
     return analysistest.end(env)
 

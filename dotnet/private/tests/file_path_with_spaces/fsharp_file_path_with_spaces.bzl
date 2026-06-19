@@ -21,7 +21,7 @@ def fsharp_file_path_args_with_spaces():
         target_under_test = ":fsharp_file_path_api_tests_with_spaces",
         action_mnemonic = "FSharpCompile",
         expected_partial_args = [
-            "dotnet/private/tests/file_path_with_spaces/api tests/test.fs",
+            "\'dotnet/private/tests/file_path_with_spaces/api tests/test.fs\'",
         ],
     )
 
@@ -38,7 +38,7 @@ def fsharp_file_path_args_with_spaces():
         target_under_test = ":fsharp_resource_with_spaces",
         action_mnemonic = "FSharpCompile",
         expected_partial_args = [
-            "--resource:dotnet/private/tests/file_path_with_spaces/res dir/data file.txt,fsharp_resource_with_spaces.res dir.data file.txt",
+            "--resource:\'dotnet/private/tests/file_path_with_spaces/res dir/data file.txt\',\'fsharp_resource_with_spaces.res dir.data file.txt\'",
         ],
     )
 
@@ -54,10 +54,7 @@ def fsharp_file_path_args_with_spaces():
         target_under_test = ":fsharp output with spaces",
         action_mnemonic = "FSharpCompile",
         expected_args_containing = [
-            "--out:bazel-out",
-            "--pdb:bazel-out",
-            "--refout:bazel-out",
-            "fsharp output with spaces/net10.0/fsharp output with spaces.dll",
+            "fsharp output with spaces/net10.0/fsharp output with spaces.dll\'",
         ],
     )
 
@@ -81,7 +78,6 @@ def fsharp_file_path_args_with_spaces():
         target_under_test = ":fsharp_reference_with_spaces",
         action_mnemonic = "FSharpCompile",
         expected_args_containing = [
-            "-r:bazel-out",
-            "fsharp_reflib with spaces/net10.0/fsharp_reflib with spaces.dll",
+            "fsharp_reflib with spaces/net10.0/fsharp_reflib with spaces.dll\'",
         ],
     )

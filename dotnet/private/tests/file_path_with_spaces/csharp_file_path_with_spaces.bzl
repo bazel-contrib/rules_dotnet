@@ -18,7 +18,7 @@ def csharp_file_path_args_with_spaces():
         target_under_test = ":csharp_file_path_api_tests_with_spaces",
         action_mnemonic = "CSharpCompile",
         expected_partial_args = [
-            "\"dotnet/private/tests/file_path_with_spaces/api tests/test.cs\"",
+            "\'dotnet/private/tests/file_path_with_spaces/api tests/test.cs\'",
         ],
     )
 
@@ -35,7 +35,7 @@ def csharp_file_path_args_with_spaces():
         target_under_test = ":csharp_resource_with_spaces",
         action_mnemonic = "CSharpCompile",
         expected_partial_args = [
-            "/resource:\"dotnet/private/tests/file_path_with_spaces/res dir/data file.txt\",\"csharp_resource_with_spaces.res dir.data file.txt\"",
+            "/resource:\'dotnet/private/tests/file_path_with_spaces/res dir/data file.txt\',\'csharp_resource_with_spaces.res dir.data file.txt\'",
         ],
     )
 
@@ -51,10 +51,10 @@ def csharp_file_path_args_with_spaces():
         target_under_test = ":csharp output with spaces",
         action_mnemonic = "CSharpCompile",
         expected_args_containing = [
-            "/out:\"",
-            "/refout:\"",
-            "/pdb:\"",
-            "csharp output with spaces.dll\"",
+            "/out:\'",
+            "/refout:\'",
+            "/pdb:\'",
+            "csharp output with spaces.dll\'",
         ],
     )
 
@@ -78,7 +78,7 @@ def csharp_file_path_args_with_spaces():
         target_under_test = ":csharp_reference_with_spaces",
         action_mnemonic = "CSharpCompile",
         expected_args_containing = [
-            "-r:\"",
-            "reflib with spaces.dll\"",
+            "-r:\'",
+            "reflib with spaces.dll\'",
         ],
     )

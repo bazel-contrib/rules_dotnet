@@ -2,10 +2,12 @@
 Actions for compiling targets with C#.
 """
 
+load("@bazel_skylib//lib:shell.bzl", "shell")
 load(
     "//dotnet/private:common.bzl",
     "collect_compile_info",
     "copy_files_to_dir",
+    "format_ref_arg",
     "framework_preprocessor_symbols",
     "generate_warning_args",
     "get_framework_version_info",
@@ -21,21 +23,8 @@ load(
     "DotnetAssemblyRuntimeInfo",
 )
 
-# Unlike the C# compiler, the F# compiler reads each line of a multiline
-# response file as a single literal argument and does not strip surrounding
-# double quotes from flag values. Quoting paths therefore breaks fsc (the
-# quotes become part of the path). Paths with spaces work without quoting
-# because the response file already preserves the whole line as one argument.
-def _format_ref_with_overrides(assembly):
-    # See https://github.com/bazel-contrib/rules_dotnet/issues/405
-    # The following files should not be passed as references to the compiler
-    if assembly.path.endswith("System.EnterpriseServices.Thunk.dll") or assembly.path.endswith("System.EnterpriseServices.Wrapper.dll"):
-        return None
-    return "-r:" + assembly.path
-
-def format_ref_arg(args, refs):
-    args.add_all(refs, map_each = _format_ref_with_overrides)
-    return args
+def format_file_path(file):
+    return shell.quote(file.path)
 
 def _format_targetprofile(tfm):
     if is_standard_framework(tfm):
@@ -406,28 +395,28 @@ def _compile(
 
     # outputs
     if out_dll != None:
-        args.add("--out:" + out_dll.path)
-        args.add("--pdb:" + out_pdb.path)
+        args.add("--out:" + shell.quote(out_dll.path))
+        args.add("--pdb:" + shell.quote(out_pdb.path))
         outputs = [out_dll, out_pdb]
 
         if out_ref != None:
-            args.add("--refout:" + out_ref.path)
+            args.add("--refout:" + shell.quote(out_ref.path))
             outputs.append(out_ref)
 
     else:
         args.add("--refonly")
-        args.add("--out:" + out_ref.path)
+        args.add("--out:" + shell.quote(out_ref.path))
         outputs = [out_ref]
 
     if out_xml != None:
-        args.add("--doc:" + out_xml.path)
+        args.add("--doc:" + shell.quote(out_xml.path))
         outputs.append(out_xml)
 
     # assembly references
     format_ref_arg(args, depset(framework_files, transitive = [refs]))
 
     # .fs files
-    args.add_all(srcs)
+    args.add_all(srcs, map_each = format_file_path)
 
     # resources
     args.add_all(resources, map_each = lambda r: map_resource_arg(r, label, out_dll.basename if out_dll != None else None, language = "fsharp"), allow_closure = True)
@@ -437,7 +426,7 @@ def _compile(
 
     # keyfile
     if keyfile != None:
-        args.add("--keyfile:" + keyfile.path)
+        args.add("--keyfile:" + shell.quote(keyfile.path))
 
     # Additional compiler options
     for option in compiler_options:

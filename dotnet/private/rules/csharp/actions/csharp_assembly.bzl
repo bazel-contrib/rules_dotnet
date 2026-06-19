@@ -2,12 +2,11 @@
 Actions for compiling targets with C#.
 """
 
+load("@bazel_skylib//lib:shell.bzl", "shell")
 load(
     "//dotnet/private:common.bzl",
     "collect_compile_info",
     "copy_files_to_dir",
-    "format_arg",
-    "format_file_path",
     "format_ref_arg",
     "framework_preprocessor_symbols",
     "generate_warning_args",
@@ -22,13 +21,16 @@ load(
 )
 
 def format_analyzer(file):
-    return format_arg("/analyzer:", file.path)
+    return "/analyzer:" + shell.quote(file.path)
 
 def format_additionalfile(file):
-    return format_arg("/additionalfile:", file.path)
+    return "/additionalfile:" + shell.quote(file.path)
 
 def format_analyzerconfig(file):
-    return format_arg("/analyzerconfig:", file.path)
+    return "/analyzerconfig:" + shell.quote(file.path)
+
+def format_file_path(file):
+    return shell.quote(file.path)
 
 def _write_internals_visible_to_csharp(actions, label_name, dll_name, others):
     """Write a .cs file containing InternalsVisibleTo attributes.
@@ -467,17 +469,17 @@ def _compile(
 
     # outputs
     if out_dll != None:
-        args.add(format_arg("/out:", out_dll.path))
-        args.add(format_arg("/refout:", out_ref.path))
-        args.add(format_arg("/pdb:", out_pdb.path))
+        args.add("/out:" + shell.quote(out_dll.path))
+        args.add("/refout:" + shell.quote(out_ref.path))
+        args.add("/pdb:" + shell.quote(out_pdb.path))
         outputs = [out_dll, out_ref, out_pdb]
     else:
         args.add("/refonly")
-        args.add(format_arg("/out:", out_ref.path))
+        args.add("/out:" + shell.quote(out_ref.path))
         outputs = [out_ref]
 
     if out_xml != None:
-        args.add(format_arg("/doc:", out_xml.path))
+        args.add("/doc:" + shell.quote(out_xml.path))
         outputs.append(out_xml)
 
     # assembly references
@@ -501,7 +503,7 @@ def _compile(
 
     # keyfile
     if keyfile != None:
-        args.add(format_arg("/keyfile:", keyfile.path))
+        args.add("/keyfile:" + shell.quote(keyfile.path))
 
     # Additional compiler flags
     for option in compiler_options:
