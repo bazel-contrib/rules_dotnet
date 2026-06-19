@@ -1,9 +1,9 @@
 ---
 buildifier:
-  version: 7.1.0
+  version: 8.5.1
 
 matrix:
-  bazel: ["8.x"]
+  bazel: ["9.x"]
   platform:
     [
       "windows",
