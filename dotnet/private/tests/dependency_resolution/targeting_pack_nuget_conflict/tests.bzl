@@ -14,6 +14,7 @@ EXPECTED_VERSION_PER_TFM = {
     "net8.0": "8.0.0.0",
 }
 
+# buildifier: disable=unnamed-macro
 def tests():
     """Returns a list of test targets."""
     for tfm, expected_version in EXPECTED_VERSION_PER_TFM.items():
