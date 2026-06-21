@@ -12,6 +12,7 @@ load(
 load("//dotnet/private/rules/common:attrs.bzl", "CSHARP_BINARY_COMMON_ATTRS")
 load("//dotnet/private/rules/common:binary.bzl", "build_binary")
 load("//dotnet/private/rules/csharp/actions:csharp_assembly.bzl", "AssemblyAction")
+load("//dotnet/private/transitions:default_transition.bzl", "default_transition")
 load("//dotnet/private/transitions:tfm_transition.bzl", "tfm_transition")
 
 def _compile_action(ctx, tfm):
@@ -62,21 +63,41 @@ def _binary_private_impl(ctx):
     result = build_binary(ctx, _compile_action)
     return result
 
+_BINARY_ATTRS = dicts.add(
+    CSHARP_BINARY_COMMON_ATTRS,
+    {
+        "include_host_model_dll": attr.bool(
+            doc = "Whether to include Microsoft.NET.HostModel from the toolchain. This is only required to build tha apphost shimmer.",
+            default = False,
+        ),
+    },
+)
+
 csharp_binary = rule(
     _binary_private_impl,
     doc = """Compile a C# exe""",
-    attrs = dicts.add(
-        CSHARP_BINARY_COMMON_ATTRS,
-        {
-            "include_host_model_dll": attr.bool(
-                doc = "Whether to include Microsoft.NET.HostModel from the toolchain. This is only required to build tha apphost shimmer.",
-                default = False,
-            ),
-        },
-    ),
+    attrs = _BINARY_ATTRS,
     executable = True,
     toolchains = [
         "//dotnet:toolchain_type",
     ],
     cfg = tfm_transition,
+)
+
+# This rule is purely for building the apphost
+# shimmer. It is needed because the apphost shimmer
+# has to target the exec configuration but we can't
+# just set `cfg = "exec"` in publish_binary because
+# we also need to reset the TFM/RID graph back to the
+# defaults so that the publish_binary's target
+# framework does not infect the apphost shimmer build.
+apphost_shimmer_binary = rule(
+    _binary_private_impl,
+    doc = """Compile the apphost shimmer C# exe. See the comment in binary.bzl for why this is separate from `csharp_binary`.""",
+    attrs = _BINARY_ATTRS,
+    executable = True,
+    toolchains = [
+        "//dotnet:toolchain_type",
+    ],
+    cfg = default_transition,
 )

@@ -11,6 +11,7 @@ bzl_library(
         "//dotnet/private/rules/common:attrs",
         "//dotnet/private/rules/common:binary",
         "//dotnet/private/rules/csharp/actions:csharp_assembly",
+        "//dotnet/private/transitions:default_transition",
         "//dotnet/private/transitions:tfm_transition",
         "@bazel_skylib//lib:dicts",
         "@bazel_skylib//rules:common_settings",
