@@ -12,7 +12,7 @@ load(
 load("//dotnet/private/rules/common:attrs.bzl", "CSHARP_BINARY_COMMON_ATTRS")
 load("//dotnet/private/rules/common:binary.bzl", "build_binary")
 load("//dotnet/private/rules/csharp/actions:csharp_assembly.bzl", "AssemblyAction")
-load("//dotnet/private/transitions:default_transition.bzl", "default_transition")
+load("//dotnet/private/transitions:apphost_shimmer_transition.bzl", "apphost_shimmer_transition")
 load("//dotnet/private/transitions:tfm_transition.bzl", "tfm_transition")
 
 def _compile_action(ctx, tfm):
@@ -93,11 +93,11 @@ csharp_binary = rule(
 # framework does not infect the apphost shimmer build.
 apphost_shimmer_binary = rule(
     _binary_private_impl,
-    doc = """Compile the apphost shimmer C# exe. See the comment in binary.bzl for why this is separate from `csharp_binary`.""",
+    doc = """Compile the apphost shimmer C# exe.""",
     attrs = _BINARY_ATTRS,
     executable = True,
     toolchains = [
         "//dotnet:toolchain_type",
     ],
-    cfg = default_transition,
+    cfg = apphost_shimmer_transition,
 )
