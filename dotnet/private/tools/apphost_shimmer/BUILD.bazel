@@ -1,9 +1,9 @@
 load(
-    "//dotnet:defs.bzl",
-    "csharp_binary",
+    "//dotnet/private/rules/csharp:binary.bzl",
+    "apphost_shimmer_binary",
 )
 
-csharp_binary(
+apphost_shimmer_binary(
     name = "apphost_shimmer",
     srcs = [
         "AppHostShellShimMaker.cs",

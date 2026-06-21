@@ -7,6 +7,7 @@ bzl_library(
     deps = [
         "//dotnet/private:common",
         "@bazel_skylib//lib:sets",
+        "@platforms//host:constraints_lib",
     ],
 )
 
@@ -18,7 +19,6 @@ bzl_library(
         ":common",
         "//dotnet/private:common",
         "@bazel_skylib//lib:dicts",
-        "@platforms//host:constraints_lib",
     ],
 )
 
@@ -29,6 +29,18 @@ bzl_library(
     deps = [
         ":common",
         "//dotnet/private:common",
+        "@bazel_skylib//lib:dicts",
+    ],
+)
+
+bzl_library(
+    name = "apphost_shimmer_transition",
+    srcs = ["apphost_shimmer_transition.bzl"],
+    visibility = ["//dotnet:__subpackages__"],
+    deps = [
+        ":common",
+        "//dotnet/private:common",
+        "//dotnet/private/sdk:rids",
         "@bazel_skylib//lib:dicts",
     ],
 )

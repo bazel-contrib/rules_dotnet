@@ -9,6 +9,10 @@ module(
 
 dotnet = use_extension("@rules_dotnet//dotnet:extensions.bzl", "dotnet")
 dotnet.toolchain(dotnet_version = "10.0.201")
+
+# This toolchain is used for building the apphost shimmer only. The apphost shimmer
+# can not be buit with the toolchain that the end-user picks because the apphost builder
+# always targets the latest SDK and the end-user can pick an older SDK that is incompatible with the apphost builder.
 dotnet.toolchain(
     name = "dotnet_apphost",
     dotnet_version = "10.0.201",
