@@ -56,6 +56,7 @@ bazel_dep(name = "bazel_skylib_gazelle_plugin", version = "1.9.0", dev_dependenc
 bazel_dep(name = "rules_cc", version = "0.2.19", dev_dependency = True)
 bazel_dep(name = "rules_testing", version = "0.8.0", dev_dependency = True)
 bazel_dep(name = "bazel_ci_rules", version = "1.0.0", dev_dependency = True)
+bazel_dep(name = "llvm", version = "0.8.9", dev_dependency = True)
 bazel_dep(name = "dotnet_test_resources_other_repo", version = "", dev_dependency = True)
 local_path_override(
     module_name = "dotnet_test_resources_other_repo",
@@ -76,3 +77,8 @@ use_repo(rules_dotnet_framework_override_not_provided_tests_extension, "paket.ru
 
 rules_dotnet_nuget_tool_tests_extension = use_extension("@rules_dotnet//dotnet:paket.rules_dotnet_nuget_tool_tests_extension.bzl", "rules_dotnet_nuget_tool_tests_extension", dev_dependency = True)
 use_repo(rules_dotnet_nuget_tool_tests_extension, "paket.rules_dotnet_nuget_tool_tests")
+
+register_toolchains(
+    "@llvm//toolchain:all",
+    dev_dependency = True,
+)

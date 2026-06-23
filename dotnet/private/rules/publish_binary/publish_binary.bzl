@@ -290,7 +290,7 @@ def _publish_binary_impl(ctx):
 # into an outgoing transition in the wrapper. This allows us to select on the runtime_identifier
 # and runtime_packs attributes. We also need to have all the file copying in the wrapper rule
 # because Bazel does not allow forwarding executable files as they have to be created by the wrapper rule.
-publish_binary = rule(
+_publish_binary = rule(
     _publish_binary_impl,
     doc = """Publish a .Net binary""",
     attrs = {
@@ -343,4 +343,29 @@ publish_binary = rule(
     ],
     executable = True,
     cfg = tfm_transition,
+)
+
+def _publish_binary_macro_impl(name, **kwargs):
+    # This macro is just a wrapper so that we can make the user experience for automatic
+    # runtime identifier selection better. If the user does not provide a runtime identifier
+    # we will use the target platform to determine the runtime identifier.
+    # If the user provides a runtime identifier we will use that one. The wrapper macro
+    # is needed because we don't have access to the target platform in the TFM/RID transition.
+
+    rid = kwargs.get("runtime_identifier", None)
+    if rid == None:
+        kwargs["runtime_identifier"] = select({
+            "//dotnet/private:linux-x64": "linux-x64",
+            "//dotnet/private:osx-x64": "osx-x64",
+            "//dotnet/private:windows-x64": "win-x64",
+            "//dotnet/private:linux-arm64": "linux-arm64",
+            "//dotnet/private:osx-arm64": "osx-arm64",
+            "//dotnet/private:windows-arm64": "win-arm64",
+        })
+
+    _publish_binary(name = name, **kwargs)
+
+publish_binary = macro(
+    inherit_attrs = _publish_binary,
+    implementation = _publish_binary_macro_impl,
 )
