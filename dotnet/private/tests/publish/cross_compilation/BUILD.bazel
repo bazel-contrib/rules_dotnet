@@ -21,6 +21,11 @@ platform(
 publish_binary(
     name = "publish",
     binary = "//dotnet/private/tests/publish/app_to_publish",
+    # Can't get the hermetic toolchain working on windows so we exclude it for now.
+    target_compatible_with = select({
+        "@platforms//os:windows": ["@platforms//:incompatible"],
+        "//conditions:default": [],
+    }),
     target_framework = "net10.0",
 )
 
@@ -48,7 +53,6 @@ sh_test(
         ":transitioned_publish_linux_x86_64",
         "@bazel_tools//tools/bash/runfiles",
     ],
-    tags = ["no-remote-exec"],  # Can't be bothered to get this working in RBE at the moment
 )
 
 sh_test(
@@ -63,5 +67,4 @@ sh_test(
         ":transitioned_publish_linux_arm64",
         "@bazel_tools//tools/bash/runfiles",
     ],
-    tags = ["no-remote-exec"],  # Can't be bothered to get this working in RBE at the moment
 )
