@@ -2,6 +2,8 @@ load("@bazel_lib//lib:transitions.bzl", "platform_transition_binary")
 load("@rules_dotnet//dotnet:defs.bzl", "publish_binary")
 load("@rules_shell//shell:sh_test.bzl", "sh_test")
 
+#TODO: Add a C/C++ toolchain for cross compilation. Until that is done these tests are marked as manual
+
 platform(
     name = "x86_64_linux",
     constraint_values = [
@@ -21,23 +23,21 @@ platform(
 publish_binary(
     name = "publish",
     binary = "//dotnet/private/tests/publish/app_to_publish",
-    # Can't get the hermetic toolchain working on windows so we exclude it for now.
-    target_compatible_with = select({
-        "@platforms//os:windows": ["@platforms//:incompatible"],
-        "//conditions:default": [],
-    }),
+    tags = ["manual"],
     target_framework = "net10.0",
 )
 
 platform_transition_binary(
     name = "transitioned_publish_linux_x86_64",
     binary = ":publish",
+    tags = ["manual"],
     target_platform = "x86_64_linux",
 )
 
 platform_transition_binary(
     name = "transitioned_publish_linux_arm64",
     binary = ":publish",
+    tags = ["manual"],
     target_platform = "arm64_linux",
 )
 
@@ -53,6 +53,7 @@ sh_test(
         ":transitioned_publish_linux_x86_64",
         "@bazel_tools//tools/bash/runfiles",
     ],
+    tags = ["manual"],
 )
 
 sh_test(
@@ -67,4 +68,5 @@ sh_test(
         ":transitioned_publish_linux_arm64",
         "@bazel_tools//tools/bash/runfiles",
     ],
+    tags = ["manual"],
 )

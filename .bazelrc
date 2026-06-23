@@ -30,9 +30,3 @@ try-import %workspace%/.bazelrc.user
 common --incompatible_disallow_empty_glob
 # Enable once our dependencies all support this
 # common --incompatible_auto_exec_groups
-
-# Hermetic toolchain flags: https://github.com/uber/hermetic_cc_toolchain#configuration-file
-common --enable_platform_specific_config
-build:linux --sandbox_add_mount_pair=/home
-build:macos --sandbox_add_mount_pair=/Users
-build:windows --sandbox_add_mount_pair=C:\Users
