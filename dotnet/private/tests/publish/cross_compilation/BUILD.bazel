@@ -48,6 +48,7 @@ sh_test(
         ":transitioned_publish_linux_x86_64",
         "@bazel_tools//tools/bash/runfiles",
     ],
+    tags = ["no-remote-exec"],  # Can't be bothered to get this working in RBE at the moment
 )
 
 sh_test(
@@ -62,4 +63,5 @@ sh_test(
         ":transitioned_publish_linux_arm64",
         "@bazel_tools//tools/bash/runfiles",
     ],
+    tags = ["no-remote-exec"],  # Can't be bothered to get this working in RBE at the moment
 )
