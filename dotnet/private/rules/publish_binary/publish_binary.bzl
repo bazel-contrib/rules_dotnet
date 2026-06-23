@@ -355,12 +355,12 @@ def _publish_binary_macro_impl(name, **kwargs):
     rid = kwargs.get("runtime_identifier", None)
     if rid == None:
         kwargs["runtime_identifier"] = select({
-            "//dotnet/private:linux-x64": "linux-x64",
-            "//dotnet/private:osx-x64": "osx-x64",
-            "//dotnet/private:windows-x64": "win-x64",
-            "//dotnet/private:linux-arm64": "linux-arm64",
-            "//dotnet/private:osx-arm64": "osx-arm64",
-            "//dotnet/private:windows-arm64": "win-arm64",
+            "@rules_dotnet//dotnet/private:linux-x64": "linux-x64",
+            "@rules_dotnet//dotnet/private:osx-x64": "osx-x64",
+            "@rules_dotnet//dotnet/private:windows-x64": "win-x64",
+            "@rules_dotnet//dotnet/private:linux-arm64": "linux-arm64",
+            "@rules_dotnet//dotnet/private:osx-arm64": "osx-arm64",
+            "@rules_dotnet//dotnet/private:windows-arm64": "win-arm64",
         })
 
     _publish_binary(name = name, **kwargs)
