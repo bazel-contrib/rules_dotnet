@@ -21,6 +21,7 @@ def _get_assembly_files(assembly_info, transitive_runtime_deps, deps_json_struct
     native = [] + assembly_info.native
     data = [] + assembly_info.data
     appsetting_files = assembly_info.appsetting_files.to_list()
+    content_files = assembly_info.content_files
     for dep in transitive_runtime_deps:
         # For each dependency we need to check in the deps.json struct if the files should be copied.
         # If the file is to be copied it will be in the `native`, `runtimeTargets` or `runtime` attribute of the `target` for the dependency.
@@ -44,7 +45,7 @@ def _get_assembly_files(assembly_info, transitive_runtime_deps, deps_json_struct
 
         data += dep.data
         resource_assemblies += dep.resource_assemblies
-    return (libs, resource_assemblies, native, data, appsetting_files)
+    return (libs, resource_assemblies, native, data, appsetting_files, content_files)
 
 def _copy_to_publish(ctx, runtime_identifier, runtime_pack_info, binary_info, assembly_info, transitive_runtime_deps, deps_json_struct, is_self_contained):
     is_windows = ctx.target_platform_has_constraint(ctx.attr._windows_constraint[platform_common.ConstraintValueInfo])
@@ -57,7 +58,7 @@ def _copy_to_publish(ctx, runtime_identifier, runtime_pack_info, binary_info, as
 
     _copy_file(script_body, binary_info.dll, main_dll_copy, is_windows = is_windows)
 
-    (libs, resource_assemblies, native, data, appsetting_files) = _get_assembly_files(assembly_info, transitive_runtime_deps, deps_json_struct)
+    (libs, resource_assemblies, native, data, appsetting_files, content_files) = _get_assembly_files(assembly_info, transitive_runtime_deps, deps_json_struct)
 
     # All managed DLLs are copied next to the app host in the publish directory
     for file in libs:
@@ -136,6 +137,14 @@ def _copy_to_publish(ctx, runtime_identifier, runtime_pack_info, binary_info, as
         )
         outputs.append(output)
         _copy_file(script_body, file, output, is_windows = is_windows)
+
+    for entry in content_files:
+        inputs.append(entry.file)
+        output = ctx.actions.declare_file(
+            "{}/publish/{}/{}".format(ctx.label.name, runtime_identifier, entry.dest),
+        )
+        outputs.append(output)
+        _copy_file(script_body, entry.file, output, is_windows = is_windows)
 
     # In case the publish is self-contained there needs to be a runtime pack available
     # with the runtime dependencies that are required for the targeted runtime.
