@@ -1,0 +1,2 @@
+exit=1
+resourcegen: Malformed.resx: entry 'Malformed' has child elements but no <value>
