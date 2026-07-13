@@ -1,7 +1,7 @@
 "Tests for compiling `.resx` files and resolving them (incl. localization) at runtime."
 
-load("@bazel_lib//lib:diff_test.bzl", "diff_test")
 load("@bazel_lib//lib:run_binary.bzl", "run_binary")
+load("@bazel_skylib//rules:diff_test.bzl", "diff_test")
 load(
     "//dotnet:defs.bzl",
     "csharp_binary",

@@ -20,7 +20,8 @@ namespace ResxCsTest
 
         public static void Main(string[] args)
         {
-            using var writer = new StreamWriter(args[0]);
+            // Force '\n' so the output matches on every platform.
+            using var writer = new StreamWriter(args[0]) { NewLine = "\n" };
             writer.WriteLine("neutral: " + Get(Strings, "Hello", ""));
             writer.WriteLine("fr: " + Get(Strings, "Hello", "fr"));
             writer.WriteLine("messages neutral: " + Get(Messages, "Greeting", ""));

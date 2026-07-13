@@ -1,7 +1,7 @@
 "Tests for the `resourcegen` build tool."
 
-load("@bazel_lib//lib:diff_test.bzl", "diff_test")
 load("@bazel_lib//lib:run_binary.bzl", "run_binary")
+load("@bazel_skylib//rules:diff_test.bzl", "diff_test")
 load("//dotnet:defs.bzl", "csharp_binary")
 
 # Compile a `.resx` into a binary `.resources` blob using the tool under test. The sample
@@ -24,8 +24,8 @@ run_binary(
 
 # Decode the produced `.resources` back to sorted `key=value` lines.
 csharp_binary(
-    name = "dumper",
-    srcs = ["Dumper.cs"],
+    name = "dump_resource",
+    srcs = ["DumpResource.cs"],
     target_frameworks = ["net8.0"],
 )
 
@@ -37,10 +37,10 @@ run_binary(
         "$(location Sample.resources)",
         "$@",
     ],
-    tool = ":dumper",
+    tool = ":dump_resource",
 )
 
-# The decoded entries must match the expected golden output.
+# The decoded entries must match the expected output.
 diff_test(
     name = "resourcegen_roundtrip_test",
     file1 = ":sample_dump.txt",
@@ -48,49 +48,42 @@ diff_test(
 )
 
 # Negative tests: resourcegen must reject inputs it cannot faithfully compile rather than
-# emitting a broken `.resources`. Each genrule runs the tool on a bad fixture, captures the
-# exit code and (path-normalized) stderr, and always exits 0 so a diff_test can assert the
-# failure stays stable.
-genrule(
-    name = "typed_result",
+# emitting a broken `.resources`. `fail_on = [0]` asserts the tool does not succeed, and the
+# captured stderr is pinned by a diff_test so the rejection message stays stable.
+run_binary(
+    name = "typed_rejected",
     srcs = ["Typed.resx"],
-    outs = ["typed_result.txt"],
-    cmd = """
-err="$$(mktemp)"
-set +e
-"$(execpath //dotnet/private/tools/resourcegen)" compile "$(execpath Typed.resx)" "$$(mktemp)" 2> "$$err"
-code=$$?
-set -e
-echo "exit=$$code" > $@
-sed -E 's#(resourcegen: )[^ ]*/([^/ ]+\\.resx)#\\1\\2#' "$$err" >> $@
-""",
-    tools = ["//dotnet/private/tools/resourcegen"],
+    args = [
+        "compile",
+        "$(execpath Typed.resx)",
+        "unused.resources",
+    ],
+    fail_on = [0],
+    stderr = "typed_stderr.txt",
+    tool = "//dotnet/private/tools/resourcegen",
 )
 
-genrule(
-    name = "malformed_result",
+run_binary(
+    name = "malformed_rejected",
     srcs = ["Malformed.resx"],
-    outs = ["malformed_result.txt"],
-    cmd = """
-err="$$(mktemp)"
-set +e
-"$(execpath //dotnet/private/tools/resourcegen)" compile "$(execpath Malformed.resx)" "$$(mktemp)" 2> "$$err"
-code=$$?
-set -e
-echo "exit=$$code" > $@
-sed -E 's#(resourcegen: )[^ ]*/([^/ ]+\\.resx)#\\1\\2#' "$$err" >> $@
-""",
-    tools = ["//dotnet/private/tools/resourcegen"],
+    args = [
+        "compile",
+        "$(execpath Malformed.resx)",
+        "unused.resources",
+    ],
+    fail_on = [0],
+    stderr = "malformed_stderr.txt",
+    tool = "//dotnet/private/tools/resourcegen",
 )
 
 diff_test(
     name = "typed_rejected_test",
-    file1 = ":typed_result.txt",
-    file2 = "typed_expected",
+    file1 = ":typed_stderr.txt",
+    file2 = "typed_expected_stderr",
 )
 
 diff_test(
     name = "malformed_rejected_test",
-    file1 = ":malformed_result.txt",
-    file2 = "malformed_expected",
+    file1 = ":malformed_stderr.txt",
+    file2 = "malformed_expected_stderr",
 )

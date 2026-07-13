@@ -20,7 +20,9 @@ let private get (rm: ResourceManager) (key: string) (culture: string) =
 
 [<EntryPoint>]
 let main argv =
+    // Force '\n' so the output matches on every platform.
     use writer = new StreamWriter(argv.[0])
+    writer.NewLine <- "\n"
     writer.WriteLine("neutral: " + get strings "Hello" "")
     writer.WriteLine("fr: " + get strings "Hello" "fr")
     writer.WriteLine("messages neutral: " + get messages "Greeting" "")

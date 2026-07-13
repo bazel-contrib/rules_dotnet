@@ -1,0 +1,1 @@
+resourcegen: dotnet/private/tests/resourcegen/Malformed.resx: entry 'Malformed' has child elements but no <value>

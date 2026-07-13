@@ -1,0 +1,1 @@
+resourcegen: dotnet/private/tests/resourcegen/Typed.resx: entry 'Typed' is a typed/serialized resource (type='System.Byte[], mscorlib', mimetype=''); only string resources are supported

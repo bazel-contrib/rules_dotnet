@@ -19,6 +19,9 @@ static class ResourceGen
 {
     static int Main(string[] args)
     {
+        // Force '\n' so captured stderr is identical on every platform.
+        Console.Error.NewLine = "\n";
+
         if (args.Length < 1)
         {
             return Fail("usage: resourcegen compile <in.resx> <out.resources>");
