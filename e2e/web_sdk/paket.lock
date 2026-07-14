@@ -3,3 +3,12 @@ RESTRICTION: == net10.0
 NUGET
   remote: https://api.nuget.org/v3/index.json
     FSharp.Core (10.1.201)
+    Microsoft.Extensions.Configuration (10.0.10)
+      Microsoft.Extensions.Configuration.Abstractions (>= 10.0.10)
+      Microsoft.Extensions.Primitives (>= 10.0.10)
+    Microsoft.Extensions.Configuration.Abstractions (10.0.10)
+      Microsoft.Extensions.Primitives (>= 10.0.10)
+    Microsoft.Extensions.Configuration.Binder (10.0.9)
+      Microsoft.Extensions.Configuration (>= 10.0.9)
+      Microsoft.Extensions.Configuration.Abstractions (>= 10.0.9)
+    Microsoft.Extensions.Primitives (10.0.10)

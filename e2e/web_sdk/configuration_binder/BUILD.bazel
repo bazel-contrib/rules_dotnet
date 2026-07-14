@@ -1,0 +1,26 @@
+load("@rules_dotnet//dotnet:defs.bzl", "csharp_binary")
+
+# Regression test for https://github.com/bazel-contrib/rules_dotnet/issues/467
+#
+# The `Microsoft.Extensions.Configuration.Binder.SourceGeneration` source generator is provided
+# both by the ASP.NET Core targeting pack (via `project_sdk = "web"`) and by the
+# `Microsoft.Extensions.Configuration.Binder` NuGet package. Because the NuGet version (10.0.9)
+# is newer than the `targeting_pack_overrides` floor the framework records for it (10.0.0),
+# `collect_compile_info` keeps the NuGet package, so the same source generator used to be passed
+# to the compiler twice. That made it run twice and emit a duplicate `InterceptsLocationAttribute`,
+# failing the build with CS0433. `collect_compile_info` now de-duplicates analyzers by file name.
+csharp_binary(
+    name = "configuration_binder",
+    srcs = ["Program.cs"],
+    # The configuration binder source generator emits its interceptor into this namespace.
+    # rules_dotnet does not read the NuGet package's MSBuild `.targets`, which is what normally
+    # adds this namespace to `InterceptorsNamespaces`, so we enable it explicitly here.
+    compiler_options = [
+        "/features:InterceptorsNamespaces=Microsoft.Extensions.Configuration.Binder.SourceGeneration",
+    ],
+    project_sdk = "web",
+    target_frameworks = ["net10.0"],
+    deps = [
+        "@paket.main//microsoft.extensions.configuration.binder",
+    ],
+)
