@@ -110,7 +110,8 @@ def AssemblyAction(
         is_language_specific_analyzer,
         analyzer_configs,
         compiler_options,
-        is_windows):
+        is_windows,
+        excluded_analyzers = []):
     """Creates an action that runs the CSharp compiler with the specified inputs.
 
     This macro aims to match the [C# compiler](https://docs.microsoft.com/en-us/dotnet/csharp/language-reference/compiler-options/listed-alphabetically), with the inputs mapping to compiler options.
@@ -155,6 +156,7 @@ def AssemblyAction(
         analyzer_configs: List of analyzer configuration files.
         compiler_options: Additional options to pass to the compiler.
         is_windows: Whether or not the target is running on Windows.
+        excluded_analyzers: List of analyzer/source-generator assembly file names (basenames) to exclude from the compilation.
     Returns:
         The compiled csharp artifacts.
     """
@@ -231,6 +233,7 @@ def AssemblyAction(
             nullable,
             run_analyzers,
             compiler_options,
+            excluded_analyzers = excluded_analyzers,
             out_dll = out_dll,
             out_ref = out_ref,
             out_pdb = out_pdb,
@@ -280,6 +283,7 @@ def AssemblyAction(
             nullable,
             run_analyzers,
             compiler_options,
+            excluded_analyzers = excluded_analyzers,
             out_ref = out_iref,
             out_dll = out_dll,
             out_pdb = out_pdb,
@@ -318,6 +322,7 @@ def AssemblyAction(
             nullable,
             run_analyzers,
             compiler_options,
+            excluded_analyzers = excluded_analyzers,
             out_dll = None,
             out_ref = out_ref,
             out_pdb = None,
@@ -392,6 +397,7 @@ def _compile(
         nullable,
         run_analyzers,
         compiler_options,
+        excluded_analyzers = [],
         out_dll = None,
         out_ref = None,
         out_pdb = None,
@@ -471,6 +477,21 @@ def _compile(
 
     # assembly references
     format_ref_arg(args, depset(framework_files, transitive = [refs]))
+
+    # Exclude specific analyzer/source-generator assemblies (matched by file
+    # basename) so a single bundled analyzer can be turned off per target while
+    # leaving the others active.
+    if excluded_analyzers:
+        analyzer_assemblies = depset([
+            a
+            for a in analyzer_assemblies.to_list()
+            if a.basename not in excluded_analyzers
+        ])
+        analyzer_assemblies_csharp = depset([
+            a
+            for a in analyzer_assemblies_csharp.to_list()
+            if a.basename not in excluded_analyzers
+        ])
 
     # analyzers
     if run_analyzers:
