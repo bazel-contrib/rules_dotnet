@@ -52,6 +52,7 @@ def _compile_action(ctx, tfm):
         allow_unsafe_blocks = ctx.attr.allow_unsafe_blocks,
         nullable = ctx.attr.nullable,
         run_analyzers = ctx.attr.run_analyzers,
+        excluded_analyzers = ctx.attr.excluded_analyzers,
         is_analyzer = False,
         is_language_specific_analyzer = False,
         analyzer_configs = ctx.files.analyzer_configs,
