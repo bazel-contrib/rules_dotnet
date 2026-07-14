@@ -55,6 +55,7 @@ def _compile_action(ctx, tfm):
         is_language_specific_analyzer = ctx.attr.is_language_specific_analyzer,
         analyzer_configs = ctx.files.analyzer_configs,
         compiler_options = ctx.attr.compiler_options,
+        interceptors_namespaces = ctx.attr.interceptors_namespaces,
         is_windows = ctx.target_platform_has_constraint(ctx.attr._windows_constraint[platform_common.ConstraintValueInfo]),
     )
 
