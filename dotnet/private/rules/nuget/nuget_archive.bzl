@@ -585,12 +585,11 @@ def tfm_filegroup(name, default_to_empty, tfms):
     cor = []
     tfm_rids = {}
 
-    if default_to_empty:
-        native.filegroup(
-            name = "%s_default" % (name),
-            srcs = [],
-            visibility = ["//visibility:public"],
-        )
+    native.filegroup(
+        name = "%s_default" % (name),
+        srcs = [],
+        visibility = ["//visibility:public"],
+    )
 
     for (tfm, value) in tfms.items():
         native.filegroup(
