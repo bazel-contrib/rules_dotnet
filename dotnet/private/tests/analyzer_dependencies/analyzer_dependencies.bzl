@@ -1,6 +1,6 @@
 "Tests for ensuring analyzers' dependencies are correctly passed in."
 
-load("@bazel_skylib//lib:unittest.bzl", "analysistest")
+load("@bazel_skylib//lib:unittest.bzl", "analysistest", "asserts")
 load("//dotnet:defs.bzl", "csharp_library")
 load(
     "//dotnet/private:providers.bzl",
@@ -55,6 +55,27 @@ def _has_analyzer_test_impl(ctx):
 
     return analysistest.end(env)
 
+def _reference_only_compile_does_not_run_analyzers_impl(ctx):
+    env = analysistest.begin(ctx)
+    reference_only_action = None
+
+    for action in analysistest.target_actions(env):
+        if action.mnemonic == "CSharpCompile" and "/refonly" in action.argv:
+            reference_only_action = action
+            break
+
+    if reference_only_action == None:
+        fail("No reference-only CSharpCompile action found")
+
+    for argument in reference_only_action.argv:
+        asserts.false(
+            env,
+            argument.startswith("/analyzer:"),
+            "Reference-only compilation must not run analyzers: {}".format(argument),
+        )
+
+    return analysistest.end(env)
+
 has_analyzer_test = analysistest.make(
     _has_analyzer_test_impl,
     doc = "Tests whether the given target has an analyzer dependency.",
@@ -71,6 +92,10 @@ has_analyzer_test = analysistest.make(
             values = ["any", "csharp", "fsharp", "vb"],
         ),
     },
+)
+
+reference_only_compile_does_not_run_analyzers_test = analysistest.make(
+    _reference_only_compile_does_not_run_analyzers_impl,
 )
 
 # buildifier: disable=function-docstring
@@ -104,4 +129,17 @@ def test_analyzer_dependencies():
         target_under_test = ":user_lib",
         analyzers = [":core_lib", ":analyzer_lib"],
         target_language = "any",
+    )
+
+    csharp_library(
+        name = "user_lib_with_internals",
+        srcs = ["User.cs"],
+        deps = [":core_lib", ":analyzer_lib"],
+        internals_visible_to = ["UserTests"],
+        target_frameworks = ["net9.0"],
+    )
+
+    reference_only_compile_does_not_run_analyzers_test(
+        name = "reference_only_compile_does_not_run_analyzers",
+        target_under_test = ":user_lib_with_internals",
     )

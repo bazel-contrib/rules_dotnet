@@ -316,7 +316,7 @@ def AssemblyAction(
             nowarn,
             allow_unsafe_blocks,
             nullable,
-            run_analyzers,
+            False,
             compiler_options,
             out_dll = None,
             out_ref = out_ref,
