@@ -65,6 +65,12 @@ local_path_override(
 rules_dotnet_dev_nuget_packages_extension = use_extension("@rules_dotnet//dotnet:paket.rules_dotnet_dev_nuget_packages_extension.bzl", "rules_dotnet_dev_nuget_packages_extension", dev_dependency = True)
 use_repo(rules_dotnet_dev_nuget_packages_extension, "paket.rules_dotnet_dev_nuget_packages")
 
+local_package_artifact = use_extension("@rules_dotnet//dotnet/private/tests/nuget_structure:local_package.bzl", "local_package_artifact", dev_dependency = True)
+use_repo(local_package_artifact, "local_nuget_package_artifact")
+
+local_package_test = use_extension("@rules_dotnet//dotnet/private/tests/nuget_structure:local_package.bzl", "local_package_test", dev_dependency = True)
+use_repo(local_package_test, "local_nuget_package_test")
+
 rules_dotnet_nuget_resource_assemblies_tests_extension = use_extension("@rules_dotnet//dotnet:paket.rules_dotnet_nuget_resource_assemblies_tests_extension.bzl", "rules_dotnet_nuget_resource_assemblies_tests_extension", dev_dependency = True)
 use_repo(rules_dotnet_nuget_resource_assemblies_tests_extension, "paket.rules_dotnet_nuget_resource_assemblies_tests")
 

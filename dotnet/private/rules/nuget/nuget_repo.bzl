@@ -125,12 +125,14 @@ def nuget_repo(name, packages):
     for package in packages:
         id = package["id"].lower()
         version = package["version"].lower()
+        local_package = package.pop("local_package", None)
 
         # maybe another nuget_repo has the same nuget package dependency
         maybe(
             nuget_archive,
             name = "{}.{}.v{}".format(_GLOBAL_NUGET_PREFIX, id, version),
-            sources = package["sources"],
+            sources = package.get("sources", []),
+            local_package = local_package,
             netrc = package.get("netrc", None),
             id = id,
             version = version,

@@ -401,20 +401,24 @@ def _get_auth_dict(ctx, netrc, urls):
     return cred_dict
 
 def _nuget_archive_impl(ctx):
-    # First get the auth dict for the package sources since the sources can be different than the
-    # package base url when using NuGet V3 feeds.
-    auth = _get_auth_dict(ctx, ctx.attr.netrc, ctx.attr.sources)
-    urls = _get_package_urls(ctx, ctx.attr.sources, auth, ctx.attr.id, ctx.attr.version)
-
-    # Then get the auth dict for the package base urls
-    auth = _get_auth_dict(ctx, ctx.attr.netrc, urls)
-
     # We download it as .zip because ctx.exract reads the file extension to determine the archive type
     file_name = "%s.zip" % ctx.name
     nupkg_name = "%s.%s.nupkg" % (ctx.attr.id, ctx.attr.version)
     names = [nupkg_name]
 
-    ctx.download(urls, output = file_name, integrity = ctx.attr.sha512, auth = auth)
+    if ctx.attr.local_package:
+        local_path = str(ctx.path(ctx.attr.local_package)).replace("\\\\", "/")
+        local_url = "file://" + (local_path if local_path.startswith("/") else "/" + local_path)
+        ctx.download(local_url, output = file_name, integrity = ctx.attr.sha512)
+    else:
+        # First get the auth dict for the package sources since the sources can be different than the
+        # package base url when using NuGet V3 feeds.
+        auth = _get_auth_dict(ctx, ctx.attr.netrc, ctx.attr.sources)
+        urls = _get_package_urls(ctx, ctx.attr.sources, auth, ctx.attr.id, ctx.attr.version)
+
+        # Then get the auth dict for the package base urls.
+        auth = _get_auth_dict(ctx, ctx.attr.netrc, urls)
+        ctx.download(urls, output = file_name, integrity = ctx.attr.sha512, auth = auth)
     ctx.extract(archive = file_name)
     for name in names:
         ctx.symlink(file_name, name)
@@ -574,6 +578,7 @@ nuget_archive = repository_rule(
         "id": attr.string(),
         "version": attr.string(),
         "sha512": attr.string(),
+        "local_package": attr.label(allow_single_file = True),
     },
 )
 

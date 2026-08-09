@@ -1,6 +1,7 @@
 load("@bazel_lib//:bzl_library.bzl", "bzl_library")
 load("@bazel_skylib//rules:select_file.bzl", "select_file")
 load(":analyzers.bzl", "analyzers_structure")
+load(":local_package.bzl", "local_package_structure")
 load(":resolution.bzl", "resolution_structure")
 load(":resource_assemblies.bzl", "resource_assemblies")
 load(":runtimes.bzl", "runtimes_structure")
@@ -16,6 +17,8 @@ resolution_structure()
 resource_assemblies()
 
 analyzers_structure()
+
+local_package_structure()
 
 targetingpacks_structure()
 
@@ -64,6 +67,17 @@ bzl_library(
     srcs = ["analyzers.bzl"],
     visibility = ["//dotnet:__subpackages__"],
     deps = [":common"],
+)
+
+bzl_library(
+    name = "local_package_bzl",
+    srcs = ["local_package.bzl"],
+    visibility = ["//dotnet:__subpackages__"],
+    deps = [
+        ":common",
+        "//dotnet:defs",
+        "@bazel_tools//tools/build_defs/repo:http.bzl",
+    ],
 )
 
 select_file(
