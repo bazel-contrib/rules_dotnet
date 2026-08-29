@@ -34,10 +34,19 @@ DotnetAssemblyRuntimeInfo = provider(
         "native": "list[File]: Native runtime files",
         "data": "list[File]: Runtime data files",
         "resource_assemblies": "list[File]: Resource assemblies",
-        "appsetting_files": "list[File]: Appsetting files",
+        "appsetting_files": "depset[File]: Appsetting files staged next to the assembly, flattened to their basename.",
+        "content_files": "list[struct(file, dest)]: Content files staged next to the assembly, where `dest` is each file's path relative to the output directory. Consumers reproduce this layout (e.g. in runfiles or the publish folder).",
         "nuget_info": "NugetInfo",
         "deps": "depset[DotnetAssemblyRuntimeInfo]: The direct and transitive runtime dependencies of the assembly",
         "direct_deps_depsjson_fragment": "struct: A struct containing the direct deps of the target. This is used during deps.json generation and is generated in the provider to avoid making the provider too bloated and thus making analysis slower.",
+    },
+)
+
+DotnetContentFilesInfo = provider(
+    doc = "Content files with explicit destination paths, produced by the `dotnet_content_files` rule and consumed by the `content_files` attribute of the binary/test rules. Lets users remap where each file lands relative to the assembly output directory (MSBuild CopyToOutputDirectory/Link parity).",
+    fields = {
+        "files": "depset[File]: The source files, for DefaultInfo/runfiles propagation.",
+        "mappings": "list[struct]: `struct(src = File, dest = string)` pairs, where `dest` is the destination path (relative to the assembly output directory) at which `src` should be staged.",
     },
 )
 

@@ -33,6 +33,7 @@ def _compile_action(ctx, tfm):
         srcs = ctx.files.srcs,
         data = ctx.files.data,
         appsetting_files = [],
+        content_file_mappings = [],
         compile_data = ctx.files.compile_data,
         out = ctx.attr.out,
         target = "library",

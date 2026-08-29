@@ -168,6 +168,21 @@ BINARY_COMMON_ATTRS = {
         # in their appsetting_files and we want the TFM graphs to be disconnected
         cfg = default_transition,
     ),
+    "content_files": attr.label_list(
+        doc = "A list of data files to copy next to the output assembly, preserving each " +
+              "file's path relative to the consuming target's Bazel package so nested " +
+              "directory trees are kept intact (unlike `appsetting_files`, which flattens " +
+              "every file to its basename). The staged files sit alongside the assembly and " +
+              "are resolvable at runtime relative to `AppContext.BaseDirectory`. Accepts plain " +
+              "files as well as [`dotnet_content_files`](#dotnet_content_files) targets, which " +
+              "give explicit control over each file's destination path.",
+        allow_files = True,
+        default = [],
+        allow_empty = True,
+        # Transition to the default configuration to match appsetting_files: the end user might
+        # have dotnet binaries among the content and we want the TFM graphs to be disconnected.
+        cfg = default_transition,
+    ),
     "envs": attr.string_dict(
         doc = "A dictionary of environment variables to set when the binary is run. Supports make variable expansion",
         default = {},

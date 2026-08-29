@@ -31,6 +31,7 @@ bzl_library(
     srcs = ["defs.bzl"],
     visibility = ["//visibility:public"],
     deps = [
+        "//dotnet/private/rules/content_files",
         "//dotnet/private/rules/csharp:binary",
         "//dotnet/private/rules/csharp:library",
         "//dotnet/private/rules/csharp:nunit_test",

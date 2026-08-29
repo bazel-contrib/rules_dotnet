@@ -11,6 +11,7 @@ load(
 )
 load("//dotnet/private/rules/common:attrs.bzl", "CSHARP_BINARY_COMMON_ATTRS")
 load("//dotnet/private/rules/common:binary.bzl", "build_binary")
+load("//dotnet/private/rules/content_files:content_files.bzl", "resolve_content_file_mappings")
 load("//dotnet/private/rules/csharp/actions:csharp_assembly.bzl", "AssemblyAction")
 load("//dotnet/private/transitions:apphost_shimmer_transition.bzl", "apphost_shimmer_transition")
 load("//dotnet/private/transitions:tfm_transition.bzl", "tfm_transition")
@@ -34,6 +35,7 @@ def _compile_action(ctx, tfm):
         srcs = ctx.files.srcs,
         data = ctx.files.data,
         appsetting_files = ctx.files.appsetting_files,
+        content_file_mappings = resolve_content_file_mappings(ctx.attr.content_files, ctx.label.package),
         compile_data = ctx.files.compile_data,
         out = ctx.attr.out,
         target = "exe",
