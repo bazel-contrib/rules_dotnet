@@ -205,6 +205,27 @@ def _find_ref_by_file_name(refs, file_name):
 
     return None
 
+def _extend_analyzers_without_duplicate_file_names(collected, additional):
+    """Append `additional` analyzers to `collected`, skipping any whose file name is already present.
+
+    An analyzer/source generator that is forwarded to the compiler more than once runs more
+    than once and emits its generated types more than once, which fails the compilation (e.g.
+    CS0433 for the `InterceptsLocationAttribute` emitted by the configuration binder source
+    generator). This happens when the same analyzer ships both in a targeting pack (pulled in
+    via `project_sdk`) and in an explicitly referenced NuGet package.
+    See https://github.com/bazel-contrib/rules_dotnet/issues/467.
+
+    Args:
+        collected: The list of analyzers to append to. Mutated in place.
+        additional: The analyzers to append if their file name is not already present.
+    """
+    seen = {analyzer.basename: None for analyzer in collected}
+    for analyzer in additional:
+        if analyzer.basename in seen:
+            continue
+        seen[analyzer.basename] = None
+        collected.append(analyzer)
+
 def collect_compile_info(name, deps, targeting_pack, exports, strict_deps):
     """Determine the transitive dependencies by the target framework.
 
@@ -238,6 +259,14 @@ def collect_compile_info(name, deps, targeting_pack, exports, strict_deps):
     framework_list = {}
     framework_files = []
 
+    # Analyzers provided by the targeting pack (the framework). Collected separately from
+    # dependency-provided analyzers so that an analyzer explicitly provided by a dependency
+    # can supersede a framework-provided analyzer with the same file name. See issue #467.
+    framework_analyzers = []
+    framework_analyzers_csharp = []
+    framework_analyzers_fsharp = []
+    framework_analyzers_vb = []
+
     if targeting_pack:
         targeting_pack_info = targeting_pack[DotnetTargetingPackInfo]
         for i, nuget_info in enumerate(targeting_pack_info.nuget_infos):
@@ -252,10 +281,10 @@ def collect_compile_info(name, deps, targeting_pack, exports, strict_deps):
             if len(nuget_info.framework_list) == 0:
                 framework_files.extend(compile_info.irefs)
 
-            direct_analyzers.extend(compile_info.analyzers)
-            direct_analyzers_csharp.extend(compile_info.analyzers_csharp)
-            direct_analyzers_fsharp.extend(compile_info.analyzers_fsharp)
-            direct_analyzers_vb.extend(compile_info.analyzers_vb)
+            framework_analyzers.extend(compile_info.analyzers)
+            framework_analyzers_csharp.extend(compile_info.analyzers_csharp)
+            framework_analyzers_fsharp.extend(compile_info.analyzers_fsharp)
+            framework_analyzers_vb.extend(compile_info.analyzers_vb)
             direct_compile_data.extend(compile_info.compile_data)
 
     for dep in deps:
@@ -319,6 +348,16 @@ def collect_compile_info(name, deps, targeting_pack, exports, strict_deps):
             transitive_analyzers_fsharp.append(assembly.transitive_analyzers_fsharp)
             transitive_analyzers_vb.append(assembly.transitive_analyzers_vb)
             transitive_compile_data.append(assembly.transitive_compile_data)
+
+    # Add the framework-provided analyzers after the dependency-provided analyzers, skipping
+    # any whose file name a dependency already provides. Forwarding the same source generator
+    # to the compiler twice makes it run twice and emit duplicate generated types (issue #467).
+    # The dependency-provided analyzer wins, mirroring how a newer dependency supersedes the
+    # framework reference assembly above.
+    _extend_analyzers_without_duplicate_file_names(direct_analyzers, framework_analyzers)
+    _extend_analyzers_without_duplicate_file_names(direct_analyzers_csharp, framework_analyzers_csharp)
+    _extend_analyzers_without_duplicate_file_names(direct_analyzers_fsharp, framework_analyzers_fsharp)
+    _extend_analyzers_without_duplicate_file_names(direct_analyzers_vb, framework_analyzers_vb)
 
     for file in framework_list.values():
         if file["file"] != None:

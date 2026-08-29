@@ -3,3 +3,4 @@ storage: none
 source https://api.nuget.org/v3/index.json
 
 nuget FSharp.Core 10.1.201
+nuget Microsoft.Extensions.Configuration.Binder 10.0.9
