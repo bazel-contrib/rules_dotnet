@@ -14,3 +14,7 @@ primer on Bazel.
 See API documentation at https://registry.bazel.build/docs/rules_dotnet
 
 See examples in the [examples](examples/) folder.
+
+## Dependencies
+
+See `tools/paket2bazel` for instructions of how to include and use external dependencies.
