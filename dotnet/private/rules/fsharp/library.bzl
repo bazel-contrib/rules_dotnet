@@ -29,6 +29,7 @@ def _compile_action(ctx, tfm):
         keyfile = ctx.file.keyfile,
         langversion = ctx.attr.langversion if ctx.attr.langversion != "" else toolchain.dotnetinfo.fsharp_default_version,
         resources = ctx.files.resources,
+        resx = ctx.attr.resx,
         srcs = ctx.files.srcs,
         data = ctx.files.data,
         appsetting_files = [],

@@ -82,6 +82,66 @@ out of the box.
 
 See the [paket2bazel](../tools/paket2bazel/README.md) docs for instructions on how to set Paket up with Bazel.
 
+## Resources and localization
+
+The `csharp_*` and `fsharp_*` rules can embed arbitrary files into an assembly through the
+`resources` attribute, but `.resx` files require compilation into a binary `.resources`
+stream before `System.Resources.ResourceManager` can read them. The `resx_resource` rule
+does this compilation and the `resx` attribute wires the result into a compilation.
+
+```starlark
+load("@rules_dotnet//dotnet:defs.bzl", "csharp_library", "resx_resource")
+
+resx_resource(
+    name = "strings",
+    srcs = [
+        "Strings.resx",      # neutral / culture-invariant
+        "Strings.fr.resx",   # French
+        "Strings.de.resx",   # German
+    ],
+)
+
+csharp_library(
+    name = "greeter",
+    srcs = ["Greeter.cs"],
+    out = "Localization",
+    resx = [":strings"],
+    target_frameworks = ["net9.0"],
+)
+```
+
+The neutral `.resx` files are embedded into the assembly under their manifest name
+(`<AssemblyName>.<path-with-dots>`, e.g. `Localization.Strings`). Each culture variant
+(`*.<culture>.resx`) is compiled into a **satellite assembly**
+(`<culture>/<AssemblyName>.resources.dll`, e.g. `fr/Localization.resources.dll`) that is
+placed next to the main assembly, added to runfiles and `deps.json`, and copied into the
+publish output — so `ResourceManager` resolves the right culture at runtime. The same
+`resx` attribute is available on `csharp_binary`, `csharp_test`, `fsharp_library`,
+`fsharp_binary` and `fsharp_test`; satellite assemblies are always built with the
+toolchain's C# compiler because they contain no code.
+
+By default the manifest resource name is derived from the assembly name and the `.resx`
+file path (`<AssemblyName>.<path-with-dots>`). To pin an explicit manifest name instead —
+for example so it matches a name the consuming code already looks up — override it with
+`logical_names`:
+
+```starlark
+resx_resource(
+    name = "messages",
+    srcs = [
+        "resources/Messages.resx",
+        "resources/Messages.fr.resx",
+    ],
+    logical_names = {
+        "resources/Messages.resx": "MyApp.Messages",
+    },
+)
+```
+
+The value is the exact name to construct `ResourceManager` with. Culture variants inherit
+their neutral counterpart's logical name automatically. See the
+[`examples/localization`](../examples/localization) example for a runnable end-to-end setup.
+
 ## Remote execution
 
 The rules support remote execution out of the box. The remote runners do need to have the required .Net

@@ -46,7 +46,7 @@ use_repo(apphost_packs_extension, "dotnet.apphost_packs")
 
 bazel_dep(name = "bazel_skylib", version = "1.7.1")
 bazel_dep(name = "platforms", version = "1.0.0")
-bazel_dep(name = "bazel_lib", version = "3.0.0")
+bazel_dep(name = "bazel_lib", version = "3.5.0")
 bazel_dep(name = "rules_shell", version = "0.5.0")
 
 # Dev dependencies
@@ -64,6 +64,15 @@ local_path_override(
 
 rules_dotnet_dev_nuget_packages_extension = use_extension("@rules_dotnet//dotnet:paket.rules_dotnet_dev_nuget_packages_extension.bzl", "rules_dotnet_dev_nuget_packages_extension", dev_dependency = True)
 use_repo(rules_dotnet_dev_nuget_packages_extension, "paket.rules_dotnet_dev_nuget_packages")
+
+bazel_lib_toolchains = use_extension("@bazel_lib//lib:extensions.bzl", "toolchains", dev_dependency = True)
+bazel_lib_toolchains.spawn_binary()
+use_repo(bazel_lib_toolchains, "spawn_binary_toolchains")
+
+register_toolchains(
+    "@spawn_binary_toolchains//:all",
+    dev_dependency = True,
+)
 
 rules_dotnet_nuget_resource_assemblies_tests_extension = use_extension("@rules_dotnet//dotnet:paket.rules_dotnet_nuget_resource_assemblies_tests_extension.bzl", "rules_dotnet_nuget_resource_assemblies_tests_extension", dev_dependency = True)
 use_repo(rules_dotnet_nuget_resource_assemblies_tests_extension, "paket.rules_dotnet_nuget_resource_assemblies_tests")

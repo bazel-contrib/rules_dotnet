@@ -41,6 +41,21 @@ DotnetAssemblyRuntimeInfo = provider(
     },
 )
 
+DotnetResxInfo = provider(
+    doc = "Compiled `.resx` resources produced by the `resx_resource` rule.",
+    fields = {
+        "neutral": "list[struct]: Compiled neutral (culture-invariant) `.resources` blobs to " +
+                   "embed in the assembly. Each struct has `file` (the compiled `.resources` " +
+                   "File), `base_name` (the package-relative path without extension, used to " +
+                   "derive the manifest name) and `logical_name` (an explicit manifest base " +
+                   "name, or `None`).",
+        "culture": "list[struct]: Compiled per-culture `.resources` blobs used to build " +
+                   "satellite assemblies. Each struct has `file`, `culture` (e.g. `fr`, " +
+                   "`zh-Hans`), `base_name` (the neutral base path, culture segment stripped) " +
+                   "and `logical_name` (inherited from the neutral counterpart, or `None`).",
+    },
+)
+
 DotnetDepVariantInfo = provider(
     doc = "A wrapper provider for a dependency. The dependency can be a project " +
           "dependency, in which case the `assembly_runtime_info` will be populated" +

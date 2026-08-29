@@ -1,0 +1,89 @@
+"Tests for the `resourcegen` build tool."
+
+load("@bazel_lib//lib:run_binary.bzl", "run_binary")
+load("@bazel_skylib//rules:diff_test.bzl", "diff_test")
+load("//dotnet:defs.bzl", "csharp_binary")
+
+# Compile a `.resx` into a binary `.resources` blob using the tool under test. The sample
+# exercises the string-resource behaviors resourcegen implements: normal strings,
+# `xml:space="preserve"` whitespace, whitespace-only values collapsing to empty (Blank)
+# vs. being preserved (PaddedBlank), unicode, an explicitly-typed `System.String`, and
+# case-insensitive duplicate names where the first occurrence wins (Case/case keeps
+# "upper").
+run_binary(
+    name = "sample_resources",
+    srcs = ["Sample.resx"],
+    outs = ["Sample.resources"],
+    args = [
+        "compile",
+        "$(location Sample.resx)",
+        "$@",
+    ],
+    tool = "//dotnet/private/tools/resourcegen",
+)
+
+# Decode the produced `.resources` back to sorted `key=value` lines.
+csharp_binary(
+    name = "dump_resource",
+    srcs = ["DumpResource.cs"],
+    target_frameworks = ["net8.0"],
+)
+
+run_binary(
+    name = "sample_dump",
+    srcs = ["Sample.resources"],
+    outs = ["sample_dump.txt"],
+    args = [
+        "$(location Sample.resources)",
+        "$@",
+    ],
+    tool = ":dump_resource",
+)
+
+# The decoded entries must match the expected output.
+diff_test(
+    name = "resourcegen_roundtrip_test",
+    file1 = ":sample_dump.txt",
+    file2 = "expected_dump",
+)
+
+# Negative tests: resourcegen must reject inputs it cannot faithfully compile rather than
+# emitting a broken `.resources`. `fail_on = [0]` asserts the tool does not succeed, and the
+# captured stderr is pinned by a diff_test so the rejection message stays stable.
+run_binary(
+    name = "typed_rejected",
+    srcs = ["Typed.resx"],
+    args = [
+        "compile",
+        "$(execpath Typed.resx)",
+        "unused.resources",
+    ],
+    fail_on = [0],
+    stderr = "typed_stderr.txt",
+    tool = "//dotnet/private/tools/resourcegen",
+)
+
+run_binary(
+    name = "malformed_rejected",
+    srcs = ["Malformed.resx"],
+    args = [
+        "compile",
+        "$(execpath Malformed.resx)",
+        "unused.resources",
+    ],
+    fail_on = [0],
+    stderr = "malformed_stderr.txt",
+    tool = "//dotnet/private/tools/resourcegen",
+)
+
+diff_test(
+    name = "typed_rejected_test",
+    file1 = ":typed_stderr.txt",
+    file2 = "typed_expected_stderr",
+)
+
+diff_test(
+    name = "malformed_rejected_test",
+    file1 = ":malformed_stderr.txt",
+    file2 = "malformed_expected_stderr",
+)
