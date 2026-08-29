@@ -1,0 +1,16 @@
+load(
+    "@rules_dotnet//dotnet:defs.bzl",
+    "fsharp_library",
+)
+
+fsharp_library(
+    name = "fsharp_signature_files",
+    srcs = [
+        "domain.fsi",
+        "domain.fs",
+    ],
+    target_frameworks = ["netstandard2.1"],
+    deps = [
+        "@paket.example_deps//fsharp.core",
+    ],
+)
