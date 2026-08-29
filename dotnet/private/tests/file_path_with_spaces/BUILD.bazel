@@ -1,0 +1,75 @@
+load("//dotnet:defs.bzl", "csharp_library", "fsharp_library")
+
+csharp_library(
+    name = "csharp_file_path_api_tests_with_spaces",
+    srcs = ["api tests/test.cs"],
+    tags = ["manual"],
+    target_frameworks = ["net10.0"],
+)
+
+csharp_library(
+    name = "csharp_resource_with_spaces",
+    srcs = ["api tests/test.cs"],
+    resources = ["res dir/data file.txt"],
+    tags = ["manual"],
+    target_frameworks = ["net10.0"],
+)
+
+csharp_library(
+    name = "csharp output with spaces",
+    srcs = ["api tests/test.cs"],
+    tags = ["manual"],
+    target_frameworks = ["net10.0"],
+)
+
+csharp_library(
+    name = "reflib with spaces",
+    srcs = ["api tests/test.cs"],
+    tags = ["manual"],
+    target_frameworks = ["net10.0"],
+)
+
+csharp_library(
+    name = "csharp_reference_with_spaces",
+    srcs = ["api tests/test.cs"],
+    tags = ["manual"],
+    target_frameworks = ["net10.0"],
+    deps = [":reflib with spaces"],
+)
+
+fsharp_library(
+    name = "fsharp_file_path_api_tests_with_spaces",
+    srcs = ["api tests/test.fs"],
+    tags = ["manual"],
+    target_frameworks = ["net10.0"],
+)
+
+fsharp_library(
+    name = "fsharp_resource_with_spaces",
+    srcs = ["api tests/test.fs"],
+    resources = ["res dir/data file.txt"],
+    tags = ["manual"],
+    target_frameworks = ["net10.0"],
+)
+
+fsharp_library(
+    name = "fsharp output with spaces",
+    srcs = ["api tests/test.fs"],
+    tags = ["manual"],
+    target_frameworks = ["net10.0"],
+)
+
+fsharp_library(
+    name = "fsharp_reflib with spaces",
+    srcs = ["api tests/test.fs"],
+    tags = ["manual"],
+    target_frameworks = ["net10.0"],
+)
+
+fsharp_library(
+    name = "fsharp_reference_with_spaces",
+    srcs = ["api tests/test.fs"],
+    tags = ["manual"],
+    target_frameworks = ["net10.0"],
+    deps = [":fsharp_reflib with spaces"],
+)

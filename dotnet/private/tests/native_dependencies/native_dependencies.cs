@@ -1,5 +1,5 @@
 using NUnit.Framework;
-using LibGit2Sharp;
+using RocksDbSharp;
 
 [TestFixture]
 public sealed class Tests
@@ -7,7 +7,7 @@ public sealed class Tests
     [Test]
     public void TestShouldRunUsingNativeDependencies()
     {
-        Assert.Throws<RepositoryNotFoundException>(() => { new Repository("./"); });
+        var options = new DbOptions().SetCreateIfMissing(true);
     }
 }
 

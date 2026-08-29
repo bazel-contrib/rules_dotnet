@@ -22,7 +22,7 @@ def _collect_transitive():
         t[framework] = sets.union(sets.make([framework]), *[t[c] for c in compat])
     return t
 
-DEFAULT_TFM = "net9.0"
+DEFAULT_TFM = "net10.0"
 DEFAULT_RID = "base"
 
 # A dict of target frameworks to the set of other framworks it can compile
@@ -74,6 +74,7 @@ FRAMEWORK_COMPATIBILITY = {
     "net7.0": ["net6.0"],
     "net8.0": ["net7.0"],
     "net9.0": ["net8.0"],
+    "net10.0": ["net9.0"],
 }
 
 _subsystem_version = {
@@ -116,48 +117,7 @@ _subsystem_version = {
     "net7.0": None,
     "net8.0": None,
     "net9.0": None,
-}
-
-_default_lang_version_csharp = {
-    "netstandard": "7.3",
-    "netstandard1.0": "7.3",
-    "netstandard1.1": "7.3",
-    "netstandard1.2": "7.3",
-    "netstandard1.3": "7.3",
-    "netstandard1.4": "7.3",
-    "netstandard1.5": "7.3",
-    "netstandard1.6": "7.3",
-    "netstandard2.0": "7.3",
-    "netstandard2.1": "7.3",
-    "net11": "7.3",
-    "net20": "7.3",
-    "net30": "7.3",
-    "net35": "7.3",
-    "net40": "7.3",
-    "net403": "7.3",
-    "net45": "7.3",
-    "net451": "7.3",
-    "net452": "7.3",
-    "net46": "7.3",
-    "net461": "7.3",
-    "net462": "7.3",
-    "net47": "7.3",
-    "net471": "7.3",
-    "net472": "7.3",
-    "net48": "7.3",
-    "net481": "7.3",
-    "netcoreapp1.0": "7.3",
-    "netcoreapp1.1": "7.3",
-    "netcoreapp2.0": "7.3",
-    "netcoreapp2.1": "7.3",
-    "netcoreapp2.2": "7.3",
-    "netcoreapp3.0": "8.0",
-    "netcoreapp3.1": "8.0",
-    "net5.0": "9.0",
-    "net6.0": "10.0",
-    "net7.0": "11.0",
-    "net8.0": "12.0",
-    "net9.0": "13.0",
+    "net10.0": None,
 }
 
 _net = FRAMEWORK_COMPATIBILITY.keys().index("net11")
@@ -195,7 +155,7 @@ def is_standard_framework(tfm):
 
 def is_core_framework(tfm):
     # TODO: Make this work with future versions
-    return tfm.startswith("netcoreapp") or tfm.startswith("net5.0") or tfm.startswith("net6.0") or tfm.startswith("net7.0") or tfm.startswith("net8.0") or tfm.startswith("net9.0")
+    return tfm.startswith("netcoreapp") or tfm.startswith("net5.0") or tfm.startswith("net6.0") or tfm.startswith("net7.0") or tfm.startswith("net8.0") or tfm.startswith("net9.0") or tfm.startswith("net10.0")
 
 def is_greater_or_equal_framework(tfm1, tfm2):
     """Returns true if tfm1 is greater or equal to tfm2
@@ -211,7 +171,17 @@ def is_greater_or_equal_framework(tfm1, tfm2):
         return True
     return False
 
+def get_toolchain(ctx):
+    if hasattr(ctx.attr, "dotnet_toolchain") and ctx.attr.dotnet_toolchain != None:
+        return ctx.attr.dotnet_toolchain[platform_common.ToolchainInfo]
+
+    return ctx.toolchains["//dotnet:toolchain_type"]
+
 def _format_ref_with_overrides(assembly):
+    # See https://github.com/bazel-contrib/rules_dotnet/issues/405
+    # The following files should not be passed as references to the compiler
+    if assembly.path.endswith("System.EnterpriseServices.Thunk.dll") or assembly.path.endswith("System.EnterpriseServices.Wrapper.dll"):
+        return None
     return "-r:" + assembly.path
 
 def format_ref_arg(args, refs):
@@ -294,7 +264,22 @@ def collect_compile_info(name, deps, targeting_pack, exports, strict_deps):
         add_to_output = True
         if assembly.name.lower() in targeting_pack_overrides:
             if semver.to_comparable(assembly.version) > semver.to_comparable(targeting_pack_overrides[assembly.name.lower()], relaxed = True):
-                framework_list.pop(assembly.name.lower())
+                # The `targeting_pack_overrides` specify minimum versions for assemblies. The
+                # `framework_list` specifies reference assemblies that will be included even if
+                # not listed by the Bazel target as an explicit dependency. When the user
+                # provides their own explicit assembly dependency that is newer than the minimum
+                # version, we must remove the automatically-provided reference assembly from
+                # `framework_list` to avoid conflicts.
+                #
+                # We pass `None` to make the pop() a no-op if the assembly doesn't exist in
+                # `framework_list`. It is okay if `targeting_pack_overrides` specifies a minimum
+                # version but `framework_list` did not actually automatically include that
+                # assembly. Not all assemblies in the former list are in the latter list for all
+                # possible `project_sdk` values. For example, System.Security.Cryptography.Xml
+                # must be at least version 4.4.0 for net8.0, but the default net8.0 framework
+                # does not provide it automatically: only the `project_sdk = "web"` (ASP.NET)
+                # framework does.
+                framework_list.pop(assembly.name.lower(), None)
                 add_to_output = True
             else:
                 add_to_output = False
@@ -380,10 +365,7 @@ def collect_transitive_runfiles(ctx, assembly_runtime_info, deps):
     return runfiles.merge_all(transitive_runfiles)
 
 def get_framework_version_info(tfm):
-    return (
-        _subsystem_version[tfm],
-        _default_lang_version_csharp[tfm],
-    )
+    return _subsystem_version[tfm]
 
 def get_highest_compatible_target_framework(incoming_tfm, tfms):
     """Returns the highest compatible framework version for the incoming_tfm.
@@ -648,11 +630,29 @@ def generate_depsjson(
             target_fragment["runtime"] = {(dll.basename if not use_relative_paths else to_rlocation_path(ctx, dll)): {
                 "assemblyVersion": runtime_dep.version + ".0",
             } for dll in runtime_dep.libs}
-            target_fragment["native"] = {native_file.basename if not use_relative_paths else to_rlocation_path(ctx, native_file): {} for native_file in runtime_dep.native}
 
             target_fragment["resources"] = {(resource_assembly.basename if not use_relative_paths else to_rlocation_path(ctx, resource_assembly)): {
                 "locale": _get_resource_assembly_locale(resource_assembly),
             } for resource_assembly in runtime_dep.resource_assemblies}
+
+            # Handling of runtime files
+            # If the publish is self-contained we put the native files in the `native` section of the target fragment
+            # Otherwise we followe the conventions mentioned here: https://github.com/dotnet/sdk/blob/main/documentation/specs/runtime-configuration-file.md#framework-dependent-deployment-model
+            if is_self_contained:
+                target_fragment["native"] = {native_file.basename: {"fileVersion": "0.0.0.0"} for native_file in runtime_dep.native}
+            elif runtime_dep.nuget_info == None or runtime_dep.nuget_info.nupkg == None:
+                # For non self-contained binaries that are not from a NuGet package, assume we built
+                # them and point to their relative location within the execroot.
+                target_fragment["native"] = {(native_file.basename if not use_relative_paths else to_rlocation_path(ctx, native_file)): {"fileVersion": "0.0.0.0"} for native_file in runtime_dep.native}
+            else:
+                target_fragment["runtimeTargets"] = {}
+                for native_file in runtime_dep.native:
+                    # The path of the native file is of the form:
+                    # <prefix>/runtimes/<rid>/<native/lib>/<file>
+                    rid = native_file.dirname.split("/")[-2]
+                    asset_type = "runtime" if native_file.dirname.split("/")[-1] == "lib" else "native"
+                    native_path = "runtimes/{}/{}/{}".format(rid, native_file.dirname.split("/")[-1], native_file.basename)
+                    target_fragment["runtimeTargets"][native_path] = {"rid": rid, "assetType": asset_type}
 
         base["libraries"][library_name] = library_fragment
         base["targets"][runtime_target][library_name] = target_fragment

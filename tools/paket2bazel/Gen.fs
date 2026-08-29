@@ -20,6 +20,15 @@ let generateBazelFiles (groups: Group seq) (outputFolder: string) (netrcLabel: s
                   netrc = netrcLabel
                   dependencies = Dictionary(p.dependencies)
                   targeting_pack_overrides = p.overrides
-                  framework_list = p.frameworkList })
+                  framework_list = p.frameworkList
+                  tools =
+                      p.tools
+                      |> Map.map (fun _ ts ->
+                          ts
+                          |> Seq.map (fun t ->
+                              { NugetRepo.NugetRepoTool.name = t.name
+                                NugetRepo.NugetRepoTool.entrypoint = t.entrypoint
+                                NugetRepo.NugetRepoTool.runner = t.runner }))
+                      |> Dictionary })
 
         NugetRepo.generateBazelFiles $"{group.name.ToLower()}" packages outputFolder "paket.")

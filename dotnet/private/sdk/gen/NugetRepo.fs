@@ -7,6 +7,11 @@ open System.Text.Json
 open System.Text.Json.Serialization
 open System.Text.Encodings.Web
 
+type NugetRepoTool =
+    { name: string
+      entrypoint: string
+      runner: string }
+
 type NugetRepoPackage =
     { name: string
       id: string
@@ -16,7 +21,8 @@ type NugetRepoPackage =
       netrc: string option
       dependencies: Dictionary<string, string seq>
       targeting_pack_overrides: string seq
-      framework_list: string seq }
+      framework_list: string seq
+      tools: Dictionary<string, NugetRepoTool seq> }
 
 let generateTarget (packages: NugetRepoPackage seq) (repoName: string) (repoPrefix: string) =
     let jsonOptions = JsonSerializerOptions()

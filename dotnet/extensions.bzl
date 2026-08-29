@@ -4,13 +4,20 @@ load(":repositories.bzl", "dotnet_register_toolchains")
 
 _DEFAULT_NAME = "dotnet"
 
+_ATTRS = {
+    "name": attr.string(
+        doc = "Base name for generated repositories",
+        default = _DEFAULT_NAME,
+    ),
+    "dotnet_version": attr.string(
+        doc = "Version of the .Net SDK",
+    ),
+}
+
 def _toolchain_extension(module_ctx):
     registrations = {}
     for mod in module_ctx.modules:
         for toolchain in mod.tags.toolchain:
-            if toolchain.name != _DEFAULT_NAME and not mod.is_root:
-                fail("Only the root module may provide a name for the dotnet toolchain.")
-
             if toolchain.name in registrations.keys():
                 if toolchain.name == _DEFAULT_NAME:
                     # Prioritize the root-most registration of the default dotnet toolchain version and
@@ -36,14 +43,6 @@ def _toolchain_extension(module_ctx):
 dotnet = module_extension(
     implementation = _toolchain_extension,
     tag_classes = {
-        "toolchain": tag_class(attrs = {
-            "name": attr.string(
-                doc = "Base name for generated repositories",
-                default = _DEFAULT_NAME,
-            ),
-            "dotnet_version": attr.string(
-                doc = "Version of the .Net SDK",
-            ),
-        }),
+        "toolchain": tag_class(attrs = _ATTRS),
     },
 )

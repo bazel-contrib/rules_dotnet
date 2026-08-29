@@ -2,21 +2,49 @@
 Base rule for building .Net binaries
 """
 
-load("@aspect_bazel_lib//lib:expand_make_vars.bzl", "expand_locations", "expand_variables")
+load("@bazel_lib//lib:expand_make_vars.bzl", "expand_locations", "expand_variables")
 load("@bazel_skylib//rules:common_settings.bzl", "BuildSettingInfo")
 load(
     "//dotnet/private:common.bzl",
     "collect_transitive_runfiles",
     "generate_depsjson",
     "generate_runtimeconfig",
+    "get_toolchain",
     "is_core_framework",
     "is_standard_framework",
     "to_rlocation_path",
 )
-load("//dotnet/private:providers.bzl", "DotnetApphostPackInfo", "DotnetBinaryInfo", "DotnetRuntimePackInfo")
+load("//dotnet/private:providers.bzl", "DotnetApphostPackInfo", "DotnetAssemblyRuntimeInfo", "DotnetBinaryInfo", "DotnetRuntimePackInfo")
+
+def _collect_native_dlls(assembly_runtime_info, deps):
+    """Collect the native DLLs of target and its dependencies.
+
+    Args:
+        assembly_runtime_info: The DotnetAssemblyRuntimeInfo provider for the target.
+        deps: Dependencies of the target.
+
+    Returns:
+        A list of native DLL files that includes the transitive dependencies of the target
+    """
+    native_dlls = assembly_runtime_info.native
+
+    for dep in deps:
+        native_dlls.extend(dep[DotnetAssemblyRuntimeInfo].native)
+        for transitive_dep in dep[DotnetAssemblyRuntimeInfo].deps.to_list():
+            native_dlls.extend(transitive_dep.native)
+
+    # Create a dict where the key is the RID and the value is the list of native DLLs for that RID
+    result = {}
+    for dll in native_dlls:
+        rid = dll.dirname.split("/")[-2]
+        if rid not in result:
+            result[rid] = []
+        result[rid].append(dll)
+
+    return result
 
 def _create_launcher(ctx, runfiles, executable):
-    runtime = ctx.toolchains["//dotnet:toolchain_type"].runtime
+    runtime = get_toolchain(ctx).runtime
     windows_constraint = ctx.attr._windows_constraint[platform_common.ConstraintValueInfo]
 
     launcher = ctx.actions.declare_file("{}.{}".format(executable.basename, "bat" if ctx.target_platform_has_constraint(windows_constraint) else "sh"), sibling = executable)
@@ -42,7 +70,7 @@ def _create_launcher(ctx, runfiles, executable):
             is_executable = True,
         )
 
-    runfiles.extend(ctx.toolchains["//dotnet:toolchain_type"].dotnetinfo.runtime_files)
+    runfiles.extend(get_toolchain(ctx).dotnetinfo.runtime_files)
 
     return launcher
 
@@ -68,7 +96,9 @@ def build_binary(ctx, compile_action):
     (compile_provider, runtime_provider) = compile_action(ctx, tfm)
     dll = runtime_provider.libs[0]
     default_info_files = [dll] + runtime_provider.xml_docs + runtime_provider.appsetting_files.to_list()
-    additional_runfiles = []
+
+    # appsetting_files must be in runfiles (not just DefaultInfo) so they're present when the target runs from an isolated runfiles tree (RBE/sandbox).
+    additional_runfiles = runtime_provider.appsetting_files.to_list()
 
     launcher = _create_launcher(ctx, additional_runfiles, dll)
 
@@ -124,6 +154,22 @@ def build_binary(ctx, compile_action):
         additional_runfiles.append(depsjson)
 
     runfiles = collect_transitive_runfiles(ctx, runtime_provider, ctx.attr.deps).merge(ctx.runfiles(files = additional_runfiles))
+
+    # Due to how the .Net runtime loads native DLLs we need make the native
+    # DLLs available in the application root directory with the folder structure:
+    # runtimes/{rid}/native/{dlls}
+    native_dlls = _collect_native_dlls(runtime_provider, ctx.attr.deps)
+    for (rid, native_files) in native_dlls.items():
+        for file in native_files:
+            output_path = "{}/{}/runtimes/{}/native/{}".format(ctx.label.name, tfm, rid, file.basename)
+            output = ctx.actions.declare_file(output_path)
+            ctx.actions.symlink(
+                output = output,
+                target_file = file,
+            )
+            default_info_files.append(output)
+            runfiles = runfiles.merge(ctx.runfiles(files = [output]))
+
     if not ctx.target_platform_has_constraint(ctx.attr._windows_constraint[platform_common.ConstraintValueInfo]):
         runfiles = runfiles.merge(ctx.attr._bash_runfiles[DefaultInfo].default_runfiles)
     default_info = DefaultInfo(
@@ -139,4 +185,4 @@ def build_binary(ctx, compile_action):
         runtime_pack_info = ctx.attr._runtime_pack[0][DotnetRuntimePackInfo],
     )
 
-    return [default_info, dotnet_binary_info, compile_provider, runtime_provider, RunEnvironmentInfo(environment = {key: expand_variables(ctx, expand_locations(ctx, value, ctx.attr.data)) for key, value in ctx.attr.envs.items()})]
+    return [default_info, dotnet_binary_info, compile_provider, runtime_provider, RunEnvironmentInfo(environment = {key: expand_variables(ctx, expand_locations(ctx, value, ctx.attr.data)) for key, value in ctx.attr.envs.items()}, inherited_environment = ctx.attr.env_inherit)]

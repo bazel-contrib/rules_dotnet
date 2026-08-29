@@ -11,6 +11,6 @@ primer on Bazel.
 
 ## Usage
 
-See the documentation in the [docs](docs/)
+See API documentation at https://registry.bazel.build/docs/rules_dotnet
 
 See examples in the [examples](examples/) folder.

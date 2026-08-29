@@ -1,9 +1,9 @@
 ---
 buildifier:
-  version: 7.1.0
+  version: 8.5.1
 
 matrix:
-  bazel: ["7.x", "8.x"]
+  bazel: ["9.x"]
   platform:
     [
       "windows",
@@ -19,7 +19,7 @@ matrix:
       ["--@rules_dotnet//dotnet/settings:strict_deps=true"],
       ["--@rules_dotnet//dotnet/settings:strict_deps=false"],
     ]
-  e2e_working_directory: ["e2e/net8.0", "e2e/net9.0"]
+  e2e_working_directory: ["e2e/net8.0", "e2e/net9.0", "e2e/net10.0", "e2e/web_sdk"]
 
 tasks:
   test_all:
@@ -32,10 +32,8 @@ tasks:
       - test
     build_targets:
       - "//..."
-      - "-//docs/..."
     test_targets:
       - "//..."
-      - "-//docs/..."
     build_flags: ${{ flag_combo }}
     test_flags: ${{ flag_combo }}
   examples:
@@ -52,15 +50,6 @@ tasks:
       - "//..."
     build_flags: ${{ flag_combo }}
     test_flags: ${{ flag_combo }}
-  docs:
-    name: Docs
-    bazel: 8.x
-    platform: ubuntu2004
-    working_directory: ""
-    build_targets:
-      - "//docs/..."
-    test_targets:
-      - "//docs/..."
   e2e:
     name: ${{ e2e_working_directory }}
     bazel: ${{ bazel }}

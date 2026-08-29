@@ -1,4 +1,4 @@
-load("@bazel_skylib//:bzl_library.bzl", "bzl_library")
+load("@bazel_lib//:bzl_library.bzl", "bzl_library")
 load("@bazel_skylib//rules:select_file.bzl", "select_file")
 load(":analyzers.bzl", "analyzers_structure")
 load(":resolution.bzl", "resolution_structure")

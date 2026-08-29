@@ -1,5 +1,6 @@
 "Cross publishing tests"
 
+load("@rules_shell//shell:sh_test.bzl", "sh_test")
 load(
     "//dotnet:defs.bzl",
     "publish_binary",
@@ -35,8 +36,7 @@ def tests():
             self_contained = True,
             target_framework = "net6.0",
         )
-
-        native.sh_test(
+        sh_test(
             name = "cross_publish_test_{}".format(rid),
             srcs = ["test.sh"],
             args = [

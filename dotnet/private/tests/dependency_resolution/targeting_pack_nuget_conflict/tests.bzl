@@ -1,7 +1,7 @@
 "Tests for targeting pack conflicts with user provided dependencies."
 
-load("@aspect_bazel_lib//lib:run_binary.bzl", "run_binary")
-load("@aspect_bazel_lib//lib:testing.bzl", "assert_contains")
+load("@bazel_lib//lib:run_binary.bzl", "run_binary")
+load("@bazel_lib//lib:testing.bzl", "assert_contains")
 load(
     "//dotnet:defs.bzl",
     "csharp_binary",
@@ -14,6 +14,7 @@ EXPECTED_VERSION_PER_TFM = {
     "net8.0": "8.0.0.0",
 }
 
+# buildifier: disable=unnamed-macro
 def tests():
     """Returns a list of test targets."""
     for tfm, expected_version in EXPECTED_VERSION_PER_TFM.items():

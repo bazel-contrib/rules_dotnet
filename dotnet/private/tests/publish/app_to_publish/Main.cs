@@ -4,11 +4,15 @@ using System;
 using System.IO;
 using System.Diagnostics;
 using System.Linq;
+using System.Runtime.InteropServices;
 
 namespace AppToPublish
 {
     public static class Program
     {
+        [DllImport("native")]
+        private static extern int return42();
+
         public static void Main()
         {
             // Make sure that runfiles work when publishing
@@ -25,7 +29,7 @@ namespace AppToPublish
                 Console.WriteLine("Data file read successfully!");
             }
 
-            // Make sure that native binaries work when publishing
+            // Make sure that native binaries from NuGet packages work when publishing
             try
             {
                 new Repository("./");
@@ -33,6 +37,13 @@ namespace AppToPublish
             catch (RepositoryNotFoundException e)
             {
                 Console.WriteLine("Got excpected RepositoryNotFoundException: " + e.Message);
+            }
+
+            // Make sure that first party native packages work then publishing
+            var shouldBe42 = return42();
+            if (shouldBe42 != 42)
+            {
+                throw new Exception("First party native call should have returned 42");
             }
         }
     }

@@ -1,4 +1,4 @@
-load("@aspect_bazel_lib//lib:diff_test.bzl", "diff_test")
+load("@bazel_lib//lib:diff_test.bzl", "diff_test")
 load("@bazel_skylib//rules:select_file.bzl", "select_file")
 load(
     "//dotnet:defs.bzl",

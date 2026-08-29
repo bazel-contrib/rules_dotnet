@@ -1,0 +1,15 @@
+load("@bazel_lib//:bzl_library.bzl", "bzl_library")
+load(":csharp_interceptors_namespaces.bzl", "csharp_interceptors_namespaces")
+
+csharp_interceptors_namespaces()
+
+bzl_library(
+    name = "csharp_interceptors_namespaces",
+    srcs = ["csharp_interceptors_namespaces.bzl"],
+    visibility = ["//dotnet:__subpackages__"],
+    deps = [
+        "//dotnet:defs",
+        "//dotnet/private/tests:utils",
+        "@bazel_skylib//lib:unittest",
+    ],
+)

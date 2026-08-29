@@ -45,6 +45,7 @@ filegroup(
     data = glob([
         "host/**/*",
         "sdk/**/*",
+        "shared/Microsoft.AspNetCore.App/**/*",
         "shared/Microsoft.NETCore.App/**/*",
     ]),
     visibility = ["//visibility:public"],
@@ -87,6 +88,7 @@ dotnet_toolchain(
     runtime_tfm = "{runtime_tfm}",
     csharp_default_version = "{csharp_default_version}",
     fsharp_default_version = "{fsharp_default_version}",
+    visibility = ["//visibility:public"],
 )
 """.format(
         sdk_version = repository_ctx.attr.dotnet_version,
@@ -114,6 +116,7 @@ def dotnet_register_toolchains(name, dotnet_version, register = True, **kwargs):
     - create a repository exposing toolchains for each platform like "dotnet_platforms"
     - register a toolchain pointing at each platform
     Users can avoid this macro and do these steps themselves, if they want more control.
+
     Args:
         name: base name for all created repos, like "dotnet"
         dotnet_version: The .Net SDK version to use e.g. 8.0.100

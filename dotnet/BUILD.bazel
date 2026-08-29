@@ -1,4 +1,4 @@
-load("@bazel_skylib//:bzl_library.bzl", "bzl_library")
+load("@bazel_lib//:bzl_library.bzl", "bzl_library")
 load("//dotnet/private:resolved_toolchain.bzl", "resolved_toolchain")
 load(
     "//dotnet/private/macros:register_rids.bzl",
@@ -39,6 +39,7 @@ bzl_library(
         "//dotnet/private/rules/fsharp:library",
         "//dotnet/private/rules/fsharp:nunit_test",
         "//dotnet/private/rules/fsharp:test",
+        "//dotnet/private/rules/nuget:dotnet_tool",
         "//dotnet/private/rules/nuget:imports",
         "//dotnet/private/rules/nuget:nuget_archive",
         "//dotnet/private/rules/nuget:nuget_repo",
@@ -52,6 +53,7 @@ bzl_library(
     visibility = ["//visibility:public"],
     deps = [
         "//dotnet/private:toolchains_repo",
+        "//dotnet/private/sdk:versions",
         "@bazel_tools//tools/build_defs/repo:http.bzl",
         "@bazel_tools//tools/build_defs/repo:utils.bzl",
     ],

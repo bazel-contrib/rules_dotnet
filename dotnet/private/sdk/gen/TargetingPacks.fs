@@ -140,7 +140,8 @@ let generateTargetingPacksNugetRepo (targetingPacksFile: string) (outputFolder: 
               netrc = None
               dependencies = Dictionary<string, string seq>()
               targeting_pack_overrides = packageInfo.overrides
-              framework_list = packageInfo.frameworkList })
+              framework_list = packageInfo.frameworkList
+              tools = Dictionary() })
 
     NugetRepo.generateBazelFiles "targeting_packs" repoPackages outputFolder "dotnet."
     ()

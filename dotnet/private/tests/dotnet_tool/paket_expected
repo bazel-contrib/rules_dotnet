@@ -1,0 +1,63 @@
+Paket version 9.0.2+a9b12aaeb8d8d5e47a415a3442b7920ed04e98e0
+Help was requested:
+USAGE: paket [--help] [--version] [--silent] [--verbose] [--log-file <path>]
+             [<subcommand> [<options>]]
+
+SUBCOMMANDS:
+
+    add <options>         add a new dependency
+    github <options>      commands to manipulate GitHub repository references
+    git <options>         commands to manipulate git repository references
+    clear-cache <options> clear the global and optionally local NuGet and cache
+                          directories
+    config <options>      store global configuration values like NuGet
+                          credentials
+    convert-from-nuget <options>
+                          convert projects from NuGet to Paket
+    find-refs <options>   find all project files that have a dependency
+                          installed
+    init <options>        create an empty paket.dependencies file in the
+                          current working directory
+    auto-restore <options>
+                          manage automatic package restore during the build
+                          process inside Visual Studio
+    install <options>     compute dependency graph, download dependencies and
+                          update projects
+    outdated <options>    find dependencies that have newer versions available
+    remove <options>      remove a dependency
+    restore <options>     download the computed dependency graph
+    simplify <options>    simplify declared dependencies by removing transitive
+                          dependencies
+    update <options>      update dependencies to their latest version
+    find-packages <options>
+                          search for NuGet packages
+    find-package-versions <options>
+                          search for dependency versions
+    fix-nuspecs <options> patch a list of .nuspec files to correct transitive
+                          dependencies
+    generate-nuspec <options>
+                          generate a default nuspec for a project including its
+                          direct dependencies
+    show-installed-packages <options>
+                          show installed top-level packages
+    show-groups <options> show groups
+    pack <options>        create NuGet packages from paket.template files
+    push <options>        push a NuGet package
+    generate-load-scripts <options>
+                          generate F# and C# include scripts that reference
+                          installed packages in a interactive environment like
+                          F# Interactive or ScriptCS
+    why <options>         determine why a dependency is required
+    restriction <options> resolve a framework restriction and show details
+    info <options>        info
+
+    Use 'paket <subcommand> --help' for additional information.
+
+OPTIONS:
+
+    --version             show Paket version
+    --silent, -s          suppress console output
+    --verbose, -v         print detailed information to the console
+    --log-file <path>     print output to a file
+    --help                display this list of options.
+

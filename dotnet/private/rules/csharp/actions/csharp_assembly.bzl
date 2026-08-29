@@ -110,6 +110,7 @@ def AssemblyAction(
         is_language_specific_analyzer,
         analyzer_configs,
         compiler_options,
+        interceptors_namespaces,
         is_windows):
     """Creates an action that runs the CSharp compiler with the specified inputs.
 
@@ -154,13 +155,14 @@ def AssemblyAction(
         is_language_specific_analyzer: Whether or not the target is a language specific analyzer.
         analyzer_configs: List of analyzer configuration files.
         compiler_options: Additional options to pass to the compiler.
+        interceptors_namespaces: Namespaces that are allowed to contain interceptors.
         is_windows: Whether or not the target is running on Windows.
     Returns:
         The compiled csharp artifacts.
     """
 
     assembly_name = target_name if out == "" else out
-    (subsystem_version, default_lang_version) = get_framework_version_info(target_framework)
+    subsystem_version = get_framework_version_info(target_framework)
     (
         irefs,
         prefs,
@@ -209,7 +211,6 @@ def AssemblyAction(
             analyzers_csharp,
             analyzer_configs,
             debug,
-            default_lang_version,
             defines,
             keyfile,
             langversion,
@@ -232,6 +233,7 @@ def AssemblyAction(
             nullable,
             run_analyzers,
             compiler_options,
+            interceptors_namespaces,
             out_dll = out_dll,
             out_ref = out_ref,
             out_pdb = out_pdb,
@@ -259,7 +261,6 @@ def AssemblyAction(
             analyzers_csharp,
             analyzer_configs,
             debug,
-            default_lang_version,
             defines,
             keyfile,
             langversion,
@@ -282,6 +283,7 @@ def AssemblyAction(
             nullable,
             run_analyzers,
             compiler_options,
+            interceptors_namespaces,
             out_ref = out_iref,
             out_dll = out_dll,
             out_pdb = out_pdb,
@@ -298,7 +300,6 @@ def AssemblyAction(
             analyzers_csharp,
             analyzer_configs,
             debug,
-            default_lang_version,
             defines,
             keyfile,
             langversion,
@@ -321,6 +322,7 @@ def AssemblyAction(
             nullable,
             run_analyzers,
             compiler_options,
+            interceptors_namespaces,
             out_dll = None,
             out_ref = out_ref,
             out_pdb = None,
@@ -373,7 +375,6 @@ def _compile(
         analyzer_assemblies_csharp,
         analyzer_configs,
         debug,
-        default_lang_version,
         defines,
         keyfile,
         langversion,
@@ -396,6 +397,7 @@ def _compile(
         nullable,
         run_analyzers,
         compiler_options,
+        interceptors_namespaces,
         out_dll = None,
         out_ref = None,
         out_pdb = None,
@@ -443,7 +445,7 @@ def _compile(
     )
 
     args.add("/target:" + target)
-    args.add("/langversion:" + (langversion or default_lang_version))
+    args.add("/langversion:" + langversion)
 
     if debug:
         args.add("/debug+")
@@ -460,17 +462,17 @@ def _compile(
 
     # outputs
     if out_dll != None:
-        args.add("/out:" + out_dll.path)
-        args.add("/refout:" + out_ref.path)
-        args.add("/pdb:" + out_pdb.path)
+        args.add(out_dll.path, format = "/out:%s")
+        args.add(out_ref.path, format = "/refout:%s")
+        args.add(out_pdb.path, format = "/pdb:%s")
         outputs = [out_dll, out_ref, out_pdb]
     else:
         args.add("/refonly")
-        args.add("/out:" + out_ref.path)
+        args.add(out_ref.path, format = "/out:%s")
         outputs = [out_ref]
 
     if out_xml != None:
-        args.add("/doc:" + out_xml.path)
+        args.add(out_xml.path, format = "/doc:%s")
         outputs.append(out_xml)
 
     # assembly references
@@ -494,11 +496,15 @@ def _compile(
 
     # keyfile
     if keyfile != None:
-        args.add("/keyfile:" + keyfile.path)
+        args.add(keyfile.path, format = "/keyfile:%s")
 
     # Additional compiler flags
     for option in compiler_options:
         args.add(option)
+
+    # Namespaces that are allowed to contain interceptors
+    if interceptors_namespaces:
+        args.add("/features:InterceptorsNamespaces=" + ";".join(interceptors_namespaces))
 
     # spill to a "response file" when the argument list gets too big (Bazel
     # makes that call based on limitations of the OS).

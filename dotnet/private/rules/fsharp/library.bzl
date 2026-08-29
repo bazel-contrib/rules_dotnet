@@ -5,6 +5,7 @@ Rule for compiling F# libraries.
 load("@bazel_skylib//rules:common_settings.bzl", "BuildSettingInfo")
 load(
     "//dotnet/private:common.bzl",
+    "get_toolchain",
     "is_debug",
 )
 load("//dotnet/private/rules/common:attrs.bzl", "FSHARP_LIBRARY_COMMON_ATTRS")
@@ -13,7 +14,7 @@ load("//dotnet/private/rules/fsharp/actions:fsharp_assembly.bzl", "AssemblyActio
 load("//dotnet/private/transitions:tfm_transition.bzl", "tfm_transition")
 
 def _compile_action(ctx, tfm):
-    toolchain = ctx.toolchains["//dotnet:toolchain_type"]
+    toolchain = get_toolchain(ctx)
 
     return AssemblyAction(
         ctx.actions,
@@ -26,7 +27,7 @@ def _compile_action(ctx, tfm):
         targeting_pack = ctx.attr._targeting_pack[0],
         internals_visible_to = ctx.attr.internals_visible_to,
         keyfile = ctx.file.keyfile,
-        langversion = ctx.attr.langversion,
+        langversion = ctx.attr.langversion if ctx.attr.langversion != "" else toolchain.dotnetinfo.fsharp_default_version,
         resources = ctx.files.resources,
         srcs = ctx.files.srcs,
         data = ctx.files.data,

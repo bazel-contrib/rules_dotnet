@@ -6,15 +6,17 @@ load("@bazel_skylib//lib:dicts.bzl", "dicts")
 load("@bazel_skylib//rules:common_settings.bzl", "BuildSettingInfo")
 load(
     "//dotnet/private:common.bzl",
+    "get_toolchain",
     "is_debug",
 )
 load("//dotnet/private/rules/common:attrs.bzl", "CSHARP_BINARY_COMMON_ATTRS")
 load("//dotnet/private/rules/common:binary.bzl", "build_binary")
 load("//dotnet/private/rules/csharp/actions:csharp_assembly.bzl", "AssemblyAction")
+load("//dotnet/private/transitions:apphost_shimmer_transition.bzl", "apphost_shimmer_transition")
 load("//dotnet/private/transitions:tfm_transition.bzl", "tfm_transition")
 
 def _compile_action(ctx, tfm):
-    toolchain = ctx.toolchains["//dotnet:toolchain_type"]
+    toolchain = get_toolchain(ctx)
     return AssemblyAction(
         ctx.actions,
         ctx.executable._compiler_wrapper_bat if ctx.target_platform_has_constraint(ctx.attr._windows_constraint[platform_common.ConstraintValueInfo]) else ctx.executable._compiler_wrapper_sh,
@@ -27,7 +29,7 @@ def _compile_action(ctx, tfm):
         targeting_pack = ctx.attr._targeting_pack[0],
         internals_visible_to = ctx.attr.internals_visible_to,
         keyfile = ctx.file.keyfile,
-        langversion = ctx.attr.langversion,
+        langversion = ctx.attr.langversion if ctx.attr.langversion != "" else toolchain.dotnetinfo.csharp_default_version,
         resources = ctx.files.resources,
         srcs = ctx.files.srcs,
         data = ctx.files.data,
@@ -54,6 +56,7 @@ def _compile_action(ctx, tfm):
         is_language_specific_analyzer = False,
         analyzer_configs = ctx.files.analyzer_configs,
         compiler_options = ctx.attr.compiler_options,
+        interceptors_namespaces = ctx.attr.interceptors_namespaces,
         is_windows = ctx.target_platform_has_constraint(ctx.attr._windows_constraint[platform_common.ConstraintValueInfo]),
     )
 
@@ -61,21 +64,41 @@ def _binary_private_impl(ctx):
     result = build_binary(ctx, _compile_action)
     return result
 
+_BINARY_ATTRS = dicts.add(
+    CSHARP_BINARY_COMMON_ATTRS,
+    {
+        "include_host_model_dll": attr.bool(
+            doc = "Whether to include Microsoft.NET.HostModel from the toolchain. This is only required to build tha apphost shimmer.",
+            default = False,
+        ),
+    },
+)
+
 csharp_binary = rule(
     _binary_private_impl,
     doc = """Compile a C# exe""",
-    attrs = dicts.add(
-        CSHARP_BINARY_COMMON_ATTRS,
-        {
-            "include_host_model_dll": attr.bool(
-                doc = "Whether to include Microsoft.NET.HostModel from the toolchain. This is only required to build tha apphost shimmer.",
-                default = False,
-            ),
-        },
-    ),
+    attrs = _BINARY_ATTRS,
     executable = True,
     toolchains = [
         "//dotnet:toolchain_type",
     ],
     cfg = tfm_transition,
+)
+
+# This rule is purely for building the apphost
+# shimmer. It is needed because the apphost shimmer
+# has to target the exec configuration but we can't
+# just set `cfg = "exec"` in publish_binary because
+# we also need to reset the TFM/RID graph back to the
+# defaults so that the publish_binary's target
+# framework does not infect the apphost shimmer build.
+apphost_shimmer_binary = rule(
+    _binary_private_impl,
+    doc = """Compile the apphost shimmer C# exe.""",
+    attrs = _BINARY_ATTRS,
+    executable = True,
+    toolchains = [
+        "//dotnet:toolchain_type",
+    ],
+    cfg = apphost_shimmer_transition,
 )
