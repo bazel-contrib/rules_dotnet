@@ -54,11 +54,11 @@ def _read_dir(repository_ctx, src_dir):
         result = find_result.stdout
     return result
 
-def _create_framework_select(name, group, default_to_empty):
+def _create_framework_select(name, group):
     if len(group) == 0:
         return None
 
-    result = ["tfm_filegroup(\"%s\", %s, {\n" % (name, default_to_empty)]
+    result = ["tfm_filegroup(\"%s\", {\n" % name]
 
     for (tfm, items) in group.items():
         result.append(' "')
@@ -547,13 +547,13 @@ def _nuget_archive_impl(ctx):
 exports_files(glob(["**"]))
 load("@rules_dotnet//dotnet/private/rules/nuget:nuget_archive.bzl", "tfm_filegroup", "rid_filegroup", "tool_filegroup")
 """ + "\n".join([
-        _create_framework_select("libs", libs, False) or "filegroup(name = \"libs\", srcs = [])",
-        _create_framework_select("refs", refs, False) or "filegroup(name = \"refs\", srcs = [])",
+        _create_framework_select("libs", libs) or "filegroup(name = \"libs\", srcs = [])",
+        _create_framework_select("refs", refs) or "filegroup(name = \"refs\", srcs = [])",
         # Packages can have runtime DLLs foa a TFM and resource assemblies
         # for the same TFM but there is no guarantee that if one TFM has resource assemblies that all TFMs have resource assemblies.
         # So we need to have an empty filegroup as a default case for resource assemblies
         # in case a package is missing resource assemblies for a TFM.
-        _create_framework_select("resource_assemblies", groups["resource_assemblies"], True) or "filegroup(name = \"resource_assemblies\", srcs = [])",
+        _create_framework_select("resource_assemblies", groups["resource_assemblies"]) or "filegroup(name = \"resource_assemblies\", srcs = [])",
         "filegroup(name = \"analyzers\", srcs = [%s])" % ",".join(["\n  \"%s\"" % a for a in groups.get("analyzers")["dotnet"]]),
         "filegroup(name = \"analyzers_csharp\", srcs = [%s])" % ",".join(["\n  \"%s\"" % a for a in groups.get("analyzers")["dotnet/cs"]]),
         "filegroup(name = \"analyzers_fsharp\", srcs = [%s])" % ",".join(["\n  \"%s\"" % a for a in groups.get("analyzers")["dotnet/fs"]]),
@@ -579,18 +579,17 @@ nuget_archive = repository_rule(
 
 # This function is public because it's used by the nuget_archive repository rule.
 # buildifier: disable=function-docstring
-def tfm_filegroup(name, default_to_empty, tfms):
+def tfm_filegroup(name, tfms):
     std = []
     net = []
     cor = []
     tfm_rids = {}
 
-    if default_to_empty:
-        native.filegroup(
-            name = "%s_default" % (name),
-            srcs = [],
-            visibility = ["//visibility:public"],
-        )
+    native.filegroup(
+        name = "%s_default" % (name),
+        srcs = [],
+        visibility = ["//visibility:public"],
+    )
 
     for (tfm, value) in tfms.items():
         native.filegroup(
