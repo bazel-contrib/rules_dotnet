@@ -7,8 +7,8 @@ label_setting(
     visibility = ["//visibility:public"],
 )
 
-# Label settings need a default target, and a publish that is not NativeAOT
-# never transitions away from it.
+# The label setting needs a default, and a publish that is not NativeAOT never
+# transitions away from it.
 nativeaot_pack(
     name = "empty_pack",
     visibility = ["//visibility:public"],
@@ -19,7 +19,7 @@ bzl_library(
     srcs = ["nativeaot_pack_transition.bzl"],
     visibility = ["//dotnet:__subpackages__"],
     deps = [
-        "//dotnet/private:providers",
+        "//dotnet/private:common",
         "//dotnet/private/sdk:packs",
     ],
 )

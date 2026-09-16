@@ -14,6 +14,7 @@ bzl_library(
         "//dotnet/private/transitions:tfm_transition",
         "@bazel_skylib//lib:paths",
         "@bazel_skylib//lib:shell",
+        "@rules_cc//cc:action_names_bzl",
         "@rules_cc//cc/common",
     ],
 )

@@ -159,6 +159,8 @@ alias(
     visibility = ["//visibility:public"],
 )
 
+# The ILCompiler pack for the machine the build runs on, aliased for the same
+# reason as crossgen2 above.
 alias(
     name = "ilcompiler_pack",
     actual = select({

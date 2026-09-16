@@ -1,0 +1,21 @@
+exports_files(["test_file_type_contains.sh"])
+
+# The platforms the cross-publishing tests target, shared so that the transition
+# and the publish under test agree on one definition.
+platform(
+    name = "linux_x86_64",
+    constraint_values = [
+        "@platforms//cpu:x86_64",
+        "@platforms//os:linux",
+    ],
+    visibility = ["//dotnet/private/tests/publish:__subpackages__"],
+)
+
+platform(
+    name = "linux_arm64",
+    constraint_values = [
+        "@platforms//cpu:arm64",
+        "@platforms//os:linux",
+    ],
+    visibility = ["//dotnet/private/tests/publish:__subpackages__"],
+)

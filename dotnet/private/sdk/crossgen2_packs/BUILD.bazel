@@ -4,5 +4,5 @@ bzl_library(
     name = "crossgen2_pack",
     srcs = ["crossgen2_pack.bzl"],
     visibility = ["//dotnet:__subpackages__"],
-    deps = ["//dotnet/private:providers"],
+    deps = ["//dotnet/private/sdk:tool_pack"],
 )

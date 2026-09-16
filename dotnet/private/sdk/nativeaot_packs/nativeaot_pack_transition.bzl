@@ -6,18 +6,13 @@ load("//dotnet/private/sdk:packs.bzl", "NATIVEAOT_PACK_LOOKUP_TABLE")
 _SETTING = "//dotnet/private/sdk/nativeaot_packs:nativeaot_pack"
 
 def _impl(settings, _attr):
-    supported_rids = NATIVEAOT_PACK_LOOKUP_TABLE.get(settings["//dotnet:target_framework"])
+    by_rid = NATIVEAOT_PACK_LOOKUP_TABLE.get(settings["//dotnet:target_framework"], {})
+    rid = get_highest_compatible_runtime_identifier(settings["//dotnet:rid"], by_rid.keys())
 
-    if supported_rids:
-        rid = get_highest_compatible_runtime_identifier(settings["//dotnet:rid"], supported_rids.keys())
-        pack = supported_rids.get(rid)
-
-        if pack:
-            return {_SETTING: pack}
-
-    # Every publish carries this attribute but only a NativeAOT one reads it,
-    # so a missing pack is reported at the point of use.
-    return {_SETTING: settings[_SETTING]}
+    # Every publish carries this attribute but only a NativeAOT one reads it, so
+    # a framework or platform without a pack keeps the empty default and is
+    # reported at the point of use.
+    return {_SETTING: by_rid.get(rid) or settings[_SETTING]}
 
 nativeaot_pack_transition = transition(
     implementation = _impl,

@@ -12,9 +12,8 @@ load(
     "DotnetAssemblyCompileInfo",
     "DotnetAssemblyRuntimeInfo",
     "DotnetBinaryInfo",
-    "DotnetCrossgen2PackInfo",
-    "DotnetIlcompilerPackInfo",
     "DotnetNativeAotPackInfo",
+    "DotnetToolPackInfo",
 )
 load("//dotnet/private/sdk/nativeaot_packs:nativeaot_pack_transition.bzl", "nativeaot_pack_transition")
 load("//dotnet/private/transitions:tfm_transition.bzl", "tfm_transition")
@@ -89,12 +88,15 @@ def _render_copy_script(copies, is_windows):
 _NO_READY_TO_RUN = struct(replace = {}, extra = [])
 
 def _native_target(runtime_identifier):
-    """Splits a runtime identifier into crossgen2's --targetos/--targetarch.
+    """Splits a runtime identifier into --targetos/--targetarch.
+
+    Both crossgen2 and ilc take the target this way, which is what lets either
+    of them cross-compile.
     """
     parts = runtime_identifier.split("-")
 
     if len(parts) < 2 or parts[0] not in ("linux", "osx", "win"):
-        fail("Cannot target {} with ReadyToRun".format(runtime_identifier))
+        fail("Cannot compile native code for {}".format(runtime_identifier))
 
     return ("windows" if parts[0] == "win" else parts[0], parts[-1])
 
@@ -140,122 +142,6 @@ _AOT_FEATURE_SWITCHES = {
 
 _AOT_SWITCHES_WITHOUT_KNOB = ["System.Diagnostics.Debugger.IsSupported"]
 
-def _direct_pinvokes(link_inputs):
-    """The framework libraries ilc binds directly instead of loading at runtime.
-
-    Read from the static libraries the pack ships, which is what makes the
-    platform differences -- Apple's cryptography library against OpenSSL's, or
-    MSVC's naming against Unix's -- fall out on their own.
-    """
-    names = []
-
-    for basename in link_inputs:
-        name = basename[3:] if basename.startswith("lib") else basename
-        name = name.rsplit(".", 1)[0].removesuffix(".Aot")
-
-        if name.startswith("System."):
-            names.append(name)
-
-    return sorted(names)
-
-def _aot_closure(assembly_info, transitive_runtime_deps):
-    """Everything a NativeAOT publish has to account for.
-
-    ilc compiles the whole managed closure, so every assembly is a reference
-    rather than something to select between. Native libraries are still loaded
-    at runtime, so they travel beside the executable.
-    """
-    libs = [] + assembly_info.libs
-    native = [] + assembly_info.native
-    data = [] + assembly_info.data
-
-    for dep in transitive_runtime_deps:
-        libs += dep.libs
-        native += dep.native
-        data += dep.data
-
-    return struct(
-        libs = libs,
-        native = native,
-        data = data,
-        appsetting_files = assembly_info.appsetting_files.to_list(),
-    )
-
-def _native_aot_object(ctx, binary_info, assembly_files, runtime_identifier, target_framework):
-    """Compiles the whole managed closure to one native object file.
-
-    Returns that object and the list of symbols to export from the executable
-    linked from it.
-    """
-    ilcompiler = ctx.attr._ilcompiler_pack[DotnetIlcompilerPackInfo]
-    aot_pack = ctx.attr._nativeaot_pack[0][DotnetNativeAotPackInfo]
-
-    if not aot_pack.libs:
-        fail("NativeAOT is not available for {} on {}".format(target_framework, runtime_identifier))
-
-    (target_os, target_arch) = _native_target(runtime_identifier)
-    name = binary_info.dll.basename[:-len(".dll")]
-
-    # The AOT framework replaces the JIT one wholesale: ilc compiles the app
-    # and its dependencies against assemblies built for ahead-of-time use.
-    references = {reference.path: reference for reference in aot_pack.libs + assembly_files.libs}
-    references.pop(binary_info.dll.path, None)
-
-    prefix = "{}/aot/{}/{}".format(ctx.label.name, runtime_identifier, name)
-    object_file = ctx.actions.declare_file(prefix + ".o")
-    exports_file = ctx.actions.declare_file(prefix + ".exports")
-
-    args = ctx.actions.args()
-    args.add(binary_info.dll)
-    args.add("-o:" + object_file.path)
-    args.add("--targetos:" + target_os)
-    args.add("--targetarch:" + target_arch)
-    args.add_all(references.values(), format_each = "-r:%s")
-    args.add("-O")
-    args.add("--dehydrate")
-    args.add("--exportsfile:" + exports_file.path)
-    args.add("--export-dynamic-symbol:DotNetRuntimeDebugHeader")
-    args.add_all(_AOT_INIT_ASSEMBLIES, format_each = "--initassembly:%s")
-
-    # The bootstrapper calls into the class library through a fixed set of
-    # entry points, which only exist if ilc is asked to emit them.
-    args.add("--generateunmanagedentrypoints:System.Private.CoreLib")
-    args.add_all(_direct_pinvokes(aot_pack.link_inputs), format_each = "--directpinvoke:%s")
-
-    for switch in sorted(_AOT_FEATURE_SWITCHES):
-        setting = "{}={}".format(switch, "true" if _AOT_FEATURE_SWITCHES[switch] else "false")
-        args.add("--feature:" + setting)
-
-        if switch not in _AOT_SWITCHES_WITHOUT_KNOB:
-            args.add("--runtimeknob:" + setting)
-
-    args.add("--runtimeknob:RUNTIME_IDENTIFIER=" + runtime_identifier)
-    args.add("--stacktracedata")
-    args.add("--scanreflection")
-    args.add("--methodbodyfolding:generic")
-
-    # A warning from framework code is not the user's to fix, and one bad
-    # method should not fail the whole publish.
-    args.add("--singlewarn")
-    args.add("--nosinglewarnassembly:" + name)
-    args.add("--resilient")
-    args.set_param_file_format("multiline")
-    args.use_param_file("@%s", use_always = True)
-
-    ctx.actions.run(
-        executable = ilcompiler.ilc,
-        arguments = [args],
-        inputs = depset(
-            [binary_info.dll] + references.values(),
-            transitive = [ilcompiler.files],
-        ),
-        outputs = [object_file, exports_file],
-        mnemonic = "Ilc",
-        progress_message = "Compiling %{label} to native code",
-    )
-
-    return struct(object_file = object_file, exports_file = exports_file)
-
 # The order the runtime's static libraries have to reach the linker. Names are
 # given without the platform's `lib` prefix or archive extension; entries the
 # pack does not ship (the cryptography library differs by platform) are skipped.
@@ -280,17 +166,16 @@ _AOT_LINK_ORDER = [
     "brotlicommon",
 ]
 
-# Libraries the runtime expects from the platform rather than from its pack.
-# The C++ runtime, the Swift runtime and ICU are deliberately absent: the
-# pack's own libstdc++compat.a covers the first, and nothing in a publish has
-# been found to reference the other two.
+# Libraries the runtime expects from the platform rather than from its pack,
+# keyed by the target operating systems a publish can link for. The C++ runtime
+# is absent because the pack's own libstdc++compat.a covers it.
 _AOT_SYSTEM_LIBS = {
     "linux": ["dl", "rt", "m"],
     "osx": ["dl", "objc", "m"],
 }
 
 # Apple frameworks the runtime links against. They come from the macOS SDK, so
-# the toolchain's sysroot has to carry them.
+# the toolchain's sysroot has to carry them. See docs/README.md.
 _AOT_APPLE_FRAMEWORKS = [
     "CoreFoundation",
     "CryptoKit",
@@ -299,6 +184,39 @@ _AOT_APPLE_FRAMEWORKS = [
     "Security",
     "GSS",
 ]
+
+def _direct_pinvokes(link_inputs):
+    """The framework libraries ilc binds directly instead of loading at runtime.
+
+    Read from the static libraries the pack ships, so that a platform's own
+    naming -- Apple's cryptography library against OpenSSL's -- falls out on
+    its own.
+    """
+    names = []
+
+    for basename in link_inputs:
+        name = basename[3:] if basename.startswith("lib") else basename
+        name = name.rsplit(".", 1)[0].removesuffix(".Aot")
+
+        if name.startswith("System."):
+            names.append(name)
+
+    return sorted(names)
+
+def _aot_closure(assembly_info, transitive_runtime_deps):
+    """Everything a NativeAOT publish has to account for.
+
+    Native libraries are still loaded at runtime, so they travel
+    beside the executable.
+    """
+    parts = [assembly_info] + transitive_runtime_deps
+
+    return struct(
+        libs = [file for part in parts for file in part.libs],
+        native = [file for part in parts for file in part.native],
+        data = [file for part in parts for file in part.data],
+        appsetting_files = assembly_info.appsetting_files.to_list(),
+    )
 
 def _aot_link_libraries(link_inputs):
     """The pack's static libraries, in the order the linker needs them."""
@@ -313,13 +231,79 @@ def _aot_link_libraries(link_inputs):
 
     return libraries
 
-def _native_aot_binary(ctx, compiled, runtime_identifier, name):
+def _ilc_compile(ctx, dll, closure, aot):
+    """Compiles the whole managed closure to one native object file.
+
+    Returns that object and the list of symbols to export from the executable
+    linked from it.
+    """
+    ilc = ctx.attr._ilcompiler_pack[DotnetToolPackInfo]
+
+    # The AOT framework replaces the JIT one wholesale: ilc compiles the app
+    # and its dependencies against assemblies built for ahead-of-time use. The
+    # app's own assembly is the input rather than a reference.
+    references = {reference.path: reference for reference in aot.pack.libs + closure.libs}
+    references.pop(dll.path, None)
+
+    object_file = ctx.actions.declare_file(aot.prefix + ".o")
+    exports_file = ctx.actions.declare_file(aot.prefix + ".exports")
+
+    # Every path reaches ilc as a File so that path mapping can rewrite it; a
+    # path baked into a string at analysis time would survive unmapped.
+    args = ctx.actions.args()
+    args.add(dll)
+    args.add(object_file, format = "-o:%s")
+    args.add("--targetos:" + aot.os)
+    args.add("--targetarch:" + aot.arch)
+    args.add_all(references.values(), format_each = "-r:%s")
+    args.add("-O")
+    args.add("--dehydrate")
+    args.add(exports_file, format = "--exportsfile:%s")
+    args.add("--export-dynamic-symbol:DotNetRuntimeDebugHeader")
+    args.add_all(_AOT_INIT_ASSEMBLIES, format_each = "--initassembly:%s")
+
+    # The bootstrapper calls into the class library through a fixed set of
+    # entry points, which only exist if ilc is asked to emit them.
+    args.add("--generateunmanagedentrypoints:System.Private.CoreLib")
+    args.add_all(_direct_pinvokes(aot.pack.link_inputs), format_each = "--directpinvoke:%s")
+
+    for switch in sorted(_AOT_FEATURE_SWITCHES):
+        setting = "{}={}".format(switch, "true" if _AOT_FEATURE_SWITCHES[switch] else "false")
+        args.add("--feature:" + setting)
+
+        if switch not in _AOT_SWITCHES_WITHOUT_KNOB:
+            args.add("--runtimeknob:" + setting)
+
+    args.add("--runtimeknob:RUNTIME_IDENTIFIER=" + aot.rid)
+    args.add("--stacktracedata")
+    args.add("--scanreflection")
+    args.add("--methodbodyfolding:generic")
+
+    # A warning from framework code is not the user's to fix, and one bad
+    # method should not fail the whole publish.
+    args.add("--singlewarn")
+    args.add("--nosinglewarnassembly:" + aot.name)
+    args.add("--resilient")
+    args.set_param_file_format("multiline")
+    args.use_param_file("@%s", use_always = True)
+
+    ctx.actions.run(
+        executable = ilc.tool,
+        arguments = [args],
+        inputs = depset(
+            [dll] + references.values(),
+            transitive = [ilc.files],
+        ),
+        outputs = [object_file, exports_file],
+        mnemonic = "Ilc",
+        progress_message = "Compiling %{label} to native code",
+        execution_requirements = {"supports-path-mapping": "1"},
+    )
+
+    return struct(object_file = object_file, exports_file = exports_file)
+
+def _ilc_link(ctx, compiled, aot):
     """Links the compiled object into a native executable."""
-    (target_os, _) = _native_target(runtime_identifier)
-
-    if target_os not in _AOT_SYSTEM_LIBS:
-        fail("NativeAOT cannot target {} yet: only Linux and macOS are supported".format(target_os))
-
     toolchain = ctx.toolchains["@bazel_tools//tools/cpp:toolchain_type"]
 
     if toolchain == None:
@@ -341,14 +325,18 @@ def _native_aot_binary(ctx, compiled, runtime_identifier, name):
         cc_toolchain = cc_toolchain,
     )
 
-    aot_pack = ctx.attr._nativeaot_pack[0][DotnetNativeAotPackInfo]
-    libraries = _aot_link_libraries(aot_pack.link_inputs)
-    executable = ctx.actions.declare_file("{}/aot/{}/{}".format(ctx.label.name, runtime_identifier, name))
+    is_apple = aot.os == "osx"
+    libraries = _aot_link_libraries(aot.pack.link_inputs)
+    executable = ctx.actions.declare_file(aot.prefix)
 
+    # Ordered the way a Unix linker reads its command line: the object first,
+    # then the archives that satisfy it, then the system libraries.
     args = ctx.actions.args()
 
     # Whatever the toolchain itself needs to target this platform: the sysroot
-    # on a hermetic toolchain, the SDK path on Apple.
+    # on a hermetic toolchain, the SDK path on Apple. These arrive as plain
+    # strings, some of them output paths, which is why this action cannot opt
+    # in to path mapping the way `Ilc` does.
     args.add_all(cc_common.get_memory_inefficient_command_line(
         feature_configuration = feature_configuration,
         action_name = CPP_LINK_EXECUTABLE_ACTION_NAME,
@@ -357,23 +345,23 @@ def _native_aot_binary(ctx, compiled, runtime_identifier, name):
     args.add(compiled.object_file)
     args.add("-o", executable)
 
-    if target_os == "osx":
-        # Exports only what ilc listed and drops the rest. Section garbage
-        # collection has no Linux counterpart here: the runtime relies on
-        # sections the linker cannot prove are reachable.
+    if is_apple:
+        # Exports only what ilc listed and drops the rest. There is no Linux
+        # counterpart: the runtime relies on sections a GC-ing linker cannot
+        # prove are reachable.
         args.add("-exported_symbols_list", compiled.exports_file)
         args.add("-Wl,-dead_strip")
 
     args.add_all(libraries)
 
-    if target_os != "osx":
+    if not is_apple:
         args.add("-Wl,--build-id=sha1")
         args.add("-Wl,--as-needed")
         args.add("-pthread")
 
-    args.add_all(_AOT_SYSTEM_LIBS[target_os], format_each = "-l%s")
+    args.add_all(_AOT_SYSTEM_LIBS[aot.os], format_each = "-l%s")
 
-    if target_os == "osx":
+    if is_apple:
         args.add_all(_AOT_APPLE_FRAMEWORKS, before_each = "-framework")
     else:
         # The hardening the runtime ships with: read-only relocations,
@@ -401,6 +389,32 @@ def _native_aot_binary(ctx, compiled, runtime_identifier, name):
     )
 
     return executable
+
+def _native_aot_executable(ctx, dll, closure, runtime_identifier, target_framework):
+    """Compiles the managed closure to native code and links it into one executable."""
+    pack = ctx.attr._nativeaot_pack[0][DotnetNativeAotPackInfo]
+
+    if not pack.libs:
+        fail("NativeAOT is not available for {} on {}".format(target_framework, runtime_identifier))
+
+    (target_os, target_arch) = _native_target(runtime_identifier)
+
+    if target_os not in _AOT_SYSTEM_LIBS:
+        fail("NativeAOT cannot target {} yet: only Linux and macOS are supported".format(target_os))
+
+    name = dll.basename.removesuffix(".dll")
+    aot = struct(
+        pack = pack,
+        rid = runtime_identifier,
+        os = target_os,
+        arch = target_arch,
+        name = name,
+        # The executable's path; the object and the export list sit beside it
+        # under their own extensions.
+        prefix = "{}/aot/{}/{}".format(ctx.label.name, runtime_identifier, name),
+    )
+
+    return _ilc_link(ctx, _ilc_compile(ctx, dll, closure, aot), aot)
 
 def _runtime_pack_files(runtime_pack_info, deps_json_struct):
     """The files each runtime pack contributes to the publish, one struct per pack.
@@ -491,7 +505,7 @@ def _ready_to_run_images(ctx, binary_info, assembly_files, runtime_pack_files, r
     crossgen2 cross-compiles, so the tool comes from the pack for the execution
     platform while the target platform and the references come from the target.
     """
-    crossgen2_info = ctx.attr._crossgen2_pack[DotnetCrossgen2PackInfo]
+    crossgen2 = ctx.attr._crossgen2_pack[DotnetToolPackInfo]
     (target_os, target_arch) = _native_target(runtime_identifier)
 
     framework = [
@@ -510,27 +524,31 @@ def _ready_to_run_images(ctx, binary_info, assembly_files, runtime_pack_files, r
 
     assemblies = {assembly.path: assembly for assembly in compiled}.values()
     references = {reference.path: reference for reference in framework + assemblies}.values()
+    inputs = depset(references, transitive = [crossgen2.files])
+    root = "{}/r2r/{}".format(ctx.label.name, runtime_identifier)
 
-    common = ctx.actions.args()
-    common.add("--targetos:" + target_os)
-    common.add("--targetarch:" + target_arch)
-    common.add("-O")
-    common.add_all(references, format_each = "-r:%s")
-    common.set_param_file_format("multiline")
+    def common_args():
+        """The arguments every crossgen2 action here starts with.
 
-    response_file = ctx.actions.declare_file("{}/r2r/{}/crossgen2.rsp".format(
-        ctx.label.name,
-        runtime_identifier,
-    ))
-    ctx.actions.write(response_file, common)
+        The references alone run past any OS command line limit, so they always
+        go into a parameter file. Each action builds its own rather than sharing
+        one written ahead of time, because Bazel rewrites the paths inside a
+        parameter file it writes for a path-mapped action and cannot rewrite
+        those in a file that already exists.
+        """
+        args = ctx.actions.args()
+        args.add("--targetos:" + target_os)
+        args.add("--targetarch:" + target_arch)
+        args.add("-O")
+        args.add_all(references, format_each = "-r:%s")
+        args.set_param_file_format("multiline")
+        args.use_param_file("@%s", use_always = True)
 
-    tool_files = depset(references + [response_file], transitive = [crossgen2_info.files])
-    rsp = "@" + response_file.path
+        return args
 
     if ctx.attr.ready_to_run_composite:
-        image = ctx.actions.declare_file("{}/r2r/{}/composite/{}.r2r.dll".format(
-            ctx.label.name,
-            runtime_identifier,
+        image = ctx.actions.declare_file("{}/composite/{}.r2r.dll".format(
+            root,
             ctx.attr.binary[0][DotnetAssemblyRuntimeInfo].name,
         ))
 
@@ -538,74 +556,96 @@ def _ready_to_run_images(ctx, binary_info, assembly_files, runtime_pack_files, r
         outputs = [image]
 
         for assembly in assemblies:
-            component = ctx.actions.declare_file("{}/r2r/{}/composite/{}".format(
-                ctx.label.name,
-                runtime_identifier,
-                assembly.basename,
-            ))
+            component = ctx.actions.declare_file("{}/composite/{}".format(root, assembly.basename))
             components[assembly.path] = component
             outputs.append(component)
 
+        args = common_args()
+        args.add("--composite")
+        args.add(image, format = "--out:%s")
+        args.add_all(assemblies)
+
         ctx.actions.run(
-            executable = crossgen2_info.crossgen2,
-            arguments = [rsp, "--composite", "--out:" + image.path] + [a.path for a in assemblies],
-            inputs = tool_files,
+            executable = crossgen2.tool,
+            arguments = [args],
+            inputs = inputs,
             outputs = outputs,
             mnemonic = "Crossgen2Composite",
             progress_message = "Compiling composite ReadyToRun image for %{label}",
+            execution_requirements = {"supports-path-mapping": "1"},
         )
 
         return struct(replace = components, extra = [image])
 
     images = {}
+
     for assembly in assemblies:
-        image = ctx.actions.declare_file("{}/r2r/{}/{}".format(
-            ctx.label.name,
-            runtime_identifier,
-            assembly.basename,
-        ))
+        image = ctx.actions.declare_file("{}/{}".format(root, assembly.basename))
+        args = common_args()
+        args.add(image, format = "--out:%s")
+        args.add(assembly)
 
         ctx.actions.run(
-            executable = crossgen2_info.crossgen2,
-            arguments = [rsp, "--out:" + image.path, assembly.path],
-            inputs = tool_files,
+            executable = crossgen2.tool,
+            arguments = [args],
+            inputs = inputs,
             outputs = [image],
             mnemonic = "Crossgen2",
             progress_message = "Compiling %{input} to ReadyToRun",
+            execution_requirements = {"supports-path-mapping": "1"},
         )
 
         images[assembly.path] = image
 
     return struct(replace = images, extra = [])
 
+def _run_copy_script(ctx, copies, suffix, mnemonic, progress_message):
+    """Runs one action that puts every (source, destination) pair in place.
+
+    The pairs are also the action's inputs and outputs.
+
+    Args:
+        ctx: The rule context.
+        copies: The (source, destination) pairs to copy.
+        suffix: Distinguishes this script from the target's other copy scripts.
+        mnemonic: The action's mnemonic.
+        progress_message: The action's progress message.
+
+    Returns:
+        The destination files.
+    """
+    is_windows = ctx.target_platform_has_constraint(ctx.attr._windows_constraint[platform_common.ConstraintValueInfo])
+    outputs = [dst for (_, dst) in copies]
+    script = ctx.actions.declare_file("{}.{}.{}".format(ctx.label.name, suffix, "bat" if is_windows else "sh"))
+
+    ctx.actions.write(
+        output = script,
+        content = ("\r\n" if is_windows else "\n").join(_render_copy_script(copies, is_windows)),
+        is_executable = True,
+    )
+    ctx.actions.run(
+        executable = script,
+        inputs = depset([src for (src, _) in copies]),
+        outputs = outputs,
+        tools = [script],
+        mnemonic = mnemonic,
+        progress_message = progress_message,
+    )
+
+    return outputs
+
 def _copy_beside(ctx, executable, files):
     """Copies files into the directory holding `executable`."""
     if not files:
         return []
 
-    is_windows = ctx.target_platform_has_constraint(ctx.attr._windows_constraint[platform_common.ConstraintValueInfo])
-    copies = [(file, ctx.actions.declare_file(file.basename, sibling = executable)) for file in files]
-    outputs = [dst for (_, dst) in copies]
-
-    script_body = _render_copy_script(copies, is_windows)
-    script = ctx.actions.declare_file(
-        "{}.sidecars.{}".format(ctx.label.name, "bat" if is_windows else "sh"),
+    return _run_copy_script(
+        ctx,
+        [(file, ctx.actions.declare_file(file.basename, sibling = executable)) for file in files],
+        "sidecars",
+        "DotnetCopySidecars",
+        "Copying native dependencies for %{label}",
     )
-    ctx.actions.write(
-        output = script,
-        content = ("\r\n" if is_windows else "\n").join(script_body),
-        is_executable = True,
-    )
-    ctx.actions.run(
-        executable = script,
-        inputs = files,
-        outputs = outputs,
-        tools = [script],
-        mnemonic = "CopyNativeAotFiles",
-        progress_message = "Copying native dependencies for %{label}",
-    )
-
-    return outputs
 
 def _get_assembly_files(assembly_info, transitive_runtime_deps, deps_json_struct):
     """The files a publish copies, gathered from the target and its deps."""
@@ -647,12 +687,10 @@ def _get_assembly_files(assembly_info, transitive_runtime_deps, deps_json_struct
     )
 
 def _copy_to_publish(ctx, runtime_identifier, layout, binary_info, ready_to_run = _NO_READY_TO_RUN):
-    is_windows = ctx.target_platform_has_constraint(ctx.attr._windows_constraint[platform_common.ConstraintValueInfo])
     root = "{}/publish/{}".format(ctx.label.name, runtime_identifier)
 
-    # (source, destination) pairs, which are also the action's inputs and
-    # outputs. Keyed by destination because the binary's own assembly arrives
-    # twice, as the main DLL and again in the list of assemblies to publish.
+    # Keyed by destination because the binary's own assembly arrives twice, as
+    # the main DLL and again in the list of assemblies to publish.
     copies = {
         path: (
             ready_to_run.replace.get(file.path, file),
@@ -664,28 +702,15 @@ def _copy_to_publish(ctx, runtime_identifier, layout, binary_info, ready_to_run 
     for file in ready_to_run.extra:
         copies[file.basename] = (file, ctx.actions.declare_file("{}/{}".format(root, file.basename)))
 
-    copies = copies.values()
-    main_dll_copy = ctx.actions.declare_file("{}/{}".format(root, binary_info.dll.basename))
-    outputs = [dst for (_, dst) in copies]
-
-    script_body = _render_copy_script(copies, is_windows)
-    copy_script = ctx.actions.declare_file(ctx.label.name + ".copy.bat" if is_windows else ctx.label.name + ".copy.sh")
-    ctx.actions.write(
-        output = copy_script,
-        content = "\r\n".join(script_body) if is_windows else "\n".join(script_body),
-        is_executable = True,
+    outputs = _run_copy_script(
+        ctx,
+        copies.values(),
+        "copy",
+        "DotnetPublishCopy",
+        "Assembling publish output for %{label}",
     )
 
-    ctx.actions.run(
-        mnemonic = "DotnetPublishCopy",
-        progress_message = "Assembling publish output for %{label}",
-        outputs = outputs,
-        inputs = depset([src for (src, _) in copies]),
-        executable = copy_script,
-        tools = [copy_script],
-    )
-
-    return (main_dll_copy, outputs)
+    return (ctx.actions.declare_file("{}/{}".format(root, binary_info.dll.basename)), outputs)
 
 def _create_shim_exe(ctx, apphost_pack_info, dll, runtime_identifier):
     windows_constraint = ctx.attr._windows_constraint[platform_common.ConstraintValueInfo]
@@ -753,14 +778,13 @@ def _publish_binary_impl(ctx):
         # Nothing managed survives into the output, so none of the publish
         # layout below applies: no deps.json, no runtimeconfig, no apphost.
         closure = _aot_closure(assembly_runtime_info, transitive_runtime_deps)
-        compiled = _native_aot_object(
+        executable = _native_aot_executable(
             ctx,
-            binary_info,
+            binary_info.dll,
             closure,
             runtime_identifier,
             target_framework,
         )
-        executable = _native_aot_binary(ctx, compiled, runtime_identifier, assembly_name)
         sidecars = _copy_beside(ctx, executable, closure.native + closure.appsetting_files)
 
         return [DefaultInfo(
@@ -833,10 +857,9 @@ def _publish_binary_impl(ctx):
         ),
     ]
 
-# This wrapper is only needed so that we can turn the incoming transition in `publish_binary`
-# into an outgoing transition in the wrapper. This allows us to select on the runtime_identifier
-# and runtime_packs attributes. We also need to have all the file copying in the wrapper rule
-# because Bazel does not allow forwarding executable files as they have to be created by the wrapper rule.
+# The incoming transition on `binary` becomes an outgoing one here, which is
+# what lets the rule select on `runtime_identifier`. The file copying lives
+# here too: Bazel cannot forward an executable, so this rule has to create it.
 _publish_binary = rule(
     _publish_binary_impl,
     doc = """Publish a .Net binary""",
@@ -941,12 +964,8 @@ cross-compiles, so what matters is the machine it runs on.""",
 )
 
 def _publish_binary_macro_impl(name, **kwargs):
-    # This macro is just a wrapper so that we can make the user experience for automatic
-    # runtime identifier selection better. If the user does not provide a runtime identifier
-    # we will use the target platform to determine the runtime identifier.
-    # If the user provides a runtime identifier we will use that one. The wrapper macro
-    # is needed because we don't have access to the target platform in the TFM/RID transition.
-
+    # Default the runtime identifier to the target platform's. It is resolved
+    # here because the TFM/RID transition cannot see the target platform.
     rid = kwargs.get("runtime_identifier", None)
     if rid == None:
         kwargs["runtime_identifier"] = select({

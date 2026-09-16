@@ -147,8 +147,8 @@ def crossgen2_pack(tfm, rid):
 def aot_pack_rids(tfm):
     """Returns the runtime identifiers a target framework can publish AOT for.
 
-    NativeAOT ships its framework as a separate runtime pack from .NET 9; the
-    generator records a band's ILCompiler version only where that pack exists.
+    A band carries an ILCompiler version only where NativeAOT ships a runtime
+    pack of its own, which is from .NET 9 onwards.
 
     Args:
       tfm: The target framework.
@@ -191,8 +191,8 @@ def nativeaot_pack(tfm, rid):
     """Returns the runtime pack a NativeAOT publish compiles and links against.
 
     Distinct from the JIT runtime pack: the assemblies are built for AOT, and
-    the pack carries the static libraries the native link needs. Its version
-    tracks the compiler, which is built alongside it.
+    the pack carries the static libraries the native link needs. It is built
+    alongside ilc and shares its version.
 
     Args:
       tfm: The target framework.
@@ -278,8 +278,8 @@ TARGETING_PACK_LOOKUP_TABLE = {
     for project_sdk in PROJECT_SDKS
 }
 
-# The runtime identifiers a build can run on, and so the ones host-keyed tool
-# packs are fetched for. Matches the platforms the `crossgen2_pack` and
+# The runtime identifiers a build can run on, and so the ones the tool packs
+# are fetched for. Matches the platforms the `crossgen2_pack` and
 # `ilcompiler_pack` aliases select over; a musl host is not distinguishable as
 # a Bazel platform here.
 _HOST_RIDS = [
@@ -292,7 +292,7 @@ _HOST_RIDS = [
 ]
 
 def host_rids():
-    """The runtime identifiers host-keyed tool packs are fetched for.
+    """The runtime identifiers the tool packs are fetched for.
 
     Returns:
       A list of runtime identifiers.

@@ -4,5 +4,5 @@ bzl_library(
     name = "ilcompiler_pack",
     srcs = ["ilcompiler_pack.bzl"],
     visibility = ["//dotnet:__subpackages__"],
-    deps = ["//dotnet/private:providers"],
+    deps = ["//dotnet/private/sdk:tool_pack"],
 )

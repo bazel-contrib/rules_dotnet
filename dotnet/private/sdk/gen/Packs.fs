@@ -12,8 +12,7 @@ type Band =
       rids: string list
       /// Set only where ASP.NET Core shipped a different set to .NET.
       webRids: string list option
-      /// NativeAOT ships its framework as a separate runtime pack from .NET 9;
-      /// before that the static libraries lived inside the ILCompiler pack.
+      /// NativeAOT ships a runtime pack of its own from .NET 9 onwards.
       hasAot: bool }
 
 let private allRids =
@@ -137,8 +136,8 @@ let generatePackBands (output: string) (channels: string list) =
             | None -> ()
 
             if band.hasAot then
-                // The compiler and the framework it links against are built
-                // together, so one version covers both packs.
+                // ilc and the runtime pack it links against ship together, so
+                // one version covers both.
                 let ilcompilerId = "runtime." + band.rids.Head + ".Microsoft.DotNet.ILCompiler"
                 fields.Add(sprintf "\"ilcompiler\": \"%s\"" (latestInBand ilcompilerId band.tfm))
 

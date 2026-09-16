@@ -37,32 +37,36 @@ The following workloads are not supported by these rules at this given time:
 - Razor
 - Blazor/WebAssembly
 - Workloads that require Mono
+
+Contributions to add the missing workloads are welcomed and the maintainers
+will do their best to guide if needed.
+
 ## NativeAOT and the C/C++ toolchain
 
 `publish_binary(native_aot = True)` compiles the application ahead of time to a
 single native executable. It is the only publish model that links native code,
-so unlike every other rule in `rules_dotnet` it needs a **C/C++ toolchain**.
+so unlike every other rule in `rules_dotnet` it needs a **C/C++ toolchain**. The
+toolchain is resolved through Bazel's standard mechanism and requested
+optionally, so a build that never publishes NativeAOT does not need one.
 
-The toolchain is resolved through Bazel's standard mechanism and requested
-optionally, so a build that never publishes NativeAOT needs none — nothing else
-in `rules_dotnet` is affected.
+Windows AOT is not supported yet.
 
 ### Recommended: a hermetic toolchain
 
-We recommend the [`llvm`](https://registry.bazel.build/modules/llvm) module. It
-supplies a hermetic LLVM toolchain and downloads Apple's official SDK for Apple
-targets, so NativeAOT builds the same way on every machine and can
-cross-compile — publishing a `linux-x64` binary from macOS, for example, with
-nothing installed on the host.
+The [`llvm`](https://registry.bazel.build/modules/llvm) module supplies a
+hermetic LLVM toolchain and downloads Apple's official SDK for Apple targets, so
+NativeAOT builds the same way on every machine and can cross-compile — a
+`linux-x64` binary from macOS, say, with nothing installed on the host. It is
+what `rules_dotnet` uses for its own test suite.
 
 ```starlark
 bazel_dep(name = "llvm", version = "0.8.19")
 
 register_toolchains("@llvm//toolchain:all")
 
-# Only needed for Apple targets. The .NET runtime binds to frameworks that are
-# not in the module's default sysroot, and naming any framework replaces the
-# default set rather than extending it, so the defaults are repeated here.
+# Apple targets only. The .NET runtime links against CryptoKit, GSS and Network,
+# which the module's minimal sysroot leaves out, and naming any framework
+# replaces the default set rather than extending it.
 osx_sysroot = use_extension("@llvm//extensions:osx.bzl", "osx")
 osx_sysroot.frameworks(names = [
     "CoreFoundation",
@@ -77,22 +81,13 @@ osx_sysroot.frameworks(names = [
 ])
 ```
 
-This is what `rules_dotnet` itself uses, so the arrangement above is exercised
-by its own test suite on every change.
-
 ### Otherwise: host toolchains
 
 Any registered C/C++ toolchain works, including the one Bazel auto-configures
-from the host compiler. That needs a working toolchain installed on every
-machine that publishes NativeAOT — Xcode's command line tools on macOS, clang
-or gcc on Linux — and it cannot cross-compile, because a host toolchain only
-targets its own platform.
-
-Windows targets are not supported yet either way: the link goes through MSVC's
-`link.exe`, whose command line shares nothing with the Unix driver.
-
-Contributions to add the missing workloads are welcomed and the maintainers
-will do their best to guide if needed.
+from the host compiler. That needs a working toolchain on every machine that
+publishes NativeAOT — Xcode's command line tools on macOS, clang or gcc on
+Linux — and it cannot cross-compile, because a host toolchain only targets its
+own platform.
 
 ## Usage
 
@@ -231,7 +226,8 @@ build --@rules_dotnet//dotnet/settings:prune_unused_references=true
 
 ## Path mapping
 
-The rules_dotnet compile actions support [path mapping](https://bazel.build/reference/command-line-reference#flag--experimental_output_paths),
+The rules_dotnet compile actions support
+[path mapping](https://bazel.build/reference/command-line-reference#flag--experimental_output_paths),
 which strips the configuration segment out of the paths a compile action sees, so the *same*
 compilation reached through two different configurations produces one cache **key** instead of two.
 
