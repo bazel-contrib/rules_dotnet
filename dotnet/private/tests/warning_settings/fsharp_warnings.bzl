@@ -9,7 +9,7 @@ def fsharp_warnings():
     fsharp_library(
         name = "fsharp_all_warnings",
         srcs = ["warnings.fs"],
-        target_frameworks = ["net6.0"],
+        target_frameworks = ["net8.0"],
         treat_warnings_as_errors = True,
         tags = ["manual"],
     )
@@ -24,7 +24,7 @@ def fsharp_warnings():
     fsharp_library(
         name = "fsharp_warnings_as_errors",
         srcs = ["warnings.fs"],
-        target_frameworks = ["net6.0"],
+        target_frameworks = ["net8.0"],
         warnings_as_errors = ["FS0025", "FS0026"],
         tags = ["manual"],
     )
@@ -39,7 +39,7 @@ def fsharp_warnings():
     fsharp_library(
         name = "fsharp_warnings_not_as_errors",
         srcs = ["warnings.fs"],
-        target_frameworks = ["net6.0"],
+        target_frameworks = ["net8.0"],
         treat_warnings_as_errors = True,
         warnings_not_as_errors = ["FS0025", "FS0026"],
         tags = ["manual"],
@@ -55,7 +55,7 @@ def fsharp_warnings():
     fsharp_library(
         name = "fsharp_warning_level",
         srcs = ["warnings.fs"],
-        target_frameworks = ["net6.0"],
+        target_frameworks = ["net8.0"],
         warning_level = 5,
         tags = ["manual"],
     )
@@ -70,7 +70,7 @@ def fsharp_warnings():
     fsharp_library(
         name = "fsharp_nowarn",
         srcs = ["warnings.fs"],
-        target_frameworks = ["net6.0"],
+        target_frameworks = ["net8.0"],
         nowarn = ["FS0000", "FS1234"],
         tags = ["manual"],
     )

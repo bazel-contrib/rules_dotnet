@@ -1,15 +1,27 @@
 load("@bazel_lib//:bzl_library.bzl", "bzl_library")
 
 bzl_library(
+    name = "global_usings",
+    srcs = ["global_usings.bzl"],
+    visibility = [
+        "//dotnet:__subpackages__",
+        "//proto:__subpackages__",
+    ],
+)
+
+bzl_library(
     name = "binary",
     srcs = ["binary.bzl"],
     visibility = [
         "//dotnet:__subpackages__",
+        "//tools/blazor:__pkg__",
+        "//tools/stamp2info:__pkg__",
     ],
     deps = [
         "//dotnet/private:common",
         "//dotnet/private/rules/common:attrs",
         "//dotnet/private/rules/common:binary",
+        "//dotnet/private/rules/common:stamping",
         "//dotnet/private/rules/csharp/actions:csharp_assembly",
         "//dotnet/private/transitions:apphost_shimmer_transition",
         "//dotnet/private/transitions:tfm_transition",
@@ -28,6 +40,8 @@ bzl_library(
         "//dotnet/private:common",
         "//dotnet/private/rules/common:attrs",
         "//dotnet/private/rules/common:library",
+        "//dotnet/private/rules/common:stamping",
+        "//dotnet/private/rules/csharp:global_usings",
         "//dotnet/private/rules/csharp/actions:csharp_assembly",
         "//dotnet/private/transitions:tfm_transition",
         "@bazel_skylib//rules:common_settings",
@@ -44,6 +58,7 @@ bzl_library(
         "//dotnet/private:common",
         "//dotnet/private/rules/common:attrs",
         "//dotnet/private/rules/common:binary",
+        "//dotnet/private/rules/common:stamping",
         "//dotnet/private/rules/csharp/actions:csharp_assembly",
         "//dotnet/private/transitions:tfm_transition",
         "@bazel_skylib//rules:common_settings",

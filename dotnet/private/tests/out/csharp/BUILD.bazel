@@ -10,7 +10,7 @@ csharp_nunit_test(
     name = "lib_test",
     srcs = ["libtest.cs"],
     out = "OtherLibTest",
-    target_frameworks = ["net6.0"],
+    target_frameworks = ["net8.0"],
     deps = [
         ":lib",
     ],
@@ -24,6 +24,6 @@ csharp_library(
     internals_visible_to = [
         "OtherLibTest",
     ],
-    target_frameworks = ["net6.0"],
+    target_frameworks = ["net8.0"],
     deps = [],
 )

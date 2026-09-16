@@ -18,7 +18,7 @@ csharp_nunit_test(
         "TEMPLATED_FILE": "$(execpath //dotnet/private/tests/binary_envs:test.txt)",
         "TEMPLATED_VARIABLE": "$(DOTNET_SDK_VERSION)",
     },
-    target_frameworks = ["net6.0"],
+    target_frameworks = ["net8.0"],
 )
 
 csharp_test(

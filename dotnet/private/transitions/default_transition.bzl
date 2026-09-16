@@ -1,10 +1,10 @@
 """A transition that always transitions back to the default target framework. 
 
 This transition is used to create a disconnect between two TFM graphs. For example
-if you have a binary that targets net7.0 and another binary that targets net6.0
+if you have a binary that targets net7.0 and another binary that targets net8.0
 but depends on the net7.0 binary as a data dependency then we do not want the TFM
 graphqs to be connected since the compilation of the net7.0 binary is not in any way
-related to the net6.0 binary since it's only used as a data dependency.
+related to the net8.0 binary since it's only used as a data dependency.
 
 """
 

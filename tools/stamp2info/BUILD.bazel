@@ -1,0 +1,12 @@
+load("//dotnet/private/rules/csharp:binary.bzl", "csharp_bootstrap_binary")
+
+csharp_bootstrap_binary(
+    name = "stamp2info",
+    srcs = [
+        "Program.cs",
+    ],
+    nullable = "enable",
+    target_frameworks = ["net8.0"],
+    visibility = ["//visibility:public"],
+    deps = [],
+)

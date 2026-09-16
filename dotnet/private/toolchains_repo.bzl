@@ -17,6 +17,20 @@ This guidance tells us how to avoid that: we put the toolchain targets in the al
 with only the toolchain attribute pointing into the platform-specific repositories.
 """
 
+# Dotnet supported architectures (https://github.com/dotnet/runtime/blob/main/src/libraries/System.Private.CoreLib/src/System/Runtime/InteropServices/Architecture.cs)
+ARCHITECTURES = [
+    "X86",
+    "X64",
+    "ARM",
+    "ARM64",
+    "WASM",
+    "S390X",
+    "LOONGARCH64",
+    "ARMV6",
+    "PPC64LE",
+    "RISCV64",
+]
+
 # Add more platforms as needed to mirror all the binaries
 # published by the upstream project.
 PLATFORMS = {
@@ -25,36 +39,60 @@ PLATFORMS = {
             "@platforms//os:macos",
             "@platforms//cpu:x86_64",
         ],
+        dotnet = struct(
+            arch = "X64",
+            rid = "osx-x64",
+        ),
     ),
     "aarch64-apple-darwin": struct(
         compatible_with = [
             "@platforms//os:macos",
             "@platforms//cpu:aarch64",
         ],
+        dotnet = struct(
+            arch = "ARM64",
+            rid = "osx-arm64",
+        ),
     ),
     "x86_64-unknown-linux-gnu": struct(
         compatible_with = [
             "@platforms//os:linux",
             "@platforms//cpu:x86_64",
         ],
+        dotnet = struct(
+            arch = "X64",
+            rid = "linux-x64",
+        ),
     ),
     "arm64-unknown-linux-gnu": struct(
         compatible_with = [
             "@platforms//os:linux",
             "@platforms//cpu:arm64",
         ],
+        dotnet = struct(
+            arch = "ARM64",
+            rid = "linux-arm64",
+        ),
     ),
     "x86_64-pc-windows-msvc": struct(
         compatible_with = [
             "@platforms//os:windows",
             "@platforms//cpu:x86_64",
         ],
+        dotnet = struct(
+            arch = "X64",
+            rid = "win-x64",
+        ),
     ),
     "arm64-pc-windows-msvc": struct(
         compatible_with = [
             "@platforms//os:windows",
             "@platforms//cpu:arm64",
         ],
+        dotnet = struct(
+            arch = "ARM64",
+            rid = "win-arm64",
+        ),
     ),
 }
 

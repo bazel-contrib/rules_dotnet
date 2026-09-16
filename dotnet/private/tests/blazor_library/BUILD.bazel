@@ -1,0 +1,86 @@
+load("@bazel_lib//:bzl_library.bzl", "bzl_library")
+load("//dotnet:defs.bzl", "blazor_component", "blazor_library", "blazor_publish", "csharp_library")
+load("//dotnet/private/tests:utils.bzl", "action_args_test")
+load(":publish_test.bzl", "publish_test")
+
+bzl_library(
+    name = "publish_test",
+    deps = ["@bazel_skylib//lib:unittest"],
+)
+
+blazor_component(
+    name = "root",
+    implicit_usings = True,
+    namespace = "BlazorLibraryTest",
+)
+
+blazor_library(
+    name = "basic",
+    srcs = [
+        "Basic.razor",
+        "Helper.cs",
+    ],
+    assets = [
+        "Basic.razor.css",
+        "wwwroot/app.css",
+        "wwwroot/app.js",
+    ],
+    component = ":root",
+    nullable = "enable",
+    target_frameworks = ["net10.0"],
+)
+
+blazor_library(
+    name = "basic_two",
+    srcs = [
+        "Basic.razor",
+        "Helper.cs",
+    ],
+    assets = [
+        "Basic.razor.css",
+        "wwwroot/app.css",
+        "wwwroot/app.js",
+    ],
+    component = ":root",
+    nullable = "enable",
+    target_frameworks = ["net10.0"],
+)
+
+csharp_library(
+    name = "plain",
+    srcs = ["Helper.cs"],
+    target_frameworks = ["net10.0"],
+)
+
+blazor_publish(
+    name = "publish",
+    main = ":basic_two",
+    nuget_asset_paths = ["wwwroot/_content/example/app.js"],
+    nuget_assets = ["wwwroot/app.js"],
+    target_frameworks = ["net10.0"],
+    deps = [
+        ":basic",
+        ":plain",
+    ],
+)
+
+action_args_test(
+    name = "library_output_test",
+    action_mnemonic = "CSharpCompile",
+    expected_nonexistent_partial_args = ["/target:exe"],
+    expected_partial_args = ["/target:library"],
+    target_under_test = ":basic_two",
+)
+
+publish_test(
+    name = "explicit_main_test",
+    target_under_test = ":publish",
+)
+
+test_suite(
+    name = "publish_api_tests",
+    tests = [
+        ":explicit_main_test",
+        ":library_output_test",
+    ],
+)

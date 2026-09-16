@@ -9,7 +9,7 @@ csharp_nunit_test(
         "MockFile.cs",
         "Runfiles.cs",
     ],
-    target_frameworks = ["net6.0"],
+    target_frameworks = ["net8.0"],
     deps = [
         "//tools/runfiles",
     ],

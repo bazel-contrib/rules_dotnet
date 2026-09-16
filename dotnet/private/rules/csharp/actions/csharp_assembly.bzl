@@ -53,7 +53,7 @@ def _write_internals_visible_to_csharp(actions, label_name, dll_name, others):
     return output
 
 def _collect_analyzer_dependencies(deps):
-    """Collect the runtime libraries of this analyzer. These will be passed to the compiler.
+    """Collect runtime libraries to stage beside the analyzer assembly.
 
     Args:
         deps: The list of dependencies of the analyzer.
@@ -112,7 +112,12 @@ def AssemblyAction(
         analyzer_configs,
         compiler_options,
         interceptors_namespaces,
-        is_windows):
+        is_windows,
+        extra_analyzers = [],
+        extra_analyzers_csharp = [],
+        generated_source_dirs = [],
+        additionalfiles_path_prefix = "",
+        analyzer_config_template = None):
     """Creates an action that runs the CSharp compiler with the specified inputs.
 
     This macro aims to match the [C# compiler](https://docs.microsoft.com/en-us/dotnet/csharp/language-reference/compiler-options/listed-alphabetically), with the inputs mapping to compiler options.
@@ -125,7 +130,7 @@ def AssemblyAction(
         additionalfiles: Names additional files that don't directly affect code generation but may be used by analyzers for producing errors or warnings.
         debug: Emits debugging information.
         defines: The list of conditional compilation symbols.
-        deps: The list of other libraries to be linked in to the assembly.
+        deps: Direct assembly and analyzer dependencies.
         exports: List of exported targets.
         targeting_pack: The targeting pack being used.
         internals_visible_to: An optional list of assemblies that can see this assemblies internal symbols.
@@ -159,6 +164,11 @@ def AssemblyAction(
         compiler_options: Additional options to pass to the compiler.
         interceptors_namespaces: Namespaces that are allowed to contain interceptors.
         is_windows: Whether or not the target is running on Windows.
+        extra_analyzers: Extra common analyzer DLLs for this compilation only.
+        extra_analyzers_csharp: Extra C# analyzer DLLs for this compilation only.
+        generated_source_dirs: Directories containing generated C# source files.
+        additionalfiles_path_prefix: Prefix to use when formatting /additionalfile paths.
+        analyzer_config_template: Analyzer config template whose exec-root token is expanded by the compiler wrapper.
     Returns:
         The compiled csharp artifacts.
     """
@@ -188,6 +198,8 @@ def AssemblyAction(
 
     # TODO: Ensure that all the analyzer DLLs also target netstandard2.0.
     analyzer_dlls = _collect_analyzer_dependencies(deps) if (is_analyzer or is_language_specific_analyzer) else []
+    compile_analyzers = depset(direct = extra_analyzers, transitive = [analyzers])
+    compile_analyzers_csharp = depset(direct = extra_analyzers_csharp, transitive = [analyzers_csharp])
 
     defines = framework_preprocessor_symbols(target_framework) + defines
 
@@ -202,6 +214,7 @@ def AssemblyAction(
 
     # Appsettings
     out_appsettings = copy_files_to_dir(target_name, actions, is_windows, appsetting_files, out_dir)
+    analyzer_data = copy_files_to_dir(target_name + ".analyzer_deps", actions, is_windows, analyzer_dlls, out_dir)
 
     if len(internals_visible_to) == 0 or is_analyzer:
         _compile(
@@ -210,8 +223,8 @@ def AssemblyAction(
             compiler_worker,
             label,
             additionalfiles,
-            analyzers,
-            analyzers_csharp,
+            compile_analyzers,
+            compile_analyzers_csharp,
             analyzer_configs,
             debug,
             defines,
@@ -241,6 +254,9 @@ def AssemblyAction(
             out_ref = out_ref,
             out_pdb = out_pdb,
             out_xml = out_xml,
+            generated_source_dirs = generated_source_dirs,
+            additionalfiles_path_prefix = additionalfiles_path_prefix,
+            analyzer_config_template = analyzer_config_template,
         )
     else:
         # If the user is using internals_visible_to generate an additional
@@ -261,8 +277,8 @@ def AssemblyAction(
             compiler_worker,
             label,
             additionalfiles,
-            analyzers,
-            analyzers_csharp,
+            compile_analyzers,
+            compile_analyzers_csharp,
             analyzer_configs,
             debug,
             defines,
@@ -292,6 +308,9 @@ def AssemblyAction(
             out_dll = out_dll,
             out_pdb = out_pdb,
             out_xml = out_xml,
+            generated_source_dirs = generated_source_dirs,
+            additionalfiles_path_prefix = additionalfiles_path_prefix,
+            analyzer_config_template = analyzer_config_template,
         )
 
         # Generate a ref-only DLL without internals
@@ -301,8 +320,8 @@ def AssemblyAction(
             compiler_worker,
             label,
             additionalfiles,
-            analyzers,
-            analyzers_csharp,
+            compile_analyzers,
+            compile_analyzers_csharp,
             analyzer_configs,
             debug,
             defines,
@@ -332,6 +351,9 @@ def AssemblyAction(
             out_ref = out_ref,
             out_pdb = None,
             out_xml = None,
+            generated_source_dirs = generated_source_dirs,
+            additionalfiles_path_prefix = additionalfiles_path_prefix,
+            analyzer_config_template = analyzer_config_template,
         )
 
     return (DotnetAssemblyCompileInfo(
@@ -340,12 +362,12 @@ def AssemblyAction(
         project_sdk = project_sdk,
         refs = [out_ref] if not is_analyzer else [],
         irefs = [out_iref] if out_iref else [out_ref],
-        analyzers = [] if (not is_analyzer) or is_language_specific_analyzer else ([out_dll] + analyzer_dlls),
-        analyzers_csharp = ([out_dll] + analyzer_dlls) if is_language_specific_analyzer else [],
+        analyzers = [] if (not is_analyzer) or is_language_specific_analyzer else [out_dll],
+        analyzers_csharp = [out_dll] if is_language_specific_analyzer else [],
         analyzers_fsharp = [],
         analyzers_vb = [],
         internals_visible_to = internals_visible_to or [],
-        compile_data = compile_data,
+        compile_data = compile_data + analyzer_data,
         exports = exports_files,
         transitive_refs = prefs if not (is_analyzer or is_language_specific_analyzer) else depset(),
         transitive_analyzers = analyzers,
@@ -407,7 +429,10 @@ def _compile(
         out_dll = None,
         out_ref = None,
         out_pdb = None,
-        out_xml = None):
+        out_xml = None,
+        generated_source_dirs = [],
+        additionalfiles_path_prefix = "",
+        analyzer_config_template = None):
     # Our goal is to match msbuild as much as reasonable
     # https://docs.microsoft.com/en-us/dotnet/csharp/language-reference/compiler-options/listed-alphabetically
     args = actions.args()
@@ -473,7 +498,8 @@ def _compile(
         outputs = [out_dll, out_ref, out_pdb]
     else:
         args.add("/refonly")
-        args.add(out_ref, format = "/out:%s")
+        args.add("/parallel-")
+        args.add("/out:" + out_ref.path)
         outputs = [out_ref]
 
     if out_xml != None:
@@ -497,11 +523,12 @@ def _compile(
     if run_analyzers:
         args.add_all(analyzer_assemblies, format_each = "/analyzer:%s")
         args.add_all(analyzer_assemblies_csharp, format_each = "/analyzer:%s")
-        args.add_all(additionalfiles, format_each = "/additionalfile:%s")
+        args.add_all(additionalfiles, format_each = "/additionalfile:" + additionalfiles_path_prefix + "%s")
         args.add_all(analyzer_configs, format_each = "/analyzerconfig:%s")
 
     # .cs files
     args.add_all(srcs)
+    args.add_all(generated_source_dirs, format_each = "/recurse:%s/*.cs", expand_directories = False)
 
     # resources
     add_resource_args(args, resources, label, out_dll.basename if out_dll != None else None, "csharp")
@@ -526,8 +553,15 @@ def _compile(
     args.set_param_file_format("multiline")
     args.use_param_file("@%s", use_always = True)
 
-    direct_inputs = srcs + resources + additionalfiles + analyzer_configs
+    direct_inputs = srcs + resources + additionalfiles + analyzer_configs + generated_source_dirs + [toolchain.csharp_compiler.files_to_run.executable]
+    direct_inputs += [analyzer_config_template] if analyzer_config_template else []
     direct_inputs += [keyfile] if keyfile else []
+
+    action_env = {
+        "DOTNET_CLI_HOME": toolchain.runtime.files_to_run.executable.dirname,
+    }
+    if analyzer_config_template:
+        action_env["RULES_DOTNET_ANALYZER_CONFIG_TEMPLATE"] = analyzer_config_template.path
 
     if compiler_worker:
         executable = compiler_worker.executable
@@ -540,9 +574,8 @@ def _compile(
         executable = compiler_wrapper
         execution_requirements = {"supports-path-mapping": "1"}
 
-    # Both the worker and the wrapper script take the dotnet host and csc.dll
-    # first, then the csc arguments:
-    # https://learn.microsoft.com/en-us/dotnet/csharp/language-reference/compiler-options/
+    # dotnet.exe csc.dll /noconfig <other csc args>
+    # https://docs.microsoft.com/en-us/dotnet/csharp/language-reference/compiler-options/command-line-building-with-csc-exe
     actions.run(
         mnemonic = "CSharpCompile",
         progress_message = "Compiling " + target_name + (" (internals ref-only dll)" if out_dll == None else ""),
@@ -568,8 +601,6 @@ def _compile(
             toolchain.csharp_compiler.files_to_run.executable.path,
         ] + (["--prune_unused_inputs"] if unused_inputs else []) + [args],
         unused_inputs_list = unused_inputs,
-        env = {
-            "DOTNET_CLI_HOME": toolchain.compiler_host.files_to_run.executable.dirname,
-        },
+        env = action_env,
         execution_requirements = execution_requirements,
     )

@@ -3,14 +3,14 @@ load("//dotnet:defs.bzl", "fsharp_library")
 fsharp_library(
     name = "a",
     srcs = ["a.fs"],
-    target_frameworks = ["net6.0"],
+    target_frameworks = ["net8.0"],
     deps = [":b"],
 )
 
 fsharp_library(
     name = "b",
     srcs = ["b.fs"],
-    target_frameworks = ["net6.0"],
+    target_frameworks = ["net8.0"],
     exports = [":c"],
     deps = [":c"],
 )
@@ -18,5 +18,5 @@ fsharp_library(
 fsharp_library(
     name = "c",
     srcs = ["c.fs"],
-    target_frameworks = ["net6.0"],
+    target_frameworks = ["net8.0"],
 )

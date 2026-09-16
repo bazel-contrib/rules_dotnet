@@ -7,7 +7,6 @@ load(
     "//dotnet/private:common.bzl",
     "collect_compile_info",
     "collect_transitive_runfiles",
-    "get_toolchain",
 )
 load("//dotnet/private:providers.bzl", "DotnetAssemblyCompileInfo", "DotnetAssemblyRuntimeInfo", "NuGetInfo")
 
@@ -27,7 +26,7 @@ def _import_library(ctx):
         ctx.attr.deps,
         None,
         [],
-        get_toolchain(ctx).strict_deps[BuildSettingInfo].value,
+        ctx.attr._strict_deps[BuildSettingInfo].value,
     )
 
     nuget_info = NuGetInfo(
@@ -156,10 +155,11 @@ import_library = rule(
             doc = "The `.nupkg` file providing this import",
             allow_single_file = True,
         ),
+        "_strict_deps": attr.label(
+            doc = "Whether to use strict deps or not",
+            default = "//dotnet/settings:strict_deps",
+        ),
     },
-    toolchains = [
-        "//dotnet:toolchain_type",
-    ],
     executable = False,
 )
 

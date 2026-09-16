@@ -1,6 +1,6 @@
 "Tests for ensuring analyzers' dependencies are correctly passed in."
 
-load("@bazel_skylib//lib:unittest.bzl", "analysistest")
+load("@bazel_skylib//lib:unittest.bzl", "analysistest", "asserts")
 load("//dotnet:defs.bzl", "csharp_library")
 load(
     "//dotnet/private:providers.bzl",
@@ -25,14 +25,16 @@ def _has_analyzer_test_impl(ctx):
     if ctx.attr.target_language == "any":
         actual_analyzer_libs = compile_info.analyzers + compile_info.transitive_analyzers.to_list()
     elif ctx.attr.target_language == "csharp":
-        actual_analyzer_libs = compile_info.csharp_analyzers + compile_info.transitive_csharp_analyzers.to_list()
+        actual_analyzer_libs = compile_info.analyzers_csharp + compile_info.transitive_analyzers_csharp.to_list()
     elif ctx.attr.target_language == "fsharp":
-        actual_analyzer_libs = compile_info.fsharp_analyzers + compile_info.transitive_fsharp_analyzers.to_list()
+        actual_analyzer_libs = compile_info.analyzers_fsharp + compile_info.transitive_analyzers_fsharp.to_list()
     elif ctx.attr.target_language == "vb":
-        actual_analyzer_libs = compile_info.vb_analyzers + compile_info.transitive_vb_analyzers.to_list()
+        actual_analyzer_libs = compile_info.analyzers_vb + compile_info.transitive_analyzers_vb.to_list()
     else:
         fail("Unknown target language: {}".format(ctx.attr.target_language))
 
+    compile_action = [action for action in analysistest.target_actions(env) if action.mnemonic == "CSharpCompile"][0]
+    compile_inputs = compile_action.inputs.to_list()
     for expected_analyzer in ctx.attr.analyzers:
         expected_compile_info = expected_analyzer[DotnetAssemblyCompileInfo]
         expected_runtime_info = expected_analyzer[DotnetAssemblyRuntimeInfo]
@@ -40,9 +42,14 @@ def _has_analyzer_test_impl(ctx):
             # This assembly is an analyzer itself.
             expected_libs = expected_compile_info.analyzers
         else:
-            # This assembly is not an analyzer, but its runtime libraries will be
-            # used by analyzers.
-            expected_libs = expected_runtime_info.libs
+            for dependency in expected_runtime_info.libs:
+                asserts.false(env, any([library.basename == dependency.basename for library in actual_analyzer_libs]))
+                for analyzer in actual_analyzer_libs:
+                    staged = [file for file in compile_inputs if file.basename == dependency.basename and file.dirname == analyzer.dirname]
+                    asserts.equals(env, 1, len(staged), "Analyzer dependency must be staged beside " + analyzer.path)
+                    if staged:
+                        asserts.false(env, "/analyzer:" + staged[0].path in compile_action.argv)
+            continue
 
         for expected_lib in expected_libs:
             if expected_lib not in actual_analyzer_libs:

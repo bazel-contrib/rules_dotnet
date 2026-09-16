@@ -11,7 +11,7 @@ load(
 csharp_nunit_test(
     name = "main",
     srcs = ["Test.cs"],
-    target_frameworks = ["net6.0"],
+    target_frameworks = ["net8.0"],
     deps = [
         "@paket.rules_dotnet_dev_nuget_packages//system.text.json",
     ],

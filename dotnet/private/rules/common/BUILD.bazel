@@ -14,14 +14,20 @@ bzl_library(
 bzl_library(
     name = "library",
     srcs = ["library.bzl"],
-    visibility = ["//dotnet:__subpackages__"],
+    visibility = [
+        "//dotnet:__subpackages__",
+        "//proto:__subpackages__",
+    ],
     deps = ["@bazel_skylib//rules:common_settings"],
 )
 
 bzl_library(
     name = "attrs",
     srcs = ["attrs.bzl"],
-    visibility = ["//dotnet:__subpackages__"],
+    visibility = [
+        "//dotnet:__subpackages__",
+        "//proto:__subpackages__",
+    ],
     deps = [
         "//dotnet/private:providers",
         "//dotnet/private/sdk/apphost_packs:apphost_pack_transition",
@@ -29,6 +35,17 @@ bzl_library(
         "//dotnet/private/sdk/targeting_packs:targeting_pack_transition",
         "//dotnet/private/transitions:default_transition",
         "@bazel_lib//lib:expand_make_vars",
+        "@bazel_lib//lib:stamping",
         "@bazel_skylib//lib:dicts",
     ],
+)
+
+bzl_library(
+    name = "stamping",
+    srcs = ["stamping.bzl"],
+    visibility = [
+        "//dotnet:__subpackages__",
+        "//proto:__subpackages__",
+    ],
+    deps = ["@bazel_lib//lib:stamping"],
 )

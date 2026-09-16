@@ -1,0 +1,3 @@
+group blazor_dependencies
+    ExCSS
+    System.CommandLine

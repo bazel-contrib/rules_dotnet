@@ -60,14 +60,15 @@ def test_framework_preprocessor_defines():
         action_mnemonic = "CSharpCompile",
         expected_partial_args = [
             "/d:NET",
+            "/d:NETCOREAPP",
             "/d:NET8_0",
             "/d:NET8_0_OR_GREATER",
             "/d:NET6_0_OR_GREATER",
-            "/d:NETCOREAPP",
             "/d:NETCOREAPP3_1_OR_GREATER",
         ],
         expected_nonexistent_partial_args = [
             "/d:NETSTANDARD",
+            "/d:NETSTANDARD2_1_OR_GREATER",
             "/d:NETFRAMEWORK",
             "/d:NET9_0_OR_GREATER",
             "/d:NET472_OR_GREATER",

@@ -4,8 +4,8 @@ namespace D {
     {
       #if NETSTANDARD2_1
       return "netstandard2.1";
-      #elif NET6_0
-      return "net6.0";
+      #elif NET8_0
+      return "net8.0";
       #endif
     }
 

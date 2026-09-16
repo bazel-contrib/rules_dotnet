@@ -5,13 +5,9 @@ Rule for assembling the publish output of a .NET binary.
 load("@bazel_skylib//lib:paths.bzl", "paths")
 load("@bazel_skylib//lib:shell.bzl", "shell")
 load("//dotnet/private:common.bzl", "generate_depsjson", "generate_runtimeconfig", "runtime_target_path")
-load(
-    "//dotnet/private:providers.bzl",
-    "DotnetAssemblyCompileInfo",
-    "DotnetAssemblyRuntimeInfo",
-    "DotnetBinaryInfo",
-    "DotnetCrossgen2PackInfo",
-)
+load("//dotnet/private:providers.bzl", "DotnetApphostPackInfo", "DotnetAssemblyCompileInfo", "DotnetAssemblyRuntimeInfo", "DotnetBinaryInfo", "DotnetCrossgen2PackInfo", "DotnetRuntimePackInfo")
+load("//dotnet/private/sdk/apphost_packs:apphost_pack_transition.bzl", "apphost_pack_transition")
+load("//dotnet/private/sdk/runtime_packs:runtime_pack_transition.bzl", "runtime_pack_default_transition", "runtime_pack_web_transition")
 load("//dotnet/private/transitions:tfm_transition.bzl", "tfm_transition")
 
 # How many sources one `cp` invocation takes. A self-contained publish copies
@@ -393,8 +389,10 @@ def _publish_binary_impl(ctx):
     if ctx.attr.ready_to_run_composite and not (ctx.attr.ready_to_run and is_self_contained):
         fail("ready_to_run_composite requires ready_to_run and self_contained")
     assembly_name = assembly_runtime_info.name
-    runtime_pack_info = binary_info.runtime_pack_info if is_self_contained else None
-    runtime_identifier = ctx.attr.runtime_identifier if ctx.attr.runtime_identifier else binary_info.runtime_pack_info.runtime_identifier
+    selected_runtime_pack = ctx.attr._runtime_pack_web if assembly_compile_info.project_sdk == "web" else ctx.attr._runtime_pack_default
+    selected_runtime_pack_info = selected_runtime_pack[0][DotnetRuntimePackInfo]
+    runtime_pack_info = selected_runtime_pack_info if is_self_contained else None
+    runtime_identifier = ctx.attr.runtime_identifier if ctx.attr.runtime_identifier else selected_runtime_pack_info.runtime_identifier
     roll_forward_behavior = ctx.attr.roll_forward_behavior
 
     depsjson = ctx.actions.declare_file("{}/publish/{}/{}.deps.json".format(ctx.label.name, runtime_identifier, assembly_name))
@@ -447,7 +445,7 @@ def _publish_binary_impl(ctx):
         ready_to_run,
     )
 
-    apphost_shim = _create_shim_exe(ctx, binary_info.apphost_pack_info, main_dll, runtime_identifier)
+    apphost_shim = _create_shim_exe(ctx, ctx.attr._apphost_pack[0][DotnetApphostPackInfo], main_dll, runtime_identifier)
 
     return [
         DefaultInfo(
@@ -514,6 +512,11 @@ boundaries. Requires `ready_to_run` and `self_contained`, because the framework
 has to be part of the image.""",
             default = False,
         ),
+        "_apphost_pack": attr.label(
+            default = "//dotnet/private/sdk/apphost_packs:apphost_pack",
+            providers = [DotnetApphostPackInfo],
+            cfg = apphost_pack_transition,
+        ),
         "_crossgen2_pack": attr.label(
             doc = """The crossgen2 pack to compile ReadyToRun images with.
 
@@ -527,6 +530,19 @@ cross-compiles, so what matters is the machine it runs on.""",
             executable = True,
             default = "//dotnet/private/tools/apphost_shimmer:apphost_shimmer",
             cfg = "exec",
+        ),
+        "_runtime_pack_default": attr.label(
+            default = "//dotnet/private/sdk/runtime_packs:runtime_pack",
+            providers = [DotnetRuntimePackInfo],
+            cfg = runtime_pack_default_transition,
+        ),
+        "_runtime_pack_web": attr.label(
+            default = "//dotnet/private/sdk/runtime_packs:runtime_pack",
+            providers = [DotnetRuntimePackInfo],
+            cfg = runtime_pack_web_transition,
+        ),
+        "_allowlist_function_transition": attr.label(
+            default = "@bazel_tools//tools/allowlists/function_transition_allowlist",
         ),
         "_windows_constraint": attr.label(default = "@platforms//os:windows"),
     },

@@ -9,7 +9,7 @@ def csharp_warnings():
     csharp_library(
         name = "csharp_all_warnings",
         srcs = ["warnings.cs"],
-        target_frameworks = ["net6.0"],
+        target_frameworks = ["net8.0"],
         treat_warnings_as_errors = True,
         tags = ["manual"],
     )
@@ -24,7 +24,7 @@ def csharp_warnings():
     csharp_library(
         name = "csharp_all_warnings_except_some",
         srcs = ["warnings.cs"],
-        target_frameworks = ["net6.0"],
+        target_frameworks = ["net8.0"],
         treat_warnings_as_errors = True,
         warnings_not_as_errors = ["CS1591"],
         tags = ["manual"],
@@ -40,7 +40,7 @@ def csharp_warnings():
     csharp_library(
         name = "csharp_warnings_as_errors",
         srcs = ["warnings.cs"],
-        target_frameworks = ["net6.0"],
+        target_frameworks = ["net8.0"],
         warnings_as_errors = ["CS0025", "CS0026"],
         tags = ["manual"],
     )
@@ -55,7 +55,7 @@ def csharp_warnings():
     csharp_library(
         name = "csharp_warnings_not_as_errors",
         srcs = ["warnings.cs"],
-        target_frameworks = ["net6.0"],
+        target_frameworks = ["net8.0"],
         treat_warnings_as_errors = True,
         warnings_not_as_errors = ["CS0025", "CS0026"],
         tags = ["manual"],
@@ -71,7 +71,7 @@ def csharp_warnings():
     csharp_library(
         name = "csharp_warning_level",
         srcs = ["warnings.cs"],
-        target_frameworks = ["net6.0"],
+        target_frameworks = ["net8.0"],
         warning_level = 5,
         tags = ["manual"],
     )
@@ -86,7 +86,7 @@ def csharp_warnings():
     csharp_library(
         name = "csharp_nowarn",
         srcs = ["warnings.cs"],
-        target_frameworks = ["net6.0"],
+        target_frameworks = ["net8.0"],
         nowarn = ["CS1234", "CS0000"],
         tags = ["manual"],
     )

@@ -9,7 +9,7 @@ fsharp_library(
     name = "lib",
     srcs = ["lib.fs"],
     internals_visible_to = ["lib_test"],
-    target_frameworks = ["net6.0"],
+    target_frameworks = ["net8.0"],
     deps = [
         "@paket.rules_dotnet_dev_nuget_packages//fsharp.core",
     ],
@@ -18,7 +18,7 @@ fsharp_library(
 select_file(
     name = "docs_xml",
     srcs = ":lib",
-    subpath = "lib/net6.0/lib.xml",
+    subpath = "lib/net8.0/lib.xml",
 )
 
 diff_test(

@@ -2,8 +2,7 @@
 
 load("//dotnet/private/sdk:packs.bzl", "TARGETING_PACK_LOOKUP_TABLE")
 
-def _impl(settings, attr):
-    project_sdk = attr.project_sdk
+def _transition(settings, project_sdk):
     incoming_target_framework = settings["//dotnet:target_framework"]
 
     supported_tfms = TARGETING_PACK_LOOKUP_TABLE.get(project_sdk)
@@ -14,8 +13,29 @@ def _impl(settings, attr):
 
     fail("No targeting pack found for project SDK/target framework: {}/{}".format(project_sdk, incoming_target_framework))
 
+def _impl(settings, attr):
+    return _transition(settings, attr.project_sdk)
+
+def _default_impl(settings, _attr):
+    return _transition(settings, "default")
+
+def _web_impl(settings, _attr):
+    return _transition(settings, "web")
+
 targeting_pack_transition = transition(
     implementation = _impl,
+    inputs = ["//dotnet/private/sdk/targeting_packs:targeting_pack", "//dotnet:target_framework"],
+    outputs = ["//dotnet/private/sdk/targeting_packs:targeting_pack"],
+)
+
+targeting_pack_default_transition = transition(
+    implementation = _default_impl,
+    inputs = ["//dotnet/private/sdk/targeting_packs:targeting_pack", "//dotnet:target_framework"],
+    outputs = ["//dotnet/private/sdk/targeting_packs:targeting_pack"],
+)
+
+targeting_pack_web_transition = transition(
+    implementation = _web_impl,
     inputs = ["//dotnet/private/sdk/targeting_packs:targeting_pack", "//dotnet:target_framework"],
     outputs = ["//dotnet/private/sdk/targeting_packs:targeting_pack"],
 )

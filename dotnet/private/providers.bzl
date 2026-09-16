@@ -41,6 +41,33 @@ DotnetAssemblyRuntimeInfo = provider(
     },
 )
 
+BlazorLibraryInfo = provider(
+    doc = "Blazor library output: a .NET assembly together with Blazor assets.",
+    fields = {
+        "assembly_compile_info": "DotnetAssemblyCompileInfo: Compile provider for the generated assembly",
+        "assembly_runtime_info": "DotnetAssemblyRuntimeInfo: Runtime provider for the generated assembly",
+        "compilation": "dict: AssemblyAction inputs for compiling the application's entry assembly during publishing",
+        "assets": "list[File]: Direct static web assets contributed by this target",
+        "scoped_css": "list[File]: Direct scoped CSS outputs contributed by this target",
+        "transitive_assets": "depset[File]: Static web assets from this target and transitive Blazor dependencies",
+        "transitive_scoped_css": "depset[File]: Scoped CSS outputs from this target and transitive Blazor dependencies",
+        "static_web_assets": "list[struct]: Direct publishable assets with source assembly and relative path metadata",
+        "transitive_static_web_assets": "list[struct]: Publishable assets from this target and transitive Blazor dependencies",
+    },
+)
+
+BlazorComponentInfo = provider(
+    doc = "Blazor component context metadata for virtual paths, namespaces, imports, and global usings.",
+    fields = {
+        "effective_root": "string: Virtual path prefix contributed by this component and its parents",
+        "effective_namespace": "string: Namespace contributed by this component and its parents",
+        "import_files": "list[File]: Global imports visible from this component, parent first",
+        "import_target_paths": "list[string]: Virtual target paths for import_files",
+        "global_usings": "list[string]: C# global using declarations visible from this component, parent first",
+        "global_using_files": "list[File]: Generated C# source files declaring global_usings",
+    },
+)
+
 DotnetDepVariantInfo = provider(
     doc = "A wrapper provider for a dependency. The dependency can be a project " +
           "dependency, in which case the `assembly_runtime_info` will be populated" +
@@ -67,7 +94,6 @@ DotnetBinaryInfo = provider(
     fields = {
         "dll": "File: The main binary dll",
         "transitive_runtime_deps": "list[DotnetAssemblyRuntimeInfo]: The transitive runtime dependencies of the binary",
-        "apphost_pack_info": "DotnetApphostPackInfo: The apphost pack for the binary",
         "runtime_pack_info": "DotnetRuntimePackInfo: The runtime pack for the binary",
     },
 )

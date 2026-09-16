@@ -1,6 +1,8 @@
 """This module implements an alias rule to the resolved toolchain.
 """
 
+load("//dotnet/private:providers.bzl", "DotnetAssemblyCompileInfo", "DotnetAssemblyRuntimeInfo")
+
 DOC = """\
 Exposes a concrete toolchain which is the result of Bazel resolving the
 toolchain for the execution or target platform.
@@ -23,4 +25,21 @@ resolved_toolchain = rule(
     implementation = _resolved_toolchain_impl,
     toolchains = ["//dotnet:toolchain_type"],
     doc = DOC,
+)
+
+def _resolved_toolchain_assembly_impl(ctx):
+    toolchain_info = ctx.toolchains["//dotnet:toolchain_type"]
+    assembly = getattr(toolchain_info, ctx.attr.assembly)
+    return [
+        assembly[DefaultInfo],
+        assembly[DotnetAssemblyCompileInfo],
+        assembly[DotnetAssemblyRuntimeInfo],
+    ]
+
+resolved_toolchain_assembly = rule(
+    implementation = _resolved_toolchain_assembly_impl,
+    attrs = {
+        "assembly": attr.string(mandatory = True),
+    },
+    toolchains = ["//dotnet:toolchain_type"],
 )

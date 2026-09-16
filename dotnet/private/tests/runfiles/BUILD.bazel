@@ -7,7 +7,7 @@ csharp_nunit_test(
     name = "runfiles_test",
     srcs = ["RunfilesTest.cs"],
     data = ["nested_folder/data-file"],
-    target_frameworks = ["net6.0"],
+    target_frameworks = ["net8.0"],
     deps = [
         "//tools/runfiles",
     ],

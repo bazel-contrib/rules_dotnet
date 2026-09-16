@@ -1,0 +1,159 @@
+load("@rules_dotnet//dotnet:toolchain.bzl", "dotnet_toolchain")
+load("@rules_dotnet//dotnet:defs.bzl", "import_dll", "import_library")
+
+filegroup(
+    name = "csc_binary",
+    srcs = [
+        "sdk/{sdk_version}/Roslyn/bincore/csc.dll",
+    ],
+    data = glob([
+        "sdk/{sdk_version}/Roslyn/bincore/**/*",
+        "host/**/*",
+    ]),
+    visibility = ["//visibility:public"],
+)
+
+filegroup(
+    name = "runtime",
+    srcs = select({
+        "@bazel_tools//src/conditions:windows": ["dotnet.exe"],
+        "//conditions:default": ["dotnet"],
+    }),
+    data = glob([
+        "host/**/*",
+        "packs/Microsoft.NETCore.App.Host.{runtime_identifier}/**/*",
+        "sdk/**/*",
+        "shared/Microsoft.AspNetCore.App/**/*",
+        "shared/Microsoft.NETCore.App/**/*",
+    ]),
+    visibility = ["//visibility:public"],
+)
+
+import_dll(
+    name = "host_model",
+    version = "{runtime_version}",
+    dll = "sdk/{sdk_version}/Microsoft.NET.HostModel.dll",
+)
+
+filegroup(
+    name = "fsc_binary",
+    # We glob both fsc.dll and fsc.exe for backwards compatibility
+    # Pre .Net 5.0 the file was called fsc.exe but has been changed to fsc.dll
+    srcs = glob(
+        [
+            "sdk/**/FSharp/fsc.dll*",
+            "sdk/**/FSharp/fsc.exe*",
+        ],
+        allow_empty = True,
+    ) or fail("glob is empty"),
+    data = glob([
+        "host/**/*",
+        "sdk/{sdk_version}/FSharp/**/*.dll",
+    ]) + [
+        "sdk/{sdk_version}/FSharp/fsc.runtimeconfig.json",
+    ],
+    visibility = ["//visibility:public"],
+)
+
+filegroup(
+    name = "targeting_pack_default_refs",
+    srcs = glob(
+        ["packs/Microsoft.NETCore.App.Ref/{runtime_version}/ref/{runtime_tfm}/*.dll"],
+        allow_empty = False,
+    ),
+)
+
+filegroup(
+    name = "targeting_pack_web_refs",
+    srcs = glob(
+        ["packs/Microsoft.AspNetCore.App.Ref/{runtime_version}/ref/{runtime_tfm}/*.dll"],
+        allow_empty = False,
+    ),
+)
+
+filegroup(
+    name = "runtime_pack_default_libs",
+    srcs = glob(
+        ["shared/Microsoft.NETCore.App/{runtime_version}/*.dll"],
+        allow_empty = False,
+    ),
+)
+
+filegroup(
+    name = "runtime_pack_default_native",
+    srcs = glob([
+        "shared/Microsoft.NETCore.App/{runtime_version}/*.so",
+        "shared/Microsoft.NETCore.App/{runtime_version}/*.dylib",
+    ], allow_empty = True),
+)
+
+filegroup(
+    name = "runtime_pack_web_libs",
+    srcs = glob(
+        ["shared/Microsoft.AspNetCore.App/{runtime_version}/*.dll"],
+        allow_empty = False,
+    ),
+)
+
+filegroup(
+    name = "runtime_pack_web_native",
+    srcs = glob([
+        "shared/Microsoft.AspNetCore.App/{runtime_version}/*.so",
+        "shared/Microsoft.AspNetCore.App/{runtime_version}/*.dylib",
+    ], allow_empty = True),
+)
+
+filegroup(
+    name = "wasm_workload_files",
+    srcs = glob([
+        "metadata/workloads/**/wasm-tools/**",
+        "packs/Microsoft.NET.Runtime.WebAssembly.Sdk/**/*",
+        "packs/Microsoft.NETCore.App.Runtime.Mono.browser-wasm/**/*",
+        "sdk-manifests/**/microsoft.net.workload.mono.toolchain*/**/*",
+    ], allow_empty = True),
+)
+
+import_library(
+    name = "aspnetcore_razor_toolset",
+    library_name = "Microsoft.CodeAnalysis.Razor.Compiler.Toolset",
+    version = "{runtime_version}",
+    refs = glob(
+        [
+            "sdk/{sdk_version}/Sdks/Microsoft.NET.Sdk.Razor/source-generators/*.dll",
+            "sdk/{sdk_version}/Roslyn/bincore/Microsoft.CodeAnalysis.dll",
+            "sdk/{sdk_version}/Roslyn/bincore/Microsoft.CodeAnalysis.CSharp.dll",
+        ],
+        allow_empty = False,
+    ),
+    libs = glob(
+        [
+            "sdk/{sdk_version}/Sdks/Microsoft.NET.Sdk.Razor/source-generators/*.dll",
+            "sdk/{sdk_version}/Roslyn/bincore/Microsoft.CodeAnalysis.dll",
+            "sdk/{sdk_version}/Roslyn/bincore/Microsoft.CodeAnalysis.CSharp.dll",
+        ],
+        allow_empty = False,
+    ),
+)
+
+dotnet_toolchain(
+    name = "dotnet_toolchain",
+    runtime = ":runtime",
+    csharp_compiler = ":csc_binary",
+    fsharp_compiler = ":fsc_binary",
+    host_model = ":host_model",
+    sdk_version = "{sdk_version}",
+    runtime_version = "{runtime_version}",
+    runtime_tfm = "{runtime_tfm}",
+    csharp_default_version = "{csharp_default_version}",
+    fsharp_default_version = "{fsharp_default_version}",
+    runtime_identifier = "{runtime_identifier}",
+    aspnetcore_razor_toolset = ":aspnetcore_razor_toolset",
+    targeting_pack_default_refs = [":targeting_pack_default_refs"],
+    targeting_pack_web_refs = [":targeting_pack_web_refs"],
+    runtime_pack_default_libs = [":runtime_pack_default_libs"],
+    runtime_pack_default_native = [":runtime_pack_default_native"],
+    runtime_pack_web_libs = [":runtime_pack_web_libs"],
+    runtime_pack_web_native = [":runtime_pack_web_native"],
+    wasm_workload_files = [":wasm_workload_files"],
+    visibility = ["//visibility:public"],
+)

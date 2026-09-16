@@ -14,7 +14,7 @@ load(
     "is_standard_framework",
     "to_rlocation_path",
 )
-load("//dotnet/private:providers.bzl", "DotnetApphostPackInfo", "DotnetAssemblyRuntimeInfo", "DotnetBinaryInfo", "DotnetRuntimePackInfo")
+load("//dotnet/private:providers.bzl", "DotnetAssemblyRuntimeInfo", "DotnetBinaryInfo")
 
 def _collect_native_dlls(assembly_runtime_info, deps):
     """Groups the native DLLs of a target and its dependencies by RID.
@@ -178,11 +178,12 @@ def build_binary(ctx, compile_action):
         files = depset(default_info_files),
     )
 
+    toolchain = get_toolchain(ctx)
+
     dotnet_binary_info = DotnetBinaryInfo(
         dll = dll,
         transitive_runtime_deps = transitive_runtime_deps,
-        apphost_pack_info = ctx.attr._apphost_pack[0][DotnetApphostPackInfo],
-        runtime_pack_info = ctx.attr._runtime_pack[0][DotnetRuntimePackInfo],
+        runtime_pack_info = toolchain.dotnetinfo.runtime_pack_infos[ctx.attr.project_sdk],
     )
 
     return [default_info, dotnet_binary_info, compile_provider, runtime_provider, RunEnvironmentInfo(environment = {key: expand_variables(ctx, expand_locations(ctx, value, ctx.attr.data)) for key, value in ctx.attr.envs.items()}, inherited_environment = ctx.attr.env_inherit)]

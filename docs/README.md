@@ -65,6 +65,51 @@ More information on these flags can be found here:
 
 Various examples of how each rule can be used are in the [examples](../examples) folder.
 
+### gRPC C# generation
+
+Use the Paket-pinned `Grpc.Tools` package through its public file target:
+
+```starlark
+load("@rules_dotnet//proto:defs.bzl", "csharp_grpc_proto_compiler")
+
+csharp_grpc_proto_compiler(
+	name = "grpc_csharp_proto",
+	grpc_tools = "@paket.main//grpc.tools:files",
+)
+```
+
+Add `:grpc_csharp_proto` alongside `@rules_dotnet//proto:csharp_proto` in
+`csharp_proto_library.proto_compilers`. The first generates gRPC services; the
+second generates protobuf messages. Generated-code runtime packages such as
+`Google.Protobuf` and `Grpc.Core.Api` belong in the library's `deps`.
+
+The plugin is selected from the package using Bazel's **execution platform**,
+not the machine evaluating the BUILD file or the application's target platform.
+The version and checksum remain controlled by Paket; no direct archive repository
+import is needed. `options` accepts gRPC generation options such as `no_server`
+and `internal_access`.
+
+| Execution platform | Packaged binary |
+| --- | --- |
+| Linux x86, x64, ARM64 | Corresponding `tools/linux_<architecture>/grpc_csharp_plugin` |
+| macOS x64, ARM64 | Architecture-specific binary when present, otherwise `tools/macosx_universal/grpc_csharp_plugin` |
+| Windows x86, x64 | Corresponding `tools/windows_<architecture>/grpc_csharp_plugin.exe` |
+| Windows ARM64 | Native ARM64 binary when present, otherwise x64 requiring OS emulation |
+
+`Grpc.Tools` 2.84.0 provides a macOS universal binary with native x64 and ARM64
+slices. macOS ARM64 never falls back to an x64-only binary and does not require
+Rosetta. Windows ARM64 may use x64 emulation when the package lacks a native binary.
+For platforms the package does not support, pass
+an execution-compatible Bazel executable using `plugin` instead of `grpc_tools`.
+For example, `plugin` may reference a `cc_binary` that builds the gRPC C# plugin
+from a separately pinned source dependency. Bazel builds that target for the
+execution platform. Missing or ambiguous packaged binaries fail during analysis
+with an actionable diagnostic.
+
+The lower-level `grpc_csharp_plugin(grpc_tools = ...)` rule is also available for
+other protoc toolchains; consume it through an executable attribute with
+`cfg = "exec"`.
+
 ## IDE Support
 
 Currently the rules do not support IDE support out of the box so for

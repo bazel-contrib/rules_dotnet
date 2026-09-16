@@ -17,7 +17,7 @@ def _csharp_binary(name):
             "appsettings.json",
             "appsettings.Development.json",
         ],
-        target_frameworks = ["net6.0"],
+        target_frameworks = ["net8.0"],
     )
 
     analysis_test(
@@ -34,7 +34,7 @@ def _csharp_publish(name):
             "appsettings.json",
             "appsettings.Development.json",
         ],
-        target_frameworks = ["net6.0"],
+        target_frameworks = ["net8.0"],
     )
 
     publish_binary(
@@ -42,7 +42,7 @@ def _csharp_publish(name):
         binary = name + "_binary",
         roll_forward_behavior = "Major",
         self_contained = False,
-        target_framework = "net6.0",
+        target_framework = "net8.0",
     )
 
     analysis_test(
@@ -59,7 +59,7 @@ def _csharp_publish_self_contained(name):
             "appsettings.json",
             "appsettings.Development.json",
         ],
-        target_frameworks = ["net6.0"],
+        target_frameworks = ["net8.0"],
     )
 
     publish_binary(
@@ -67,7 +67,7 @@ def _csharp_publish_self_contained(name):
         binary = name + "_binary",
         roll_forward_behavior = "Major",
         self_contained = True,
-        target_framework = "net6.0",
+        target_framework = "net8.0",
     )
 
     analysis_test(
@@ -84,7 +84,7 @@ def _fsharp_binary(name):
             "appsettings.json",
             "appsettings.Development.json",
         ],
-        target_frameworks = ["net6.0"],
+        target_frameworks = ["net8.0"],
     )
 
     analysis_test(
@@ -101,7 +101,7 @@ def _fsharp_publish(name):
             "appsettings.json",
             "appsettings.Development.json",
         ],
-        target_frameworks = ["net6.0"],
+        target_frameworks = ["net8.0"],
     )
 
     publish_binary(
@@ -109,7 +109,7 @@ def _fsharp_publish(name):
         binary = name + "_binary",
         roll_forward_behavior = "Major",
         self_contained = False,
-        target_framework = "net6.0",
+        target_framework = "net8.0",
     )
 
     analysis_test(
@@ -126,7 +126,7 @@ def _fsharp_publish_self_contained(name):
             "appsettings.json",
             "appsettings.Development.json",
         ],
-        target_frameworks = ["net6.0"],
+        target_frameworks = ["net8.0"],
     )
 
     publish_binary(
@@ -134,7 +134,7 @@ def _fsharp_publish_self_contained(name):
         binary = name + "_binary",
         roll_forward_behavior = "Major",
         self_contained = True,
-        target_framework = "net6.0",
+        target_framework = "net8.0",
     )
 
     analysis_test(

@@ -8,13 +8,13 @@ csharp_library(
     name = "Unsafe",
     srcs = ["unsafe.cs"],
     allow_unsafe_blocks = True,
-    target_frameworks = ["net6.0"],
+    target_frameworks = ["net8.0"],
 )
 
 csharp_nunit_test(
     name = "UnsafeTest",
     srcs = ["unsafetest.cs"],
-    target_frameworks = ["net6.0"],
+    target_frameworks = ["net8.0"],
     deps = [
         ":Unsafe",
     ],

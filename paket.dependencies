@@ -3,10 +3,15 @@ group sdk_gen_dependencies
     framework: net10.0
     source https://api.nuget.org/v3/index.json
 
-    nuget FSharp.Core 10.1.201
-    nuget NuGet.Packaging 7.0.0
-    nuget NuGet.Protocol 7.0.0
-    nuget System.Text.Json 10.0.0
+    nuget FSharp.Core 10.1.300
+    nuget Argu 6.2.5
+    nuget Paket.Core 10.3.1
+    nuget NuGet.PackageManagement 7.6.0
+    nuget NuGet.Packaging 7.6.0
+    nuget NuGet.Protocol 7.6.0
+    nuget NuGet.Credentials 7.6.0
+    nuget NuGet.Resolver 7.6.0
+    nuget System.Text.Json 10.0.8
 
 group rules_dotnet_dev_nuget_packages
     framework: net9.0,netstandard2.1,netstandard2.0
@@ -19,7 +24,7 @@ group rules_dotnet_dev_nuget_packages
     nuget System.Security.Principal.Windows 5.0.0
     nuget Magick.NET.Core 12.2.2
     nuget System.Memory 4.5.5
-    nuget System.Text.Json 7.0.3
+    nuget System.Text.Json 8.0.5
     nuget Microsoft.CodeAnalysis.Common 4.9.2
     nuget Microsoft.CodeAnalysis.Analyzers 3.3.4
     nuget Microsoft.CodeAnalysis.CSharp 4.9.2
@@ -64,3 +69,11 @@ group paket_cli
     source https://api.nuget.org/v3/index.json
 
     nuget Paket 10.3.1
+
+group blazor_dependencies
+    framework: net10.0
+    source https://api.nuget.org/v3/index.json
+
+    nuget ExCSS 4.3.1
+    nuget Microsoft.NET.ILLink.Tasks 10.0.12
+    nuget System.CommandLine 2.0.8

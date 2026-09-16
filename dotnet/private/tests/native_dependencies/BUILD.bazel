@@ -7,7 +7,7 @@ csharp_nunit_test(
     name = "native_dependencies",
     srcs = ["native_dependencies.cs"],
     target_frameworks = [
-        "net6.0",
+        "net8.0",
     ],
     visibility = ["//visibility:public"],
     deps = ["@paket.rules_dotnet_dev_nuget_packages//rocksdb"],

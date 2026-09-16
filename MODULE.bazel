@@ -2,22 +2,24 @@
 
 module(
     name = "rules_dotnet",
-    version = "0.0.0",
-    bazel_compatibility = [">=9.0.0"],
-    compatibility_level = 0,
+    bazel_compatibility = [">=8.0.0"],
 )
 
 dotnet = use_extension("@rules_dotnet//dotnet:extensions.bzl", "dotnet")
-dotnet.toolchain(dotnet_version = "10.0.201")
-
-# This toolchain is used for building the apphost shimmer only. The apphost shimmer
-# can not be buit with the toolchain that the end-user picks because the apphost builder
-# always targets the latest SDK and the end-user can pick an older SDK that is incompatible with the apphost builder.
+dotnet.toolchain(host = True)
 dotnet.toolchain(
     name = "dotnet_apphost",
-    dotnet_version = "10.0.201",
+    host = True,
 )
-use_repo(dotnet, "dotnet.apphost_packs", "dotnet.crossgen2_packs", "dotnet.runtime_packs", "dotnet.targeting_packs", "dotnet_toolchains")
+use_repo(
+    dotnet,
+    "dotnet.apphost_packs",
+    "dotnet.crossgen2_packs",
+    "dotnet.runtime_packs",
+    "dotnet.targeting_packs",
+    "dotnet_toolchains",
+    "dotnet_wasm_workload",
+)
 
 # These toolchains are used to build the apphost shimmer
 use_repo(dotnet, "dotnet_apphost_x86_64-unknown-linux-gnu")
@@ -33,25 +35,33 @@ paket = use_extension("@rules_dotnet//dotnet:paket.bzl", "paket")
 paket.parse(
     dependencies = "//:paket.dependencies",
     groups = [
+        "blazor_dependencies",
         "paket_cli",
         "sdk_gen_dependencies",
         "rules_dotnet_nuget_packages",
     ],
     lock = "//:paket.lock",
 )
-use_repo(paket, "paket.paket_cli", "paket.rules_dotnet_nuget_packages", "paket.sdk_gen_dependencies")
+use_repo(
+    paket,
+    "paket.blazor_dependencies",
+    "paket.paket_cli",
+    "paket.rules_dotnet_nuget_packages",
+    "paket.sdk_gen_dependencies",
+)
 
-bazel_dep(name = "bazel_skylib", version = "1.7.1")
-bazel_dep(name = "platforms", version = "1.0.0")
-bazel_dep(name = "bazel_lib", version = "3.0.0")
-bazel_dep(name = "rules_shell", version = "0.5.0")
+bazel_dep(name = "bazel_skylib", version = "1.9.0")
+bazel_dep(name = "platforms", version = "1.1.0")
+bazel_dep(name = "bazel_lib", version = "3.3.1")
+bazel_dep(name = "rules_shell", version = "0.8.0")
+bazel_dep(name = "protobuf", version = "33.4", repo_name = "com_google_protobuf")
 
 # Dev dependencies
-bazel_dep(name = "rules_pkg", version = "1.1.0", dev_dependency = True)
-bazel_dep(name = "gazelle", version = "0.51.3", dev_dependency = True, repo_name = "bazel_gazelle")
+bazel_dep(name = "rules_pkg", version = "1.2.0", dev_dependency = True)
+bazel_dep(name = "gazelle", version = "0.50.0", dev_dependency = True, repo_name = "bazel_gazelle")
 bazel_dep(name = "bazel_skylib_gazelle_plugin", version = "1.9.0", dev_dependency = True)
-bazel_dep(name = "rules_cc", version = "0.2.19", dev_dependency = True)
-bazel_dep(name = "rules_testing", version = "0.8.0", dev_dependency = True)
+bazel_dep(name = "rules_cc", version = "0.2.18", dev_dependency = True)
+bazel_dep(name = "rules_testing", version = "0.9.0", dev_dependency = True)
 bazel_dep(name = "bazel_ci_rules", version = "1.0.0", dev_dependency = True)
 bazel_dep(name = "dotnet_test_resources_other_repo", version = "", dev_dependency = True)
 local_path_override(

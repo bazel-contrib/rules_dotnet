@@ -22,8 +22,8 @@ def analyzers_structure():
     nuget_structure_test(
         name = "nuget_structure_should_parse_version_specific_analyzers",
         target_under_test = ":system.text.json",
-        expected_libs = ["lib/net7.0/System.Text.Json.dll"],
-        expected_refs = ["lib/net7.0/System.Text.Json.dll"],
+        expected_libs = ["lib/net8.0/System.Text.Json.dll"],
+        expected_refs = ["lib/net8.0/System.Text.Json.dll"],
         expected_analyzers = [],
         expected_analyzers_csharp = ["analyzers/dotnet/roslyn3.11/cs/System.Text.Json.SourceGeneration.dll"],
         expected_analyzers_fsharp = [],

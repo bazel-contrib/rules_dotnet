@@ -1,3 +1,14 @@
+load("@bazel_skylib//:bzl_library.bzl", "bzl_library")
 load(":framework_preprocessor_defines.bzl", "test_framework_preprocessor_defines")
 
 test_framework_preprocessor_defines()
+
+bzl_library(
+    name = "framework_preprocessor_defines",
+    srcs = ["framework_preprocessor_defines.bzl"],
+    visibility = ["//dotnet:__subpackages__"],
+    deps = [
+        "//dotnet:defs",
+        "//dotnet/private/tests:utils",
+    ],
+)

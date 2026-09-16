@@ -191,6 +191,9 @@ def get_compiler_worker(ctx):
         prune_unused_references = prune_unused_references,
     )
 
+def get_targeting_pack(ctx):
+    return ctx.attr._targeting_pack[0][DotnetTargetingPackInfo]
+
 def _format_ref_with_overrides(assembly):
     # See https://github.com/bazel-contrib/rules_dotnet/issues/405
     # The following files should not be passed as references to the compiler
@@ -237,13 +240,13 @@ def _resolve_analyzers(direct, transitive):
 
     return depset(resolved.values())
 
-def collect_compile_info(name, deps, targeting_pack, exports, strict_deps):
+def collect_compile_info(name, deps, targeting_pack_info, exports, strict_deps):
     """Determine the transitive dependencies by the target framework.
 
     Args:
         name: The name of the assembly that is being compiled.
         deps: Dependencies that the compilation target depends on.
-        targeting_pack: Targeting pack that the compilation target depends on.
+        targeting_pack_info: DotnetTargetingPackInfo for the compilation target.
         exports: Exported targets
         strict_deps: Whether or not to use strict dependencies.
 
@@ -267,20 +270,15 @@ def collect_compile_info(name, deps, targeting_pack, exports, strict_deps):
 
     exports_files = []
 
-    targeting_pack_info = None
-    targeting_pack_overrides = {}
-    framework_list = {}
+    targeting_pack_overrides = targeting_pack_info.targeting_pack_overrides if targeting_pack_info else {}
+    framework_list = targeting_pack_info.framework_list if targeting_pack_info else {}
 
     # The pack has already resolved its FrameworkList to ref files. A dependency
     # that supersedes one of them narrows that set, which needs a copy of the
     # pack's dict; hold the pack's own until that actually happens.
     narrowed = False
 
-    if targeting_pack:
-        targeting_pack_info = targeting_pack[DotnetTargetingPackInfo]
-        targeting_pack_overrides = targeting_pack_info.targeting_pack_overrides
-        framework_list = targeting_pack_info.framework_list
-
+    if targeting_pack_info:
         direct_compile_data.extend(targeting_pack_info.compile_data)
 
     for dep in deps:
@@ -1129,16 +1127,21 @@ def _resource_arg_format(file, target_label, out_dll, language):
     # the basename of the file.
     simple_resource_name = "{}.{}".format(out_dll[:-4], file.basename)
 
+    resource_path = file.short_path
+    if file.owner != None and file.owner.repo_name == target_label.repo_name and resource_path.startswith("../"):
+        resource_path = resource_path.split("/", 2)[2]
+    package_prefix = target_label.package + "/" if target_label.package else ""
+
     if file.owner != None and file.owner.repo_name != target_label.repo_name:
         # Fallback to the basename if the file comes from a different repository.
         resource_name = simple_resource_name
-    elif not file.short_path.startswith(target_label.package):
+    elif not resource_path.startswith(package_prefix):
         # Fallback to the basename if the file is not in the target's package, because
         # the path will not be normalized.
         resource_name = simple_resource_name
     else:
         # Packages/Foo.Bar/BUILD.bazel importing Packages/Foo.Bar/a/b/c.txt -> a/b/c.txt
-        relative_path = file.short_path[len(target_label.package) + 1:]
+        relative_path = resource_path[len(package_prefix):]
 
         # Foo.Bar.dll and a/b/c.txt -> Foo.Bar.a.b.c.txt
         parts = relative_path.split("/")
@@ -1147,3 +1150,6 @@ def _resource_arg_format(file, target_label, out_dll, language):
     # `%` is the escape character in an Args format string, so a resource whose
     # name contains one has to double it to come out literal.
     return base_resource_fmt + "," + resource_name.replace("%", "%%")
+
+def map_resource_arg(file, target_label, out_dll, language):
+    return _resource_arg_format(file, target_label, out_dll, language) % file.path

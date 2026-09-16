@@ -1,0 +1,21 @@
+load("@bazel_lib//:bzl_library.bzl", "bzl_library")
+load("//proto:defs.bzl", "csharp_proto_compiler")
+
+package(default_visibility = ["//visibility:public"])
+
+csharp_proto_compiler(
+    name = "csharp_proto",
+)
+
+bzl_library(
+    name = "defs",
+    srcs = ["defs.bzl"],
+    visibility = ["//visibility:public"],
+    deps = [
+        "//proto/private:compiler",
+        "//proto/private:library",
+        "//proto/private:providers",
+    ],
+)
+
+exports_files(["defs.bzl"])

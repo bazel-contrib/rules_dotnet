@@ -1,0 +1,42 @@
+load("@bazel_lib//:bzl_library.bzl", "bzl_library")
+
+bzl_library(
+    name = "providers",
+    srcs = ["providers.bzl"],
+    visibility = [
+        "//dotnet:__subpackages__",
+        "//proto:__subpackages__",
+    ],
+)
+
+bzl_library(
+    name = "compiler",
+    srcs = ["compiler.bzl"],
+    visibility = ["//proto:__subpackages__"],
+    deps = [
+        ":providers",
+        "@com_google_protobuf//bazel/common:proto_lang_toolchain_info_bzl",
+        "@com_google_protobuf//bazel/toolchains:proto_lang_toolchain_bzl",
+    ],
+)
+
+bzl_library(
+    name = "library",
+    srcs = ["library.bzl"],
+    visibility = ["//proto:__subpackages__"],
+    deps = [
+        ":providers",
+        "//dotnet/private:common",
+        "//dotnet/private/rules/common:attrs",
+        "//dotnet/private/rules/common:library",
+        "//dotnet/private/rules/common:stamping",
+        "//dotnet/private/rules/csharp:global_usings",
+        "//dotnet/private/rules/csharp/actions:csharp_assembly",
+        "//dotnet/private/transitions:default_transition",
+        "//dotnet/private/transitions:tfm_transition",
+        "@bazel_skylib//lib:dicts",
+        "@bazel_skylib//rules:common_settings",
+        "@com_google_protobuf//bazel/common:proto_common_bzl",
+        "@com_google_protobuf//bazel/common:proto_info_bzl",
+    ],
+)

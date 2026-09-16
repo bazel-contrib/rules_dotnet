@@ -8,14 +8,14 @@ csharp_library(
     name = "Nullable",
     srcs = ["nullable.cs"],
     nullable = "enable",
-    target_frameworks = ["net6.0"],
+    target_frameworks = ["net8.0"],
     treat_warnings_as_errors = True,
 )
 
 csharp_nunit_test(
     name = "NullableTest",
     srcs = ["nullabletest.cs"],
-    target_frameworks = ["net6.0"],
+    target_frameworks = ["net8.0"],
     deps = [
         ":Nullable",
     ],

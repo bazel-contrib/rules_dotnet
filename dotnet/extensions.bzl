@@ -1,6 +1,7 @@
 "extensions for bzlmod"
 
 load("//dotnet/private/sdk:pack_repos.bzl", "declare_pack_repos")
+load(":host.bzl", "dotnet_register_host_toolchains")
 load(":repositories.bzl", "dotnet_register_toolchains")
 
 _DEFAULT_NAME = "dotnet"
@@ -13,6 +14,10 @@ _ATTRS = {
     "dotnet_version": attr.string(
         doc = "Version of the .Net SDK",
     ),
+    "host": attr.bool(
+        doc = "Use a preinstalled toolchain if available",
+        default = False,
+    ),
 }
 
 def _toolchain_extension(module_ctx):
@@ -20,28 +25,44 @@ def _toolchain_extension(module_ctx):
     for mod in module_ctx.modules:
         for toolchain in mod.tags.toolchain:
             if toolchain.name in registrations.keys():
+                registration = registrations[toolchain.name]
                 if toolchain.name == _DEFAULT_NAME:
                     # Prioritize the root-most registration of the default dotnet toolchain version and
                     # ignore any further registrations (modules are processed breadth-first)
                     continue
-                if toolchain.dotnet_version == registrations[toolchain.name]:
+                if toolchain.dotnet_version == registration.dotnet_version and toolchain.host == registration.host:
                     # No problem to register a matching toolchain twice
                     continue
-                fail("Multiple conflicting toolchains declared for name {} ({} and {})".format(
+                fail("Multiple conflicting toolchains declared for name {} ({} host={} and {} host={})".format(
                     toolchain.name,
                     toolchain.dotnet_version,
-                    registrations[toolchain.name],
+                    toolchain.host,
+                    registration.dotnet_version,
+                    registration.host,
                 ))
             else:
-                registrations[toolchain.name] = toolchain.dotnet_version
-    for name, dotnet_version in registrations.items():
-        dotnet_register_toolchains(
-            name = name,
-            dotnet_version = dotnet_version,
-            register = False,
-        )
+                registrations[toolchain.name] = struct(
+                    dotnet_version = toolchain.dotnet_version,
+                    host = toolchain.host,
+                )
 
-    facts = declare_pack_repos(module_ctx, registrations)
+    for name, registration in registrations.items():
+        if registration.host:
+            dotnet_register_host_toolchains(
+                name = name,
+                dotnet_version = registration.dotnet_version,
+            )
+        else:
+            dotnet_register_toolchains(
+                name = name,
+                dotnet_version = registration.dotnet_version,
+                register = False,
+            )
+
+    facts = declare_pack_repos(module_ctx, {
+        name: registration.dotnet_version
+        for (name, registration) in registrations.items()
+    })
 
     metadata = {}
     if hasattr(module_ctx, "facts"):

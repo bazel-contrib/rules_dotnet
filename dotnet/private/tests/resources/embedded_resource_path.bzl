@@ -1,7 +1,33 @@
 "Tests for embedded resources of `csharp_*` and `fsharp_*` rules."
 
+load("@bazel_skylib//lib:unittest.bzl", "asserts", "unittest")
 load("//dotnet:defs.bzl", "csharp_library", "fsharp_library")
+load("//dotnet/private:common.bzl", "map_resource_arg")
 load("//dotnet/private/tests:utils.bzl", "action_args_test")
+
+def _external_repository_resource_name_test_impl(ctx):
+    env = unittest.begin(ctx)
+    owner = struct(repo_name = "dependency+", package = "src/Components")
+    resource = struct(
+        path = "generated/Resources/Labels.resources",
+        short_path = "../dependency+/src/Components/Resources/Labels.resources",
+        basename = "Labels.resources",
+        owner = owner,
+    )
+    for language, prefix in [("csharp", "/resource:"), ("fsharp", "--resource:")]:
+        asserts.equals(
+            env,
+            prefix + resource.path + ",Components.Resources.Labels.resources",
+            map_resource_arg(resource, owner, "Components.dll", language),
+        )
+        asserts.equals(
+            env,
+            prefix + resource.path + ",Components.Labels.resources",
+            map_resource_arg(resource, struct(repo_name = "other+", package = owner.package), "Components.dll", language),
+        )
+    return unittest.end(env)
+
+external_repository_resource_name_test = unittest.make(_external_repository_resource_name_test_impl)
 
 # buildifier: disable=unnamed-macro
 def test_embedded_resource_path_csharp():

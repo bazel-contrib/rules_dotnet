@@ -4,6 +4,18 @@ Users should not load files under "/dotnet"
 """
 
 load(
+    "//dotnet/private/rules/blazor:component.bzl",
+    _blazor_component = "blazor_component",
+)
+load(
+    "//dotnet/private/rules/blazor:library.bzl",
+    _blazor_library = "blazor_library",
+)
+load(
+    "//dotnet/private/rules/blazor:publish.bzl",
+    _blazor_publish = "blazor_publish",
+)
+load(
     "//dotnet/private/rules/csharp:binary.bzl",
     _csharp_binary = "csharp_binary",
 )
@@ -50,11 +62,17 @@ load(
 )
 load(
     "//dotnet/private/rules/nuget:nuget_repo.bzl",
+    _nuget_archives = "nuget_archives",
     _nuget_repo = "nuget_repo",
 )
 load(
     "//dotnet/private/rules/publish_binary:publish_binary.bzl",
     _publish_binary = "publish_binary",
+)
+load(
+    "//dotnet/private/rules/resources:resx_resource.bzl",
+    _resx_resource = "resx_resource",
+    _resx_source = "resx_source",
 )
 
 csharp_binary = _csharp_binary
@@ -66,8 +84,14 @@ fsharp_library = _fsharp_library
 fsharp_test = _fsharp_test
 fsharp_nunit_test = _fsharp_nunit_test
 publish_binary = _publish_binary
+blazor_component = _blazor_component
+blazor_library = _blazor_library
+blazor_publish = _blazor_publish
 import_library = _import_library
 import_dll = _import_dll
 nuget_repo = _nuget_repo
+nuget_archives = _nuget_archives
 nuget_archive = _nuget_archive
 dotnet_tool = _dotnet_tool
+resx_resource = _resx_resource
+resx_source = _resx_source

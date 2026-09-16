@@ -10,7 +10,7 @@ fsharp_nunit_test(
     name = "lib_test",
     srcs = ["libtest.fs"],
     out = "OtherLibTest",
-    target_frameworks = ["net6.0"],
+    target_frameworks = ["net8.0"],
     deps = [
         ":lib",
         "@paket.rules_dotnet_dev_nuget_packages//fsharp.core",
@@ -25,7 +25,7 @@ fsharp_library(
     internals_visible_to = [
         "OtherLibTest",
     ],
-    target_frameworks = ["net6.0"],
+    target_frameworks = ["net8.0"],
     deps = [
         "@paket.rules_dotnet_dev_nuget_packages//fsharp.core",
     ],

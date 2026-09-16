@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>{framework_version}</TargetFramework>
+    <PlatformTarget>{dotnet_arch}</PlatformTarget>
+    <RuntimeArchitecture>{dotnet_arch}</RuntimeArchitecture>
+  </PropertyGroup>
+
+  <Target Name="VerifyAndGetInfo">
+    <Message Importance="high" Text="VERIFY:SUCCESS" />
+    <Message Importance="high" Text="INFO:NETCoreSdkVersion=$(NETCoreSdkVersion)" />
+    <Message Importance="high" Text="INFO:NETCoreSdkRuntimeIdentifier=$(NETCoreSdkRuntimeIdentifier)" />
+    <Message Importance="high" Text="INFO:BundledNETCoreAppPackageVersion=$(BundledNETCoreAppPackageVersion)" />
+    <Message Importance="high" Text="INFO:RuntimeIdentifier=$(RuntimeIdentifier)" />
+    <Message Importance="high" Text="INFO:TargetFramework=$(TargetFramework)" />
+    <Message Importance="high" Text="INFO:PlatformTarget=$(PlatformTarget)" />
+    <Message Importance="high" Text="INFO:LangVersion=$(MaxSupportedLangVersion)" />
+    <Message Importance="high" Text="INFO:MSBuildSDKsPath=$(MSBuildSDKsPath)" />
+  </Target>
+</Project>

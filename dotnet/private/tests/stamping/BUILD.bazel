@@ -1,0 +1,20 @@
+load("//dotnet:defs.bzl", "csharp_test", "fsharp_test")
+
+csharp_test(
+    name = "csharp_stamping_test",
+    size = "small",
+    srcs = ["StampingTest.cs"],
+    tags = ["manual"],
+    target_frameworks = ["net8.0"],
+)
+
+fsharp_test(
+    name = "fsharp_stamping_test",
+    size = "small",
+    srcs = ["StampingTest.fs"],
+    tags = ["manual"],
+    target_frameworks = ["net8.0"],
+    deps = [
+        "@paket.rules_dotnet_dev_nuget_packages//fsharp.core",
+    ],
+)

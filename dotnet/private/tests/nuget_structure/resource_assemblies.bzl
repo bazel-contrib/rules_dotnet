@@ -50,8 +50,8 @@ def resource_assemblies():
     )
 
     nuget_test_wrapper(
-        name = "humanizer.core.de.net6.0",
-        target_framework = "net6.0",
+        name = "humanizer.core.de.net8.0",
+        target_framework = "net8.0",
         runtime_identifier = "linux-x64",
         package = "@paket.rules_dotnet_nuget_resource_assemblies_tests//humanizer.core.de",
     )

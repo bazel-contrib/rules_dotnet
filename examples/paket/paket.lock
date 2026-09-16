@@ -23,7 +23,7 @@ NUGET
       System.Drawing.Common (>= 6.0)
 
 GROUP othergroup
-RESTRICTION: == net6.0
+RESTRICTION: == net8.0
 NUGET
   remote: https://api.nuget.org/v3/index.json
     Argu (6.1.1)

@@ -8,6 +8,7 @@ bzl_library(
     ],
     deps = [
         "//dotnet/private:providers",
+        "//dotnet/private/sdk/apphost_packs:apphost_pack_transition",
         "//dotnet/private/sdk/runtime_packs:runtime_pack_transition",
         "//dotnet/private/transitions:default_transition",
         "//dotnet/private/transitions:tfm_transition",

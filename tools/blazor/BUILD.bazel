@@ -1,0 +1,33 @@
+load("//dotnet:defs.bzl", "csharp_test")
+load(
+    "//dotnet/private/rules/csharp:binary.bzl",
+    "csharp_bootstrap_binary",
+)
+
+csharp_test(
+    name = "publish_helpers_test",
+    size = "small",
+    srcs = [
+        "NativePublish.cs",
+        "NativePublishTests.cs",
+    ],
+    nullable = "enable",
+    target_frameworks = ["net10.0"],
+)
+
+csharp_bootstrap_binary(
+    name = "blazor",
+    srcs = [
+        "NativePublish.cs",
+        "Preprocess.cs",
+        "Program.cs",
+        "Publish.cs",
+    ],
+    nullable = "enable",
+    target_frameworks = ["net10.0"],
+    visibility = ["//visibility:public"],
+    deps = [
+        "@paket.blazor_dependencies//excss",
+        "@paket.blazor_dependencies//system.commandline",
+    ],
+)

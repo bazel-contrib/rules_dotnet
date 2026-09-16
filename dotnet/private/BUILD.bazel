@@ -15,7 +15,10 @@ exports_files(
 bzl_library(
     name = "common",
     srcs = ["common.bzl"],
-    visibility = ["//dotnet:__subpackages__"],
+    visibility = [
+        "//dotnet:__subpackages__",
+        "//proto:__subpackages__",
+    ],
     deps = [
         ":providers",
         ":semver",
@@ -106,15 +109,10 @@ config_setting(
 )
 
 bzl_library(
-    name = "providers",
-    srcs = ["providers.bzl"],
-    visibility = ["//dotnet:__subpackages__"],
-)
-
-bzl_library(
     name = "resolved_toolchain",
     srcs = ["resolved_toolchain.bzl"],
     visibility = ["//dotnet:__subpackages__"],
+    deps = [":providers"],
 )
 
 bzl_library(
@@ -122,6 +120,29 @@ bzl_library(
     srcs = ["portable_rids.bzl"],
     visibility = ["//dotnet:__subpackages__"],
     deps = ["//dotnet/private/sdk:rids"],
+)
+
+# The crossgen2 pack for the machine the build runs on. Behind an alias
+# because a rule attribute default cannot itself be a select; the rule depends
+# on this in the exec configuration, so the select resolves to the execution
+# platform rather than the target.
+alias(
+    name = "crossgen2_pack",
+    actual = select({
+        ":linux-arm64": "@dotnet.crossgen2_packs//tool:linux-arm64",
+        ":linux-x64": "@dotnet.crossgen2_packs//tool:linux-x64",
+        ":osx-arm64": "@dotnet.crossgen2_packs//tool:osx-arm64",
+        ":osx-x64": "@dotnet.crossgen2_packs//tool:osx-x64",
+        ":windows-arm64": "@dotnet.crossgen2_packs//tool:win-arm64",
+        ":windows-x64": "@dotnet.crossgen2_packs//tool:win-x64",
+    }),
+    visibility = ["//visibility:public"],
+)
+
+bzl_library(
+    name = "providers",
+    srcs = ["providers.bzl"],
+    visibility = ["//dotnet:__subpackages__"],
 )
 
 bzl_library(
@@ -140,21 +161,4 @@ bzl_library(
     name = "xml",
     srcs = ["xml.bzl"],
     visibility = ["//dotnet:__subpackages__"],
-)
-
-# The crossgen2 pack for the machine the build runs on. Behind an alias
-# because a rule attribute default cannot itself be a select; the rule depends
-# on this in the exec configuration, so the select resolves to the execution
-# platform rather than the target.
-alias(
-    name = "crossgen2_pack",
-    actual = select({
-        ":linux-arm64": "@dotnet.crossgen2_packs//tool:linux-arm64",
-        ":linux-x64": "@dotnet.crossgen2_packs//tool:linux-x64",
-        ":osx-arm64": "@dotnet.crossgen2_packs//tool:osx-arm64",
-        ":osx-x64": "@dotnet.crossgen2_packs//tool:osx-x64",
-        ":windows-arm64": "@dotnet.crossgen2_packs//tool:win-arm64",
-        ":windows-x64": "@dotnet.crossgen2_packs//tool:win-x64",
-    }),
-    visibility = ["//visibility:public"],
 )

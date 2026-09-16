@@ -72,3 +72,10 @@ select_file(
     subpath = "lib/netstandard2.1/it/FSharp.Core.resources.dll",
     visibility = ["//dotnet:__subpackages__"],
 )
+
+bzl_library(
+    name = "resource_assemblies",
+    srcs = ["resource_assemblies.bzl"],
+    visibility = ["//dotnet:__subpackages__"],
+    deps = [":common"],
+)

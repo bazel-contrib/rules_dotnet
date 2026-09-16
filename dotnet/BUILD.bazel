@@ -1,5 +1,5 @@
 load("@bazel_lib//:bzl_library.bzl", "bzl_library")
-load("//dotnet/private:resolved_toolchain.bzl", "resolved_toolchain")
+load("//dotnet/private:resolved_toolchain.bzl", "resolved_toolchain", "resolved_toolchain_assembly")
 load(
     "//dotnet/private/macros:register_rids.bzl",
     "register_rids",
@@ -22,6 +22,12 @@ resolved_toolchain(
     visibility = ["//visibility:public"],
 )
 
+resolved_toolchain_assembly(
+    name = "aspnetcore_razor_toolset",
+    assembly = "aspnetcore_razor_toolset",
+    visibility = ["//tools/razor:__pkg__"],
+)
+
 register_tfms()
 
 register_rids()
@@ -31,6 +37,9 @@ bzl_library(
     srcs = ["defs.bzl"],
     visibility = ["//visibility:public"],
     deps = [
+        "//dotnet/private/rules/blazor:component",
+        "//dotnet/private/rules/blazor:library",
+        "//dotnet/private/rules/blazor:publish",
         "//dotnet/private/rules/csharp:binary",
         "//dotnet/private/rules/csharp:library",
         "//dotnet/private/rules/csharp:nunit_test",
@@ -44,6 +53,7 @@ bzl_library(
         "//dotnet/private/rules/nuget:nuget_archive",
         "//dotnet/private/rules/nuget:nuget_repo",
         "//dotnet/private/rules/publish_binary",
+        "//dotnet/private/rules/resources:resx_resource",
     ],
 )
 
@@ -60,10 +70,18 @@ bzl_library(
 )
 
 bzl_library(
+    name = "host",
+    srcs = ["host.bzl"],
+    visibility = ["//visibility:public"],
+    deps = ["//dotnet/private:toolchains_repo"],
+)
+
+bzl_library(
     name = "extensions",
     srcs = ["extensions.bzl"],
     visibility = ["//visibility:public"],
     deps = [
+        ":host",
         ":repositories",
         "//dotnet/private/sdk:pack_repos",
     ],
@@ -82,4 +100,14 @@ bzl_library(
     name = "toolchain",
     srcs = ["toolchain.bzl"],
     visibility = ["//visibility:public"],
+    deps = [
+        "//dotnet/private:providers",
+    ],
+)
+
+bzl_library(
+    name = "internal_dev_deps",
+    srcs = ["internal_dev_deps.bzl"],
+    visibility = ["//visibility:public"],
+    deps = ["@bazel_ci_rules//:rbe_repo"],
 )

@@ -6,7 +6,7 @@ load(
 csharp_library(
     name = "ab",
     srcs = ["ab.cs"],
-    target_frameworks = ["net6.0"],
+    target_frameworks = ["net8.0"],
     visibility = ["//visibility:public"],
     deps = [
         "//dotnet/private/tests/dependency_resolution/diamond_dependencies/d",

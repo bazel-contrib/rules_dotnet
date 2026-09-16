@@ -1,0 +1,12 @@
+load("@bazel_lib//:bzl_library.bzl", "bzl_library")
+load(":compiler_test.bzl", "compiler_tests")
+
+compiler_tests(name = "compiler_tests")
+
+bzl_library(
+    name = "compiler_test",
+    deps = [
+        "//proto:defs",
+        "@bazel_skylib//lib:unittest",
+    ],
+)

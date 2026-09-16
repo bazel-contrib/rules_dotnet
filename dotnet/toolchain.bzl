@@ -2,6 +2,61 @@
 Rules to configure the .NET toolchain of rules_dotnet.
 """
 
+load(
+    "//dotnet/private:providers.bzl",
+    "DotnetAssemblyCompileInfo",
+    "DotnetAssemblyRuntimeInfo",
+    "DotnetRuntimePackInfo",
+    "DotnetTargetingPackInfo",
+    "NuGetInfo",
+)
+
+def _compile_info(name, version, refs, project_sdk):
+    return DotnetAssemblyCompileInfo(
+        name = name,
+        version = version,
+        project_sdk = project_sdk,
+        refs = refs,
+        irefs = refs,
+        analyzers = [],
+        analyzers_csharp = [],
+        analyzers_fsharp = [],
+        analyzers_vb = [],
+        compile_data = [],
+        exports = [],
+        transitive_compile_data = depset([]),
+        transitive_refs = depset([]),
+        transitive_analyzers = depset([]),
+        transitive_analyzers_csharp = depset([]),
+        transitive_analyzers_fsharp = depset([]),
+        transitive_analyzers_vb = depset([]),
+        internals_visible_to = [],
+    )
+
+def _runtime_info(name, version, libs, native):
+    return DotnetAssemblyRuntimeInfo(
+        name = name,
+        version = version,
+        libs = libs,
+        pdbs = [],
+        xml_docs = [],
+        native = native,
+        data = [],
+        resource_assemblies = [],
+        appsetting_files = depset([]),
+        nuget_info = None,
+        deps = depset([]),
+        direct_deps_depsjson_fragment = {},
+    )
+
+def _nuget_info():
+    return NuGetInfo(
+        targeting_pack_overrides = {},
+        framework_list = {},
+        sha512 = "",
+        nupkg = None,
+    )
+
 DotnetInfo = provider(
     doc = "Information about the dotnet toolchain",
     fields = {
@@ -29,6 +84,8 @@ May be empty if the apphost_path points to a locally installed tool binary.""",
         "runtime_tfm": "The target framework moniker for the current SDK",
         "csharp_default_version": "Default version of the C# language",
         "fsharp_default_version": "Default version of the F# language",
+        "targeting_pack_infos": "dict[string, DotnetTargetingPackInfo]",
+        "runtime_pack_infos": "dict[string, DotnetRuntimePackInfo]",
     },
 )
 
@@ -105,6 +162,39 @@ def _dotnet_toolchain_impl(ctx):
         runfiles = ctx.runfiles(transitive_files = toolchain_files),
     )
 
+    targeting_pack_infos = {
+        "default": DotnetTargetingPackInfo(
+            assembly_compile_infos = [_compile_info("Microsoft.NETCore.App.Ref", ctx.attr.runtime_version, ctx.files.targeting_pack_default_refs, "default")],
+            assembly_runtime_infos = [],
+            nuget_infos = [_nuget_info()],
+        ),
+        "web": DotnetTargetingPackInfo(
+            assembly_compile_infos = [
+                _compile_info("Microsoft.NETCore.App.Ref", ctx.attr.runtime_version, ctx.files.targeting_pack_default_refs, "web"),
+                _compile_info("Microsoft.AspNetCore.App.Ref", ctx.attr.runtime_version, ctx.files.targeting_pack_web_refs, "web"),
+            ],
+            assembly_runtime_infos = [],
+            nuget_infos = [_nuget_info(), _nuget_info()],
+        ),
+    }
+    runtime_pack_infos = {
+        "default": DotnetRuntimePackInfo(
+            runtime_identifier = ctx.attr.runtime_identifier,
+            assembly_runtime_infos = [
+                _runtime_info("Microsoft.NETCore.App.Runtime.{}".format(ctx.attr.runtime_identifier), ctx.attr.runtime_version, ctx.files.runtime_pack_default_libs, ctx.files.runtime_pack_default_native),
+            ],
+            nuget_infos = [],
+        ),
+        "web": DotnetRuntimePackInfo(
+            runtime_identifier = ctx.attr.runtime_identifier,
+            assembly_runtime_infos = [
+                _runtime_info("Microsoft.NETCore.App.Runtime.{}".format(ctx.attr.runtime_identifier), ctx.attr.runtime_version, ctx.files.runtime_pack_default_libs, ctx.files.runtime_pack_default_native),
+                _runtime_info("Microsoft.AspNetCore.App.Runtime.{}".format(ctx.attr.runtime_identifier), ctx.attr.runtime_version, ctx.files.runtime_pack_web_libs, ctx.files.runtime_pack_web_native),
+            ],
+            nuget_infos = [],
+        ),
+    }
+
     dotnetinfo = DotnetInfo(
         runtime_path = runtime_path,
         runtime_files = runtime_host_files,
@@ -117,6 +207,8 @@ def _dotnet_toolchain_impl(ctx):
         runtime_tfm = ctx.attr.runtime_tfm,
         csharp_default_version = ctx.attr.csharp_default_version,
         fsharp_default_version = ctx.attr.fsharp_default_version,
+        targeting_pack_infos = targeting_pack_infos,
+        runtime_pack_infos = runtime_pack_infos,
     )
 
     # Export all the providers inside our ToolchainInfo
@@ -131,6 +223,8 @@ def _dotnet_toolchain_impl(ctx):
         fsharp_compiler = ctx.attr.fsharp_compiler,
         host_model = ctx.attr.host_model,
         strict_deps = ctx.attr._strict_deps,
+        aspnetcore_razor_toolset = ctx.attr.aspnetcore_razor_toolset,
+        wasm_workload_files = ctx.files.wasm_workload_files,
     )
     return [
         default,
@@ -211,10 +305,25 @@ Defaults to `runtime`, which also carries the SDK a binary does not need.""",
             doc = "The default F# version used by the current dotnet SDK",
             mandatory = True,
         ),
+        "aspnetcore_razor_toolset": attr.label(
+            doc = "The ASP.NET Core Razor toolset assemblies from Microsoft.NET.Sdk.Razor",
+            mandatory = False,
+        ),
         "_strict_deps": attr.label(
             doc = "Whether to use strict deps or not",
             default = "//dotnet/settings:strict_deps",
         ),
+        "runtime_identifier": attr.string(
+            doc = "The runtime identifier of the current SDK",
+            mandatory = True,
+        ),
+        "targeting_pack_default_refs": attr.label_list(allow_files = [".dll"]),
+        "targeting_pack_web_refs": attr.label_list(allow_files = [".dll"]),
+        "runtime_pack_default_libs": attr.label_list(allow_files = [".dll"]),
+        "runtime_pack_default_native": attr.label_list(allow_files = True),
+        "runtime_pack_web_libs": attr.label_list(allow_files = [".dll"]),
+        "runtime_pack_web_native": attr.label_list(allow_files = True),
+        "wasm_workload_files": attr.label_list(allow_files = True),
     },
     doc = """Defines a dotnet compiler/runtime toolchain.
 

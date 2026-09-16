@@ -10,7 +10,7 @@ publish_binary(
     binary = "//dotnet/private/tests/publish/app_to_publish",
     roll_forward_behavior = "Major",
     self_contained = False,
-    target_framework = "net10.0",
+    target_framework = "net8.0",
 )
 
 # We tar the output to because that way we can strip the

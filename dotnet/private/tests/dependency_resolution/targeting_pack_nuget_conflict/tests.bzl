@@ -12,8 +12,8 @@ load(
 # first framework whose pack also lists System.Text.Json in PackageOverrides,
 # which is the other of the two ways a pack can supersede a dependency.
 EXPECTED_VERSION_PER_TFM = {
-    "net6.0": "7.0.0.0",
-    "net7.0": "7.0.0.0",
+    "net6.0": "8.0.0.0",
+    "net7.0": "8.0.0.0",
     "net8.0": "8.0.0.0",
     "net10.0": "10.0.0.0",
 }

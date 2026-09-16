@@ -9,7 +9,7 @@ def fsharp_additional_compiler_options():
     fsharp_library(
         name = "fsharp_all_additional_compiler_options",
         srcs = ["additional_compiler_options.fs"],
-        target_frameworks = ["net6.0"],
+        target_frameworks = ["net8.0"],
         compiler_options = ["/warnnotaserror:CS1234", "/warnnotaserror:CS0000"],
         tags = ["manual"],
     )

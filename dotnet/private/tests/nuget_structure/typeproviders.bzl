@@ -7,7 +7,7 @@ def typeproviders_structure():
     "Tests for the typeproviders folder"
     nuget_test_wrapper(
         name = "fsharp.data",
-        target_framework = "net6.0",
+        target_framework = "net8.0",
         runtime_identifier = "linux-x64",
         package = "@paket.rules_dotnet_dev_nuget_packages//fsharp.data",
     )

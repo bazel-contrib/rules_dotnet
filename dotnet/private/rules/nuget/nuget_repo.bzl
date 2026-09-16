@@ -163,7 +163,7 @@ _nuget_repo = repository_rule(
     },
 )
 
-def nuget_archives(packages, declared):
+def nuget_archives(packages, declared = None):
     """Declares a `nuget_archive` for each package that does not have one yet.
 
     Args:
@@ -173,6 +173,9 @@ def nuget_archives(packages, declared):
         adds to. Pass the same dict across groups so that a package version
         shared between them is only declared once.
     """
+    if declared == None:
+        declared = {}
+
     for package in packages:
         name = nuget_archive_name(package["id"], package["version"])
         if name in declared:
@@ -216,7 +219,7 @@ def nuget_hub_repo(name, packages, extra_build_files = {}):
         ],
     )
 
-def nuget_repo(name, packages):
+def nuget_repo(name, packages, create_archives = True, extra_build_files = {}):
     """Declares a repository for a set of resolved NuGet packages.
 
     Prefer pointing the `paket` module extension at a `paket.lock` file. This
@@ -224,9 +227,13 @@ def nuget_repo(name, packages):
     list some other way.
 
     Args:
-      name: The repository name, which is how users address the packages.
-      packages: Dicts describing each resolved package, with `id`, `version`
-        and `sources` keys, and optionally `sha512` and `netrc`.
+        name: The repository name, which is how users address the packages.
+        packages: Dicts describing each resolved package, with `id`, `version`
+            and `sources` keys, and optionally `sha512` and `netrc`.
+        create_archives: Whether to declare an archive repository for each package.
+        extra_build_files: Additional BUILD files to write into the repository,
+            keyed by path.
     """
-    nuget_archives(packages, {})
-    nuget_hub_repo(name, packages)
+    if create_archives:
+        nuget_archives(packages)
+    nuget_hub_repo(name, packages, extra_build_files)

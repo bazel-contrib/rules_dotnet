@@ -5,20 +5,34 @@ Rule for compiling C# libraries.
 load("@bazel_skylib//rules:common_settings.bzl", "BuildSettingInfo")
 load(
     "//dotnet/private:common.bzl",
-    "default_csharp_lang_version",
     "get_compiler_worker",
     "get_compiler_wrapper",
+    "get_targeting_pack",
     "get_toolchain",
     "is_debug",
     "targets_windows",
 )
 load("//dotnet/private/rules/common:attrs.bzl", "CSHARP_LIBRARY_COMMON_ATTRS")
 load("//dotnet/private/rules/common:library.bzl", "build_library")
+load("//dotnet/private/rules/common:stamping.bzl", "maybe_stamp_srcs")
+load(
+    "//dotnet/private/rules/csharp:global_usings.bzl",
+    "collect_global_usings",
+    "generate_global_usings_source",
+)
 load("//dotnet/private/rules/csharp/actions:csharp_assembly.bzl", "AssemblyAction")
 load("//dotnet/private/transitions:tfm_transition.bzl", "tfm_transition")
 
 def _compile_action(ctx, tfm):
     toolchain = get_toolchain(ctx)
+    assembly_name = ctx.attr.out or ctx.attr.name
+    global_usings = collect_global_usings(ctx.attr.global_usings, ctx.attr.implicit_usings, [])
+    global_using_srcs = generate_global_usings_source(
+        ctx.actions,
+        "%s/%s/%s.GlobalUsings.g.cs" % (ctx.attr.name, tfm, assembly_name),
+        global_usings,
+    )
+    srcs = maybe_stamp_srcs(ctx, ctx.files.srcs + global_using_srcs, assembly_name, tfm, "csharp")
 
     return AssemblyAction(
         ctx.actions,
@@ -30,12 +44,12 @@ def _compile_action(ctx, tfm):
         defines = ctx.attr.defines,
         deps = ctx.attr.deps,
         exports = ctx.attr.exports,
-        targeting_pack = ctx.attr._targeting_pack[0],
+        targeting_pack = get_targeting_pack(ctx),
         internals_visible_to = ctx.attr.internals_visible_to,
         keyfile = ctx.file.keyfile,
-        langversion = ctx.attr.langversion if ctx.attr.langversion != "" else default_csharp_lang_version(tfm, toolchain.dotnetinfo.csharp_default_version),
+        langversion = ctx.attr.langversion if ctx.attr.langversion != "" else toolchain.dotnetinfo.csharp_default_version,
         resources = ctx.files.resources,
-        srcs = ctx.files.srcs,
+        srcs = srcs,
         data = ctx.files.data,
         appsetting_files = [],
         compile_data = ctx.files.compile_data,

@@ -1,6 +1,8 @@
-load("//dotnet:defs.bzl", "csharp_test", "fsharp_test")
+load("@bazel_skylib//:bzl_library.bzl", "bzl_library")
+load("//dotnet:defs.bzl", "csharp_test", "fsharp_test", "resx_resource", "resx_source")
 load(
     ":embedded_resource_path.bzl",
+    "external_repository_resource_name_test",
     "test_embedded_resource_path_csharp",
     "test_embedded_resource_path_fsharp",
     "test_path_from_other_repo_should_stay_as_basename",
@@ -11,6 +13,10 @@ load(
 exports_files(
     ["file.txt"],
     visibility = ["//visibility:public"],
+)
+
+external_repository_resource_name_test(
+    name = "external_repository_resource_name_test",
 )
 
 test_embedded_resource_path_csharp()
@@ -42,18 +48,39 @@ fsharp_test(
     ],
 )
 
-# A resource that is a build output rather than a source file: its path carries
-# the configuration segment that --experimental_output_paths=strip rewrites.
-genrule(
-    name = "generate_resource",
-    outs = ["generated.txt"],
-    cmd = "echo 'generated at build time' > $@",
+resx_source(
+    name = "strings_source",
+    src = "Strings.resx",
+    accessibility = "public",
+    class_name = "Strings",
+    constants = True,
+    namespace = "ResxSource.Runtime",
+)
+
+resx_resource(
+    name = "strings_resource",
+    src = "Strings.resx",
 )
 
 csharp_test(
-    name = "test_generated_resource_runtime_csharp",
-    srcs = ["GeneratedResource.cs"],
-    out = "GeneratedResource.Library",
-    resources = [":generate_resource"],
+    name = "test_resx_source_runtime_csharp",
+    srcs = [
+        "ResxSourceTest.cs",
+        ":strings_source",
+    ],
+    out = "ResxSource.Runtime",
+    resources = [":strings_resource"],
     target_frameworks = ["net9.0"],
+)
+
+bzl_library(
+    name = "embedded_resource_path",
+    srcs = ["embedded_resource_path.bzl"],
+    visibility = ["//dotnet:__subpackages__"],
+    deps = [
+        "//dotnet:defs",
+        "//dotnet/private:common",
+        "//dotnet/private/tests:utils",
+        "@bazel_skylib//lib:unittest",
+    ],
 )

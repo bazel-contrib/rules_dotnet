@@ -7,7 +7,7 @@ nuget FSharp.Core 9.0.300
 nuget Microsoft.NETCore.App.Ref 6.0.5
 
 group othergroup
-    framework: net6.0
+    framework: net8.0
     source https://api.nuget.org/v3/index.json
 
     nuget Argu 6.1.1

@@ -10,14 +10,14 @@ csharp_library(
     srcs = ["lib.cs"],
     internals_visible_to = ["lib_test"],
     nullable = "enable",
-    target_frameworks = ["net6.0"],
+    target_frameworks = ["net8.0"],
     deps = [],
 )
 
 select_file(
     name = "docs_xml",
     srcs = ":lib",
-    subpath = "lib/net6.0/lib.xml",
+    subpath = "lib/net8.0/lib.xml",
 )
 
 diff_test(

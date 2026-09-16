@@ -9,28 +9,28 @@ def runtimes_structure():
     # x64
     nuget_test_wrapper(
         name = "libgit2sharp.nativebinaries.linux-x64",
-        target_framework = "net6.0",
+        target_framework = "net8.0",
         runtime_identifier = "linux-x64",
         package = "@paket.rules_dotnet_dev_nuget_packages//libgit2sharp.nativebinaries",
     )
 
     nuget_test_wrapper(
         name = "libgit2sharp.nativebinaries.osx-x64",
-        target_framework = "net6.0",
+        target_framework = "net8.0",
         runtime_identifier = "osx-x64",
         package = "@paket.rules_dotnet_dev_nuget_packages//libgit2sharp.nativebinaries",
     )
 
     nuget_test_wrapper(
         name = "libgit2sharp.nativebinaries.win-x64",
-        target_framework = "net6.0",
+        target_framework = "net8.0",
         runtime_identifier = "win-x64",
         package = "@paket.rules_dotnet_dev_nuget_packages//libgit2sharp.nativebinaries",
     )
 
     nuget_test_wrapper(
         name = "libgit2sharp.nativebinaries.alpine-x64",
-        target_framework = "net6.0",
+        target_framework = "net8.0",
         runtime_identifier = "alpine-x64",
         package = "@paket.rules_dotnet_dev_nuget_packages//libgit2sharp.nativebinaries",
     )
@@ -62,14 +62,14 @@ def runtimes_structure():
     # x86
     nuget_test_wrapper(
         name = "libgit2sharp.nativebinaries.linux-x86",
-        target_framework = "net6.0",
+        target_framework = "net8.0",
         runtime_identifier = "linux-x86",
         package = "@paket.rules_dotnet_dev_nuget_packages//libgit2sharp.nativebinaries",
     )
 
     nuget_test_wrapper(
         name = "libgit2sharp.nativebinaries.win-x86",
-        target_framework = "net6.0",
+        target_framework = "net8.0",
         runtime_identifier = "win-x86",
         package = "@paket.rules_dotnet_dev_nuget_packages//libgit2sharp.nativebinaries",
     )
@@ -89,28 +89,28 @@ def runtimes_structure():
     # arm64
     nuget_test_wrapper(
         name = "libgit2sharp.nativebinaries.linux-arm64",
-        target_framework = "net6.0",
+        target_framework = "net8.0",
         runtime_identifier = "linux-arm64",
         package = "@paket.rules_dotnet_dev_nuget_packages//libgit2sharp.nativebinaries",
     )
 
     nuget_test_wrapper(
         name = "libgit2sharp.nativebinaries.osx-arm64",
-        target_framework = "net6.0",
+        target_framework = "net8.0",
         runtime_identifier = "osx-arm64",
         package = "@paket.rules_dotnet_dev_nuget_packages//libgit2sharp.nativebinaries",
     )
 
     nuget_test_wrapper(
         name = "libgit2sharp.nativebinaries.win-arm64",
-        target_framework = "net6.0",
+        target_framework = "net8.0",
         runtime_identifier = "win-arm64",
         package = "@paket.rules_dotnet_dev_nuget_packages//libgit2sharp.nativebinaries",
     )
 
     nuget_test_wrapper(
         name = "libgit2sharp.nativebinaries.alpine-arm64",
-        target_framework = "net6.0",
+        target_framework = "net8.0",
         runtime_identifier = "alpine-arm64",
         package = "@paket.rules_dotnet_dev_nuget_packages//libgit2sharp.nativebinaries",
     )
@@ -142,21 +142,21 @@ def runtimes_structure():
     # arm
     nuget_test_wrapper(
         name = "libgit2sharp.nativebinaries.linux-arm",
-        target_framework = "net6.0",
+        target_framework = "net8.0",
         runtime_identifier = "linux-arm",
         package = "@paket.rules_dotnet_dev_nuget_packages//libgit2sharp.nativebinaries",
     )
 
     nuget_test_wrapper(
         name = "libgit2sharp.nativebinaries.win-arm",
-        target_framework = "net6.0",
+        target_framework = "net8.0",
         runtime_identifier = "win-arm",
         package = "@paket.rules_dotnet_dev_nuget_packages//libgit2sharp.nativebinaries",
     )
 
     nuget_test_wrapper(
         name = "libgit2sharp.nativebinaries.alpine-arm",
-        target_framework = "net6.0",
+        target_framework = "net8.0",
         runtime_identifier = "alpine-arm",
         package = "@paket.rules_dotnet_dev_nuget_packages//libgit2sharp.nativebinaries",
     )
@@ -183,85 +183,85 @@ def runtimes_structure():
     # to see that the right RID is chosen if we choose a parent of
     # those RIDs
     nuget_test_wrapper(
-        name = "system.security.principal.windows.net6.0.linux-x64",
-        target_framework = "net6.0",
+        name = "system.security.principal.windows.net8.0.linux-x64",
+        target_framework = "net8.0",
         runtime_identifier = "linux-x64",
         package = "@paket.rules_dotnet_dev_nuget_packages//system.security.principal.windows",
     )
 
     nuget_structure_test(
         name = "nuget_structure_should_parse_runtime_unix_correctly_net6_0_linux_x64",
-        target_under_test = ":system.security.principal.windows.net6.0.linux-x64",
+        target_under_test = ":system.security.principal.windows.net8.0.linux-x64",
         expected_libs = [],
         expected_refs = ["ref/netcoreapp3.0/System.Security.Principal.Windows.dll"],
     )
 
     nuget_test_wrapper(
-        name = "system.security.principal.windows.net6.0.linux-arm64",
-        target_framework = "net6.0",
+        name = "system.security.principal.windows.net8.0.linux-arm64",
+        target_framework = "net8.0",
         runtime_identifier = "linux-arm64",
         package = "@paket.rules_dotnet_dev_nuget_packages//system.security.principal.windows",
     )
 
     nuget_structure_test(
         name = "nuget_structure_should_parse_runtime_unix_correctly_net6_0_linux_arm64",
-        target_under_test = ":system.security.principal.windows.net6.0.linux-arm64",
+        target_under_test = ":system.security.principal.windows.net8.0.linux-arm64",
         expected_libs = [],
         expected_refs = ["ref/netcoreapp3.0/System.Security.Principal.Windows.dll"],
     )
 
     nuget_test_wrapper(
-        name = "system.security.principal.windows.net6.0.osx-x64",
-        target_framework = "net6.0",
+        name = "system.security.principal.windows.net8.0.osx-x64",
+        target_framework = "net8.0",
         runtime_identifier = "osx-x64",
         package = "@paket.rules_dotnet_dev_nuget_packages//system.security.principal.windows",
     )
 
     nuget_structure_test(
         name = "nuget_structure_should_parse_runtime_unix_correctly_net6_0_osx_x64",
-        target_under_test = ":system.security.principal.windows.net6.0.osx-x64",
+        target_under_test = ":system.security.principal.windows.net8.0.osx-x64",
         expected_libs = [],
         expected_refs = ["ref/netcoreapp3.0/System.Security.Principal.Windows.dll"],
     )
 
     nuget_test_wrapper(
-        name = "system.security.principal.windows.net6.0.osx-arm64",
-        target_framework = "net6.0",
+        name = "system.security.principal.windows.net8.0.osx-arm64",
+        target_framework = "net8.0",
         runtime_identifier = "osx-arm64",
         package = "@paket.rules_dotnet_dev_nuget_packages//system.security.principal.windows",
     )
 
     nuget_structure_test(
         name = "nuget_structure_should_parse_runtime_unix_correctly_net6_0_osx_arm64",
-        target_under_test = ":system.security.principal.windows.net6.0.osx-arm64",
+        target_under_test = ":system.security.principal.windows.net8.0.osx-arm64",
         expected_libs = [],
         expected_refs = ["ref/netcoreapp3.0/System.Security.Principal.Windows.dll"],
     )
 
     nuget_test_wrapper(
-        name = "system.security.principal.windows.net6.0.win-x64",
-        target_framework = "net6.0",
+        name = "system.security.principal.windows.net8.0.win-x64",
+        target_framework = "net8.0",
         runtime_identifier = "win-x64",
         package = "@paket.rules_dotnet_dev_nuget_packages//system.security.principal.windows",
     )
 
     nuget_structure_test(
         name = "nuget_structure_should_parse_runtime_unix_correctly_net6_0_win_x64",
-        target_under_test = ":system.security.principal.windows.net6.0.win-x64",
+        target_under_test = ":system.security.principal.windows.net8.0.win-x64",
         expected_libs = [],
         expected_refs = ["ref/netcoreapp3.0/System.Security.Principal.Windows.dll"],
     )
 
     nuget_test_wrapper(
-        name = "system.security.principal.windows.net6.0.win-arm64",
-        target_framework = "net6.0",
+        name = "system.security.principal.windows.net8.0.win-arm64",
+        target_framework = "net8.0",
         runtime_identifier = "win-arm64",
         package = "@paket.rules_dotnet_dev_nuget_packages//system.security.principal.windows",
     )
 
     nuget_structure_test(
         name = "nuget_structure_should_parse_runtime_unix_correctly_net6_0_win_arm64",
-        target_under_test = ":system.security.principal.windows.net6.0.win-arm64",
+        target_under_test = ":system.security.principal.windows.net8.0.win-arm64",
         expected_libs = [],
         expected_refs = ["ref/netcoreapp3.0/System.Security.Principal.Windows.dll"],
     )
@@ -352,7 +352,7 @@ def runtimes_structure():
 
     nuget_test_wrapper(
         name = "magick.net.core.netstandard21.linux-x64",
-        target_framework = "net6.0",
+        target_framework = "net8.0",
         runtime_identifier = "linux-x64",
         package = "@paket.rules_dotnet_dev_nuget_packages//magick.net.core",
     )

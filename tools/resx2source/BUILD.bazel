@@ -1,0 +1,9 @@
+load("//dotnet:defs.bzl", "csharp_binary")
+
+csharp_binary(
+    name = "resx2source",
+    srcs = ["Program.cs"],
+    nullable = "enable",
+    target_frameworks = ["net10.0"],
+    visibility = ["//visibility:public"],
+)

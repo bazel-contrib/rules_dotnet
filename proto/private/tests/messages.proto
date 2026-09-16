@@ -1,0 +1,7 @@
+syntax = "proto3";
+
+package rules_dotnet.proto.tests;
+
+message Greeting {
+  string text = 1;
+}

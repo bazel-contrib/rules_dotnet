@@ -16,7 +16,7 @@ load("//dotnet/private/tests/use_as_tool/run_shell_rule:run_shell_rule.bzl", "ru
 fsharp_binary(
     name = "main",
     srcs = ["main.fs"],
-    target_frameworks = ["net6.0"],
+    target_frameworks = ["net8.0"],
     deps = [
         ":lib",
         "@paket.rules_dotnet_dev_nuget_packages//fsharp.core",
@@ -26,7 +26,7 @@ fsharp_binary(
 fsharp_library(
     name = "lib",
     srcs = ["lib.fs"],
-    target_frameworks = ["net6.0"],
+    target_frameworks = ["net8.0"],
     deps = [
         "@paket.rules_dotnet_dev_nuget_packages//fsharp.core",
     ],
@@ -59,7 +59,7 @@ publish_binary(
     name = "publish_self_contained",
     binary = ":main",
     self_contained = True,
-    target_framework = "net6.0",
+    target_framework = "net8.0",
 )
 
 run_rule(
