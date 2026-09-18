@@ -181,19 +181,21 @@ def get_compiler_worker(ctx):
 
     prune_unused_references = ctx.attr._prune_unused_references[BuildSettingInfo].value
 
-    if not ctx.attr._use_compiler_worker[BuildSettingInfo].value:
+    # compiler_worker_binary drops the attribute: it is the one target that
+    # cannot be compiled by the worker.
+    if not hasattr(ctx.attr, "_compiler_worker"):
+        return None
+
+    files_to_run = ctx.attr._compiler_worker[DefaultInfo].files_to_run
+
+    if files_to_run.executable == None:
         if prune_unused_references:
             fail("//dotnet/settings:prune_unused_references needs //dotnet/settings:use_compiler_worker, " +
                  "because it is the worker that reads the compiled output to work out which references went unused.")
         return None
 
-    # compiler_worker_binary drops the attribute: it is the one target that
-    # cannot be compiled by the worker.
-    if not hasattr(ctx.executable, "_compiler_worker"):
-        return None
-
     return struct(
-        executable = ctx.executable._compiler_worker,
+        executable = files_to_run,
         prune_unused_references = prune_unused_references,
     )
 
