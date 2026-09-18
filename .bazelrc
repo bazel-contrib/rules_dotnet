@@ -17,6 +17,11 @@ common --experimental_collect_worker_data_in_profiler
 # Verbose failure output
 common --verbose_failures
 
+# The hermetic C/C++ toolchain the NativeAOT and cross-publishing tests link
+# with. Only on the hosts that run them: see the note in MODULE.bazel.
+common:linux --extra_toolchains=@llvm//toolchain:all
+common:macos --extra_toolchains=@llvm//toolchain:all
+
 # Give one cache key to a compilation reached through several configurations.
 # Per platform because path mapping requires a sandbox and Bazel has none on
 # Windows, where it would fail every compile. See docs/README.md#path-mapping.
