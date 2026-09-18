@@ -1,8 +1,9 @@
 "extensions for bzlmod"
 
+load("@bazel_skylib//lib:collections.bzl", "collections")
 load("//dotnet/private:toolchains_repo.bzl", "BOOTSTRAP_TOOLCHAIN_TYPE")
 load("//dotnet/private/sdk:pack_repos.bzl", "declare_pack_repos")
-load(":repositories.bzl", "dotnet_register_toolchains")
+load(":repositories.bzl", "dotnet_sdk_repositories", "dotnet_toolchains_repo")
 
 _SDK_NAME = "dotnet"
 _BOOTSTRAP_NAME = "dotnet_bootstrap"
@@ -40,18 +41,22 @@ def _toolchain_extension(module_ctx):
             if sdk_version == None:
                 sdk_version = toolchain.dotnet_version
 
+    # One set of SDK repositories per distinct version, so a bootstrap SDK that
+    # matches the user's is downloaded and extracted once and both compile with
+    # identical action keys.
+    for version in collections.uniq([v for v in [sdk_version, bootstrap_version] if v != None]):
+        dotnet_sdk_repositories(version)
+
     if sdk_version != None:
-        dotnet_register_toolchains(
-            name = _SDK_NAME,
+        dotnet_toolchains_repo(
+            name = _SDK_NAME + "_toolchains",
             dotnet_version = sdk_version,
-            register = False,
         )
 
     if bootstrap_version != None:
-        dotnet_register_toolchains(
-            name = _BOOTSTRAP_NAME,
+        dotnet_toolchains_repo(
+            name = _BOOTSTRAP_NAME + "_toolchains",
             dotnet_version = bootstrap_version,
-            register = False,
             toolchain_type = BOOTSTRAP_TOOLCHAIN_TYPE,
         )
 
