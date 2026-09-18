@@ -12,7 +12,7 @@ NUGET
     Argu (6.2.3)
       FSharp.Core (>= 4.3.2)
       System.Configuration.ConfigurationManager (>= 4.4)
-    FSharp.Core (10.1.201)
+    FSharp.Core (10.1.401)
     System.ComponentModel.Composition (6.0)
 
 GROUP Build
@@ -33,7 +33,7 @@ source https://api.nuget.org/v3/index.json
 
 # A comment
 nuget Argu 6.2.3
-nuget FSharp.Core 10.1.201
+nuget FSharp.Core 10.1.401
 nuget System.Text.Json 10.0
 
 group Build
@@ -66,7 +66,7 @@ def _parse_lock_test_impl(ctx):
         env,
         {
             "Argu": "6.2.3",
-            "FSharp.Core": "10.1.201",
+            "FSharp.Core": "10.1.401",
             "System.ComponentModel.Composition": "6.0.0",
         },
         _package_versions(main),
@@ -138,7 +138,7 @@ def _parse_dependencies_test_impl(ctx):
             },
             "Main": {
                 "Argu": "6.2.3",
-                "FSharp.Core": "10.1.201",
+                "FSharp.Core": "10.1.401",
                 "System.Text.Json": "10.0.0",
             },
         },
