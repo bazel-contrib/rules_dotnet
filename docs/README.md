@@ -197,9 +197,9 @@ also exposes it as an executable, at `@paket.<group>//<package>/tools:<tool>`.
 The rules support remote execution out of the box. The remote runners do need to have the required .Net
 system dependencies installed though. A common missing system dependency in existing RBE images is `libicu`.
 
-## C# Persistent workers
+## Persistent workers
 
-The C# compile actions can run in a [Bazel persistent worker](https://bazel.build/remote/persistent).
+The C# and F# compile actions can run in a [Bazel persistent worker](https://bazel.build/remote/persistent).
 It is off by default, so turn it on with:
 
 ```
@@ -210,11 +210,12 @@ You can control the number of worker instances with:
 
 ```
 build --worker_max_instances=CSharpCompile=HOST_CPUS
+build --worker_max_instances=FSharpCompile=HOST_CPUS
 ```
 
 ### Pruning unused references
 
-When using the compiler worker an additional optimization becomes possible: pruning unused references.
+When using the compiler worker an additional optimization becomes possible for C#: pruning unused references.
 What this does is track which references are actually used by the compiler and if they are unused
 they will be ignored by Bazel in subsequent builds. This can lead to better cache reuse.
 

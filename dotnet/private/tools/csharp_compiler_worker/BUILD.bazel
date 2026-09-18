@@ -1,0 +1,14 @@
+load(
+    "//dotnet/private/rules/csharp:binary.bzl",
+    "compiler_worker_binary",
+)
+
+compiler_worker_binary(
+    name = "csharp_compiler_worker",
+    srcs = [
+        "Program.cs",
+        "//dotnet/private/tools/worker:srcs",
+    ],
+    target_frameworks = ["net10.0"],
+    visibility = ["//visibility:public"],
+)

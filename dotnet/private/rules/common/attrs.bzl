@@ -248,13 +248,13 @@ CSHARP_COMMON_ATTRS = dicts.add(
             doc = "Whether the compile action reports the references it did not use.",
             default = "//dotnet/settings:prune_unused_references",
         ),
-        "_compiler_worker": attr.label(
+        "_csharp_compiler_worker": attr.label(
             doc = """The persistent worker that runs the C# compiler, keeping Roslyn's build server alive between compilations.
 
             Resolves to nothing unless `//dotnet/settings:use_compiler_worker` is
             set, so that a workspace that does not use the worker never analyses
             it.""",
-            default = "//dotnet/settings:compiler_worker",
+            default = "//dotnet/settings:csharp_compiler_worker",
             cfg = "exec",
         ),
         "interceptors_namespaces": attr.string_list(
@@ -297,6 +297,15 @@ CSHARP_BINARY_COMMON_ATTRS = dicts.add(
 FSHARP_COMMON_ATTRS = dicts.add(
     COMMON_ATTRS,
     {
+        "_fsharp_compiler_worker": attr.label(
+            doc = """The persistent worker that runs the F# compiler, keeping it warm between compilations.
+
+            Resolves to nothing unless `//dotnet/settings:use_compiler_worker` is
+            set, so that a workspace that does not use the worker never analyses
+            it.""",
+            default = "//dotnet/settings:fsharp_compiler_worker",
+            cfg = "exec",
+        ),
         "srcs": attr.label_list(
             doc = "The source files used in the compilation.",
             allow_files = [".fs", ".fsi"],

@@ -7,8 +7,8 @@ load("@bazel_skylib//rules:common_settings.bzl", "BuildSettingInfo")
 load(
     "//dotnet/private:common.bzl",
     "default_csharp_lang_version",
-    "get_compiler_worker",
     "get_compiler_wrapper",
+    "get_csharp_compiler_worker",
     "get_toolchain",
     "is_debug",
     "targets_windows",
@@ -25,7 +25,7 @@ def _compile_action(ctx, tfm, toolchain):
     return AssemblyAction(
         ctx.actions,
         get_compiler_wrapper(ctx),
-        compiler_worker = get_compiler_worker(ctx),
+        compiler_worker = get_csharp_compiler_worker(ctx),
         label = ctx.label,
         additionalfiles = ctx.files.additionalfiles,
         debug = is_debug(ctx),
@@ -116,17 +116,17 @@ apphost_shimmer_binary = rule(
     cfg = apphost_shimmer_transition,
 )
 
-# Every other C# target compiles with the worker, so the worker itself has to
-# compile without it: depending on itself would be a cycle.
+# Every other C# target compiles with the worker, so the workers themselves have
+# to compile without it: the C# one would otherwise depend on itself.
 _COMPILER_WORKER_ATTRS = {
     name: value
     for (name, value) in _BOOTSTRAP_ATTRS.items()
-    if name != "_compiler_worker"
+    if name != "_csharp_compiler_worker"
 }
 
 compiler_worker_binary = rule(
     _bootstrap_binary_impl,
-    doc = """Compile the persistent compiler worker C# exe.""",
+    doc = """Compile a persistent compiler worker C# exe.""",
     attrs = _COMPILER_WORKER_ATTRS,
     executable = True,
     toolchains = [
