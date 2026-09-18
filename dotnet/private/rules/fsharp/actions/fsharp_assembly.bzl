@@ -9,10 +9,10 @@ load(
     "copy_files_to_dir",
     "format_ref_arg",
     "framework_preprocessor_symbols",
+    "fsharp_ref_assemblies_are_deterministic",
     "generate_warning_args",
     "get_framework_version_info",
     "is_core_framework",
-    "is_greater_or_equal_framework",
     "is_standard_framework",
     "use_highentropyva",
 )
@@ -66,10 +66,8 @@ do()
 
     return output
 
-# Reference assembly support did not come to F# until .Net 7.0
-# This check should be removed once the .Net 6.0 LTS release is no longer supported
 def _should_output_ref_assembly(toolchain):
-    return is_greater_or_equal_framework(toolchain.dotnetinfo.runtime_tfm, "net7.0")
+    return fsharp_ref_assemblies_are_deterministic(toolchain.dotnetinfo.sdk_version)
 
 # buildifier: disable=unnamed-macro
 def AssemblyAction(
@@ -284,7 +282,7 @@ def AssemblyAction(
         name = assembly_name,
         version = "1.0.0",  #TODO: Maybe make this configurable?
         project_sdk = project_sdk,
-        refs = [out_dll],
+        refs = [out_ref] if out_ref else [out_dll],
         irefs = [out_iref] if out_iref else [out_ref] if out_ref else [out_dll],
         analyzers = [],
         analyzers_csharp = [],
