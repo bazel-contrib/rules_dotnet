@@ -14,6 +14,14 @@ toolchain_type(
     visibility = ["//visibility:public"],
 )
 
+# The SDK rules_dotnet builds its own tools with: the apphost shimmer and the
+# C# compiler worker. Kept apart from `toolchain_type` so the SDK the user
+# registers cannot decide what those are built with, or against.
+toolchain_type(
+    name = "bootstrap_toolchain_type",
+    visibility = ["//visibility:public"],
+)
+
 resolved_toolchain(
     name = "resolved_toolchain",
     # Marked manual so that `bazel test //...` passes
@@ -65,6 +73,7 @@ bzl_library(
     visibility = ["//visibility:public"],
     deps = [
         ":repositories",
+        "//dotnet/private:toolchains_repo",
         "//dotnet/private/sdk:pack_repos",
     ],
 )

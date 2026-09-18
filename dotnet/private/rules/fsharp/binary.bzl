@@ -15,9 +15,7 @@ load("//dotnet/private/rules/common:binary.bzl", "build_binary")
 load("//dotnet/private/rules/fsharp/actions:fsharp_assembly.bzl", "AssemblyAction")
 load("//dotnet/private/transitions:tfm_transition.bzl", "tfm_transition")
 
-def _compile_action(ctx, tfm):
-    toolchain = get_toolchain(ctx)
-
+def _compile_action(ctx, tfm, toolchain):
     return AssemblyAction(
         ctx.actions,
         get_compiler_wrapper(ctx),
@@ -54,7 +52,7 @@ def _compile_action(ctx, tfm):
     )
 
 def _binary_private_impl(ctx):
-    return build_binary(ctx, _compile_action)
+    return build_binary(ctx, _compile_action, get_toolchain(ctx))
 
 fsharp_binary = rule(
     _binary_private_impl,

@@ -1,15 +1,11 @@
 """Declares the repositories that hold the SDK's packs and native tools.
 
 Each repository groups its packages behind targets named for what they provide
-(`@dotnet.targeting_packs//default:net10.0`), so labels do not move when the
-versions in `PACK_BANDS` change.
+(`@dotnet.targeting_packs//user/default:net10.0`), so labels do not move when
+the versions in `PACK_BANDS` change.
 """
 
 load("@bazel_skylib//lib:collections.bzl", "collections")
-load(
-    "//dotnet/private:semver.bzl",
-    "semver",
-)
 load(
     "//dotnet/private/paket:feed.bzl",
     "integrity_fact_key",
@@ -27,12 +23,14 @@ load(
 load(
     "//dotnet/private/sdk:packs.bzl",
     "APPHOST_PACK_REPO",
+    "BOOTSTRAP_PACKS",
     "CROSSGEN2_PACK_REPO",
     "ILCOMPILER_PACK_REPO",
     "NATIVEAOT_PACK_REPO",
     "PROJECT_SDKS",
     "RUNTIME_PACK_REPO",
     "TARGETING_PACK_REPO",
+    "USER_PACKS",
     "aot_pack_rids",
     "aot_pack_tfms",
     "apphost_pack",
@@ -82,23 +80,33 @@ def _target(kind, attrs):
 def _build_file(kind, targets):
     return "\n\n".join([_HEADER.format(kind = kind)] + [_target(kind, a) for a in targets]) + "\n"
 
-def _targeting(versions):
+def _targeting(versions_by_pack_set):
+    """One package per (pack set, project SDK), each at its own band.
+
+    Args:
+      versions_by_pack_set: The version each band moves to, by target framework,
+        for each pack set.
+
+    Returns:
+      A struct of build files and the packages they reference.
+    """
     packages = []
     build_files = {}
 
-    for project_sdk in PROJECT_SDKS:
-        targets = []
+    for (pack_set, versions) in versions_by_pack_set.items():
+        for project_sdk in PROJECT_SDKS:
+            targets = []
 
-        for tfm in targeting_pack_tfms(project_sdk):
-            packs = _retarget(targeting_packs(tfm, project_sdk), versions.get(tfm))
-            packages += packs
-            targets.append({
-                "name": tfm,
-                "packs": [nuget_package_label(id, version) for (id, version) in packs],
-                "target_framework": tfm,
-            })
+            for tfm in targeting_pack_tfms(project_sdk):
+                packs = _retarget(targeting_packs(tfm, project_sdk), versions.get(tfm))
+                packages += packs
+                targets.append({
+                    "name": tfm,
+                    "packs": [nuget_package_label(id, version) for (id, version) in packs],
+                    "target_framework": tfm,
+                })
 
-        build_files["{}/BUILD.bazel".format(project_sdk)] = _build_file("targeting", targets)
+            build_files["{}/{}/BUILD.bazel".format(pack_set, project_sdk)] = _build_file("targeting", targets)
 
     return struct(build_files = build_files, packages = collections.uniq(packages))
 
@@ -224,59 +232,62 @@ def _nativeaot():
 
     return struct(build_files = build_files, packages = collections.uniq(packages))
 
-def _versions_for_registered_sdks(module_ctx, registrations, netrc_entries, indexes):
-    """Returns the version each band's packs should move to, by target framework.
+def _band_versions(module_ctx, sdk_version, netrc_entries, indexes):
+    """Returns the version an SDK moves its band's packs to, by target framework.
 
     Compiling against the reference pack that ships with the SDK in use is what
-    MSBuild does. A band nobody registered an SDK for is left where the table
-    puts it, as is one whose reference pack was never published for that patch.
-    """
-    remembered = getattr(module_ctx, "facts", {})
-    wanted = {}
-
-    for dotnet_version in registrations.values():
-        sdk = TOOL_VERSIONS.get(dotnet_version)
-        if sdk == None or not band_is_movable(sdk["runtimeTfm"]):
-            continue
-
-        tfm = sdk["runtimeTfm"]
-        current = wanted.get(tfm)
-        runtime_version = sdk["runtimeVersion"]
-
-        if current == None or semver.to_comparable(runtime_version) > semver.to_comparable(current):
-            wanted[tfm] = runtime_version
-
-    versions = {}
-    facts = {}
-
-    for (tfm, runtime_version) in wanted.items():
-        (ref_id, _) = targeting_packs(tfm)[0]
-        key = "pack/v1:{}/{}".format(ref_id.lower(), runtime_version)
-        published = remembered.get(key)
-
-        if published == None:
-            # The reference pack stops being serviced first, so it stands in
-            # for the whole band.
-            published = runtime_version in package_versions(
-                module_ctx,
-                NUGET_ORG,
-                ref_id,
-                netrc_entries,
-                indexes,
-            )
-
-        facts[key] = published
-        if published:
-            versions[tfm] = runtime_version
-
-    return struct(facts = facts, versions = versions)
-
-def declare_pack_repos(module_ctx, registrations):
-    """Declares the repositories holding the SDK's packs.
+    MSBuild does, and one SDK is registered per toolchain type, so an SDK moves
+    exactly one band. Every other band is left where the table puts it, as is
+    one whose reference pack was never published for that patch.
 
     Args:
       module_ctx: The module extension context.
-      registrations: The registered .NET SDK versions, by toolchain name.
+      sdk_version: The SDK version whose band to move, or None.
+      netrc_entries: Credentials for the package feed.
+      indexes: Feed index cache, shared across calls.
+
+    Returns:
+      A struct of the facts looked up and the version to move to, by framework.
+    """
+    sdk = TOOL_VERSIONS.get(sdk_version) if sdk_version else None
+
+    if sdk == None or not band_is_movable(sdk["runtimeTfm"]):
+        return struct(facts = {}, versions = {})
+
+    tfm = sdk["runtimeTfm"]
+    runtime_version = sdk["runtimeVersion"]
+    (ref_id, _) = targeting_packs(tfm)[0]
+    key = "pack/v1:{}/{}".format(ref_id.lower(), runtime_version)
+    published = getattr(module_ctx, "facts", {}).get(key)
+
+    if published == None:
+        # The reference pack stops being serviced first, so it stands in for
+        # the whole band.
+        published = runtime_version in package_versions(
+            module_ctx,
+            NUGET_ORG,
+            ref_id,
+            netrc_entries,
+            indexes,
+        )
+
+    return struct(
+        facts = {key: published},
+        versions = {tfm: runtime_version} if published else {},
+    )
+
+def declare_pack_repos(module_ctx, sdk_version, bootstrap_version):
+    """Declares the repositories holding the SDK's packs.
+
+    The two SDKs move their own targeting pack set and nothing else, so neither
+    decides what the other compiles against. Only the registered SDK has runtime,
+    apphost and crossgen2 packs: rules_dotnet's own tools are never published.
+
+    Args:
+      module_ctx: The module extension context.
+      sdk_version: The registered .NET SDK version, or None.
+      bootstrap_version: The SDK version that builds rules_dotnet's own tools,
+        or None.
 
     Returns:
       The facts to hand back to Bazel, so that the versions and hashes looked
@@ -285,9 +296,13 @@ def declare_pack_repos(module_ctx, registrations):
     netrc_entries = read_netrc_entries(module_ctx, None)
     indexes = {}
 
-    bands = _versions_for_registered_sdks(module_ctx, registrations, netrc_entries, indexes)
+    bands = _band_versions(module_ctx, sdk_version, netrc_entries, indexes)
+    bootstrap = _band_versions(module_ctx, bootstrap_version, netrc_entries, indexes)
     kinds = [
-        (TARGETING_PACK_REPO, _targeting(bands.versions)),
+        (TARGETING_PACK_REPO, _targeting({
+            USER_PACKS: bands.versions,
+            BOOTSTRAP_PACKS: bootstrap.versions,
+        })),
         (RUNTIME_PACK_REPO, _runtime(bands.versions)),
         (APPHOST_PACK_REPO, _apphost(bands.versions)),
         (CROSSGEN2_PACK_REPO, _host_tool("crossgen2", crossgen2_pack, bands.versions)),
@@ -327,4 +342,4 @@ def declare_pack_repos(module_ctx, registrations):
         nuget_archives(hub, declared)
         nuget_hub_repo(repo, hub, extra_build_files = kind.build_files)
 
-    return bands.facts | resolved
+    return bands.facts | bootstrap.facts | resolved

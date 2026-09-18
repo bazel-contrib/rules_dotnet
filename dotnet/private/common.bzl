@@ -133,8 +133,14 @@ def is_greater_or_equal_framework(tfm1, tfm2):
     return False
 
 def get_toolchain(ctx):
-    if hasattr(ctx.attr, "dotnet_toolchain") and ctx.attr.dotnet_toolchain != None:
-        return ctx.attr.dotnet_toolchain[platform_common.ToolchainInfo]
+    """The .Net toolchain a target compiles with.
+
+    Args:
+        ctx: The rule context.
+
+    Returns:
+        The `ToolchainInfo` of the resolved .Net toolchain.
+    """
 
     return ctx.toolchains["//dotnet:toolchain_type"]
 

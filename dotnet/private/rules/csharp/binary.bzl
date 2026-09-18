@@ -13,14 +13,15 @@ load(
     "is_debug",
     "targets_windows",
 )
+load("//dotnet/private:toolchains_repo.bzl", "BOOTSTRAP_TOOLCHAIN_TYPE")
 load("//dotnet/private/rules/common:attrs.bzl", "CSHARP_BINARY_COMMON_ATTRS")
 load("//dotnet/private/rules/common:binary.bzl", "build_binary")
 load("//dotnet/private/rules/csharp/actions:csharp_assembly.bzl", "AssemblyAction")
+load("//dotnet/private/sdk:packs.bzl", "BOOTSTRAP_PACKS")
 load("//dotnet/private/transitions:apphost_shimmer_transition.bzl", "apphost_shimmer_transition")
 load("//dotnet/private/transitions:tfm_transition.bzl", "tfm_transition")
 
-def _compile_action(ctx, tfm):
-    toolchain = get_toolchain(ctx)
+def _compile_action(ctx, tfm, toolchain):
     return AssemblyAction(
         ctx.actions,
         get_compiler_wrapper(ctx),
@@ -65,9 +66,11 @@ def _compile_action(ctx, tfm):
         is_windows = targets_windows(ctx),
     )
 
-def _binary_private_impl(ctx):
-    result = build_binary(ctx, _compile_action)
-    return result
+def _binary_impl(ctx):
+    return build_binary(ctx, _compile_action, get_toolchain(ctx))
+
+def _bootstrap_binary_impl(ctx):
+    return build_binary(ctx, _compile_action, ctx.toolchains[BOOTSTRAP_TOOLCHAIN_TYPE])
 
 _BINARY_ATTRS = dicts.add(
     CSHARP_BINARY_COMMON_ATTRS,
@@ -80,7 +83,7 @@ _BINARY_ATTRS = dicts.add(
 )
 
 csharp_binary = rule(
-    _binary_private_impl,
+    _binary_impl,
     doc = """Compile a C# exe""",
     attrs = _BINARY_ATTRS,
     executable = True,
@@ -90,20 +93,25 @@ csharp_binary = rule(
     cfg = tfm_transition,
 )
 
-# This rule is purely for building the apphost
-# shimmer. It is needed because the apphost shimmer
-# has to target the exec configuration but we can't
-# just set `cfg = "exec"` in publish_binary because
-# we also need to reset the TFM/RID graph back to the
-# defaults so that the publish_binary's target
-# framework does not infect the apphost shimmer build.
+# The rules below build tools of rules_dotnet's own, so they follow the
+# bootstrap toolchain rather than the user's: its SDK compiles them and its
+# packs are what they compile against.
+_BOOTSTRAP_ATTRS = dicts.add(
+    _BINARY_ATTRS,
+    {"_pack_set": attr.string(default = BOOTSTRAP_PACKS)},
+)
+
+# The shimmer has to be built for the exec configuration, but `cfg = "exec"` in
+# publish_binary is not enough on its own: the TFM/RID graph has to be reset to
+# the defaults as well, so that publish_binary's target framework does not
+# infect the shimmer build.
 apphost_shimmer_binary = rule(
-    _binary_private_impl,
+    _bootstrap_binary_impl,
     doc = """Compile the apphost shimmer C# exe.""",
-    attrs = _BINARY_ATTRS,
+    attrs = _BOOTSTRAP_ATTRS,
     executable = True,
     toolchains = [
-        "//dotnet:toolchain_type",
+        BOOTSTRAP_TOOLCHAIN_TYPE,
     ],
     cfg = apphost_shimmer_transition,
 )
@@ -112,17 +120,17 @@ apphost_shimmer_binary = rule(
 # compile without it: depending on itself would be a cycle.
 _COMPILER_WORKER_ATTRS = {
     name: value
-    for (name, value) in _BINARY_ATTRS.items()
+    for (name, value) in _BOOTSTRAP_ATTRS.items()
     if name != "_compiler_worker"
 }
 
 compiler_worker_binary = rule(
-    _binary_private_impl,
+    _bootstrap_binary_impl,
     doc = """Compile the persistent compiler worker C# exe.""",
     attrs = _COMPILER_WORKER_ATTRS,
     executable = True,
     toolchains = [
-        "//dotnet:toolchain_type",
+        BOOTSTRAP_TOOLCHAIN_TYPE,
     ],
     cfg = apphost_shimmer_transition,
 )

@@ -1,47 +1,61 @@
 "extensions for bzlmod"
 
+load("//dotnet/private:toolchains_repo.bzl", "BOOTSTRAP_TOOLCHAIN_TYPE")
 load("//dotnet/private/sdk:pack_repos.bzl", "declare_pack_repos")
 load(":repositories.bzl", "dotnet_register_toolchains")
 
-_DEFAULT_NAME = "dotnet"
+_SDK_NAME = "dotnet"
+_BOOTSTRAP_NAME = "dotnet_bootstrap"
 
-_ATTRS = {
-    "name": attr.string(
-        doc = "Base name for generated repositories",
-        default = _DEFAULT_NAME,
-    ),
+# Only rules_dotnet may pin the bootstrap SDK, so that the SDK the user picks
+# cannot decide what rules_dotnet's own tools are built with.
+_BOOTSTRAP_MODULE = "rules_dotnet"
+
+_VERSION_ATTRS = {
     "dotnet_version": attr.string(
         doc = "Version of the .Net SDK",
+        mandatory = True,
     ),
 }
 
 def _toolchain_extension(module_ctx):
-    registrations = {}
+    sdk_version = None
+    bootstrap_version = None
+
     for mod in module_ctx.modules:
-        for toolchain in mod.tags.toolchain:
-            if toolchain.name in registrations.keys():
-                if toolchain.name == _DEFAULT_NAME:
-                    # Prioritize the root-most registration of the default dotnet toolchain version and
-                    # ignore any further registrations (modules are processed breadth-first)
-                    continue
-                if toolchain.dotnet_version == registrations[toolchain.name]:
-                    # No problem to register a matching toolchain twice
-                    continue
-                fail("Multiple conflicting toolchains declared for name {} ({} and {})".format(
-                    toolchain.name,
-                    toolchain.dotnet_version,
-                    registrations[toolchain.name],
+        for bootstrap in mod.tags.bootstrap_toolchain:
+            if mod.name != _BOOTSTRAP_MODULE:
+                fail("dotnet.bootstrap_toolchain is internal to {}; module '{}' should use dotnet.toolchain instead.".format(
+                    _BOOTSTRAP_MODULE,
+                    mod.name,
                 ))
-            else:
-                registrations[toolchain.name] = toolchain.dotnet_version
-    for name, dotnet_version in registrations.items():
+            if bootstrap_version != None:
+                fail("dotnet.bootstrap_toolchain declared twice ({} and {})".format(bootstrap_version, bootstrap.dotnet_version))
+            bootstrap_version = bootstrap.dotnet_version
+
+        # One SDK is registered per toolchain type, so a single SDK decides both
+        # what everything compiles with and what it compiles against. Modules are
+        # processed breadth-first, so the root-most registration wins.
+        for toolchain in mod.tags.toolchain:
+            if sdk_version == None:
+                sdk_version = toolchain.dotnet_version
+
+    if sdk_version != None:
         dotnet_register_toolchains(
-            name = name,
-            dotnet_version = dotnet_version,
+            name = _SDK_NAME,
+            dotnet_version = sdk_version,
             register = False,
         )
 
-    facts = declare_pack_repos(module_ctx, registrations)
+    if bootstrap_version != None:
+        dotnet_register_toolchains(
+            name = _BOOTSTRAP_NAME,
+            dotnet_version = bootstrap_version,
+            register = False,
+            toolchain_type = BOOTSTRAP_TOOLCHAIN_TYPE,
+        )
+
+    facts = declare_pack_repos(module_ctx, sdk_version, bootstrap_version)
 
     metadata = {}
     if hasattr(module_ctx, "facts"):
@@ -52,6 +66,13 @@ def _toolchain_extension(module_ctx):
 dotnet = module_extension(
     implementation = _toolchain_extension,
     tag_classes = {
-        "toolchain": tag_class(attrs = _ATTRS),
+        "toolchain": tag_class(
+            attrs = _VERSION_ATTRS,
+            doc = "The .Net SDK to build with.",
+        ),
+        "bootstrap_toolchain": tag_class(
+            attrs = _VERSION_ATTRS,
+            doc = "Internal to rules_dotnet: the SDK that builds the apphost shimmer and the C# compiler worker.",
+        ),
     },
 )

@@ -8,9 +8,11 @@ bzl_library(
     ],
     deps = [
         "//dotnet/private:common",
+        "//dotnet/private:toolchains_repo",
         "//dotnet/private/rules/common:attrs",
         "//dotnet/private/rules/common:binary",
         "//dotnet/private/rules/csharp/actions:csharp_assembly",
+        "//dotnet/private/sdk:packs",
         "//dotnet/private/transitions:apphost_shimmer_transition",
         "//dotnet/private/transitions:tfm_transition",
         "@bazel_skylib//lib:dicts",

@@ -17,6 +17,12 @@ This guidance tells us how to avoid that: we put the toolchain targets in the al
 with only the toolchain attribute pointing into the platform-specific repositories.
 """
 
+# The toolchain type an SDK registers for: `DOTNET_TOOLCHAIN_TYPE` for the SDK
+# the user builds with, `BOOTSTRAP_TOOLCHAIN_TYPE` for the one rules_dotnet
+# builds its own tools with.
+DOTNET_TOOLCHAIN_TYPE = "@rules_dotnet//dotnet:toolchain_type"
+BOOTSTRAP_TOOLCHAIN_TYPE = "@rules_dotnet//dotnet:bootstrap_toolchain_type"
+
 # Add more platforms as needed to mirror all the binaries
 # published by the upstream project.
 PLATFORMS = {
@@ -80,13 +86,13 @@ toolchain(
     name = "{platform}_toolchain",
     exec_compatible_with = {compatible_with},
     toolchain = "@{user_repository_name}_{platform}//:dotnet_toolchain",
-    toolchain_type = "@rules_dotnet//dotnet:toolchain_type",
+    toolchain_type = "{toolchain_type}",
 )
 """.format(
             platform = platform,
-            name = repository_ctx.attr.name,
             user_repository_name = repository_ctx.attr.user_repository_name,
             compatible_with = meta.compatible_with,
+            toolchain_type = repository_ctx.attr.toolchain_type,
         )
 
     # Base BUILD file for this repository
@@ -97,6 +103,10 @@ toolchains_repo = repository_rule(
     doc = """Creates a repository with toolchain definitions for all known platforms
      which can be registered or selected.""",
     attrs = {
+        "toolchain_type": attr.string(
+            doc = "The toolchain type the generated `toolchain` targets register for.",
+            default = DOTNET_TOOLCHAIN_TYPE,
+        ),
         "user_repository_name": attr.string(doc = "what the user chose for the base name"),
     },
 )

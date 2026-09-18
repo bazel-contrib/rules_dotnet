@@ -9,25 +9,13 @@ module(
 
 dotnet = use_extension("@rules_dotnet//dotnet:extensions.bzl", "dotnet")
 dotnet.toolchain(dotnet_version = "10.0.201")
+dotnet.bootstrap_toolchain(dotnet_version = "10.0.201")
+use_repo(dotnet, "dotnet.apphost_packs", "dotnet.crossgen2_packs", "dotnet.ilcompiler_packs", "dotnet.nativeaot_packs", "dotnet.runtime_packs", "dotnet.targeting_packs", "dotnet_bootstrap_toolchains", "dotnet_toolchains")
 
-# This toolchain is used for building the apphost shimmer only. The apphost shimmer
-# can not be buit with the toolchain that the end-user picks because the apphost builder
-# always targets the latest SDK and the end-user can pick an older SDK that is incompatible with the apphost builder.
-dotnet.toolchain(
-    name = "dotnet_apphost",
-    dotnet_version = "10.0.201",
+register_toolchains(
+    "@dotnet_toolchains//:all",
+    "@dotnet_bootstrap_toolchains//:all",
 )
-use_repo(dotnet, "dotnet.apphost_packs", "dotnet.crossgen2_packs", "dotnet.ilcompiler_packs", "dotnet.nativeaot_packs", "dotnet.runtime_packs", "dotnet.targeting_packs", "dotnet_toolchains")
-
-# These toolchains are used to build the apphost shimmer
-use_repo(dotnet, "dotnet_apphost_x86_64-unknown-linux-gnu")
-use_repo(dotnet, "dotnet_apphost_arm64-unknown-linux-gnu")
-use_repo(dotnet, "dotnet_apphost_aarch64-apple-darwin")
-use_repo(dotnet, "dotnet_apphost_x86_64-apple-darwin")
-use_repo(dotnet, "dotnet_apphost_x86_64-pc-windows-msvc")
-use_repo(dotnet, "dotnet_apphost_arm64-pc-windows-msvc")
-
-register_toolchains("@dotnet_toolchains//:all")
 
 paket = use_extension("@rules_dotnet//dotnet:paket.bzl", "paket")
 paket.parse(

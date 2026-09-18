@@ -2,6 +2,7 @@
 
 load("@bazel_skylib//lib:dicts.bzl", "dicts")
 load("//dotnet/private:providers.bzl", "DotnetAssemblyCompileInfo", "DotnetAssemblyRuntimeInfo")
+load("//dotnet/private/sdk:packs.bzl", "USER_PACKS")
 load("//dotnet/private/sdk/apphost_packs:apphost_pack_transition.bzl", "apphost_pack_transition")
 load("//dotnet/private/sdk/runtime_packs:runtime_pack_transition.bzl", "runtime_pack_transition")
 load("//dotnet/private/sdk/targeting_packs:targeting_pack_transition.bzl", "targeting_pack_transition")
@@ -101,12 +102,6 @@ COMMON_ATTRS = {
         mandatory = False,
         default = [],
     ),
-    "dotnet_toolchain": attr.label(
-        doc = """The .Net toolchain to use for this target.
-
-        Typically this is left unset so that Bazel automatically selects the right toolchain.
-        """,
-    ),
     "_target_framework": attr.label(
         default = "//dotnet:target_framework",
     ),
@@ -122,6 +117,10 @@ COMMON_ATTRS = {
         executable = True,
         cfg = "exec",
         allow_single_file = True,
+    ),
+    "_pack_set": attr.string(
+        doc = "The reference packs to compile against, set by the rule to match the toolchain type it resolves.",
+        default = USER_PACKS,
     ),
     "_targeting_pack": attr.label(
         default = "//dotnet/private/sdk/targeting_packs:targeting_pack",

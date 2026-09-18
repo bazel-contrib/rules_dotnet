@@ -24,6 +24,7 @@ bzl_library(
     visibility = ["//dotnet:__subpackages__"],
     deps = [
         "//dotnet/private:providers",
+        "//dotnet/private/sdk:packs",
         "//dotnet/private/sdk/apphost_packs:apphost_pack_transition",
         "//dotnet/private/sdk/runtime_packs:runtime_pack_transition",
         "//dotnet/private/sdk/targeting_packs:targeting_pack_transition",

@@ -9,7 +9,6 @@ load(
     "collect_transitive_runfiles",
     "generate_depsjson",
     "generate_runtimeconfig",
-    "get_toolchain",
     "is_core_framework",
     "is_standard_framework",
     "to_rlocation_path",
@@ -44,7 +43,7 @@ def _collect_native_dlls(assembly_runtime_info, deps):
 
     return result
 
-def _create_launcher(ctx, executable):
+def _create_launcher(ctx, executable, toolchain):
     is_windows = ctx.target_platform_has_constraint(ctx.attr._windows_constraint[platform_common.ConstraintValueInfo])
     launcher = ctx.actions.declare_file("{}.{}".format(executable.basename, "bat" if is_windows else "sh"), sibling = executable)
 
@@ -52,7 +51,7 @@ def _create_launcher(ctx, executable):
         template = ctx.file._launcher_bat if is_windows else ctx.file._launcher_sh,
         output = launcher,
         substitutions = {
-            "TEMPLATED_dotnet": to_rlocation_path(ctx, get_toolchain(ctx).runtime.files_to_run.executable),
+            "TEMPLATED_dotnet": to_rlocation_path(ctx, toolchain.runtime.files_to_run.executable),
             "TEMPLATED_executable": to_rlocation_path(ctx, executable),
         },
         is_executable = True,
@@ -60,17 +59,14 @@ def _create_launcher(ctx, executable):
 
     return launcher
 
-def build_binary(ctx, compile_action):
+def build_binary(ctx, compile_action, toolchain):
     """Builds a .Net binary from a compilation action
 
     Args:
         ctx: Bazel build ctx.
-        compile_action: A compilation function
-            Args:
-                ctx: Bazel build ctx.
-                tfm: Target framework string
-            Returns:
-                An DotnetAssemblyInfo provider
+        compile_action: A function taking (ctx, tfm, toolchain) that compiles the srcs
+            and returns a (DotnetAssemblyCompileInfo, DotnetAssemblyRuntimeInfo) tuple.
+        toolchain: The .Net toolchain to build with.
     Returns:
         A collection of the references, runfiles and native dlls.
     """
@@ -79,12 +75,12 @@ def build_binary(ctx, compile_action):
     if is_standard_framework(tfm):
         fail("It doesn't make sense to build an executable for " + tfm)
 
-    (compile_provider, runtime_provider) = compile_action(ctx, tfm)
+    (compile_provider, runtime_provider) = compile_action(ctx, tfm, toolchain)
     dll = runtime_provider.libs[0]
     appsetting_files = runtime_provider.appsetting_files.to_list()
     default_info_files = [dll] + runtime_provider.xml_docs + appsetting_files
 
-    launcher = _create_launcher(ctx, dll)
+    launcher = _create_launcher(ctx, dll, toolchain)
 
     additional_runfiles = list(appsetting_files)
 
@@ -141,7 +137,7 @@ def build_binary(ctx, compile_action):
     runfiles = collect_transitive_runfiles(ctx, runtime_provider, ctx.attr.deps).merge(
         ctx.runfiles(
             files = additional_runfiles,
-            transitive_files = get_toolchain(ctx).dotnetinfo.runtime_files,
+            transitive_files = toolchain.dotnetinfo.runtime_files,
         ),
     )
 
@@ -149,7 +145,7 @@ def build_binary(ctx, compile_action):
     # `include_host_model_dll` makes it a compile dependency; the runtime needs
     # it staged as well. Only csharp_binary carries the attribute.
     if getattr(ctx.attr, "include_host_model_dll", False):
-        runfiles = runfiles.merge(ctx.runfiles(files = get_toolchain(ctx).host_model[DotnetAssemblyRuntimeInfo].libs))
+        runfiles = runfiles.merge(ctx.runfiles(files = toolchain.host_model[DotnetAssemblyRuntimeInfo].libs))
 
     # Due to how the .Net runtime loads native DLLs we need make the native
     # DLLs available in the application root directory with the folder structure:

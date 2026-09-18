@@ -6,17 +6,6 @@ load(
 compiler_worker_binary(
     name = "compiler_worker",
     srcs = ["Program.cs"],
-    # The worker is a build tool, so it is pinned to a toolchain of its own the
-    # way the apphost shimmer is, rather than following whichever toolchain the
-    # workspace it is compiling for happens to register.
-    dotnet_toolchain = select({
-        "@bazel_tools//src/conditions:darwin_arm64": "@dotnet_apphost_aarch64-apple-darwin//:dotnet_toolchain",
-        "@bazel_tools//src/conditions:darwin_x86_64": "@dotnet_apphost_x86_64-apple-darwin//:dotnet_toolchain",
-        "@bazel_tools//src/conditions:linux_aarch64": "@dotnet_apphost_arm64-unknown-linux-gnu//:dotnet_toolchain",
-        "@bazel_tools//src/conditions:linux_x86_64": "@dotnet_apphost_x86_64-unknown-linux-gnu//:dotnet_toolchain",
-        "@bazel_tools//src/conditions:windows_arm64": "@dotnet_apphost_arm64-pc-windows-msvc//:dotnet_toolchain",
-        "@bazel_tools//src/conditions:windows_x64": "@dotnet_apphost_x86_64-pc-windows-msvc//:dotnet_toolchain",
-    }),
     target_frameworks = ["net10.0"],
     visibility = ["//visibility:public"],
 )
