@@ -132,6 +132,22 @@ def is_greater_or_equal_framework(tfm1, tfm2):
         return True
     return False
 
+# The first SDK that gives an F# reference assembly a deterministic MVID.
+# https://github.com/dotnet/fsharp/pull/19801
+_DETERMINISTIC_FSHARP_REF_ASSEMBLY_SDK = "10.0.400"
+
+def fsharp_ref_assemblies_are_deterministic(sdk_version):
+    """Whether this SDK's F# reference assemblies are worth producing.
+
+    Args:
+        sdk_version: The version of the .Net SDK, as `DotnetInfo.sdk_version`.
+
+    Returns:
+        True if `--refout` output is deterministic on this SDK.
+    """
+    return semver.to_comparable(sdk_version, relaxed = True) >= \
+           semver.to_comparable(_DETERMINISTIC_FSHARP_REF_ASSEMBLY_SDK, relaxed = True)
+
 def get_toolchain(ctx):
     """The .Net toolchain a target compiles with.
 
