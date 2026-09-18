@@ -11,7 +11,9 @@ type Band =
       hasWeb: bool
       rids: string list
       /// Set only where ASP.NET Core shipped a different set to .NET.
-      webRids: string list option }
+      webRids: string list option
+      /// NativeAOT ships a runtime pack of its own from .NET 9 onwards.
+      hasAot: bool }
 
 let private allRids =
     [ "linux-arm64"
@@ -30,7 +32,8 @@ let private band tfm hasWeb rids =
     { tfm = tfm
       hasWeb = hasWeb
       rids = rids
-      webRids = None }
+      webRids = None
+      hasAot = false }
 
 /// Releases before .NET 6 carry irregularities that are now frozen history:
 /// Apple silicon packs did not exist yet, and ASP.NET Core 3.0 shipped a
@@ -56,7 +59,10 @@ let private bands (channels: string list) =
         channels
         |> List.choose (fun channel ->
             match Version.TryParse channel with
-            | true, version when version.Major >= 6 -> Some(band $"net{channel}" true allRids)
+            | true, version when version.Major >= 6 ->
+                Some
+                    { band $"net{channel}" true allRids with
+                        hasAot = version.Major >= 9 }
             | _ -> None)
 
     historicalBands @ modern
@@ -128,6 +134,12 @@ let generatePackBands (output: string) (channels: string list) =
             match band.webRids with
             | Some webRids -> fields.Add(sprintf "\"web_rids\": [%s]" (ridList webRids))
             | None -> ()
+
+            if band.hasAot then
+                // ilc and the runtime pack it links against ship together, so
+                // one version covers both.
+                let ilcompilerId = "runtime." + band.rids.Head + ".Microsoft.DotNet.ILCompiler"
+                fields.Add(sprintf "\"ilcompiler\": \"%s\"" (latestInBand ilcompilerId band.tfm))
 
         sb.Append(sprintf "    \"%s\": {%s},\n" band.tfm (String.concat ", " fields))
         |> ignore

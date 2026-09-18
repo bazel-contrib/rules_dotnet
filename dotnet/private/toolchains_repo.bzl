@@ -21,36 +21,42 @@ with only the toolchain attribute pointing into the platform-specific repositori
 # published by the upstream project.
 PLATFORMS = {
     "x86_64-apple-darwin": struct(
+        os = "osx",
         compatible_with = [
             "@platforms//os:macos",
             "@platforms//cpu:x86_64",
         ],
     ),
     "aarch64-apple-darwin": struct(
+        os = "osx",
         compatible_with = [
             "@platforms//os:macos",
             "@platforms//cpu:aarch64",
         ],
     ),
     "x86_64-unknown-linux-gnu": struct(
+        os = "linux",
         compatible_with = [
             "@platforms//os:linux",
             "@platforms//cpu:x86_64",
         ],
     ),
     "arm64-unknown-linux-gnu": struct(
+        os = "linux",
         compatible_with = [
             "@platforms//os:linux",
             "@platforms//cpu:arm64",
         ],
     ),
     "x86_64-pc-windows-msvc": struct(
+        os = "windows",
         compatible_with = [
             "@platforms//os:windows",
             "@platforms//cpu:x86_64",
         ],
     ),
     "arm64-pc-windows-msvc": struct(
+        os = "windows",
         compatible_with = [
             "@platforms//os:windows",
             "@platforms//cpu:arm64",

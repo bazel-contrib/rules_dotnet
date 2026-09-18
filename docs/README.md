@@ -41,6 +41,55 @@ The following workloads are not supported by these rules at this given time:
 Contributions to add the missing workloads are welcomed and the maintainers
 will do their best to guide if needed.
 
+## NativeAOT and the C/C++ toolchain
+
+`publish_binary(native_aot = True)` compiles the application ahead of time to a
+single native executable. It is the only publish model that links native code,
+so unlike every other rule in `rules_dotnet` it needs a **C/C++ toolchain**. The
+toolchain is resolved through Bazel's standard mechanism and requested
+optionally, so a build that never publishes NativeAOT does not need one to
+exist.
+
+Windows AOT is not supported yet.
+
+### Recommended: a hermetic toolchain
+
+The [`llvm`](https://registry.bazel.build/modules/llvm) module supplies a
+hermetic LLVM toolchain and downloads Apple's official SDK for Apple targets, so
+NativeAOT builds the same way on every machine and can cross-compile — a
+`linux-x64` binary from macOS, say, with nothing installed on the host. It is
+what `rules_dotnet` uses for its own test suite.
+
+```starlark
+bazel_dep(name = "llvm", version = "0.8.19")
+
+register_toolchains("@llvm//toolchain:all")
+
+# Apple targets only. The .NET runtime links against CryptoKit, GSS and Network,
+# which the module's minimal sysroot leaves out, and naming any framework
+# replaces the default set rather than extending it.
+osx_sysroot = use_extension("@llvm//extensions:osx.bzl", "osx")
+osx_sysroot.frameworks(names = [
+    "CoreFoundation",
+    "CryptoKit",
+    "Foundation",
+    "GSS",
+    "Kernel",
+    "Network",
+    "OSLog",
+    "Security",
+    "SystemConfiguration",
+])
+```
+
+### Otherwise: host toolchains
+
+Any registered C/C++ toolchain works, including the one Bazel auto-configures
+from the host compiler. That needs a working toolchain on every machine that
+publishes NativeAOT — Xcode's command line tools on macOS, clang or gcc on
+Linux — and it cannot cross-compile, because a host toolchain only targets its
+own platform.
+
 ## Usage
 
 ### Installation
@@ -178,7 +227,8 @@ build --@rules_dotnet//dotnet/settings:prune_unused_references=true
 
 ## Path mapping
 
-The rules_dotnet compile actions support [path mapping](https://bazel.build/reference/command-line-reference#flag--experimental_output_paths),
+The rules_dotnet compile actions support
+[path mapping](https://bazel.build/reference/command-line-reference#flag--experimental_output_paths),
 which strips the configuration segment out of the paths a compile action sees, so the *same*
 compilation reached through two different configurations produces one cache **key** instead of two.
 

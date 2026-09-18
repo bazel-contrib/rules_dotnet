@@ -158,3 +158,18 @@ alias(
     }),
     visibility = ["//visibility:public"],
 )
+
+# The ILCompiler pack for the machine the build runs on, aliased for the same
+# reason as crossgen2 above.
+alias(
+    name = "ilcompiler_pack",
+    actual = select({
+        ":linux-arm64": "@dotnet.ilcompiler_packs//tool:linux-arm64",
+        ":linux-x64": "@dotnet.ilcompiler_packs//tool:linux-x64",
+        ":osx-arm64": "@dotnet.ilcompiler_packs//tool:osx-arm64",
+        ":osx-x64": "@dotnet.ilcompiler_packs//tool:osx-x64",
+        ":windows-arm64": "@dotnet.ilcompiler_packs//tool:win-arm64",
+        ":windows-x64": "@dotnet.ilcompiler_packs//tool:win-x64",
+    }),
+    visibility = ["//visibility:public"],
+)

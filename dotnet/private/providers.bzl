@@ -99,11 +99,19 @@ DotnetRuntimePackInfo = provider(
     },
 )
 
-DotnetCrossgen2PackInfo = provider(
-    doc = "The crossgen2 tool that compiles ReadyToRun images.",
+DotnetToolPackInfo = provider(
+    doc = "A native SDK tool, such as crossgen2 or ilc.",
     fields = {
-        "crossgen2": "The crossgen2 executable.",
-        "files": "Everything crossgen2 needs at runtime.",
+        "tool": "File: The tool's executable.",
+        "files": "depset[File]: Everything the tool needs at runtime.",
+    },
+)
+
+DotnetNativeAotPackInfo = provider(
+    doc = "The framework a NativeAOT publish compiles and links against.",
+    fields = {
+        "libs": "list[File]: The framework assemblies ilc compiles against.",
+        "link_inputs": "map[string, File]: The static libraries and objects the native link consumes, by basename.",
     },
 )
 

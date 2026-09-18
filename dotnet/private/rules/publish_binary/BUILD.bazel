@@ -8,10 +8,13 @@ bzl_library(
     ],
     deps = [
         "//dotnet/private:providers",
+        "//dotnet/private/sdk/nativeaot_packs:nativeaot_pack_transition",
         "//dotnet/private/sdk/runtime_packs:runtime_pack_transition",
         "//dotnet/private/transitions:default_transition",
         "//dotnet/private/transitions:tfm_transition",
         "@bazel_skylib//lib:paths",
         "@bazel_skylib//lib:shell",
+        "@rules_cc//cc:action_names_bzl",
+        "@rules_cc//cc/common",
     ],
 )

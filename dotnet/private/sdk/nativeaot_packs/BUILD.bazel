@@ -1,0 +1,25 @@
+load("@bazel_lib//:bzl_library.bzl", "bzl_library")
+load(":nativeaot_pack.bzl", "nativeaot_pack")
+
+label_setting(
+    name = "nativeaot_pack",
+    build_setting_default = ":empty_pack",
+    visibility = ["//visibility:public"],
+)
+
+# The label setting needs a default, and a publish that is not NativeAOT never
+# transitions away from it.
+nativeaot_pack(
+    name = "empty_pack",
+    visibility = ["//visibility:public"],
+)
+
+bzl_library(
+    name = "nativeaot_pack_transition",
+    srcs = ["nativeaot_pack_transition.bzl"],
+    visibility = ["//dotnet:__subpackages__"],
+    deps = [
+        "//dotnet/private:common",
+        "//dotnet/private/sdk:packs",
+    ],
+)

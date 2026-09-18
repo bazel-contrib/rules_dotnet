@@ -1,4 +1,4 @@
-"""Declares the repositories that hold the SDK's targeting, runtime and apphost packs.
+"""Declares the repositories that hold the SDK's packs and native tools.
 
 Each repository groups its packages behind targets named for what they provide
 (`@dotnet.targeting_packs//default:net10.0`), so labels do not move when the
@@ -28,13 +28,19 @@ load(
     "//dotnet/private/sdk:packs.bzl",
     "APPHOST_PACK_REPO",
     "CROSSGEN2_PACK_REPO",
+    "ILCOMPILER_PACK_REPO",
+    "NATIVEAOT_PACK_REPO",
     "PROJECT_SDKS",
     "RUNTIME_PACK_REPO",
     "TARGETING_PACK_REPO",
+    "aot_pack_rids",
+    "aot_pack_tfms",
     "apphost_pack",
     "band_is_movable",
-    "crossgen2_host_rids",
     "crossgen2_pack",
+    "host_rids",
+    "ilcompiler_pack",
+    "nativeaot_pack",
     "runtime_pack_rids",
     "runtime_pack_tfms",
     "runtime_packs",
@@ -139,39 +145,47 @@ def _apphost(versions):
 
     return struct(build_files = build_files, packages = collections.uniq(packages))
 
-def _crossgen2(versions):
+def _host_tool(kind, pack, versions):
     """One target per host runtime identifier, selecting its pack by framework.
 
-    crossgen2 is chosen by the machine the build runs on while the framework
+    The tool is picked by the machine the build runs on while the framework
     comes from the configuration, and a rule attribute cannot select on both.
+
+    Args:
+      kind: The pack rule's name, which also names the `.bzl` file it lives in.
+      pack: Returns the (id, version) of the tool's pack for a tfm and host rid,
+        or None where the tool did not ship for that combination.
+      versions: The version to move each band's packs to, by target framework.
+
+    Returns:
+      A struct of build files and the packages they reference.
     """
     packages = []
     targets = []
-    newest_tfm = runtime_pack_tfms()[-1]
 
-    for rid in crossgen2_host_rids():
+    for rid in host_rids():
         by_tfm = {}
 
         for tfm in runtime_pack_tfms():
-            pack = crossgen2_pack(tfm, rid)
+            found = pack(tfm, rid)
 
-            if pack == None:
+            if found == None:
                 continue
 
-            (id, version) = pack
+            (id, version) = found
             version = versions.get(tfm) or version
             packages.append((id, version))
 
-            # crossgen2 is a native executable with its JIT libraries beside
-            # it, none of which the package rules classify, so the pack reads
-            # the archive's file list directly.
-            files = "@{}//:files".format(nuget_archive_name(id, version))
-            by_tfm["@rules_dotnet//dotnet:tfm_{}".format(tfm)] = files
+            # The tool is a native executable with its JIT libraries beside it,
+            # none of which the package rules classify, so the pack reads the
+            # archive's file list directly.
+            by_tfm["@rules_dotnet//dotnet:tfm_{}".format(tfm)] = "@{}//:files".format(nuget_archive_name(id, version))
 
-            if tfm == newest_tfm:
-                # Nothing sets a target framework outside a tfm transition, so
-                # the target still has to resolve without one.
-                by_tfm["//conditions:default"] = files
+        if by_tfm:
+            # Nothing sets a target framework outside a tfm transition, so the
+            # target still has to resolve without one. Bands come oldest first,
+            # so this is the newest the tool shipped for.
+            by_tfm["//conditions:default"] = by_tfm.values()[-1]
 
         targets.append({
             "name": rid,
@@ -180,9 +194,35 @@ def _crossgen2(versions):
 
     return struct(
         # Not the root BUILD: the hub writes its own there.
-        build_files = {"tool/BUILD.bazel": _build_file("crossgen2", targets)},
+        build_files = {"tool/BUILD.bazel": _build_file(kind, targets)},
         packages = collections.uniq(packages),
     )
+
+def _nativeaot():
+    """One target per runtime identifier a framework can publish AOT for.
+
+    Carries both halves of what a NativeAOT publish needs: the framework
+    assemblies ilc compiles against, and the static libraries the native link
+    consumes. Neither is a classified asset kind, so the pack reads the
+    archive's file list directly.
+    """
+    packages = []
+    build_files = {}
+
+    for tfm in aot_pack_tfms():
+        targets = []
+
+        for rid in aot_pack_rids(tfm):
+            (id, version) = nativeaot_pack(tfm, rid)
+            packages.append((id, version))
+            targets.append({
+                "name": rid,
+                "pack_files": "@{}//:files".format(nuget_archive_name(id, version)),
+            })
+
+        build_files["{}/BUILD.bazel".format(tfm)] = _build_file("nativeaot", targets)
+
+    return struct(build_files = build_files, packages = collections.uniq(packages))
 
 def _versions_for_registered_sdks(module_ctx, registrations, netrc_entries, indexes):
     """Returns the version each band's packs should move to, by target framework.
@@ -250,11 +290,16 @@ def declare_pack_repos(module_ctx, registrations):
         (TARGETING_PACK_REPO, _targeting(bands.versions)),
         (RUNTIME_PACK_REPO, _runtime(bands.versions)),
         (APPHOST_PACK_REPO, _apphost(bands.versions)),
-        (CROSSGEN2_PACK_REPO, _crossgen2(bands.versions)),
+        (CROSSGEN2_PACK_REPO, _host_tool("crossgen2", crossgen2_pack, bands.versions)),
+        # ilc and the NativeAOT pack are versioned together and never mixed
+        # with the JIT packs, so a registered SDK does not move them.
+        (ILCOMPILER_PACK_REPO, _host_tool("ilcompiler", ilcompiler_pack, {})),
+        (NATIVEAOT_PACK_REPO, _nativeaot()),
     ]
 
     # The kinds cannot share a package: their ids end in `.Ref`,
-    # `.Runtime.<rid>`, `.Host.<rid>` and `.Crossgen2.<rid>` respectively.
+    # `.Runtime.<rid>`, `.Host.<rid>`, `.Crossgen2.<rid>` and
+    # `.Runtime.NativeAOT.<rid>`, and ILCompiler packs are `runtime.<rid>.*`.
     packages = [pack for (_, kind) in kinds for pack in kind.packages]
 
     resolved = {}

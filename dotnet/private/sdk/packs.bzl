@@ -144,6 +144,71 @@ def crossgen2_pack(tfm, rid):
 
     return (_app_pack_id(tfm, False, "Crossgen2." + rid), PACK_BANDS[tfm]["runtime"])
 
+def aot_pack_rids(tfm):
+    """Returns the runtime identifiers a target framework can publish AOT for.
+
+    A band carries an ILCompiler version only where NativeAOT ships a runtime
+    pack of its own, which is from .NET 9 onwards.
+
+    Args:
+      tfm: The target framework.
+
+    Returns:
+      A list of runtime identifiers, empty if the band predates NativeAOT.
+    """
+    return runtime_pack_rids(tfm) if "ilcompiler" in PACK_BANDS.get(tfm, {}) else []
+
+def aot_pack_tfms():
+    """Returns the target frameworks that can publish NativeAOT.
+
+    Returns:
+      A list of target frameworks.
+    """
+    return [tfm for tfm in runtime_pack_tfms() if aot_pack_rids(tfm)]
+
+def ilcompiler_pack(tfm, rid):
+    """Returns the ILCompiler pack that compiles IL to native code.
+
+    Keyed by the *host* runtime identifier, not the target: ilc runs on the
+    build machine and cross-compiles via --targetos/--targetarch.
+
+    Args:
+      tfm: The target framework.
+      rid: The runtime identifier of the machine ilc will run on.
+
+    Returns:
+      A (package id, version) tuple, or None if there is no ILCompiler pack.
+    """
+    if rid not in aot_pack_rids(tfm):
+        return None
+
+    return (
+        "runtime.{}.Microsoft.DotNet.ILCompiler".format(rid),
+        PACK_BANDS[tfm]["ilcompiler"],
+    )
+
+def nativeaot_pack(tfm, rid):
+    """Returns the runtime pack a NativeAOT publish compiles and links against.
+
+    Distinct from the JIT runtime pack: the assemblies are built for AOT, and
+    the pack carries the static libraries the native link needs. It is built
+    alongside ilc and shares its version.
+
+    Args:
+      tfm: The target framework.
+      rid: The runtime identifier being published for.
+
+    Returns:
+      A (package id, version) tuple, or None if there is no NativeAOT pack.
+    """
+    if rid not in aot_pack_rids(tfm):
+        return None
+
+    return (
+        _app_pack_id(tfm, False, "Runtime.NativeAOT." + rid),
+        PACK_BANDS[tfm]["ilcompiler"],
+    )
+
 def runtime_pack_rids(tfm, project_sdk = DEFAULT_SDK):
     """Returns the runtime identifiers a target framework shipped packs for.
 
@@ -201,6 +266,10 @@ APPHOST_PACK_REPO = "dotnet.apphost_packs"
 
 CROSSGEN2_PACK_REPO = "dotnet.crossgen2_packs"
 
+ILCOMPILER_PACK_REPO = "dotnet.ilcompiler_packs"
+
+NATIVEAOT_PACK_REPO = "dotnet.nativeaot_packs"
+
 TARGETING_PACK_LOOKUP_TABLE = {
     project_sdk: {
         tfm: "@{}//{}:{}".format(TARGETING_PACK_REPO, project_sdk, tfm)
@@ -209,10 +278,11 @@ TARGETING_PACK_LOOKUP_TABLE = {
     for project_sdk in PROJECT_SDKS
 }
 
-# The runtime identifiers a build can run on, and so the ones crossgen2 packs
-# are fetched for. Matches the platforms `//dotnet/private:crossgen2_pack`
-# selects over; a musl host is not distinguishable as a Bazel platform here.
-_CROSSGEN2_HOST_RIDS = [
+# The runtime identifiers a build can run on, and so the ones the tool packs
+# are fetched for. Matches the platforms the `crossgen2_pack` and
+# `ilcompiler_pack` aliases select over; a musl host is not distinguishable as
+# a Bazel platform here.
+_HOST_RIDS = [
     "linux-arm64",
     "linux-x64",
     "osx-arm64",
@@ -221,13 +291,13 @@ _CROSSGEN2_HOST_RIDS = [
     "win-x64",
 ]
 
-def crossgen2_host_rids():
-    """The runtime identifiers crossgen2 packs are fetched for.
+def host_rids():
+    """The runtime identifiers the tool packs are fetched for.
 
     Returns:
       A list of runtime identifiers.
     """
-    return _CROSSGEN2_HOST_RIDS
+    return _HOST_RIDS
 
 RUNTIME_PACK_LOOKUP_TABLE = {
     project_sdk: {
@@ -246,6 +316,14 @@ APPHOST_PACK_LOOKUP_TABLE = {
         for rid in runtime_pack_rids(tfm)
     }
     for tfm in runtime_pack_tfms()
+}
+
+NATIVEAOT_PACK_LOOKUP_TABLE = {
+    tfm: {
+        rid: "@{}//{}:{}".format(NATIVEAOT_PACK_REPO, tfm, rid)
+        for rid in aot_pack_rids(tfm)
+    }
+    for tfm in aot_pack_tfms()
 }
 
 def band_is_movable(tfm):

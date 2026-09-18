@@ -2,23 +2,17 @@ load("@bazel_lib//lib:transitions.bzl", "platform_transition_binary")
 load("@rules_dotnet//dotnet:defs.bzl", "publish_binary")
 load("@rules_shell//shell:sh_test.bzl", "sh_test")
 
-#TODO: Add a C/C++ toolchain for cross compilation. Until that is done these tests are marked as manual
+# Cross-publishing builds this app's own native library for the target, so it
+# needs a C/C++ toolchain that can target something other than the host. See
+# docs/README.md for the toolchain rules_dotnet registers for its own builds.
 
-platform(
-    name = "x86_64_linux",
-    constraint_values = [
-        "@platforms//os:linux",
-        "@platforms//cpu:x86_64",
-    ],
-)
-
-platform(
-    name = "arm64_linux",
-    constraint_values = [
-        "@platforms//os:linux",
-        "@platforms//cpu:arm64",
-    ],
-)
+# The tests read the published binary with `file` and `readlink -f`, neither of
+# which a Windows host has. What they check does not depend on the host, so they
+# run wherever those tools exist.
+_NOT_WINDOWS = select({
+    "@platforms//os:windows": ["@platforms//:incompatible"],
+    "//conditions:default": [],
+})
 
 publish_binary(
     name = "publish",
@@ -31,20 +25,20 @@ platform_transition_binary(
     name = "transitioned_publish_linux_x86_64",
     binary = ":publish",
     tags = ["manual"],
-    target_platform = "x86_64_linux",
+    target_platform = "//dotnet/private/tests/publish:linux_x86_64",
 )
 
 platform_transition_binary(
     name = "transitioned_publish_linux_arm64",
     binary = ":publish",
     tags = ["manual"],
-    target_platform = "arm64_linux",
+    target_platform = "//dotnet/private/tests/publish:linux_arm64",
 )
 
 sh_test(
     name = "test_publish_binary_is_x86_64",
     size = "small",
-    srcs = ["test_file_type_contains.sh"],
+    srcs = ["//dotnet/private/tests/publish:test_file_type_contains.sh"],
     args = [
         "$(rlocationpath :transitioned_publish_linux_x86_64)",
         "x86-64",
@@ -53,13 +47,13 @@ sh_test(
         ":transitioned_publish_linux_x86_64",
         "@bazel_tools//tools/bash/runfiles",
     ],
-    tags = ["manual"],
+    target_compatible_with = _NOT_WINDOWS,
 )
 
 sh_test(
     name = "test_publish_binary_is_arm64",
     size = "small",
-    srcs = ["test_file_type_contains.sh"],
+    srcs = ["//dotnet/private/tests/publish:test_file_type_contains.sh"],
     args = [
         "$(rlocationpath :transitioned_publish_linux_arm64)",
         "aarch64",
@@ -68,5 +62,5 @@ sh_test(
         ":transitioned_publish_linux_arm64",
         "@bazel_tools//tools/bash/runfiles",
     ],
-    tags = ["manual"],
+    target_compatible_with = _NOT_WINDOWS,
 )

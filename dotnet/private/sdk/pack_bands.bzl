@@ -15,6 +15,6 @@ PACK_BANDS = {
     "net6.0": {"ref": "6.0.36", "web_ref": "6.0.36", "runtime": "6.0.36", "rids": ["linux-arm64", "linux-musl-arm64", "linux-musl-x64", "linux-x64", "osx-arm64", "osx-x64", "win-arm64", "win-x64"]},
     "net7.0": {"ref": "7.0.20", "web_ref": "7.0.20", "runtime": "7.0.20", "rids": ["linux-arm64", "linux-musl-arm64", "linux-musl-x64", "linux-x64", "osx-arm64", "osx-x64", "win-arm64", "win-x64"]},
     "net8.0": {"ref": "8.0.31", "web_ref": "8.0.31", "runtime": "8.0.31", "rids": ["linux-arm64", "linux-musl-arm64", "linux-musl-x64", "linux-x64", "osx-arm64", "osx-x64", "win-arm64", "win-x64"]},
-    "net9.0": {"ref": "9.0.20", "web_ref": "9.0.20", "runtime": "9.0.20", "rids": ["linux-arm64", "linux-musl-arm64", "linux-musl-x64", "linux-x64", "osx-arm64", "osx-x64", "win-arm64", "win-x64"]},
-    "net10.0": {"ref": "10.0.12", "web_ref": "10.0.12", "runtime": "10.0.12", "rids": ["linux-arm64", "linux-musl-arm64", "linux-musl-x64", "linux-x64", "osx-arm64", "osx-x64", "win-arm64", "win-x64"]},
+    "net9.0": {"ref": "9.0.20", "web_ref": "9.0.20", "runtime": "9.0.20", "rids": ["linux-arm64", "linux-musl-arm64", "linux-musl-x64", "linux-x64", "osx-arm64", "osx-x64", "win-arm64", "win-x64"], "ilcompiler": "9.0.20"},
+    "net10.0": {"ref": "10.0.12", "web_ref": "10.0.12", "runtime": "10.0.12", "rids": ["linux-arm64", "linux-musl-arm64", "linux-musl-x64", "linux-x64", "osx-arm64", "osx-x64", "win-arm64", "win-x64"], "ilcompiler": "10.0.12"},
 }

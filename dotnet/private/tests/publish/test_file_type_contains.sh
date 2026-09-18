@@ -25,9 +25,12 @@ file --dereference "$binary_path" | grep -q "$2"
 # The binary is symlinked to the actual binary so we need to get the actual binary path
 # so that we can check the native libraries that are next to it.
 binary_path="$(readlink -f "$binary_path")"
+runtimes="$(dirname "$binary_path")/runtimes"
 
-# Then we check if the native libraries are also of the correct type
-# We have a NuGet package that contains a native library:
-find "$(dirname "$binary_path")/runtimes" -type f -name "*.so" -o -name "*.dylib" -o -name "*.dll" | while read native_lib; do
-  file --dereference "$native_lib" | grep -q "$2"
-done
+# Then we check if the native libraries are also of the correct type.
+# A NativeAOT publish links them in, so it has no runtimes directory at all.
+if [[ -d "$runtimes" ]]; then
+  find "$runtimes" -type f -name "*.so" -o -name "*.dylib" -o -name "*.dll" | while read native_lib; do
+    file --dereference "$native_lib" | grep -q "$2"
+  done
+fi

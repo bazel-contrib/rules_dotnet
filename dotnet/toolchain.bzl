@@ -24,6 +24,8 @@ May be empty if the fsharp_compiler_path points to a locally installed tool bina
         "apphost_files": """Files required in runfiles to make the apphost executable available.
 
 May be empty if the apphost_path points to a locally installed tool binary.""",
+        "os": """string: The operating system the toolchain's tools run on, one of
+`linux`, `osx` or `windows`.""",
         "sdk_version": "Version of the dotnet SDK",
         "runtime_version": "Version of the dotnet runtime",
         "runtime_tfm": "The target framework moniker for the current SDK",
@@ -112,6 +114,7 @@ def _dotnet_toolchain_impl(ctx):
         csharp_compiler_files = csharp_compiler_files,
         fsharp_compiler_path = fsharp_compiler_path,
         fsharp_compiler_files = fsharp_compiler_files,
+        os = ctx.attr.os,
         sdk_version = ctx.attr.sdk_version,
         runtime_version = ctx.attr.runtime_version,
         runtime_tfm = ctx.attr.runtime_tfm,
@@ -190,6 +193,11 @@ Defaults to `runtime`, which also carries the SDK a binary does not need.""",
         "host_model": attr.label(
             doc = "The System.NET.HostModel DLL",
             mandatory = False,
+        ),
+        "os": attr.string(
+            doc = "The operating system the toolchain's tools run on",
+            mandatory = True,
+            values = ["linux", "osx", "windows"],
         ),
         "sdk_version": attr.string(
             doc = "The SDK version of the current dotnet SDK",

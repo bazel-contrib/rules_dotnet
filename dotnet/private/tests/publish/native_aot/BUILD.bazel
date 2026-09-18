@@ -1,0 +1,81 @@
+load("@bazel_lib//lib:transitions.bzl", "platform_transition_binary")
+load("@rules_pkg//pkg:tar.bzl", "pkg_tar")
+load("@rules_shell//shell:sh_test.bzl", "sh_test")
+load("//dotnet:defs.bzl", "publish_binary")
+
+# The native link needs a C/C++ toolchain for the target platform, and Windows
+# goes through MSVC rather than the Unix driver these rules support.
+_NOT_WINDOWS = select({
+    "@platforms//os:windows": ["@platforms//:incompatible"],
+    "//conditions:default": [],
+})
+
+publish_binary(
+    name = "native_aot",
+    binary = "//dotnet/private/tests/publish/app_to_publish",
+    native_aot = True,
+    self_contained = True,
+    target_compatible_with = _NOT_WINDOWS,
+    target_framework = "net10.0",
+)
+
+# Tarring strips the path prefix, and checks that the publish output can be
+# packaged at all.
+pkg_tar(
+    name = "tar",
+    srcs = [":native_aot"],
+    include_runfiles = True,
+    mode = "0755",
+    package_dir = "/",
+    strip_prefix = select({
+        "//dotnet/private:linux-arm64": "native_aot/aot/linux-arm64",
+        "//dotnet/private:linux-x64": "native_aot/aot/linux-x64",
+        "//dotnet/private:osx-arm64": "native_aot/aot/osx-arm64",
+        "//dotnet/private:osx-x64": "native_aot/aot/osx-x64",
+    }),
+    target_compatible_with = _NOT_WINDOWS,
+)
+
+sh_test(
+    name = "native_aot_test",
+    size = "small",
+    srcs = ["test.sh"],
+    data = [":tar"],
+    target_compatible_with = _NOT_WINDOWS,
+)
+
+# Cross-compiling proves the two halves are configured independently: ilc runs
+# on the execution platform while the framework, the static libraries and the
+# linker all come from the target. The app is managed-only so that the test
+# does not also need a first-party native library built for the target.
+publish_binary(
+    name = "cross_publish",
+    binary = "//dotnet/private/tests/publish/native_aot/app",
+    native_aot = True,
+    self_contained = True,
+    tags = ["manual"],
+    target_framework = "net10.0",
+)
+
+platform_transition_binary(
+    name = "transitioned_linux_x86_64",
+    binary = ":cross_publish",
+    tags = ["manual"],
+    target_platform = "//dotnet/private/tests/publish:linux_x86_64",
+)
+
+sh_test(
+    name = "cross_compile_test",
+    size = "small",
+    srcs = ["//dotnet/private/tests/publish:test_file_type_contains.sh"],
+    args = [
+        "$(rlocationpath :transitioned_linux_x86_64)",
+        "x86-64",
+    ],
+    data = [
+        ":transitioned_linux_x86_64",
+        "@bazel_tools//tools/bash/runfiles",
+    ],
+    # `file` and `readlink -f`, which the test script uses, need a POSIX host.
+    target_compatible_with = _NOT_WINDOWS,
+)

@@ -17,7 +17,7 @@ dotnet.toolchain(
     name = "dotnet_apphost",
     dotnet_version = "10.0.201",
 )
-use_repo(dotnet, "dotnet.apphost_packs", "dotnet.crossgen2_packs", "dotnet.runtime_packs", "dotnet.targeting_packs", "dotnet_toolchains")
+use_repo(dotnet, "dotnet.apphost_packs", "dotnet.crossgen2_packs", "dotnet.ilcompiler_packs", "dotnet.nativeaot_packs", "dotnet.runtime_packs", "dotnet.targeting_packs", "dotnet_toolchains")
 
 # These toolchains are used to build the apphost shimmer
 use_repo(dotnet, "dotnet_apphost_x86_64-unknown-linux-gnu")
@@ -46,13 +46,32 @@ bazel_dep(name = "platforms", version = "1.0.0")
 bazel_dep(name = "bazel_lib", version = "3.0.0")
 bazel_dep(name = "rules_shell", version = "0.5.0")
 
+# `publish_binary` links a NativeAOT publish with the cc toolchain APIs.
+bazel_dep(name = "rules_cc", version = "0.2.19")
+
 # Dev dependencies
 bazel_dep(name = "rules_pkg", version = "1.1.0", dev_dependency = True)
 bazel_dep(name = "gazelle", version = "0.51.3", dev_dependency = True, repo_name = "bazel_gazelle")
 bazel_dep(name = "bazel_skylib_gazelle_plugin", version = "1.9.0", dev_dependency = True)
-bazel_dep(name = "rules_cc", version = "0.2.19", dev_dependency = True)
 bazel_dep(name = "rules_testing", version = "0.8.0", dev_dependency = True)
 bazel_dep(name = "bazel_ci_rules", version = "1.0.0", dev_dependency = True)
+
+# The LLVM toolchains are registered selctively in .bazelrc
+bazel_dep(name = "llvm", version = "0.8.19", dev_dependency = True)
+
+osx_sysroot = use_extension("@llvm//extensions:osx.bzl", "osx", dev_dependency = True)
+osx_sysroot.frameworks(names = [
+    "CoreFoundation",
+    "CryptoKit",
+    "Foundation",
+    "GSS",
+    "Kernel",
+    "Network",
+    "OSLog",
+    "Security",
+    "SystemConfiguration",
+])
+
 bazel_dep(name = "dotnet_test_resources_other_repo", version = "", dev_dependency = True)
 local_path_override(
     module_name = "dotnet_test_resources_other_repo",
