@@ -75,6 +75,7 @@ bzl_library(
         ":repositories",
         "//dotnet/private:toolchains_repo",
         "//dotnet/private/sdk:pack_repos",
+        "@bazel_skylib//lib:collections",
     ],
 )
 

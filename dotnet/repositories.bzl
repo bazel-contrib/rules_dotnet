@@ -140,36 +140,43 @@ dotnet_repositories = repository_rule(
     attrs = _ATTRS,
 )
 
-# Wrapper macro around everything above, this is the primary API
-def dotnet_register_toolchains(name, dotnet_version, register = True, toolchain_type = DOTNET_TOOLCHAIN_TYPE, **kwargs):
-    """Convenience macro for users which does typical setup.
+def _sdk_repo_base(dotnet_version):
+    return "dotnet_sdk.{}".format(dotnet_version)
 
-    - create a repository for each built-in platform like "dotnet_linux_amd64" -
-      this repository is lazily fetched when node is needed for that platform.
-    - create a repository exposing toolchains for each platform like "dotnet_platforms"
-    - register a toolchain pointing at each platform
-    Users can avoid this macro and do these steps themselves, if they want more control.
+def dotnet_sdk_repositories(dotnet_version, **kwargs):
+    """Declares the per-platform repositories holding one .Net SDK.
+
+    Named after the SDK version rather than the toolchain they back, so that two
+    toolchains pinned to the same version share one download and one extraction,
+    and so a compile's action key turns on the SDK it used rather than on which
+    toolchain resolved it.
 
     Args:
-        name: base name for all created repos, like "dotnet"
-        dotnet_version: The .Net SDK version to use e.g. 8.0.100
-        register: whether to call through to native.register_toolchains.
-            Should be True for WORKSPACE users, but false when used under bzlmod extension
-        toolchain_type: The toolchain type the generated toolchains register for.
+        dotnet_version: The .Net SDK version to fetch, e.g. 8.0.100.
         **kwargs: passed to each dotnet_repositories call
     """
     for platform in PLATFORMS.keys():
         dotnet_repositories(
-            name = name + "_" + platform,
+            name = "{}_{}".format(_sdk_repo_base(dotnet_version), platform),
             platform = platform,
             dotnet_version = dotnet_version,
             **kwargs
         )
-        if register:
-            native.register_toolchains("@%s_toolchains//:%s_toolchain" % (name, platform))
 
+def dotnet_toolchains_repo(name, dotnet_version, toolchain_type = DOTNET_TOOLCHAIN_TYPE):
+    """Declares the repository of `toolchain` targets for one .Net SDK.
+
+    Holds only the `toolchain` targets Bazel has to analyze up front; the SDK
+    itself stays in the repositories `dotnet_sdk_repositories` declares, which
+    are fetched only once a build actually needs them.
+
+    Args:
+        name: The name of the generated repository.
+        dotnet_version: The .Net SDK version the toolchains point at.
+        toolchain_type: The toolchain type the generated toolchains register for.
+    """
     toolchains_repo(
-        name = name + "_toolchains",
+        name = name,
         toolchain_type = toolchain_type,
-        user_repository_name = name,
+        sdk_repository_name = _sdk_repo_base(dotnet_version),
     )
