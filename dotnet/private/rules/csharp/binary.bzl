@@ -6,7 +6,6 @@ load("@bazel_skylib//lib:dicts.bzl", "dicts")
 load("@bazel_skylib//rules:common_settings.bzl", "BuildSettingInfo")
 load(
     "//dotnet/private:common.bzl",
-    "BOOTSTRAP_TOOLCHAIN_TYPE",
     "default_csharp_lang_version",
     "get_compiler_worker",
     "get_compiler_wrapper",
@@ -14,6 +13,7 @@ load(
     "is_debug",
     "targets_windows",
 )
+load("//dotnet/private:toolchains_repo.bzl", "BOOTSTRAP_TOOLCHAIN_TYPE")
 load("//dotnet/private/rules/common:attrs.bzl", "CSHARP_BINARY_COMMON_ATTRS")
 load("//dotnet/private/rules/common:binary.bzl", "build_binary")
 load("//dotnet/private/rules/csharp/actions:csharp_assembly.bzl", "AssemblyAction")
@@ -66,7 +66,7 @@ def _compile_action(ctx, tfm, toolchain):
         is_windows = targets_windows(ctx),
     )
 
-def _binary_private_impl(ctx):
+def _binary_impl(ctx):
     return build_binary(ctx, _compile_action, get_toolchain(ctx))
 
 def _bootstrap_binary_impl(ctx):
@@ -83,7 +83,7 @@ _BINARY_ATTRS = dicts.add(
 )
 
 csharp_binary = rule(
-    _binary_private_impl,
+    _binary_impl,
     doc = """Compile a C# exe""",
     attrs = _BINARY_ATTRS,
     executable = True,
@@ -93,27 +93,18 @@ csharp_binary = rule(
     cfg = tfm_transition,
 )
 
-# Both rules below build a tool of rules_dotnet's own, so both follow the
-# bootstrap toolchain rather than the user's: its SDK compiles them, and its
-# packs are what they compile against. Dropping `dotnet_toolchain` removes the
-# override that would point them back at the user's -- the toolchain they build
-# with is not the user's to choose.
+# The rules below build tools of rules_dotnet's own, so they follow the
+# bootstrap toolchain rather than the user's: its SDK compiles them and its
+# packs are what they compile against.
 _BOOTSTRAP_ATTRS = dicts.add(
-    {
-        name: value
-        for (name, value) in _BINARY_ATTRS.items()
-        if name != "dotnet_toolchain"
-    },
+    _BINARY_ATTRS,
     {"_pack_set": attr.string(default = BOOTSTRAP_PACKS)},
 )
 
-# This rule is purely for building the apphost
-# shimmer. It is needed because the apphost shimmer
-# has to target the exec configuration but we can't
-# just set `cfg = "exec"` in publish_binary because
-# we also need to reset the TFM/RID graph back to the
-# defaults so that the publish_binary's target
-# framework does not infect the apphost shimmer build.
+# The shimmer has to be built for the exec configuration, but `cfg = "exec"` in
+# publish_binary is not enough on its own: the TFM/RID graph has to be reset to
+# the defaults as well, so that publish_binary's target framework does not
+# infect the shimmer build.
 apphost_shimmer_binary = rule(
     _bootstrap_binary_impl,
     doc = """Compile the apphost shimmer C# exe.""",

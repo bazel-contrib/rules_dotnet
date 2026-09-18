@@ -16,14 +16,11 @@ WEB_SDK = "web"
 
 PROJECT_SDKS = [DEFAULT_SDK, WEB_SDK]
 
-# One pack set per toolchain type. A target compiles against the reference packs
-# of the SDK that compiles it, so the set follows the toolchain it resolves:
-# `dotnet` for the SDKs the user registered, `dotnet_bootstrap` for the one
-# rules_dotnet builds its own tools with. Named for the toolchain repositories
-# they follow, and resolved identically -- the two only ever differ in the SDK
-# versions behind them.
-USER_PACKS = "dotnet"
-BOOTSTRAP_PACKS = "dotnet_bootstrap"
+# A target compiles against the reference packs of the SDK that compiles it, so
+# there is one pack set per toolchain type. The sets are built identically and
+# differ only in the SDK version that moved their band.
+USER_PACKS = "user"
+BOOTSTRAP_PACKS = "bootstrap"
 PACK_SETS = [USER_PACKS, BOOTSTRAP_PACKS]
 
 _NETSTANDARD_PACKS = {

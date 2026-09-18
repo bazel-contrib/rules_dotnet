@@ -6,8 +6,6 @@ def _impl(settings, attr):
     project_sdk = attr.project_sdk
     incoming_target_framework = settings["//dotnet:target_framework"]
 
-    # The pack set follows the toolchain the rule resolves; within a set every
-    # target picks its pack the same way.
     supported_tfms = TARGETING_PACK_LOOKUP_TABLE[attr._pack_set].get(project_sdk)
     if supported_tfms:
         targeting_pack = supported_tfms.get(incoming_target_framework)

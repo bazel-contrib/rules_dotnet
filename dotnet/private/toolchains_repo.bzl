@@ -17,6 +17,9 @@ This guidance tells us how to avoid that: we put the toolchain targets in the al
 with only the toolchain attribute pointing into the platform-specific repositories.
 """
 
+# The toolchain type an SDK registers for: `DOTNET_TOOLCHAIN_TYPE` for the SDK
+# the user builds with, `BOOTSTRAP_TOOLCHAIN_TYPE` for the one rules_dotnet
+# builds its own tools with.
 DOTNET_TOOLCHAIN_TYPE = "@rules_dotnet//dotnet:toolchain_type"
 BOOTSTRAP_TOOLCHAIN_TYPE = "@rules_dotnet//dotnet:bootstrap_toolchain_type"
 
@@ -87,7 +90,6 @@ toolchain(
 )
 """.format(
             platform = platform,
-            name = repository_ctx.attr.name,
             user_repository_name = repository_ctx.attr.user_repository_name,
             compatible_with = meta.compatible_with,
             toolchain_type = repository_ctx.attr.toolchain_type,

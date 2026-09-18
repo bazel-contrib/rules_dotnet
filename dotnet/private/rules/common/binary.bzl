@@ -64,13 +64,8 @@ def build_binary(ctx, compile_action, toolchain):
 
     Args:
         ctx: Bazel build ctx.
-        compile_action: A compilation function
-            Args:
-                ctx: Bazel build ctx.
-                tfm: Target framework string
-                toolchain: The .Net toolchain to compile with
-            Returns:
-                An DotnetAssemblyInfo provider
+        compile_action: A function taking (ctx, tfm, toolchain) that compiles the srcs
+            and returns a (DotnetAssemblyCompileInfo, DotnetAssemblyRuntimeInfo) tuple.
         toolchain: The .Net toolchain to build with.
     Returns:
         A collection of the references, runfiles and native dlls.

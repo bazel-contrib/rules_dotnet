@@ -1,8 +1,8 @@
 """Declares the repositories that hold the SDK's packs and native tools.
 
 Each repository groups its packages behind targets named for what they provide
-(`@dotnet.targeting_packs//default:net10.0`), so labels do not move when the
-versions in `PACK_BANDS` change.
+(`@dotnet.targeting_packs//user/default:net10.0`), so labels do not move when
+the versions in `PACK_BANDS` change.
 """
 
 load("@bazel_skylib//lib:collections.bzl", "collections")
@@ -82,9 +82,6 @@ def _build_file(kind, targets):
 
 def _targeting(versions_by_pack_set):
     """One package per (pack set, project SDK), each at its own band.
-
-    The sets are built identically; they differ only in the SDK versions that
-    moved their bands, so neither can pull the other's packs around.
 
     Args:
       versions_by_pack_set: The version each band moves to, by target framework,
@@ -239,9 +236,9 @@ def _band_versions(module_ctx, sdk_version, netrc_entries, indexes):
     """Returns the version an SDK moves its band's packs to, by target framework.
 
     Compiling against the reference pack that ships with the SDK in use is what
-    MSBuild does, and exactly one SDK is registered per toolchain type, so an
-    SDK moves exactly one band. Every other band is left where the table puts
-    it, as is one whose reference pack was never published for that patch.
+    MSBuild does, and one SDK is registered per toolchain type, so an SDK moves
+    exactly one band. Every other band is left where the table puts it, as is
+    one whose reference pack was never published for that patch.
 
     Args:
       module_ctx: The module extension context.
@@ -279,15 +276,18 @@ def _band_versions(module_ctx, sdk_version, netrc_entries, indexes):
         versions = {tfm: runtime_version} if published else {},
     )
 
-def declare_pack_repos(module_ctx, sdk_version, bootstrap_version = None):
+def declare_pack_repos(module_ctx, sdk_version, bootstrap_version):
     """Declares the repositories holding the SDK's packs.
+
+    The two SDKs move their own targeting pack set and nothing else, so neither
+    decides what the other compiles against. Only the registered SDK has runtime,
+    apphost and crossgen2 packs: rules_dotnet's own tools are never published.
 
     Args:
       module_ctx: The module extension context.
-      sdk_version: The registered .NET SDK version.
-      bootstrap_version: The SDK version that builds rules_dotnet's own tools.
-        Passed separately from `sdk_version` so that the two move their own pack
-        sets and nothing else: neither decides what the other compiles against.
+      sdk_version: The registered .NET SDK version, or None.
+      bootstrap_version: The SDK version that builds rules_dotnet's own tools,
+        or None.
 
     Returns:
       The facts to hand back to Bazel, so that the versions and hashes looked

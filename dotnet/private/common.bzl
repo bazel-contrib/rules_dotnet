@@ -132,9 +132,6 @@ def is_greater_or_equal_framework(tfm1, tfm2):
         return True
     return False
 
-# The toolchain type use to build the internal tools of rules_dotnet.
-BOOTSTRAP_TOOLCHAIN_TYPE = Label("//dotnet:bootstrap_toolchain_type")
-
 def get_toolchain(ctx):
     """The .Net toolchain a target compiles with.
 
@@ -144,8 +141,6 @@ def get_toolchain(ctx):
     Returns:
         The `ToolchainInfo` of the resolved .Net toolchain.
     """
-    if hasattr(ctx.attr, "dotnet_toolchain") and ctx.attr.dotnet_toolchain != None:
-        return ctx.attr.dotnet_toolchain[platform_common.ToolchainInfo]
 
     return ctx.toolchains["//dotnet:toolchain_type"]
 

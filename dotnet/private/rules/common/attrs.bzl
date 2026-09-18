@@ -102,12 +102,6 @@ COMMON_ATTRS = {
         mandatory = False,
         default = [],
     ),
-    "dotnet_toolchain": attr.label(
-        doc = """The .Net toolchain to use for this target.
-
-        Typically this is left unset so that Bazel automatically selects the right toolchain.
-        """,
-    ),
     "_target_framework": attr.label(
         default = "//dotnet:target_framework",
     ),
@@ -125,10 +119,7 @@ COMMON_ATTRS = {
         allow_single_file = True,
     ),
     "_pack_set": attr.string(
-        doc = """Which toolchain type's reference packs to compile against.
-
-        A target compiles against the packs of the SDK that compiles it, so this
-        follows the toolchain the rule resolves.""",
+        doc = "The reference packs to compile against, set by the rule to match the toolchain type it resolves.",
         default = USER_PACKS,
     ),
     "_targeting_pack": attr.label(

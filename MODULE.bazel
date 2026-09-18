@@ -12,9 +12,10 @@ dotnet.toolchain(dotnet_version = "10.0.201")
 dotnet.bootstrap_toolchain(dotnet_version = "10.0.201")
 use_repo(dotnet, "dotnet.apphost_packs", "dotnet.crossgen2_packs", "dotnet.ilcompiler_packs", "dotnet.nativeaot_packs", "dotnet.runtime_packs", "dotnet.targeting_packs", "dotnet_bootstrap_toolchains", "dotnet_toolchains")
 
-register_toolchains("@dotnet_toolchains//:all")
-
-register_toolchains("@dotnet_bootstrap_toolchains//:all")
+register_toolchains(
+    "@dotnet_toolchains//:all",
+    "@dotnet_bootstrap_toolchains//:all",
+)
 
 paket = use_extension("@rules_dotnet//dotnet:paket.bzl", "paket")
 paket.parse(
