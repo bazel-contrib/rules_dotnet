@@ -17,6 +17,7 @@ load(
 load("//dotnet/private/rules/common:attrs.bzl", "CSHARP_BINARY_COMMON_ATTRS")
 load("//dotnet/private/rules/common:binary.bzl", "build_binary")
 load("//dotnet/private/rules/csharp/actions:csharp_assembly.bzl", "AssemblyAction")
+load("//dotnet/private/sdk:packs.bzl", "BOOTSTRAP_PACKS")
 load("//dotnet/private/transitions:apphost_shimmer_transition.bzl", "apphost_shimmer_transition")
 load("//dotnet/private/transitions:tfm_transition.bzl", "tfm_transition")
 
@@ -92,14 +93,19 @@ csharp_binary = rule(
     cfg = tfm_transition,
 )
 
-# Both rules below build a tool of rules_dotnet's own, so neither takes the
-# `dotnet_toolchain` override: the toolchain they compile with is not the user's
-# to choose. See `BOOTSTRAP_TOOLCHAIN_TYPE`.
-_BOOTSTRAP_ATTRS = {
-    name: value
-    for (name, value) in _BINARY_ATTRS.items()
-    if name != "dotnet_toolchain"
-}
+# Both rules below build a tool of rules_dotnet's own, so both follow the
+# bootstrap toolchain rather than the user's: its SDK compiles them, and its
+# packs are what they compile against. Dropping `dotnet_toolchain` removes the
+# override that would point them back at the user's -- the toolchain they build
+# with is not the user's to choose.
+_BOOTSTRAP_ATTRS = dicts.add(
+    {
+        name: value
+        for (name, value) in _BINARY_ATTRS.items()
+        if name != "dotnet_toolchain"
+    },
+    {"_pack_set": attr.string(default = BOOTSTRAP_PACKS)},
+)
 
 # This rule is purely for building the apphost
 # shimmer. It is needed because the apphost shimmer

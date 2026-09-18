@@ -16,6 +16,16 @@ WEB_SDK = "web"
 
 PROJECT_SDKS = [DEFAULT_SDK, WEB_SDK]
 
+# One pack set per toolchain type. A target compiles against the reference packs
+# of the SDK that compiles it, so the set follows the toolchain it resolves:
+# `dotnet` for the SDKs the user registered, `dotnet_bootstrap` for the one
+# rules_dotnet builds its own tools with. Named for the toolchain repositories
+# they follow, and resolved identically -- the two only ever differ in the SDK
+# versions behind them.
+USER_PACKS = "dotnet"
+BOOTSTRAP_PACKS = "dotnet_bootstrap"
+PACK_SETS = [USER_PACKS, BOOTSTRAP_PACKS]
+
 _NETSTANDARD_PACKS = {
     "netstandard1.6": ("NETStandard.Library", "1.6.1"),
     "netstandard2.0": ("NETStandard.Library", "2.0.3"),
@@ -271,11 +281,14 @@ ILCOMPILER_PACK_REPO = "dotnet.ilcompiler_packs"
 NATIVEAOT_PACK_REPO = "dotnet.nativeaot_packs"
 
 TARGETING_PACK_LOOKUP_TABLE = {
-    project_sdk: {
-        tfm: "@{}//{}:{}".format(TARGETING_PACK_REPO, project_sdk, tfm)
-        for tfm in targeting_pack_tfms(project_sdk)
+    pack_set: {
+        project_sdk: {
+            tfm: "@{}//{}/{}:{}".format(TARGETING_PACK_REPO, pack_set, project_sdk, tfm)
+            for tfm in targeting_pack_tfms(project_sdk)
+        }
+        for project_sdk in PROJECT_SDKS
     }
-    for project_sdk in PROJECT_SDKS
+    for pack_set in PACK_SETS
 }
 
 # The runtime identifiers a build can run on, and so the ones the tool packs

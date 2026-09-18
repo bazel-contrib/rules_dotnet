@@ -9,10 +9,6 @@ _BOOTSTRAP_MODULE = "rules_dotnet"
 _BOOTSTRAP_NAME = "dotnet_bootstrap"
 
 _ATTRS = {
-    "name": attr.string(
-        doc = "Base name for generated repositories",
-        default = _DEFAULT_NAME,
-    ),
     "dotnet_version": attr.string(
         doc = "Version of the .Net SDK",
     ),
@@ -26,7 +22,7 @@ _BOOTSTRAP_ATTRS = {
 }
 
 def _toolchain_extension(module_ctx):
-    registrations = {}
+    sdk_version = None
     bootstrap_version = None
     for mod in module_ctx.modules:
         for bootstrap in mod.tags.bootstrap_toolchain:
@@ -44,29 +40,20 @@ def _toolchain_extension(module_ctx):
             bootstrap_version = bootstrap.dotnet_version
 
         for toolchain in mod.tags.toolchain:
-            if toolchain.name in registrations.keys():
-                if toolchain.name == _DEFAULT_NAME:
-                    # Prioritize the root-most registration of the default dotnet toolchain version and
-                    # ignore any further registrations (modules are processed breadth-first)
-                    continue
-                if toolchain.dotnet_version == registrations[toolchain.name]:
-                    # No problem to register a matching toolchain twice
-                    continue
-                fail("Multiple conflicting toolchains declared for name {} ({} and {})".format(
-                    toolchain.name,
-                    toolchain.dotnet_version,
-                    registrations[toolchain.name],
-                ))
-            else:
-                registrations[toolchain.name] = toolchain.dotnet_version
-    for name, dotnet_version in registrations.items():
+            # One SDK is registered for the toolchain type, so one SDK decides
+            # what everything compiles with and which reference packs it
+            # compiles against. Modules are processed breadth-first, so the
+            # root-most registration wins and any further one is ignored.
+            if sdk_version == None:
+                sdk_version = toolchain.dotnet_version
+
+    if sdk_version != None:
         dotnet_register_toolchains(
-            name = name,
-            dotnet_version = dotnet_version,
+            name = _DEFAULT_NAME,
+            dotnet_version = sdk_version,
             register = False,
         )
 
-    sdk_versions = dict(registrations)
     if bootstrap_version != None:
         dotnet_register_toolchains(
             name = _BOOTSTRAP_NAME,
@@ -75,9 +62,9 @@ def _toolchain_extension(module_ctx):
             toolchain_type = BOOTSTRAP_TOOLCHAIN_TYPE,
         )
 
-        sdk_versions[_BOOTSTRAP_NAME] = bootstrap_version
-
-    facts = declare_pack_repos(module_ctx, sdk_versions)
+    # Each SDK moves only its own pack set, so neither can decide what the other
+    # compiles against.
+    facts = declare_pack_repos(module_ctx, sdk_version, bootstrap_version)
 
     metadata = {}
     if hasattr(module_ctx, "facts"):

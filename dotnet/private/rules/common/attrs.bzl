@@ -2,6 +2,7 @@
 
 load("@bazel_skylib//lib:dicts.bzl", "dicts")
 load("//dotnet/private:providers.bzl", "DotnetAssemblyCompileInfo", "DotnetAssemblyRuntimeInfo")
+load("//dotnet/private/sdk:packs.bzl", "USER_PACKS")
 load("//dotnet/private/sdk/apphost_packs:apphost_pack_transition.bzl", "apphost_pack_transition")
 load("//dotnet/private/sdk/runtime_packs:runtime_pack_transition.bzl", "runtime_pack_transition")
 load("//dotnet/private/sdk/targeting_packs:targeting_pack_transition.bzl", "targeting_pack_transition")
@@ -122,6 +123,13 @@ COMMON_ATTRS = {
         executable = True,
         cfg = "exec",
         allow_single_file = True,
+    ),
+    "_pack_set": attr.string(
+        doc = """Which toolchain type's reference packs to compile against.
+
+        A target compiles against the packs of the SDK that compiles it, so this
+        follows the toolchain the rule resolves.""",
+        default = USER_PACKS,
     ),
     "_targeting_pack": attr.label(
         default = "//dotnet/private/sdk/targeting_packs:targeting_pack",
