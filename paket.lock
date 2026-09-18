@@ -10,7 +10,7 @@ GROUP rules_dotnet_dev_nuget_packages
 RESTRICTION: || (== net9.0) (== netstandard2.0) (== netstandard2.1)
 NUGET
   remote: https://api.nuget.org/v3/index.json
-    FSharp.Core (9.0.300)
+    FSharp.Core (10.1.401)
     FSharp.Data (4.2.7)
       FSharp.Core (>= 4.7.2)
     LibGit2Sharp (0.27.0-preview-0182)
@@ -295,7 +295,7 @@ GROUP sdk_gen_dependencies
 RESTRICTION: == net10.0
 NUGET
   remote: https://api.nuget.org/v3/index.json
-    FSharp.Core (10.1.201)
+    FSharp.Core (10.1.401)
     Newtonsoft.Json (13.0.3)
     NuGet.Common (7.0)
       NuGet.Frameworks (>= 7.0)

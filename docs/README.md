@@ -132,7 +132,7 @@ Declare your packages in `paket.dependencies`:
 source https://api.nuget.org/v3/index.json
 framework: net10.0
 
-nuget FSharp.Core 10.1.201
+nuget FSharp.Core 10.1.401
 nuget Argu 6.2.3
 ```
 

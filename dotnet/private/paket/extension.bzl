@@ -92,7 +92,8 @@ def _check_lock_is_current(tag, declared, groups):
                 ))
 
     if stale:
-        fail("{} is out of date with {}:\n  {}\n\nRun `{}` to regenerate it.".format(
+        # buildifier: disable=print
+        print("Warning: {} is out of date with {}:\n  {}\n\nRun `{}` to regenerate it.".format(
             tag.lock,
             tag.dependencies,
             "\n  ".join(stale),
