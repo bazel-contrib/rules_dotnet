@@ -62,6 +62,13 @@ register_toolchains(
     dev_dependency = True,
 )
 
+# We need Go version 1.27 or newer for the LLVM
+# toolchain to work properly
+bazel_dep(name = "rules_go", version = "0.62.0", dev_dependency = True)
+
+go_sdk = use_extension("@rules_go//go:extensions.bzl", "go_sdk", dev_dependency = True)
+go_sdk.download(version = "1.27.0")
+
 osx_sysroot = use_extension("@llvm//extensions:osx.bzl", "osx", dev_dependency = True)
 osx_sysroot.frameworks(names = [
     "CoreFoundation",
