@@ -154,9 +154,8 @@ _AOT_LINK_ORDER = [
     "System.Security.Cryptography.Native.OpenSsl",
     "bootstrapper",
     "Runtime.WorkstationGC",
-    # The GC's vectorised sort, which only ships for x64.
-    "Runtime.VxsortEnabled",
     "eventpipe-disabled",
+    "Runtime.VxsortDisabled",
     "standalonegc-disabled",
     "aotminipal",
     "stdc++compat",
@@ -350,7 +349,6 @@ def _ilc_link(ctx, compiled, aot):
         # counterpart: the runtime relies on sections a GC-ing linker cannot
         # prove are reachable.
         args.add("-exported_symbols_list", compiled.exports_file)
-        args.add("-Wl,-dead_strip")
 
     args.add_all(libraries)
 
