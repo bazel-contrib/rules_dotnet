@@ -47,7 +47,8 @@ will do their best to guide if needed.
 single native executable. It is the only publish model that links native code,
 so unlike every other rule in `rules_dotnet` it needs a **C/C++ toolchain**. The
 toolchain is resolved through Bazel's standard mechanism and requested
-optionally, so a build that never publishes NativeAOT does not need one.
+optionally, so a build that never publishes NativeAOT does not need one to
+exist.
 
 Windows AOT is not supported yet.
 
