@@ -6,6 +6,7 @@ load("@bazel_skylib//lib:dicts.bzl", "dicts")
 load("@bazel_skylib//rules:common_settings.bzl", "BuildSettingInfo")
 load(
     "//dotnet/private:common.bzl",
+    "BOOTSTRAP_TOOLCHAIN_TYPE",
     "default_csharp_lang_version",
     "get_compiler_worker",
     "get_compiler_wrapper",
@@ -19,8 +20,7 @@ load("//dotnet/private/rules/csharp/actions:csharp_assembly.bzl", "AssemblyActio
 load("//dotnet/private/transitions:apphost_shimmer_transition.bzl", "apphost_shimmer_transition")
 load("//dotnet/private/transitions:tfm_transition.bzl", "tfm_transition")
 
-def _compile_action(ctx, tfm):
-    toolchain = get_toolchain(ctx)
+def _compile_action(ctx, tfm, toolchain):
     return AssemblyAction(
         ctx.actions,
         get_compiler_wrapper(ctx),
@@ -66,8 +66,10 @@ def _compile_action(ctx, tfm):
     )
 
 def _binary_private_impl(ctx):
-    result = build_binary(ctx, _compile_action)
-    return result
+    return build_binary(ctx, _compile_action, get_toolchain(ctx))
+
+def _bootstrap_binary_impl(ctx):
+    return build_binary(ctx, _compile_action, ctx.toolchains[BOOTSTRAP_TOOLCHAIN_TYPE])
 
 _BINARY_ATTRS = dicts.add(
     CSHARP_BINARY_COMMON_ATTRS,
@@ -90,6 +92,15 @@ csharp_binary = rule(
     cfg = tfm_transition,
 )
 
+# Both rules below build a tool of rules_dotnet's own, so neither takes the
+# `dotnet_toolchain` override: the toolchain they compile with is not the user's
+# to choose. See `BOOTSTRAP_TOOLCHAIN_TYPE`.
+_BOOTSTRAP_ATTRS = {
+    name: value
+    for (name, value) in _BINARY_ATTRS.items()
+    if name != "dotnet_toolchain"
+}
+
 # This rule is purely for building the apphost
 # shimmer. It is needed because the apphost shimmer
 # has to target the exec configuration but we can't
@@ -98,12 +109,12 @@ csharp_binary = rule(
 # defaults so that the publish_binary's target
 # framework does not infect the apphost shimmer build.
 apphost_shimmer_binary = rule(
-    _binary_private_impl,
+    _bootstrap_binary_impl,
     doc = """Compile the apphost shimmer C# exe.""",
-    attrs = _BINARY_ATTRS,
+    attrs = _BOOTSTRAP_ATTRS,
     executable = True,
     toolchains = [
-        "//dotnet:toolchain_type",
+        BOOTSTRAP_TOOLCHAIN_TYPE,
     ],
     cfg = apphost_shimmer_transition,
 )
@@ -112,17 +123,17 @@ apphost_shimmer_binary = rule(
 # compile without it: depending on itself would be a cycle.
 _COMPILER_WORKER_ATTRS = {
     name: value
-    for (name, value) in _BINARY_ATTRS.items()
+    for (name, value) in _BOOTSTRAP_ATTRS.items()
     if name != "_compiler_worker"
 }
 
 compiler_worker_binary = rule(
-    _binary_private_impl,
+    _bootstrap_binary_impl,
     doc = """Compile the persistent compiler worker C# exe.""",
     attrs = _COMPILER_WORKER_ATTRS,
     executable = True,
     toolchains = [
-        "//dotnet:toolchain_type",
+        BOOTSTRAP_TOOLCHAIN_TYPE,
     ],
     cfg = apphost_shimmer_transition,
 )

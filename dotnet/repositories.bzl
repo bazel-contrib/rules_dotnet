@@ -2,7 +2,7 @@
 Rules to load all the .NET SDK & framework dependencies of rules_dotnet.
 """
 
-load("//dotnet/private:toolchains_repo.bzl", "PLATFORMS", "toolchains_repo")
+load("//dotnet/private:toolchains_repo.bzl", "DOTNET_TOOLCHAIN_TYPE", "PLATFORMS", "toolchains_repo")
 load("//dotnet/private/sdk:versions.bzl", "TOOL_VERSIONS")
 
 ########
@@ -141,7 +141,7 @@ dotnet_repositories = repository_rule(
 )
 
 # Wrapper macro around everything above, this is the primary API
-def dotnet_register_toolchains(name, dotnet_version, register = True, **kwargs):
+def dotnet_register_toolchains(name, dotnet_version, register = True, toolchain_type = DOTNET_TOOLCHAIN_TYPE, **kwargs):
     """Convenience macro for users which does typical setup.
 
     - create a repository for each built-in platform like "dotnet_linux_amd64" -
@@ -155,6 +155,7 @@ def dotnet_register_toolchains(name, dotnet_version, register = True, **kwargs):
         dotnet_version: The .Net SDK version to use e.g. 8.0.100
         register: whether to call through to native.register_toolchains.
             Should be True for WORKSPACE users, but false when used under bzlmod extension
+        toolchain_type: The toolchain type the generated toolchains register for.
         **kwargs: passed to each dotnet_repositories call
     """
     for platform in PLATFORMS.keys():
@@ -169,5 +170,6 @@ def dotnet_register_toolchains(name, dotnet_version, register = True, **kwargs):
 
     toolchains_repo(
         name = name + "_toolchains",
+        toolchain_type = toolchain_type,
         user_repository_name = name,
     )

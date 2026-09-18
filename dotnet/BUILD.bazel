@@ -14,6 +14,14 @@ toolchain_type(
     visibility = ["//visibility:public"],
 )
 
+# The SDK that rules_dotnet compiles its own build tools with: the apphost
+# shimmer and the C# compiler worker. Those tools have to be built using
+# a toolchain that rules_dotnet itself provides.
+toolchain_type(
+    name = "bootstrap_toolchain_type",
+    visibility = ["//visibility:public"],
+)
+
 resolved_toolchain(
     name = "resolved_toolchain",
     # Marked manual so that `bazel test //...` passes

@@ -3,7 +3,7 @@
 load("@bazel_skylib//rules:common_settings.bzl", "BuildSettingInfo")
 load("//dotnet/private:common.bzl", "collect_transitive_runfiles")
 
-def build_library(ctx, compile_action):
+def build_library(ctx, compile_action, toolchain):
     """Builds a .Net library from a compilation action
 
     Args:
@@ -12,14 +12,16 @@ def build_library(ctx, compile_action):
             Args:
                 ctx: Bazel build ctx.
                 tfm: Target framework string
+                toolchain: The .Net toolchain to compile with
             Returns:
                 An tuple of (DotnetAssemblyCompileInfo, DotnetAssemblyRuntimeInfo)
+        toolchain: The .Net toolchain to compile with.
     Returns:
         A collection of the references, runfiles and native dlls.
     """
     tfm = ctx.attr._target_framework[BuildSettingInfo].value
 
-    (compile_provider, runtime_provider) = compile_action(ctx, tfm)
+    (compile_provider, runtime_provider) = compile_action(ctx, tfm, toolchain)
 
     return [
         compile_provider,

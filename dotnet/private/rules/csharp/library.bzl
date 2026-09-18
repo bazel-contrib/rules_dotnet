@@ -17,9 +17,7 @@ load("//dotnet/private/rules/common:library.bzl", "build_library")
 load("//dotnet/private/rules/csharp/actions:csharp_assembly.bzl", "AssemblyAction")
 load("//dotnet/private/transitions:tfm_transition.bzl", "tfm_transition")
 
-def _compile_action(ctx, tfm):
-    toolchain = get_toolchain(ctx)
-
+def _compile_action(ctx, tfm, toolchain):
     return AssemblyAction(
         ctx.actions,
         get_compiler_wrapper(ctx),
@@ -65,7 +63,7 @@ def _compile_action(ctx, tfm):
     )
 
 def _library_impl(ctx):
-    return build_library(ctx, _compile_action)
+    return build_library(ctx, _compile_action, get_toolchain(ctx))
 
 csharp_library = rule(
     _library_impl,
