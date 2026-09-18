@@ -15,6 +15,28 @@ bool_flag(
     visibility = ["//visibility:public"],
 )
 
+config_setting(
+    name = "compiler_worker_enabled",
+    flag_values = {":use_compiler_worker": "True"},
+    visibility = ["//visibility:public"],
+)
+
+# We put the compiler worker behind and alias so that it
+# not part of the analysis unless it is enabled.
+alias(
+    name = "compiler_worker",
+    actual = select({
+        ":compiler_worker_enabled": "//dotnet/private/tools/compiler_worker",
+        "//conditions:default": ":no_compiler_worker",
+    }),
+    visibility = ["//visibility:public"],
+)
+
+filegroup(
+    name = "no_compiler_worker",
+    visibility = ["//visibility:public"],
+)
+
 # Whether a compile reports the references it did not use, so that Bazel stops
 # re-running it when only those change. Needs use_compiler_worker, because it is
 # the worker that reads the compiled output.

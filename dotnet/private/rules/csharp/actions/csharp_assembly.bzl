@@ -530,7 +530,10 @@ def _compile(
     direct_inputs += [keyfile] if keyfile else []
 
     if compiler_worker:
+        # A `FilesToRunProvider` rather than a `File`, so that the worker's own
+        # runfiles reach the action without being listed as tools.
         executable = compiler_worker.executable
+        extra_tools = []
         execution_requirements = {
             "requires-worker-protocol": "json",
             "supports-path-mapping": "1",
@@ -538,6 +541,7 @@ def _compile(
         }
     else:
         executable = compiler_wrapper
+        extra_tools = [compiler_wrapper]
         execution_requirements = {"supports-path-mapping": "1"}
 
     # Both the worker and the wrapper script take the dotnet host and csc.dll
@@ -551,8 +555,7 @@ def _compile(
             transitive = [framework_files, refs, analyzer_assemblies, analyzer_assemblies_csharp, compile_data],
         ),
         tools = depset(
-            direct = [
-                executable,
+            direct = extra_tools + [
                 toolchain.compiler_host.files_to_run.executable,
                 toolchain.csharp_compiler.files_to_run.executable,
             ],
