@@ -6,7 +6,7 @@ load("@bazel_skylib//lib:paths.bzl", "paths")
 load("@bazel_skylib//lib:shell.bzl", "shell")
 load("@rules_cc//cc:action_names.bzl", "CPP_LINK_EXECUTABLE_ACTION_NAME")
 load("@rules_cc//cc/common:cc_common.bzl", "cc_common")
-load("//dotnet/private:common.bzl", "generate_depsjson", "generate_runtimeconfig", "runtime_target_path")
+load("//dotnet/private:common.bzl", "generate_depsjson", "generate_runtimeconfig", "get_toolchain", "runtime_target_path")
 load(
     "//dotnet/private:providers.bzl",
     "DotnetAssemblyCompileInfo",
@@ -612,7 +612,13 @@ def _run_copy_script(ctx, copies, suffix, mnemonic, progress_message):
     Returns:
         The destination files.
     """
-    is_windows = ctx.target_platform_has_constraint(ctx.attr._windows_constraint[platform_common.ConstraintValueInfo])
+
+    # The script runs on the machine building the publish, not the one the
+    # publish is for. Those differ whenever a publish cross-compiles, and a
+    # Windows machine cannot run the shell script a Linux target would pick.
+    # The toolchain is resolved for the execution platform, so it is what knows
+    # which machine that is.
+    is_windows = get_toolchain(ctx).dotnetinfo.os == "windows"
     outputs = [dst for (_, dst) in copies]
     script = ctx.actions.declare_file("{}.{}.{}".format(ctx.label.name, suffix, "bat" if is_windows else "sh"))
 

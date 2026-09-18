@@ -114,6 +114,7 @@ dotnet_toolchain(
     csharp_compiler = ":csc_binary",
     fsharp_compiler = ":fsc_binary",
     host_model = ":host_model",
+    os = "{os}",
     sdk_version = "{sdk_version}",
     runtime_version = "{runtime_version}",
     runtime_tfm = "{runtime_tfm}",
@@ -122,6 +123,7 @@ dotnet_toolchain(
     visibility = ["//visibility:public"],
 )
 """.format(
+        os = PLATFORMS[repository_ctx.attr.platform].os,
         sdk_version = repository_ctx.attr.dotnet_version,
         runtime_version = TOOL_VERSIONS[repository_ctx.attr.dotnet_version]["runtimeVersion"],
         runtime_tfm = TOOL_VERSIONS[repository_ctx.attr.dotnet_version]["runtimeTfm"],

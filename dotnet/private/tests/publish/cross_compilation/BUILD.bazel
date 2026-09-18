@@ -6,6 +6,14 @@ load("@rules_shell//shell:sh_test.bzl", "sh_test")
 # needs a C/C++ toolchain that can target something other than the host. See
 # docs/README.md for the toolchain rules_dotnet registers for its own builds.
 
+# The tests read the published binary with `file` and `readlink -f`, neither of
+# which a Windows host has. What they check does not depend on the host, so they
+# run wherever those tools exist.
+_NOT_WINDOWS = select({
+    "@platforms//os:windows": ["@platforms//:incompatible"],
+    "//conditions:default": [],
+})
+
 publish_binary(
     name = "publish",
     binary = "//dotnet/private/tests/publish/app_to_publish",
@@ -39,6 +47,7 @@ sh_test(
         ":transitioned_publish_linux_x86_64",
         "@bazel_tools//tools/bash/runfiles",
     ],
+    target_compatible_with = _NOT_WINDOWS,
 )
 
 sh_test(
@@ -53,4 +62,5 @@ sh_test(
         ":transitioned_publish_linux_arm64",
         "@bazel_tools//tools/bash/runfiles",
     ],
+    target_compatible_with = _NOT_WINDOWS,
 )

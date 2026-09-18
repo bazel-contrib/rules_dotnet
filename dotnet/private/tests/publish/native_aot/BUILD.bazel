@@ -76,4 +76,6 @@ sh_test(
         ":transitioned_linux_x86_64",
         "@bazel_tools//tools/bash/runfiles",
     ],
+    # `file` and `readlink -f`, which the test script uses, need a POSIX host.
+    target_compatible_with = _NOT_WINDOWS,
 )
