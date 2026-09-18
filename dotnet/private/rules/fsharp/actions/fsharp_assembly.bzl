@@ -73,6 +73,7 @@ def _should_output_ref_assembly(toolchain):
 def AssemblyAction(
         actions,
         compiler_wrapper,
+        compiler_worker,
         label,
         debug,
         defines,
@@ -109,6 +110,7 @@ def AssemblyAction(
     Args:
         actions: Bazel module providing functions to create actions.
         compiler_wrapper: The wrapper script that invokes the F# compiler.
+        compiler_worker: The persistent worker to compile with, or None to fall back to the wrapper script.
         label: The label of the target. This is used to determine the relative path of embedded resources.
         debug: Emits debugging information.
         defines: The list of conditional compilation symbols.
@@ -178,6 +180,7 @@ def AssemblyAction(
         _compile(
             actions,
             compiler_wrapper,
+            compiler_worker,
             label,
             debug,
             defines,
@@ -219,6 +222,7 @@ def AssemblyAction(
         _compile(
             actions,
             compiler_wrapper,
+            compiler_worker,
             label,
             debug,
             defines,
@@ -251,6 +255,7 @@ def AssemblyAction(
             _compile(
                 actions,
                 compiler_wrapper,
+                compiler_worker,
                 label,
                 debug,
                 defines,
@@ -315,6 +320,7 @@ def AssemblyAction(
 def _compile(
         actions,
         compiler_wrapper,
+        compiler_worker,
         label,
         debug,
         defines,
@@ -439,7 +445,19 @@ def _compile(
     direct_inputs = srcs + resources
     direct_inputs += [keyfile] if keyfile else []
 
-    # dotnet.exe fsc.dll --noconfig <other fsc args>
+    if compiler_worker:
+        executable = compiler_worker
+        extra_tools = []
+        execution_requirements = {
+            "requires-worker-protocol": "json",
+            "supports-path-mapping": "1",
+            "supports-workers": "1",
+        }
+    else:
+        executable = compiler_wrapper
+        extra_tools = [compiler_wrapper]
+        execution_requirements = {"supports-path-mapping": "1"}
+
     actions.run(
         mnemonic = "FSharpCompile",
         progress_message = "Compiling " + target_name + (" (internals ref-only dll)" if out_dll == None else ""),
@@ -448,8 +466,7 @@ def _compile(
             transitive = [framework_files, refs, compile_data],
         ),
         tools = depset(
-            direct = [
-                compiler_wrapper,
+            direct = extra_tools + [
                 toolchain.compiler_host.files_to_run.executable,
                 toolchain.fsharp_compiler.files_to_run.executable,
             ],
@@ -459,7 +476,7 @@ def _compile(
             ],
         ),
         outputs = outputs,
-        executable = compiler_wrapper,
+        executable = executable,
         arguments = [
             toolchain.compiler_host.files_to_run.executable.path,
             toolchain.fsharp_compiler.files_to_run.executable.path,
@@ -468,5 +485,5 @@ def _compile(
         env = {
             "DOTNET_CLI_HOME": toolchain.compiler_host.files_to_run.executable.dirname,
         },
-        execution_requirements = {"supports-path-mapping": "1"},
+        execution_requirements = execution_requirements,
     )

@@ -120,7 +120,7 @@ def AssemblyAction(
     Args:
         actions: Bazel module providing functions to create actions.
         compiler_wrapper: The wrapper script that invokes the C# compiler.
-        compiler_worker: The persistent worker to compile with, or None to fall back to the wrapper script. See `get_compiler_worker`.
+        compiler_worker: The persistent worker to compile with, or None to fall back to the wrapper script.
         label: The label of the target. This is used to determine the relative path of embedded resources.
         additionalfiles: Names additional files that don't directly affect code generation but may be used by analyzers for producing errors or warnings.
         debug: Emits debugging information.

@@ -9,6 +9,7 @@ load("@bazel_skylib//rules:common_settings.bzl", "BuildSettingInfo")
 load(
     "//dotnet/private:common.bzl",
     "get_compiler_wrapper",
+    "get_fsharp_compiler_worker",
     "get_toolchain",
     "is_debug",
     "targets_windows",
@@ -22,6 +23,7 @@ def _compile_action(ctx, tfm, toolchain):
     return AssemblyAction(
         ctx.actions,
         get_compiler_wrapper(ctx),
+        compiler_worker = get_fsharp_compiler_worker(ctx),
         label = ctx.label,
         debug = is_debug(ctx),
         defines = ctx.attr.defines,

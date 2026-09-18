@@ -184,8 +184,13 @@ def get_compiler_wrapper(ctx):
 
     return ctx.executable._compiler_wrapper_bat if targets_windows(ctx) else ctx.executable._compiler_wrapper_sh
 
-def get_compiler_worker(ctx):
-    """The persistent worker to compile with, if it is enabled and usable.
+def _worker_executable(worker):
+    files_to_run = worker[DefaultInfo].files_to_run
+
+    return files_to_run if files_to_run.executable != None else None
+
+def get_csharp_compiler_worker(ctx):
+    """The persistent worker to compile C# with, if it is enabled and usable.
 
     Args:
         ctx: The rule context.
@@ -197,23 +202,36 @@ def get_compiler_worker(ctx):
 
     prune_unused_references = ctx.attr._prune_unused_references[BuildSettingInfo].value
 
-    # compiler_worker_binary drops the attribute: it is the one target that
-    # cannot be compiled by the worker.
-    if not hasattr(ctx.attr, "_compiler_worker"):
+    # compiler_worker_binary drops the attribute: the workers are the targets
+    # that cannot be compiled by the worker.
+    if not hasattr(ctx.attr, "_csharp_compiler_worker"):
         return None
 
-    files_to_run = ctx.attr._compiler_worker[DefaultInfo].files_to_run
+    executable = _worker_executable(ctx.attr._csharp_compiler_worker)
 
-    if files_to_run.executable == None:
+    if executable == None:
         if prune_unused_references:
             fail("//dotnet/settings:prune_unused_references needs //dotnet/settings:use_compiler_worker, " +
                  "because it is the worker that reads the compiled output to work out which references went unused.")
         return None
 
     return struct(
-        executable = files_to_run,
+        executable = executable,
         prune_unused_references = prune_unused_references,
     )
+
+def get_fsharp_compiler_worker(ctx):
+    """The persistent worker to compile F# with, if it is enabled.
+
+    Args:
+        ctx: The rule context.
+
+    Returns:
+        The worker's `FilesToRunProvider`, or None when the compile should use
+        the wrapper script instead.
+    """
+
+    return _worker_executable(ctx.attr._fsharp_compiler_worker)
 
 def _format_ref_with_overrides(assembly):
     # See https://github.com/bazel-contrib/rules_dotnet/issues/405

@@ -7,7 +7,7 @@ bool_flag(
     visibility = ["//visibility:public"],
 )
 
-# Whether the C# compile actions run in a persistent worker.
+# Whether the C# and F# compile actions run in a persistent worker.
 # See docs/README.md#persistent-workers.
 bool_flag(
     name = "use_compiler_worker",
@@ -21,12 +21,21 @@ config_setting(
     visibility = ["//visibility:public"],
 )
 
-# We put the compiler worker behind and alias so that it
-# not part of the analysis unless it is enabled.
+# The workers sit behind an alias so that a workspace that leaves them switched
+# off never analyses them.
 alias(
-    name = "compiler_worker",
+    name = "csharp_compiler_worker",
     actual = select({
-        ":compiler_worker_enabled": "//dotnet/private/tools/compiler_worker",
+        ":compiler_worker_enabled": "//dotnet/private/tools/csharp_compiler_worker",
+        "//conditions:default": ":no_compiler_worker",
+    }),
+    visibility = ["//visibility:public"],
+)
+
+alias(
+    name = "fsharp_compiler_worker",
+    actual = select({
+        ":compiler_worker_enabled": "//dotnet/private/tools/fsharp_compiler_worker",
         "//conditions:default": ":no_compiler_worker",
     }),
     visibility = ["//visibility:public"],
