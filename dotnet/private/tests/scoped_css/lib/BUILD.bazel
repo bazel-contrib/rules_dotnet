@@ -1,0 +1,16 @@
+load("//dotnet:defs.bzl", "csharp_library")
+
+# `Widget.razor.css` applies only to `Widget.razor`. The bundle it produces is
+# served as a static web asset of this library.
+csharp_library(
+    name = "lib",
+    srcs = [
+        "Widget.razor",
+        "Widget.razor.css",
+        "_Imports.razor",
+    ],
+    project_sdk = "razor",
+    root_namespace = "Scoped.Lib",
+    target_frameworks = ["net10.0"],
+    visibility = ["//dotnet/private/tests/scoped_css:__subpackages__"],
+)

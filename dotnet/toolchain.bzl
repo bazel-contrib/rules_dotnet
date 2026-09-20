@@ -133,6 +133,9 @@ def _dotnet_toolchain_impl(ctx):
         csharp_compiler = ctx.attr.csharp_compiler,
         fsharp_compiler = ctx.attr.fsharp_compiler,
         host_model = ctx.attr.host_model,
+        razor_source_generators = ctx.attr.razor_source_generators,
+        static_web_assets_tasks = ctx.attr.static_web_assets_tasks,
+        msbuild_dlls = ctx.attr.msbuild_dlls,
         strict_deps = ctx.attr._strict_deps,
     )
     return [
@@ -193,6 +196,32 @@ Defaults to `runtime`, which also carries the SDK a binary does not need.""",
         "host_model": attr.label(
             doc = "The System.NET.HostModel DLL",
             mandatory = False,
+        ),
+        "msbuild_dlls": attr.label_list(
+            doc = """The MSBuild interfaces a task is written against.
+
+A few pieces of the SDK's build logic ship only as MSBuild tasks. These let a
+tool of ours instantiate such a task and run it directly.""",
+            mandatory = False,
+        ),
+        "static_web_assets_tasks": attr.label(
+            doc = """The `Microsoft.NET.Sdk.StaticWebAssets` task assembly and its dependencies.
+
+Carries the scoped CSS implementation: `ComputeCssScope`, `RewriteCss` and
+`ConcatenateCssFiles`.""",
+            mandatory = False,
+            allow_files = True,
+            cfg = "exec",
+        ),
+        "razor_source_generators": attr.label(
+            doc = """The Razor source generator assemblies.
+
+Passed to `csc` with `/analyzer:` whenever a target has `.razor` or `.cshtml`
+sources. They ship inside the SDK, so their version follows the toolchain
+rather than the target framework, as it does under MSBuild.""",
+            mandatory = False,
+            allow_files = True,
+            cfg = "exec",
         ),
         "os": attr.string(
             doc = "The operating system the toolchain's tools run on",

@@ -20,6 +20,7 @@ bzl_library(
         ":providers",
         ":semver",
         "//dotnet/private/sdk:frameworks",
+        "//dotnet/private/sdk:packs",
         "//dotnet/private/sdk:rids",
         "@bazel_skylib//lib:sets",
         "@bazel_skylib//lib:shell",

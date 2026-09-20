@@ -5,7 +5,28 @@ bzl_library(
     srcs = ["csharp_assembly.bzl"],
     visibility = ["//dotnet:__subpackages__"],
     deps = [
+        ":razor",
+        ":scoped_css",
         "//dotnet/private:common",
         "//dotnet/private:providers",
+        "//dotnet/private/rules/common:static_web_assets",
+        "//dotnet/private/sdk:packs",
+    ],
+)
+
+bzl_library(
+    name = "scoped_css",
+    srcs = ["scoped_css.bzl"],
+    visibility = ["//dotnet:__subpackages__"],
+    deps = [":razor"],
+)
+
+bzl_library(
+    name = "razor",
+    srcs = ["razor.bzl"],
+    visibility = ["//dotnet:__subpackages__"],
+    deps = [
+        "//dotnet/private:common",
+        "@bazel_lib//lib:base64",
     ],
 )

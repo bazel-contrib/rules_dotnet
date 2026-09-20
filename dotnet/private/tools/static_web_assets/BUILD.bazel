@@ -1,0 +1,18 @@
+load(
+    "//dotnet/private/rules/csharp:binary.bzl",
+    "bootstrap_tool_binary",
+)
+
+# Fingerprints and compresses a web application's assets and writes the
+# endpoint manifest `MapStaticAssets` serves from.
+bootstrap_tool_binary(
+    name = "static_web_assets",
+    srcs = [
+        "ContentTypes.cs",
+        "Fingerprinting.cs",
+        "Program.cs",
+    ],
+    nullable = "enable",
+    target_frameworks = ["net10.0"],
+    visibility = ["//visibility:public"],
+)

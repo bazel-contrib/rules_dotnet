@@ -440,8 +440,8 @@ def _runtime_pack_files(runtime_pack_info, deps_json_struct):
 def _publish_layout(runtime_identifier, binary_info, assembly_files, runtime_pack_files, is_self_contained):
     """Every published file paired with the path it takes inside the publish directory.
 
-    The directory is flat apart from resource assemblies and, unless the publish
-    is self-contained, native libraries.
+    The directory is flat apart from resource assemblies, the servable `wwwroot`
+    tree and, unless the publish is self-contained, native libraries.
     """
     layout = [(binary_info.dll.basename, binary_info.dll)]
 
@@ -471,6 +471,12 @@ def _publish_layout(runtime_identifier, binary_info, assembly_files, runtime_pac
     for pack in runtime_pack_files:
         for file in pack.libs + pack.native + pack.data:
             layout.append((file.basename, file))
+
+    # The servable tree, and the manifest describing it, keep the shape the
+    # binary already gave them: `wwwroot/...` with the endpoint manifest beside
+    # the assembly, which is what a published ASP.NET Core application expects.
+    for entry in binary_info.static_web_files:
+        layout.append((entry.publish_path, entry.file))
 
     return layout
 
@@ -638,6 +644,22 @@ def _run_copy_script(ctx, copies, suffix, mnemonic, progress_message):
 
     return outputs
 
+def _copy_static_web_files(ctx, executable, static_web_files):
+    """Copies the servable tree next to `executable`, keeping its structure."""
+    if not static_web_files:
+        return []
+
+    return _run_copy_script(
+        ctx,
+        [
+            (entry.file, ctx.actions.declare_file(entry.publish_path, sibling = executable))
+            for entry in static_web_files
+        ],
+        "static_web_assets",
+        "DotnetCopyStaticWebAssets",
+        "Copying static web assets for %{label}",
+    )
+
 def _copy_beside(ctx, executable, files):
     """Copies files into the directory holding `executable`."""
     if not files:
@@ -791,10 +813,14 @@ def _publish_binary_impl(ctx):
         )
         sidecars = _copy_beside(ctx, executable, closure.native + closure.appsetting_files)
 
+        # A NativeAOT publish keeps nothing managed, but it still serves the
+        # same files, so the tree travels with the executable.
+        served = _copy_static_web_files(ctx, executable, binary_info.static_web_files)
+
         return [DefaultInfo(
             executable = executable,
-            files = depset([executable] + sidecars),
-            runfiles = ctx.runfiles(files = sidecars + closure.data),
+            files = depset([executable] + sidecars + served),
+            runfiles = ctx.runfiles(files = sidecars + served + closure.data),
         )]
 
     depsjson = ctx.actions.declare_file("{}/publish/{}/{}.deps.json".format(ctx.label.name, runtime_identifier, assembly_name))

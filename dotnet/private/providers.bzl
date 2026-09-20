@@ -41,6 +41,20 @@ DotnetAssemblyRuntimeInfo = provider(
     },
 )
 
+StaticWebAssetsInfo = provider(
+    doc = "The web-servable files a target contributes, and those of its dependencies.",
+    fields = {
+        "assets": """depset[struct]: the transitive assets. Each carries
+
+  * `file`: the `File` to serve.
+  * `serving_path`: where it is served from, relative to `wwwroot`. A library's
+    assets are prefixed with `_content/<assembly name>`, matching the base path
+    MSBuild gives a Razor class library; an application's sit at the root.
+  * `scoped_css_bundle`: whether the file is the target's scoped CSS bundle,
+    which an application's own bundle has to `@import`.""",
+    },
+)
+
 DotnetDepVariantInfo = provider(
     doc = "A wrapper provider for a dependency. The dependency can be a project " +
           "dependency, in which case the `assembly_runtime_info` will be populated" +
@@ -66,6 +80,9 @@ DotnetBinaryInfo = provider(
     doc = "Information about a .Net binary",
     fields = {
         "dll": "File: The main binary dll",
+        "static_web_files": """list[struct]: The servable tree, as structs of a `file` and
+the `publish_path` it takes inside a publish directory. Already materialized by the
+binary, so a publish copies these rather than laying the tree out a second time.""",
         "transitive_runtime_deps": "list[DotnetAssemblyRuntimeInfo]: The transitive runtime dependencies of the binary",
         "apphost_pack_info": "DotnetApphostPackInfo: The apphost pack for the binary",
         "runtime_pack_info": "DotnetRuntimePackInfo: The runtime pack for the binary",

@@ -18,7 +18,7 @@ load("//dotnet/private/rules/common:attrs.bzl", "CSHARP_BINARY_COMMON_ATTRS")
 load("//dotnet/private/rules/common:binary.bzl", "build_binary")
 load("//dotnet/private/rules/csharp/actions:csharp_assembly.bzl", "AssemblyAction")
 load("//dotnet/private/sdk:packs.bzl", "BOOTSTRAP_PACKS")
-load("//dotnet/private/transitions:apphost_shimmer_transition.bzl", "apphost_shimmer_transition")
+load("//dotnet/private/transitions:bootstrap_tool_transition.bzl", "bootstrap_tool_transition")
 load("//dotnet/private/transitions:tfm_transition.bzl", "tfm_transition")
 
 def _compile_action(ctx, tfm, toolchain):
@@ -49,12 +49,15 @@ def _compile_action(ctx, tfm, toolchain):
         strict_deps = toolchain.strict_deps[BuildSettingInfo].value,
         generate_documentation_file = ctx.attr.generate_documentation_file,
         include_host_model_dll = ctx.attr.include_host_model_dll,
+        include_msbuild_dlls = ctx.attr.include_msbuild_dlls,
         treat_warnings_as_errors = ctx.attr.treat_warnings_as_errors,
         warnings_as_errors = ctx.attr.warnings_as_errors,
         warnings_not_as_errors = ctx.attr.warnings_not_as_errors,
         warning_level = ctx.attr.warning_level,
         nowarn = ctx.attr.nowarn,
         project_sdk = ctx.attr.project_sdk,
+        root_namespace = ctx.attr.root_namespace,
+        scoped_css_tool = getattr(ctx.attr, "_scoped_css_tool", None),
         allow_unsafe_blocks = ctx.attr.allow_unsafe_blocks,
         nullable = ctx.attr.nullable,
         run_analyzers = ctx.attr.run_analyzers,
@@ -79,6 +82,10 @@ _BINARY_ATTRS = dicts.add(
             doc = "Whether to include Microsoft.NET.HostModel from the toolchain. This is only required to build tha apphost shimmer.",
             default = False,
         ),
+        "include_msbuild_dlls": attr.bool(
+            doc = "Whether to include the MSBuild interfaces from the toolchain. This is only required by tools that run an SDK build task directly.",
+            default = False,
+        ),
     },
 )
 
@@ -95,25 +102,29 @@ csharp_binary = rule(
 
 # The rules below build tools of rules_dotnet's own, so they follow the
 # bootstrap toolchain rather than the user's: its SDK compiles them and its
-# packs are what they compile against.
+# packs are what they compile against. They also drop the attributes pointing at
+# rules_dotnet's own tools, which would otherwise make a tool depend on itself.
 _BOOTSTRAP_ATTRS = dicts.add(
-    _BINARY_ATTRS,
+    {
+        name: value
+        for (name, value) in _BINARY_ATTRS.items()
+        if name not in ["_scoped_css_tool", "_static_web_assets_tool"]
+    },
     {"_pack_set": attr.string(default = BOOTSTRAP_PACKS)},
 )
 
-# The shimmer has to be built for the exec configuration, but `cfg = "exec"` in
-# publish_binary is not enough on its own: the TFM/RID graph has to be reset to
-# the defaults as well, so that publish_binary's target framework does not
-# infect the shimmer build.
-apphost_shimmer_binary = rule(
+# A tool is built for the exec configuration, but `cfg = "exec"` is not enough
+# on its own: the TFM/RID graph has to be reset to the defaults as well, so that
+# the depending target's target framework does not infect the tool's build.
+bootstrap_tool_binary = rule(
     _bootstrap_binary_impl,
-    doc = """Compile the apphost shimmer C# exe.""",
+    doc = """Compile a C# exe that is part of rules_dotnet itself.""",
     attrs = _BOOTSTRAP_ATTRS,
     executable = True,
     toolchains = [
         BOOTSTRAP_TOOLCHAIN_TYPE,
     ],
-    cfg = apphost_shimmer_transition,
+    cfg = bootstrap_tool_transition,
 )
 
 # Every other C# target compiles with the worker, so the workers themselves have
@@ -132,5 +143,5 @@ compiler_worker_binary = rule(
     toolchains = [
         BOOTSTRAP_TOOLCHAIN_TYPE,
     ],
-    cfg = apphost_shimmer_transition,
+    cfg = bootstrap_tool_transition,
 )

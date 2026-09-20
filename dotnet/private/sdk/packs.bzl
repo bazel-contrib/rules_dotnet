@@ -13,8 +13,36 @@ load("//dotnet/private/sdk:pack_bands.bzl", "PACK_BANDS")
 
 DEFAULT_SDK = "default"
 WEB_SDK = "web"
+RAZOR_SDK = "razor"
 
+# The SDKs that have a pack set of their own. `razor` resolves the same packs as
+# `web`, so it has no set of its own and is normalized away before lookup.
 PROJECT_SDKS = [DEFAULT_SDK, WEB_SDK]
+
+# What a user may write in `project_sdk`.
+USER_PROJECT_SDKS = PROJECT_SDKS + [RAZOR_SDK]
+
+def normalize_project_sdk(project_sdk):
+    """Maps a project SDK onto the one whose packs back it.
+
+    Args:
+      project_sdk: The SDK named on the target.
+
+    Returns:
+      The project SDK whose packs should be resolved.
+    """
+    return WEB_SDK if project_sdk == RAZOR_SDK else project_sdk
+
+def uses_razor(project_sdk):
+    """Whether a project SDK compiles Razor sources.
+
+    Args:
+      project_sdk: The SDK named on the target.
+
+    Returns:
+      True if `.razor` and `.cshtml` sources are supported.
+    """
+    return project_sdk in [WEB_SDK, RAZOR_SDK]
 
 # A target compiles against the reference packs of the SDK that compiles it, so
 # there is one pack set per toolchain type. The sets are built identically and

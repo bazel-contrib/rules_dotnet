@@ -115,6 +115,7 @@ def nuget_package(
         nupkg = "{}:{}.{}.nupkg".format(archive, library_name.lower(), version),
         refs = ["{}:refs".format(archive)],
         resource_assemblies = ["{}:resource_assemblies".format(archive)],
+        static_web_assets = ["{}:static_web_assets".format(archive)],
         sha512 = sha512,
         targeting_pack_overrides = targeting_pack_overrides,
         version = version,

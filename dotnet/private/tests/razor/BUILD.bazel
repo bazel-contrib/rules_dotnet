@@ -1,0 +1,68 @@
+load(
+    "//dotnet:defs.bzl",
+    "csharp_library",
+    "csharp_test",
+)
+load(":target_path_test.bzl", "target_path_test_suite")
+
+# `Widget.razor` and `Pages/Widget.razor` share a file name and differ only by
+# directory: an editorconfig section that is not anchored to the config's own
+# directory matches both and gives them the same namespace.
+csharp_library(
+    name = "razor_components",
+    srcs = [
+        "Pages/Widget.razor",
+        "Widget.razor",
+        "_Imports.razor",
+    ],
+    project_sdk = "razor",
+    root_namespace = "Razor.Tests",
+    target_frameworks = ["net10.0"],
+)
+
+csharp_test(
+    name = "razor_components_test",
+    srcs = ["Test.cs"],
+    project_sdk = "razor",
+    target_frameworks = ["net10.0"],
+    deps = [":razor_components"],
+)
+
+# `root_namespace` is left off, so the generator has to receive the target name
+# with the characters a C# namespace cannot hold replaced.
+csharp_library(
+    name = "razor-default-namespace",
+    srcs = [
+        "Widget.razor",
+        "_Imports.razor",
+    ],
+    project_sdk = "razor",
+    target_frameworks = ["net10.0"],
+)
+
+csharp_test(
+    name = "razor_default_namespace_test",
+    srcs = ["DefaultNamespaceTest.cs"],
+    project_sdk = "razor",
+    target_frameworks = ["net10.0"],
+    deps = [":razor-default-namespace"],
+)
+
+# `.cshtml` compiles the same way `.razor` does, and additionally puts the
+# attribute MVC discovers the views through on the assembly.
+csharp_library(
+    name = "razor_views",
+    srcs = ["Views/Index.cshtml"],
+    project_sdk = "web",
+    target_frameworks = ["net10.0"],
+)
+
+csharp_test(
+    name = "razor_views_test",
+    srcs = ["ViewsTest.cs"],
+    project_sdk = "web",
+    target_frameworks = ["net10.0"],
+    deps = [":razor_views"],
+)
+
+target_path_test_suite(name = "target_path_test")

@@ -35,6 +35,14 @@ group rules_dotnet_nuget_resource_assemblies_tests
     nuget Humanizer.Core.de 3.0.0-beta.96
     nuget Microsoft.Data.SqlClient 5.1.1
 
+group rules_dotnet_static_web_assets_tests
+    framework: net10.0
+    source https://api.nuget.org/v3/index.json
+
+    # A Razor class library that ships both kinds of packed asset: a scoped CSS
+    # project bundle and a `.razor.js` module.
+    nuget Microsoft.AspNetCore.Components.QuickGrid 10.0.0
+
 group rules_dotnet_nuget_packages
     framework: net9.0
     source https://api.nuget.org/v3/index.json

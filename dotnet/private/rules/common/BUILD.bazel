@@ -5,6 +5,7 @@ bzl_library(
     srcs = ["binary.bzl"],
     visibility = ["//dotnet:__subpackages__"],
     deps = [
+        ":static_web_assets",
         "//dotnet/private:common",
         "//dotnet/private:providers",
         "@bazel_skylib//rules:common_settings",
@@ -12,10 +13,21 @@ bzl_library(
 )
 
 bzl_library(
+    name = "static_web_assets",
+    srcs = ["static_web_assets.bzl"],
+    visibility = ["//dotnet:__subpackages__"],
+    deps = ["//dotnet/private:providers"],
+)
+
+bzl_library(
     name = "library",
     srcs = ["library.bzl"],
     visibility = ["//dotnet:__subpackages__"],
-    deps = ["@bazel_skylib//rules:common_settings"],
+    deps = [
+        ":static_web_assets",
+        "//dotnet/private:common",
+        "@bazel_skylib//rules:common_settings",
+    ],
 )
 
 bzl_library(

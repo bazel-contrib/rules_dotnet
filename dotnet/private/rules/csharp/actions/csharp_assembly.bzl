@@ -17,7 +17,19 @@ load(
     "//dotnet/private:providers.bzl",
     "DotnetAssemblyCompileInfo",
     "DotnetAssemblyRuntimeInfo",
+    "StaticWebAssetsInfo",
 )
+load(
+    "//dotnet/private/rules/common:static_web_assets.bzl",
+    "base_path",
+)
+load(
+    "//dotnet/private/rules/csharp/actions:razor.bzl",
+    "partition_srcs",
+    "razor_compile_inputs",
+)
+load("//dotnet/private/rules/csharp/actions:scoped_css.bzl", "scoped_css_action")
+load("//dotnet/private/sdk:packs.bzl", "uses_razor")
 
 def _write_internals_visible_to_csharp(actions, label_name, dll_name, others):
     """Write a .cs file containing InternalsVisibleTo attributes.
@@ -98,12 +110,15 @@ def AssemblyAction(
         strict_deps,
         generate_documentation_file,
         include_host_model_dll,
+        include_msbuild_dlls,
         treat_warnings_as_errors,
         warnings_as_errors,
         warnings_not_as_errors,
         warning_level,
         nowarn,
         project_sdk,
+        root_namespace,
+        scoped_css_tool,
         allow_unsafe_blocks,
         nullable,
         run_analyzers,
@@ -132,7 +147,7 @@ def AssemblyAction(
         keyfile: Specifies a strong name key file of the assembly.
         langversion: Specify language version: Default, ISO-1, ISO-2, 3, 4, 5, 6, 7, 7.1, 7.2, 7.3, or Latest
         resources: The list of resouces to be embedded in the assembly.
-        srcs: The list of source (.cs) files that are processed to create the assembly.
+        srcs: The source files that are processed to create the assembly.
         data: List of files that are a direct runtime dependency
         appsetting_files: List of appsettings files to include in the output.
         compile_data: List of files that are a direct compile time dependency
@@ -144,12 +159,15 @@ def AssemblyAction(
         strict_deps: Whether or not to use strict dependencies.
         generate_documentation_file: Whether or not to output XML docs for the compiled dll.
         include_host_model_dll: Whether or not to include he Microsoft.NET.HostModel dll. ONLY USED FOR COMPILING THE APPHOST SHIMMER.
+        include_msbuild_dlls: Whether or not to include the MSBuild interfaces. ONLY USED FOR COMPILING TOOLS THAT RUN AN SDK BUILD TASK.
         treat_warnings_as_errors: Whether or not to treat warnings as errors.
         warnings_as_errors: List of warnings to treat as errors.
         warnings_not_as_errors: List of warnings to not treat errors.
         warning_level: The warning level to use.
         nowarn: List of warnings to suppress.
         project_sdk: The project sdk being targeted
+        root_namespace: The root namespace Razor derives component namespaces from.
+        scoped_css_tool: The tool that rewrites `.razor.css`.
         allow_unsafe_blocks: Compiles the target with /unsafe
         nullable: Enable nullable context, or nullable warnings.
         run_analyzers: Enable analyzers.
@@ -165,6 +183,12 @@ def AssemblyAction(
 
     assembly_name = target_name if out == "" else out
     subsystem_version = get_framework_version_info(target_framework)
+    compile_deps = list(deps)
+    if include_host_model_dll:
+        compile_deps.append(toolchain.host_model)
+    if include_msbuild_dlls:
+        compile_deps.extend(toolchain.msbuild_dlls)
+
     (
         irefs,
         prefs,
@@ -177,7 +201,7 @@ def AssemblyAction(
         exports_files,
     ) = collect_compile_info(
         assembly_name,
-        deps + [toolchain.host_model] if include_host_model_dll else deps,
+        compile_deps,
         targeting_pack,
         exports,
         strict_deps,
@@ -193,6 +217,80 @@ def AssemblyAction(
 
     out_dir = target_name + "/" + target_framework
     out_ext = "dll"
+
+    # `.razor` and `.cshtml` are inputs to a source generator, not to the
+    # compiler, so they travel as additional files rather than sources.
+    partitioned = partition_srcs(srcs, label)
+    srcs = partitioned.compile
+    is_application = target != "library"
+
+    scoped_css = None
+    generated_web_assets = []
+    if partitioned.scoped_css:
+        if not partitioned.razor:
+            fail(
+                "%s has scoped CSS but no Razor sources: %s.\n" % (
+                    label,
+                    ", ".join([src.short_path for src in partitioned.scoped_css]),
+                ) +
+                "A `<component>.razor.css` only applies to the `<component>.razor` beside it.",
+            )
+
+        # An application's bundle imports its libraries' bundles, so it has to
+        # know where each of those is served from.
+        project_bundles = [
+            asset.serving_path
+            for dep in deps
+            if StaticWebAssetsInfo in dep
+            for asset in dep[StaticWebAssetsInfo].assets.to_list()
+            if asset.scoped_css_bundle
+        ] if is_application else []
+
+        scoped_css = scoped_css_action(
+            actions,
+            label = label,
+            out_dir = out_dir,
+            assembly_name = assembly_name,
+            bundle_base_path = base_path(assembly_name, is_application),
+            is_application = is_application,
+            scoped_css_srcs = partitioned.scoped_css,
+            project_bundles = sorted(project_bundles),
+            tool = scoped_css_tool,
+            toolchain = toolchain,
+        )
+        generated_web_assets.append(struct(
+            file = scoped_css.bundle,
+            subpath = scoped_css.bundle.basename,
+            scoped_css_bundle = True,
+        ))
+
+    razor = None
+    if partitioned.razor:
+        if not uses_razor(project_sdk):
+            fail(
+                "%s has Razor sources but `project_sdk = %r`.\n" % (label, project_sdk) +
+                "Set `project_sdk` to \"razor\" for a Razor class library, or \"web\" for an " +
+                "ASP.NET Core application. Razor sources: %s" % (
+                    ", ".join([src.short_path for src in partitioned.razor]),
+                ),
+            )
+        razor = razor_compile_inputs(
+            actions,
+            label = label,
+            out_dir = out_dir,
+            root_namespace = root_namespace or target_name,
+            target_framework = target_framework,
+            razor_srcs = partitioned.razor,
+            toolchain = toolchain,
+            extra_configs = [scoped_css.scope_config] if scoped_css else [],
+        )
+        srcs = srcs + razor.srcs
+
+        # csc counts only the files it is handed as sources, so a target whose
+        # code is entirely Razor looks empty to it and warns that it has no
+        # source files. The sources exist; they reach csc through the generator.
+        if not srcs:
+            nowarn = nowarn + ["CS2008"]
 
     out_dll = actions.declare_file("%s/%s.%s" % (out_dir, assembly_name, out_ext))
     out_iref = None
@@ -237,6 +335,7 @@ def AssemblyAction(
             run_analyzers,
             compiler_options,
             interceptors_namespaces,
+            razor,
             out_dll = out_dll,
             out_ref = out_ref,
             out_pdb = out_pdb,
@@ -288,6 +387,7 @@ def AssemblyAction(
             run_analyzers,
             compiler_options,
             interceptors_namespaces,
+            razor,
             out_ref = out_iref,
             out_dll = out_dll,
             out_pdb = out_pdb,
@@ -328,6 +428,7 @@ def AssemblyAction(
             run_analyzers,
             compiler_options,
             interceptors_namespaces,
+            razor,
             out_dll = None,
             out_ref = out_ref,
             out_pdb = None,
@@ -363,13 +464,16 @@ def AssemblyAction(
         data = data,
         appsetting_files = depset(out_appsettings),
         native = [],
+        # `compile_deps` rather than `deps`: an assembly pulled in from the
+        # toolchain has to be resolvable at run time too, which is what puts it
+        # in deps.json.
         deps = depset(
-            [dep[DotnetAssemblyRuntimeInfo] for dep in deps] + [toolchain.host_model[DotnetAssemblyRuntimeInfo]] if include_host_model_dll else [dep[DotnetAssemblyRuntimeInfo] for dep in deps],
+            [dep[DotnetAssemblyRuntimeInfo] for dep in compile_deps],
             transitive = [dep[DotnetAssemblyRuntimeInfo].deps for dep in deps],
         ) if not (is_analyzer or is_language_specific_analyzer) else depset(),
         nuget_info = None,
         direct_deps_depsjson_fragment = {dep[DotnetAssemblyRuntimeInfo].name: dep[DotnetAssemblyRuntimeInfo].version for dep in deps},
-    ))
+    ), generated_web_assets)
 
 def _compile(
         actions,
@@ -404,6 +508,7 @@ def _compile(
         run_analyzers,
         compiler_options,
         interceptors_namespaces,
+        razor,
         out_dll = None,
         out_ref = None,
         out_pdb = None,
@@ -493,6 +598,14 @@ def _compile(
     # before the framework files.
     format_ref_arg(args, depset(transitive = [refs, framework_files]))
 
+    # A source generator rather than an analyzer, so it runs even when analyzers
+    # are switched off: without it every component would be undefined rather
+    # than merely undiagnosed.
+    if razor:
+        args.add_all(razor.analyzers, format_each = "/analyzer:%s")
+        args.add_all(razor.additionalfiles, format_each = "/additionalfile:%s")
+        args.add_all(razor.configs, format_each = "/analyzerconfig:%s")
+
     # analyzers
     if run_analyzers:
         args.add_all(analyzer_assemblies, format_each = "/analyzer:%s")
@@ -528,6 +641,8 @@ def _compile(
 
     direct_inputs = srcs + resources + additionalfiles + analyzer_configs
     direct_inputs += [keyfile] if keyfile else []
+    if razor:
+        direct_inputs += razor.analyzers + razor.additionalfiles + razor.configs
 
     if compiler_worker:
         # A `FilesToRunProvider` rather than a `File`, so that the worker's own

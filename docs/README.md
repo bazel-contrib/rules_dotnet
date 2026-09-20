@@ -29,12 +29,77 @@ By default Bazel sets the compilation mode to `fastbuild`.
 
 If you want to e.g. enable optimizations in CI you can add `common --compilation_mode=opt` to your CI `.bazelrc` file.
 
+## Razor
+
+`.razor` and `.cshtml` files go in `srcs` alongside `.cs`, and `project_sdk`
+picks the SDK that compiles them:
+
+```python
+csharp_library(
+    name = "components",
+    srcs = glob(["**/*.cs", "**/*.razor"]),
+    project_sdk = "razor",
+    root_namespace = "MyApp.Components",
+    target_frameworks = ["net10.0"],
+)
+```
+
+Use `"razor"` for a Razor class library and `"web"` for an ASP.NET Core
+application. Both compile Razor and resolve the ASP.NET Core reference pack,
+because `Microsoft.NET.Sdk.Web` imports `Microsoft.NET.Sdk.Razor`.
+
+A component's namespace and its `@page` route come from `root_namespace` plus
+the source's path relative to the package that compiles it, so a Razor source
+has to live in that package or below it.
+
+### Scoped CSS
+
+A `Foo.razor.css` beside `Foo.razor` styles only that component. It goes in
+`srcs` next to the component, mirroring how MSBuild picks it up from beside the
+`.razor`:
+
+```python
+csharp_library(
+    name = "components",
+    srcs = glob(["**/*.cs", "**/*.razor", "**/*.razor.css"]),
+    project_sdk = "razor",
+    target_frameworks = ["net10.0"],
+)
+```
+
+Only `<component>.razor.css` belongs in `srcs`; any other stylesheet is a static
+web asset.
+
+## Static web assets
+
+Files a target serves over HTTP go in `static_web_assets`:
+
+```python
+csharp_library(
+    name = "components",
+    static_web_assets = glob(["wwwroot/**"]),
+    ...
+)
+```
+
+Each file is served at its path relative to the `wwwroot` directory it sits
+under. A library's assets are served below `_content/<assembly name>`, matching
+the base path MSBuild gives a Razor class library, so two libraries shipping
+`site.css` do not collide. A binary's own assets sit at the root.
+
+The tree is laid out next to the binary the way a published application expects
+it, so `app.UseStaticFiles()` works under `bazel run` with no further setup.
+
+Assets that arrive inside a NuGet package are picked up too. A packed Razor
+class library ships them in a `staticwebassets` folder, and they are served from
+`_content/<package id>` just like a library target's `wwwroot`, so referencing
+the package is all that is needed.
+
 ## Unsupported workloads
 
 The following workloads are not supported by these rules at this given time:
 
 - VisualBasic
-- Razor
 - Blazor/WebAssembly
 - Workloads that require Mono
 

@@ -1,8 +1,8 @@
-"""Incoming transition for the `apphost_shimmer_binary` rule.
+"""Incoming transition for the rules that build rules_dotnet's own tools.
 
-This transition makes sure that the apphost shimmer is always transitioned to
-the default TFM and the RID of the host platform. This is needed because
-# the apphost shimmer is always built for the exec platform.
+A tool is always built for the exec platform, so it is pinned to the default TFM
+and the host platform's RID rather than inheriting the TFM and RID of whatever
+target depends on it.
 """
 
 load("@bazel_skylib//lib:dicts.bzl", "dicts")
@@ -28,7 +28,7 @@ def _impl(_settings, _attr):
         rid_compatability_transition_outputs(rid),
     )
 
-apphost_shimmer_transition = transition(
+bootstrap_tool_transition = transition(
     implementation = _impl,
     inputs = [],
     outputs = ["//dotnet:target_framework", "//dotnet:rid"] +
