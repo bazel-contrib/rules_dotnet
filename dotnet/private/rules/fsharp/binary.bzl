@@ -17,12 +17,13 @@ load("//dotnet/private/rules/fsharp/actions:fsharp_assembly.bzl", "AssemblyActio
 load("//dotnet/private/transitions:tfm_transition.bzl", "tfm_transition")
 
 def _compile_action(ctx, tfm, toolchain):
-    (compile_provider, runtime_provider) = AssemblyAction(
+    return AssemblyAction(
         ctx.actions,
         get_compiler_wrapper(ctx),
         compiler_worker = get_fsharp_compiler_worker(ctx),
         label = ctx.label,
         debug = is_debug(ctx),
+        embed_sources = ctx.attr.embed_sources,
         defines = ctx.attr.defines,
         deps = ctx.attr.deps,
         exports = [],
@@ -52,9 +53,6 @@ def _compile_action(ctx, tfm, toolchain):
         compiler_options = ctx.attr.compiler_options,
         is_windows = targets_windows(ctx),
     )
-
-    # F# compiles no Razor, so it generates no static web assets.
-    return compile_provider, runtime_provider, []
 
 def _binary_private_impl(ctx):
     return build_binary(ctx, _compile_action, get_toolchain(ctx))

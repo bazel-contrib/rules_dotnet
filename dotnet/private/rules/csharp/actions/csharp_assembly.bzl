@@ -20,10 +20,6 @@ load(
     "StaticWebAssetsInfo",
 )
 load(
-    "//dotnet/private/rules/common:static_web_assets.bzl",
-    "base_path",
-)
-load(
     "//dotnet/private/rules/csharp/actions:razor.bzl",
     "partition_srcs",
     "razor_compile_inputs",
@@ -90,6 +86,7 @@ def AssemblyAction(
         label,
         additionalfiles,
         debug,
+        embed_sources,
         defines,
         deps,
         exports,
@@ -139,6 +136,7 @@ def AssemblyAction(
         label: The label of the target. This is used to determine the relative path of embedded resources.
         additionalfiles: Names additional files that don't directly affect code generation but may be used by analyzers for producing errors or warnings.
         debug: Emits debugging information.
+        embed_sources: Embeds the sources in the PDB.
         defines: The list of conditional compilation symbols.
         deps: The list of other libraries to be linked in to the assembly.
         exports: List of exported targets.
@@ -178,7 +176,8 @@ def AssemblyAction(
         interceptors_namespaces: Namespaces that are allowed to contain interceptors.
         is_windows: Whether or not the target is running on Windows.
     Returns:
-        The compiled csharp artifacts.
+        The compile and runtime providers, and the static web assets the compile
+        generated.
     """
 
     assembly_name = target_name if out == "" else out
@@ -238,20 +237,22 @@ def AssemblyAction(
 
         # An application's bundle imports its libraries' bundles, so it has to
         # know where each of those is served from.
-        project_bundles = [
-            asset.serving_path
+        dep_assets = depset(transitive = [
+            dep[StaticWebAssetsInfo].assets
             for dep in deps
             if StaticWebAssetsInfo in dep
-            for asset in dep[StaticWebAssetsInfo].assets.to_list()
+        ]) if is_application else depset()
+        project_bundles = [
+            asset.serving_path
+            for asset in dep_assets.to_list()
             if asset.scoped_css_bundle
-        ] if is_application else []
+        ]
 
         scoped_css = scoped_css_action(
             actions,
             label = label,
             out_dir = out_dir,
             assembly_name = assembly_name,
-            bundle_base_path = base_path(assembly_name, is_application),
             is_application = is_application,
             scoped_css_srcs = partitioned.scoped_css,
             project_bundles = sorted(project_bundles),
@@ -312,6 +313,7 @@ def AssemblyAction(
             analyzers_csharp,
             analyzer_configs,
             debug,
+            embed_sources,
             defines,
             keyfile,
             langversion,
@@ -364,6 +366,7 @@ def AssemblyAction(
             analyzers_csharp,
             analyzer_configs,
             debug,
+            embed_sources,
             defines,
             keyfile,
             langversion,
@@ -405,6 +408,7 @@ def AssemblyAction(
             analyzers_csharp,
             analyzer_configs,
             debug,
+            embed_sources,
             defines,
             keyfile,
             langversion,
@@ -485,6 +489,7 @@ def _compile(
         analyzer_assemblies_csharp,
         analyzer_configs,
         debug,
+        embed_sources,
         defines,
         keyfile,
         langversion,
@@ -569,6 +574,12 @@ def _compile(
         args.add("/define:RELEASE")
 
     args.add("/debug:portable")
+
+    # A PDB records execroot-relative document paths, which resolve to nothing
+    # once the build is over. `/embed` puts the sources in the symbols instead.
+    # See docs/README.md#embedded-sources.
+    if embed_sources:
+        args.add("/embed")
 
     # outputs
     if out_dll != None:

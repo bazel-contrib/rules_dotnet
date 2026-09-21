@@ -52,7 +52,7 @@ def _import_library(ctx):
         analyzers_csharp = ctx.files.analyzers_csharp,
         analyzers_fsharp = ctx.files.analyzers_fsharp,
         analyzers_vb = ctx.files.analyzers_vb,
-        compile_data = [],
+        compile_data = ctx.files.typeproviders,
         exports = [],
         transitive_compile_data = depset([]),
         transitive_refs = prefs,
@@ -107,6 +107,12 @@ import_library = rule(
         ),
         "version": attr.string(
             doc = "The version of the library",
+        ),
+        "typeproviders": attr.label_list(
+            doc = """The designer assemblies of any F# type providers the package ships.""",
+            allow_files = True,
+            allow_empty = True,
+            default = [],
         ),
         "static_web_assets": attr.label_list(
             doc = "Files the package serves over HTTP, from its `staticwebassets` folder.",

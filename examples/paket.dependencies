@@ -1,3 +1,18 @@
+group blazor_deps
+    framework: net10.0
+    storage: none
+    source https://api.nuget.org/v3/index.json
+
+    nuget Microsoft.AspNetCore.Components.WebAssembly 10.0.12
+
+group bolero_deps
+    framework: net10.0
+    storage: none
+    source https://api.nuget.org/v3/index.json
+
+    nuget Bolero 0.25.65
+    nuget FSharp.Core 10.1.401
+
 group example_deps
     framework: net9.0,netstandard2.0
     storage: none

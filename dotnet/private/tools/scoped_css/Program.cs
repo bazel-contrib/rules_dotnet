@@ -4,16 +4,14 @@
 // inside the SDK: ComputeCssScope derives a per-component scope identifier,
 // RewriteCss rewrites every selector to carry it, and ConcatenateCssFiles
 // bundles the results. Reimplementing them would mean reimplementing a CSS
-// parser, including ::deep, at-rules and pseudo-elements, so this tool
-// instantiates the SDK's tasks and runs them against a stub build engine.
+// parser, including ::deep, at-rules and pseudo-elements, so this tool runs the
+// SDK's own copies.
 
 using System;
-using System.Collections;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reflection;
-using System.Runtime.Loader;
 using System.Text;
 using System.Text.Json;
 using Microsoft.Build.Framework;
@@ -40,39 +38,11 @@ internal sealed class ScopedCssFile
     /// this with the target name, so it decides the scope's value.
     public string CssRelativePath { get; set; } = "";
 
+    /// `RazorRelativePath`, escaped for use as an editorconfig section name.
+    public string SectionName { get; set; } = "";
+
     public string Source { get; set; } = "";
     public string Rewritten { get; set; } = "";
-}
-
-/// The tasks only use the engine to report diagnostics. Errors fail the action;
-/// warnings go to stderr so Bazel shows them.
-internal sealed class StubBuildEngine : IBuildEngine
-{
-    public bool HasLoggedErrors { get; private set; }
-
-    public bool ContinueOnError => false;
-    public int LineNumberOfTaskNode => 0;
-    public int ColumnNumberOfTaskNode => 0;
-    public string ProjectFileOfTaskNode => "";
-
-    public void LogErrorEvent(BuildErrorEventArgs e)
-    {
-        HasLoggedErrors = true;
-        Console.Error.WriteLine($"error: {e.Message}");
-    }
-
-    public void LogWarningEvent(BuildWarningEventArgs e) => Console.Error.WriteLine($"warning: {e.Message}");
-
-    public void LogMessageEvent(BuildMessageEventArgs e)
-    {
-    }
-
-    public void LogCustomEvent(CustomBuildEventArgs e)
-    {
-    }
-
-    public bool BuildProjectFile(string projectFileName, string[] targetNames, IDictionary globalProperties, IDictionary targetOutputs) =>
-        throw new NotSupportedException("the scoped CSS tasks do not build projects");
 }
 
 internal static class Program
@@ -88,7 +58,7 @@ internal static class Program
         var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
         var request = JsonSerializer.Deserialize<Request>(File.ReadAllText(args[0]), options)!;
 
-        var tasks = LoadTasks(request.TasksAssembly);
+        var tasks = Tasks.Load(request.TasksAssembly);
         var engine = new StubBuildEngine();
 
         var scopes = ComputeScopes(tasks, engine, request);
@@ -98,63 +68,25 @@ internal static class Program
         return 0;
     }
 
-    /// The task assembly sits next to its own dependencies, most importantly the
-    /// CSS parser, which nothing else resolves for it.
-    private static Assembly LoadTasks(string path)
-    {
-        var directory = Path.GetDirectoryName(Path.GetFullPath(path))!;
-
-        AssemblyLoadContext.Default.Resolving += (context, name) =>
-        {
-            var candidate = Path.Combine(directory, name.Name + ".dll");
-            return File.Exists(candidate) ? context.LoadFromAssemblyPath(candidate) : null;
-        };
-
-        return AssemblyLoadContext.Default.LoadFromAssemblyPath(Path.GetFullPath(path));
-    }
-
-    private static ITask Create(Assembly tasks, IBuildEngine engine, string name)
-    {
-        var type = tasks.GetType("Microsoft.AspNetCore.StaticWebAssets.Tasks." + name)
-            ?? throw new InvalidOperationException($"{name} is missing from {tasks.Location}");
-
-        var task = (ITask)Activator.CreateInstance(type)!;
-        task.BuildEngine = engine;
-        return task;
-    }
-
-    private static void Set(ITask task, string property, object value) =>
-        task.GetType().GetProperty(property)!.SetValue(task, value);
-
-    private static T Get<T>(ITask task, string property) =>
-        (T)task.GetType().GetProperty(property)!.GetValue(task)!;
-
-    /// A task that logs an error has failed, whether or not it says so in its
-    /// return value. MSBuild applies the same rule.
-    private static void Run(ITask task, string name)
-    {
-        if (!task.Execute() || ((StubBuildEngine)task.BuildEngine).HasLoggedErrors)
-        {
-            throw new InvalidOperationException($"{name} failed");
-        }
-    }
+    private static ITask CreateTask(Assembly tasks, IBuildEngine engine, string name) =>
+        Tasks.Create(tasks, engine, "Microsoft.AspNetCore.StaticWebAssets.Tasks." + name);
 
     /// Maps each stylesheet's `.razor` path to the scope the SDK derives for it.
     private static Dictionary<string, string> ComputeScopes(Assembly tasks, IBuildEngine engine, Request request)
     {
-        var task = Create(tasks, engine, "ComputeCssScope");
+        var task = CreateTask(tasks, engine, "ComputeCssScope");
 
         // ComputeCssScope hashes the item spec with the target name, so the spec
         // has to be the package-relative path rather than an absolute one, or
         // the scope would change with the location of the build.
-        Set(task, "ScopedCssInput", request.Files
+        Tasks.Set(task, "ScopedCssInput", request.Files
             .Select(f => (ITaskItem)new TaskItem(f.CssRelativePath))
             .ToArray());
-        Set(task, "TargetName", request.TargetName);
+        Tasks.Set(task, "TargetName", request.TargetName);
 
-        Run(task, "ComputeCssScope");
+        Tasks.Run(task, "ComputeCssScope");
 
-        var scoped = Get<ITaskItem[]>(task, "ScopedCss");
+        var scoped = Tasks.Get<ITaskItem[]>(task, "ScopedCss");
         var scopes = new Dictionary<string, string>(StringComparer.Ordinal);
         for (var i = 0; i < request.Files.Count; i++)
         {
@@ -166,7 +98,7 @@ internal static class Program
 
     private static void Rewrite(Assembly tasks, IBuildEngine engine, Request request, Dictionary<string, string> scopes)
     {
-        var task = Create(tasks, engine, "RewriteCss");
+        var task = CreateTask(tasks, engine, "RewriteCss");
 
         var items = new List<ITaskItem>(request.Files.Count);
         foreach (var file in request.Files)
@@ -179,21 +111,21 @@ internal static class Program
             items.Add(item);
         }
 
-        Set(task, "FilesToTransform", items.ToArray());
+        Tasks.Set(task, "FilesToTransform", items.ToArray());
 
         // The task otherwise skips a file whose output looks newer than its
         // input. Bazel normalizes timestamps, so that comparison means nothing
         // here and could silently leave the rewrite undone.
-        Set(task, "SkipIfOutputIsNewer", false);
+        Tasks.Set(task, "SkipIfOutputIsNewer", false);
 
-        Run(task, "RewriteCss");
+        Tasks.Run(task, "RewriteCss");
     }
 
     private static void Bundle(Assembly tasks, IBuildEngine engine, Request request)
     {
-        var task = Create(tasks, engine, "ConcatenateCssFiles");
+        var task = CreateTask(tasks, engine, "ConcatenateCssFiles");
 
-        Set(task, "ScopedCssFiles", request.Files
+        Tasks.Set(task, "ScopedCssFiles", request.Files
             .Select(f =>
             {
                 var item = new TaskItem(Path.GetFullPath(f.Rewritten));
@@ -203,14 +135,14 @@ internal static class Program
             })
             .ToArray());
 
-        Set(task, "ProjectBundles", request.ProjectBundles
+        Tasks.Set(task, "ProjectBundles", request.ProjectBundles
             .Select(b => (ITaskItem)new TaskItem(b))
             .ToArray());
-        Set(task, "ScopedCssBundleBasePath", request.BundleBasePath);
-        Set(task, "OutputFile", Path.GetFullPath(request.Bundle));
+        Tasks.Set(task, "ScopedCssBundleBasePath", request.BundleBasePath);
+        Tasks.Set(task, "OutputFile", Path.GetFullPath(request.Bundle));
 
         Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(request.Bundle))!);
-        Run(task, "ConcatenateCssFiles");
+        Tasks.Run(task, "ConcatenateCssFiles");
     }
 
     /// The Razor source generator reads the scope from an analyzer config, so it
@@ -223,7 +155,7 @@ internal static class Program
         {
             // Anchored to this config's own directory, so that a file name that
             // also exists in a subdirectory does not pick up the wrong scope.
-            builder.Append("[/").Append(EscapeSectionName(file.RazorRelativePath)).Append("]\n");
+            builder.Append("[/").Append(file.SectionName).Append("]\n");
             builder.Append("build_metadata.AdditionalFiles.CssScope = ")
                 .Append(scopes[file.RazorRelativePath])
                 .Append('\n');
@@ -231,21 +163,5 @@ internal static class Program
 
         Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(request.ScopeConfig))!);
         File.WriteAllText(request.ScopeConfig, builder.ToString());
-    }
-
-    private static string EscapeSectionName(string path)
-    {
-        var builder = new StringBuilder(path.Length);
-        foreach (var character in path)
-        {
-            if (character is '\\' or '*' or '?' or '[' or ']' or '{' or '}')
-            {
-                builder.Append('\\');
-            }
-
-            builder.Append(character);
-        }
-
-        return builder.ToString();
     }
 }

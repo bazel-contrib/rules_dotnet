@@ -1,0 +1,9 @@
+@* A component's namespace comes from `root_namespace` plus its path within the
+   package, so this one is `Example.BlazorWasm.App` and the router finds the
+   `@page` routes of everything compiled alongside it. *@
+<Router AppAssembly="@typeof(App).Assembly">
+    <Found Context="routeData">
+        <RouteView RouteData="@routeData" DefaultLayout="@typeof(MainLayout)" />
+        <FocusOnNavigate RouteData="@routeData" Selector="h1" />
+    </Found>
+</Router>

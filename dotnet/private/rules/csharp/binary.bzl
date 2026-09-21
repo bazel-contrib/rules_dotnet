@@ -29,6 +29,7 @@ def _compile_action(ctx, tfm, toolchain):
         label = ctx.label,
         additionalfiles = ctx.files.additionalfiles,
         debug = is_debug(ctx),
+        embed_sources = ctx.attr.embed_sources,
         defines = ctx.attr.defines,
         deps = ctx.attr.deps,
         exports = [],
@@ -57,7 +58,7 @@ def _compile_action(ctx, tfm, toolchain):
         nowarn = ctx.attr.nowarn,
         project_sdk = ctx.attr.project_sdk,
         root_namespace = ctx.attr.root_namespace,
-        scoped_css_tool = getattr(ctx.attr, "_scoped_css_tool", None),
+        scoped_css_tool = ctx.attr._scoped_css_tool,
         allow_unsafe_blocks = ctx.attr.allow_unsafe_blocks,
         nullable = ctx.attr.nullable,
         run_analyzers = ctx.attr.run_analyzers,
@@ -102,15 +103,17 @@ csharp_binary = rule(
 
 # The rules below build tools of rules_dotnet's own, so they follow the
 # bootstrap toolchain rather than the user's: its SDK compiles them and its
-# packs are what they compile against. They also drop the attributes pointing at
-# rules_dotnet's own tools, which would otherwise make a tool depend on itself.
+# packs are what they compile against. The attributes pointing at rules_dotnet's
+# own tools are stubbed out rather than dropped - a tool cannot depend on
+# itself, and nothing these rules compile has Razor sources or web assets, so
+# neither tool is ever invoked.
 _BOOTSTRAP_ATTRS = dicts.add(
+    _BINARY_ATTRS,
     {
-        name: value
-        for (name, value) in _BINARY_ATTRS.items()
-        if name not in ["_scoped_css_tool", "_static_web_assets_tool"]
+        "_pack_set": attr.string(default = BOOTSTRAP_PACKS),
+        "_scoped_css_tool": attr.label(default = "//dotnet/private:no_tool", cfg = "exec"),
+        "_static_web_assets_tool": attr.label(default = "//dotnet/private:no_tool", cfg = "exec"),
     },
-    {"_pack_set": attr.string(default = BOOTSTRAP_PACKS)},
 )
 
 # A tool is built for the exec configuration, but `cfg = "exec"` is not enough

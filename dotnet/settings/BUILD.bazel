@@ -55,3 +55,17 @@ bool_flag(
     build_setting_default = False,
     visibility = ["//visibility:public"],
 )
+
+# Whether the compilers embed their sources in the PDB.
+# See docs/README.md#embedded-sources.
+bool_flag(
+    name = "embed_all_sources",
+    build_setting_default = False,
+    visibility = ["//visibility:public"],
+)
+
+config_setting(
+    name = "embed_all_sources_enabled",
+    flag_values = {":embed_all_sources": "True"},
+    visibility = ["//visibility:public"],
+)

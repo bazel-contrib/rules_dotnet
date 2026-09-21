@@ -19,7 +19,16 @@ a published application does not carry one either.
 
 load("//dotnet/private:providers.bzl", "StaticWebAssetsInfo")
 
-_WEB_ROOT = "wwwroot"
+# Every rule that describes a served tree needs the tool that does it.
+STATIC_WEB_ASSETS_ATTRS = {
+    "_static_web_assets_tool": attr.label(
+        doc = "Fingerprints and compresses the served tree and writes the endpoint manifest.",
+        default = "//dotnet/private/tools/static_web_assets",
+        cfg = "exec",
+    ),
+}
+
+WEB_ROOT = "wwwroot"
 
 # Extensions worth compressing, from
 # Microsoft.NET.Sdk.StaticWebAssets.Compression.targets and trimmed to what a
@@ -101,7 +110,7 @@ def collect_static_web_assets(
         deps,
         is_application,
         generated = [],
-        content_root = _WEB_ROOT):
+        content_root = WEB_ROOT):
     """Builds the `StaticWebAssetsInfo` for a target.
 
     Args:
@@ -184,36 +193,41 @@ def materialize_static_web_assets(actions, label, out_dir, assets_info):
             )
         by_serving_path[asset.serving_path] = asset.file
 
-        output = actions.declare_file("{}/{}/{}".format(out_dir, _WEB_ROOT, asset.serving_path))
+        output = actions.declare_file("{}/{}/{}".format(out_dir, WEB_ROOT, asset.serving_path))
         actions.symlink(output = output, target_file = asset.file)
         outputs.append(struct(file = output, route = asset.serving_path))
 
     return outputs
 
-def publish_paths(assets, manifest):
-    """Pairs every served file with the path it takes in a publish directory.
-
-    Args:
-      assets: The served files, as structs of a `file` and its `route`.
-      manifest: The endpoint manifest, which sits beside the assembly.
-
-    Returns:
-      A list of structs of a `file` and its `publish_path`.
-    """
-    return [
-        struct(file = asset.file, publish_path = "{}/{}".format(_WEB_ROOT, asset.route))
-        for asset in assets
-    ] + [struct(file = manifest, publish_path = manifest.basename)]
-
 def _is_compressible(route):
     parts = route.rsplit(".", 1)
     return len(parts) == 2 and parts[1].lower() in _COMPRESSIBLE
 
+def _manifest(actions, out_dir, assembly_name):
+    return actions.declare_file("{}/{}.staticwebassets.endpoints.json".format(
+        out_dir,
+        assembly_name,
+    ))
+
+def _describe_action(actions, label, out_dir, tool, request_fields, inputs, outputs):
+    """Runs the tool that compresses the served files and describes them."""
+    request = actions.declare_file("{}/static_web_assets_request.json".format(out_dir))
+    actions.write(output = request, content = json.encode(struct(**request_fields)))
+
+    args = actions.args()
+    args.add(request)
+
+    actions.run(
+        mnemonic = "StaticWebAssetsManifest",
+        progress_message = "Describing static web assets for " + label.name,
+        executable = tool.files_to_run,
+        arguments = [args],
+        inputs = inputs + [request],
+        outputs = outputs,
+    )
+
 def endpoints_manifest_action(actions, label, out_dir, assembly_name, assets, tool):
     """Fingerprints and compresses the served tree, and describes it.
-
-    `MapStaticAssets` serves from this manifest rather than from the file
-    system, so it has to carry every asset's hash, length and headers.
 
     Args:
       actions: The rule's `ctx.actions`.
@@ -227,10 +241,7 @@ def endpoints_manifest_action(actions, label, out_dir, assembly_name, assets, to
       A struct of the `manifest` and the `compressed` variants, each a struct of
       a `file` and the `route` it is served at.
     """
-    manifest = actions.declare_file("{}/{}.staticwebassets.endpoints.json".format(
-        out_dir,
-        assembly_name,
-    ))
+    manifest = _manifest(actions, out_dir, assembly_name)
 
     outputs = [manifest]
     variants = []
@@ -240,7 +251,7 @@ def endpoints_manifest_action(actions, label, out_dir, assembly_name, assets, to
         if _is_compressible(asset.route):
             for suffix in ["gz", "br"]:
                 route = "{}.{}".format(asset.route, suffix)
-                output = actions.declare_file("{}/{}/{}".format(out_dir, _WEB_ROOT, route))
+                output = actions.declare_file("{}/{}/{}".format(out_dir, WEB_ROOT, route))
                 outputs.append(output)
                 variants.append(struct(file = output, route = route))
                 compressed.append(output.path)
@@ -252,22 +263,54 @@ def endpoints_manifest_action(actions, label, out_dir, assembly_name, assets, to
             brotli = compressed[1] if compressed else None,
         ))
 
-    request = actions.declare_file("{}/static_web_assets_request.json".format(out_dir))
-    actions.write(
-        output = request,
-        content = json.encode(struct(manifest = manifest.path, assets = requests)),
-    )
-
-    args = actions.args()
-    args.add(request)
-
-    actions.run(
-        mnemonic = "StaticWebAssetsManifest",
-        progress_message = "Describing static web assets for " + label.name,
-        executable = tool.files_to_run,
-        arguments = [args],
-        inputs = [asset.file for asset in assets] + [request],
-        outputs = outputs,
+    _describe_action(
+        actions,
+        label,
+        out_dir,
+        tool,
+        {"manifest": manifest.path, "assets": requests},
+        [asset.file for asset in assets],
+        outputs,
     )
 
     return struct(manifest = manifest, compressed = variants)
+
+def endpoints_manifest_from_directory(actions, label, out_dir, assembly_name, directory, tool, compress = True):
+    """Serves a whole directory, copying it into a `wwwroot` and describing it.
+
+    The files are not known at analysis time, so the tool walks the tree and
+    decides for itself what to compress. A Blazor WebAssembly publish arrives
+    this way, because trimming decides which assemblies it ships.
+
+    Args:
+      actions: The rule's `ctx.actions`.
+      label: The label of the target, for the progress message.
+      out_dir: The target's output directory prefix.
+      assembly_name: The target's assembly name, which names the manifest.
+      directory: The directory to serve, as a `File`.
+      tool: The `static_web_assets` tool.
+      compress: Whether to write the compressed variants. A development run
+        serves from the same machine that built it, so it pays for none.
+
+    Returns:
+      A struct of the served `wwwroot` directory and the endpoint `manifest`.
+    """
+    wwwroot = actions.declare_directory("{}/{}".format(out_dir, WEB_ROOT))
+    manifest = _manifest(actions, out_dir, assembly_name)
+
+    _describe_action(
+        actions,
+        label,
+        out_dir,
+        tool,
+        {
+            "manifest": manifest.path,
+            "inputDirectory": directory.path,
+            "outputDirectory": wwwroot.path,
+            "compressibleExtensions": _COMPRESSIBLE if compress else [],
+        },
+        [directory],
+        [wwwroot, manifest],
+    )
+
+    return struct(wwwroot = wwwroot, manifest = manifest)

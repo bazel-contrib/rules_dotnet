@@ -31,6 +31,8 @@ load(
     "RUNTIME_PACK_REPO",
     "TARGETING_PACK_REPO",
     "USER_PACKS",
+    "WASM_PACK_REPO",
+    "WASM_RID",
     "aot_pack_rids",
     "aot_pack_tfms",
     "apphost_pack",
@@ -44,6 +46,9 @@ load(
     "runtime_packs",
     "targeting_pack_tfms",
     "targeting_packs",
+    "wasm_pack_tfms",
+    "wasm_runtime_pack",
+    "wasm_tool_packs",
 )
 load("//dotnet/private/sdk:versions.bzl", "TOOL_VERSIONS")
 
@@ -129,6 +134,50 @@ def _runtime(versions):
                 })
 
             build_files["{}/{}/BUILD.bazel".format(project_sdk, tfm)] = _build_file("runtime", targets)
+
+    return struct(build_files = build_files, packages = collections.uniq(packages))
+
+def _wasm(versions):
+    """What a Blazor WebAssembly publish needs, per target framework.
+
+    There is one target per framework rather than per runtime identifier,
+    because a browser is the only target. The runtime pack reuses the
+    `runtime_pack` rule, since it carries the same mix of managed assemblies and
+    native files as any other; the tools are just their archives' file lists.
+    """
+    packages = []
+    build_files = {}
+
+    for tfm in wasm_pack_tfms():
+        (id, version) = _retarget([wasm_runtime_pack(tfm)], versions.get(tfm))[0]
+        packages.append((id, version))
+
+        lines = [
+            "\"GENERATED\"",
+            "",
+            "load(\"@rules_dotnet//dotnet/private/sdk/runtime_packs:runtime_pack.bzl\", \"runtime_pack\")",
+            "",
+            "package(default_visibility = [\"//visibility:public\"])",
+            "",
+            _target("runtime", {
+                "name": WASM_RID,
+                "packs": [nuget_package_label(id, version)],
+                "runtime_identifier": WASM_RID,
+                "target_framework": tfm,
+            }),
+        ]
+
+        for (name, (tool_id, tool_version)) in wasm_tool_packs(tfm):
+            packages.append((tool_id, tool_version))
+            lines += [
+                "",
+                "alias(\n    name = \"{}\",\n    actual = \"@{}//:files\",\n)".format(
+                    name,
+                    nuget_archive_name(tool_id, tool_version),
+                ),
+            ]
+
+        build_files["{}/BUILD.bazel".format(tfm)] = "\n".join(lines) + "\n"
 
     return struct(build_files = build_files, packages = collections.uniq(packages))
 
@@ -310,6 +359,7 @@ def declare_pack_repos(module_ctx, sdk_version, bootstrap_version):
         # with the JIT packs, so a registered SDK does not move them.
         (ILCOMPILER_PACK_REPO, _host_tool("ilcompiler", ilcompiler_pack, {})),
         (NATIVEAOT_PACK_REPO, _nativeaot()),
+        (WASM_PACK_REPO, _wasm(bands.versions)),
     ]
 
     # The kinds cannot share a package: their ids end in `.Ref`,

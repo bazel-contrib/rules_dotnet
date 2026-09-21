@@ -1,0 +1,36 @@
+load(
+    "@rules_dotnet//dotnet:defs.bzl",
+    "blazor_devserver",
+    "fsharp_binary",
+    "publish_binary",
+)
+
+# Bolero is Blazor for F#: components are written as F# code rather than Razor,
+# so this publishes a WebAssembly application without a `.razor` file anywhere.
+fsharp_binary(
+    name = "app",
+    srcs = ["Main.fs"],
+    project_sdk = "blazorwasm",
+    static_web_assets = glob(["wwwroot/**"]),
+    target_frameworks = ["net10.0"],
+    deps = [
+        "@paket.bolero_deps//bolero",
+        "@paket.bolero_deps//elmish",
+        "@paket.bolero_deps//microsoft.aspnetcore.components.webassembly",
+    ],
+)
+
+publish_binary(
+    name = "publish",
+    binary = ":app",
+    target_framework = "net10.0",
+    wasm = True,
+)
+
+# `bazel run //bolero_wasm:serve` serves the publish exactly as it will be
+# deployed - trimmed, compressed and fingerprinted - rather than the development
+# build that `bazel run //bolero_wasm:app` starts.
+blazor_devserver(
+    name = "serve",
+    app = ":publish",
+)

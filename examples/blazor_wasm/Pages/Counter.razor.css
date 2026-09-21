@@ -1,0 +1,10 @@
+/* Scoped to Counter.razor: the `.increment` button on any other component is
+   left alone. */
+.increment {
+    background-color: #1b6ec2;
+    border: 1px solid #1861ac;
+    border-radius: 4px;
+    color: white;
+    cursor: pointer;
+    padding: 0.5rem 1rem;
+}

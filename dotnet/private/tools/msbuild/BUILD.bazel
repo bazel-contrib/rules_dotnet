@@ -1,0 +1,9 @@
+# Shared by the tools that run the SDK's own MSBuild tasks. See Tasks.cs.
+filegroup(
+    name = "srcs",
+    srcs = ["Tasks.cs"],
+    visibility = [
+        "//dotnet/private/tools/blazor_wasm:__pkg__",
+        "//dotnet/private/tools/scoped_css:__pkg__",
+    ],
+)

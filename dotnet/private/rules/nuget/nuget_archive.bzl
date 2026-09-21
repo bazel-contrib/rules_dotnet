@@ -640,7 +640,17 @@ def _group_package_files(id, all_files):
         if files_for_rid["lib"]:
             rid_libs[rid] = files_for_rid["lib"]
 
+    # An F# type provider's designer assembly is never referenced, but the
+    # compiler probes the package layout for it, so it has to be staged whatever
+    # framework it was published for.
+    typeproviders = [
+        file
+        for files in groups["typeproviders"].values()
+        for file in files
+    ]
+
     return struct(
+        typeproviders = typeproviders,
         analyzers = groups["analyzers"],
         build_compat_tfms = groups["build_compat"]["tfms"].keys(),
         build_libs = _build_assemblies(groups["build"], "lib"),
@@ -727,6 +737,7 @@ load("@rules_dotnet//dotnet/private/rules/nuget:nuget_archive.bzl", "tfm_filegro
         "filegroup(name = \"data\", srcs = [])",
         _create_rid_native_select("native", groups.native) or "filegroup(name = \"native\", srcs = [])",
         "filegroup(name = \"content_files\", srcs = [%s])" % ",".join(["\n  \"%s\"" % a for a in groups.content_files]),
+        "filegroup(name = \"typeproviders\", srcs = [%s])" % ",".join(["\n  \"%s\"" % _sanitize_path(a) for a in groups.typeproviders]),
         "filegroup(name = \"static_web_assets\", srcs = [%s])" % ",".join(["\n  \"%s\"" % _sanitize_path(a) for a in groups.static_web_assets]),
         "filegroup(name = \"files\", srcs = [%s])" % ",".join(["\n  \"%s\"" % _sanitize_path(a) for a in all_files]),
         _create_tools_select(groups.tools) or "filegroup(name = \"tools\", srcs = [])",

@@ -39,6 +39,9 @@ bzl_library(
     srcs = ["defs.bzl"],
     visibility = ["//visibility:public"],
     deps = [
+        "//dotnet/private/rules/blazor:app",
+        "//dotnet/private/rules/blazor:devserver",
+        "//dotnet/private/rules/common:embed_sources",
         "//dotnet/private/rules/csharp:binary",
         "//dotnet/private/rules/csharp:library",
         "//dotnet/private/rules/csharp:nunit_test",
@@ -52,6 +55,7 @@ bzl_library(
         "//dotnet/private/rules/nuget:nuget_archive",
         "//dotnet/private/rules/nuget:nuget_repo",
         "//dotnet/private/rules/publish_binary",
+        "//dotnet/private/sdk:packs",
     ],
 )
 

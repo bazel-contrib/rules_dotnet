@@ -4,6 +4,7 @@ Rules for compiling and running NUnit tests.
 This rule is a macro that has the same attributes as `fsharp_test`
 """
 
+load("//dotnet/private/rules/common:embed_sources.bzl", "embed_sources_or_flag")
 load("//dotnet/private/rules/fsharp:test.bzl", "fsharp_test")
 
 def fsharp_nunit_test(**kwargs):
@@ -18,6 +19,7 @@ def fsharp_nunit_test(**kwargs):
     ]
 
     fsharp_test(
+        embed_sources = embed_sources_or_flag(kwargs.pop("embed_sources", None)),
         srcs = srcs,
         deps = deps,
         **kwargs

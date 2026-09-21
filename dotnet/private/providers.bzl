@@ -47,9 +47,7 @@ StaticWebAssetsInfo = provider(
         "assets": """depset[struct]: the transitive assets. Each carries
 
   * `file`: the `File` to serve.
-  * `serving_path`: where it is served from, relative to `wwwroot`. A library's
-    assets are prefixed with `_content/<assembly name>`, matching the base path
-    MSBuild gives a Razor class library; an application's sit at the root.
+  * `serving_path`: where it is served from, relative to `wwwroot`.
   * `scoped_css_bundle`: whether the file is the target's scoped CSS bundle,
     which an application's own bundle has to `@import`.""",
     },
@@ -74,6 +72,26 @@ NuGetInfo = provider(
         "sha512": "string: the SHA512 SRI string for the package",
         "nupkg": "File: the underlying `.nupkg` file which provides this package",
     },
+)
+
+BlazorWasmSiteInfo = provider(
+    doc = """A built Blazor WebAssembly application, as the development server wants it.
+
+Carried by anything that produces one - a development build or a publish - so
+that `blazor_devserver` can serve either.""",
+    fields = {
+        "wwwroot": "File: the served directory.",
+        "manifest": "File: the endpoint manifest describing it.",
+        "assembly": "File: the application's own assembly.",
+    },
+)
+
+BlazorWasmInfo = provider(
+    doc = """Marks a target as a Blazor WebAssembly application.
+
+Carried only by a binary built with `project_sdk = "blazorwasm"`, so that the
+choice of SDK and the choice of publish cannot disagree.""",
+    fields = {},
 )
 
 DotnetBinaryInfo = provider(

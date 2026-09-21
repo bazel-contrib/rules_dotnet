@@ -10,7 +10,7 @@ module(
 dotnet = use_extension("@rules_dotnet//dotnet:extensions.bzl", "dotnet")
 dotnet.toolchain(dotnet_version = "10.0.401")
 dotnet.bootstrap_toolchain(dotnet_version = "10.0.401")
-use_repo(dotnet, "dotnet.apphost_packs", "dotnet.crossgen2_packs", "dotnet.ilcompiler_packs", "dotnet.nativeaot_packs", "dotnet.runtime_packs", "dotnet.targeting_packs", "dotnet_bootstrap_toolchains", "dotnet_toolchains")
+use_repo(dotnet, "dotnet.apphost_packs", "dotnet.crossgen2_packs", "dotnet.ilcompiler_packs", "dotnet.nativeaot_packs", "dotnet.runtime_packs", "dotnet.targeting_packs", "dotnet.wasm_packs", "dotnet_bootstrap_toolchains", "dotnet_toolchains")
 
 register_toolchains(
     "@dotnet_toolchains//:all",

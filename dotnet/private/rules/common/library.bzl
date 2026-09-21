@@ -25,8 +25,8 @@ def build_library(ctx, compile_action, toolchain):
         runtime_provider,
         collect_static_web_assets(
             label = ctx.label,
-            assembly_name = ctx.attr.out or ctx.attr.name,
-            files = getattr(ctx.files, "static_web_assets", []),
+            assembly_name = runtime_provider.name,
+            files = ctx.files.static_web_assets,
             deps = ctx.attr.deps,
             is_application = False,
             generated = generated_assets,

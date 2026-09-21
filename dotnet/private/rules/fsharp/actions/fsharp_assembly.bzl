@@ -76,6 +76,7 @@ def AssemblyAction(
         compiler_worker,
         label,
         debug,
+        embed_sources,
         defines,
         deps,
         exports,
@@ -113,6 +114,7 @@ def AssemblyAction(
         compiler_worker: The persistent worker to compile with, or None to fall back to the wrapper script.
         label: The label of the target. This is used to determine the relative path of embedded resources.
         debug: Emits debugging information.
+        embed_sources: Embeds the sources in the PDB.
         defines: The list of conditional compilation symbols.
         deps: The list of other libraries to be linked in to the assembly.
         exports: List of exported targets.
@@ -142,7 +144,8 @@ def AssemblyAction(
         is_windows: Whether or not the target is running on Windows.
 
     Returns:
-        The compiled fsharp artifacts.
+        The compile and runtime providers, and the static web assets the compile
+        generated - always none, because F# compiles no Razor.
     """
 
     assembly_name = target_name if out == "" else out
@@ -183,6 +186,7 @@ def AssemblyAction(
             compiler_worker,
             label,
             debug,
+            embed_sources,
             defines,
             keyfile,
             langversion,
@@ -225,6 +229,7 @@ def AssemblyAction(
             compiler_worker,
             label,
             debug,
+            embed_sources,
             defines,
             keyfile,
             langversion,
@@ -258,6 +263,7 @@ def AssemblyAction(
                 compiler_worker,
                 label,
                 debug,
+                embed_sources,
                 defines,
                 keyfile,
                 langversion,
@@ -315,7 +321,7 @@ def AssemblyAction(
         deps = depset([dep[DotnetAssemblyRuntimeInfo] for dep in deps], transitive = [dep[DotnetAssemblyRuntimeInfo].deps for dep in deps]),
         nuget_info = None,
         direct_deps_depsjson_fragment = {dep[DotnetAssemblyRuntimeInfo].name: dep[DotnetAssemblyRuntimeInfo].version for dep in deps},
-    ))
+    ), [])
 
 def _compile(
         actions,
@@ -323,6 +329,7 @@ def _compile(
         compiler_worker,
         label,
         debug,
+        embed_sources,
         defines,
         keyfile,
         langversion,
@@ -394,6 +401,12 @@ def _compile(
         args.add("--define:RELEASE")
 
     args.add("--debug:portable")
+
+    # A PDB records execroot-relative document paths, which resolve to nothing
+    # once the build is over. `--embed+` puts the sources in the symbols instead.
+    # See docs/README.md#embedded-sources.
+    if embed_sources:
+        args.add("--embed+")
 
     # outputs
     if out_dll != None:

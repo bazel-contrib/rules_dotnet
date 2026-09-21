@@ -1,0 +1,46 @@
+load(
+    "@rules_dotnet//dotnet:defs.bzl",
+    "blazor_devserver",
+    "csharp_binary",
+    "publish_binary",
+)
+
+# `project_sdk = "blazorwasm"` compiles the `.razor` components and builds
+# against the WebAssembly runtime, so `bazel run //blazor_wasm:app` starts a
+# development server rather than executing the binary.
+csharp_binary(
+    name = "app",
+    srcs = [
+        "App.razor",
+        "Layout/MainLayout.razor",
+        "Pages/Counter.razor",
+        # Scoped CSS: styles only the component it is named after, so it is
+        # compiled rather than served. Any other stylesheet is a static web
+        # asset - see `wwwroot/css/app.css` below.
+        "Pages/Counter.razor.css",
+        "Pages/Home.razor",
+        "Program.cs",
+        "_Imports.razor",
+    ],
+    project_sdk = "blazorwasm",
+    root_namespace = "Example.BlazorWasm",
+    static_web_assets = glob(["wwwroot/**"]),
+    target_frameworks = ["net10.0"],
+    deps = ["@paket.blazor_deps//microsoft.aspnetcore.components.webassembly"],
+)
+
+# The published site is a `wwwroot` directory - trimmed, compressed and
+# fingerprinted - that any static file server can host.
+publish_binary(
+    name = "publish",
+    binary = ":app",
+    target_framework = "net10.0",
+    wasm = True,
+)
+
+# `bazel run //blazor_wasm:serve` serves that publish exactly as it will be
+# deployed, rather than the development build `:app` starts.
+blazor_devserver(
+    name = "serve",
+    app = ":publish",
+)

@@ -6,8 +6,7 @@ load(
     "FRAMEWORK_COMPATIBILITY",
     "get_highest_compatible_target_framework",
 )
-load("//dotnet/private:portable_rids.bzl", "PORTABLE_RUNTIME_GRAPH")
-load("//dotnet/private/transitions:common.bzl", "FRAMEWORK_COMPATABILITY_TRANSITION_OUTPUTS", "platform_to_rid", "rid_compatability_transition_outputs")
+load("//dotnet/private/transitions:common.bzl", "FRAMEWORK_COMPATABILITY_TRANSITION_OUTPUTS", "TFM_RID_TRANSITION_OUTPUTS", "platform_to_rid", "rid_compatability_transition_outputs")
 
 def _impl(settings, attr):
     incoming_tfm = settings["//dotnet:target_framework"]
@@ -38,7 +37,5 @@ def _impl(settings, attr):
 tfm_transition = transition(
     implementation = _impl,
     inputs = ["//dotnet:target_framework", "//dotnet:rid"],
-    outputs = ["//dotnet:target_framework", "//dotnet:rid"] +
-              ["//dotnet:framework_compatible_%s" % framework for framework in FRAMEWORK_COMPATIBILITY.keys()] +
-              ["//dotnet:rid_compatible_%s" % rid for rid in PORTABLE_RUNTIME_GRAPH.keys()],
+    outputs = TFM_RID_TRANSITION_OUTPUTS,
 )

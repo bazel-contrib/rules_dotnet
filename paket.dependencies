@@ -43,6 +43,9 @@ group rules_dotnet_static_web_assets_tests
     # project bundle and a `.razor.js` module.
     nuget Microsoft.AspNetCore.Components.QuickGrid 10.0.0
 
+    # The Blazor WebAssembly host, for the publish test.
+    nuget Microsoft.AspNetCore.Components.WebAssembly 10.0.0
+
 group rules_dotnet_nuget_packages
     framework: net9.0
     source https://api.nuget.org/v3/index.json

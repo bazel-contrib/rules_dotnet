@@ -21,11 +21,20 @@ using System.Numerics;
 using System.Security.Cryptography;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Threading.Tasks;
 
 internal sealed class Request
 {
     public string Manifest { get; set; } = "";
+
     public List<AssetRequest> Assets { get; set; } = new();
+
+    /// A whole tree to serve, rather than a listed set of files. The caller
+    /// does not know what it contains, so it also says which extensions are
+    /// worth compressing.
+    public string? InputDirectory { get; set; }
+    public string? OutputDirectory { get; set; }
+    public List<string> CompressibleExtensions { get; set; } = new();
 }
 
 internal sealed class AssetRequest
@@ -66,12 +75,9 @@ internal sealed class Manifest
 internal static class Program
 {
     // A real modification time would make the manifest differ between builds of
-    // identical inputs, which is the one thing that stops MSBuild's own output
-    // being reproducible. The header still has to be present, because the
-    // runtime assigns it unconditionally and would otherwise emit year 0001.
-    // Conditional requests stay correct: every response also carries a
-    // content-derived ETag, and If-None-Match takes precedence over
-    // If-Modified-Since.
+    // identical inputs. The header still has to be present, or the runtime emits
+    // year 0001; conditional requests stay correct because every response also
+    // carries a content-derived ETag, which takes precedence.
     private static readonly DateTimeOffset LastModified = DateTimeOffset.UnixEpoch;
 
     private const string Immutable = "max-age=31536000, immutable";
@@ -88,11 +94,14 @@ internal static class Program
         var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
         var request = JsonSerializer.Deserialize<Request>(File.ReadAllText(args[0]), options)!;
 
-        var endpoints = new List<Endpoint>();
-        foreach (var asset in request.Assets.OrderBy(a => a.Route, StringComparer.Ordinal))
-        {
-            endpoints.AddRange(Describe(asset));
-        }
+        var assets = request.InputDirectory is { } input
+            ? FromDirectory(input, request.OutputDirectory!, request.CompressibleExtensions)
+            : request.Assets;
+
+        var ordered = assets.OrderBy(a => a.Route, StringComparer.Ordinal).ToList();
+        var described = new List<Endpoint>[ordered.Count];
+        Parallel.For(0, ordered.Count, i => described[i] = Describe(ordered[i]));
+        var endpoints = described.SelectMany(e => e).ToList();
 
         Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(request.Manifest))!);
         File.WriteAllText(request.Manifest, JsonSerializer.Serialize(
@@ -106,8 +115,40 @@ internal static class Program
         return 0;
     }
 
-    private static IEnumerable<Endpoint> Describe(AssetRequest asset)
+    /// Copies a tree into the served one, and describes what it finds. The
+    /// compressed variants land beside each file, so the result is the same
+    /// shape as a listed set of assets would produce.
+    private static List<AssetRequest> FromDirectory(string input, string output, List<string> compressible)
     {
+        var extensions = new HashSet<string>(compressible, StringComparer.OrdinalIgnoreCase);
+        var assets = new List<AssetRequest>();
+        var root = Path.GetFullPath(input);
+
+        foreach (var source in Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories))
+        {
+            var route = Path.GetRelativePath(root, source).Replace(Path.DirectorySeparatorChar, '/');
+            var destination = Path.GetFullPath(Path.Combine(output, route));
+
+            Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
+            File.Copy(source, destination, overwrite: true);
+
+            var compress = extensions.Contains(Path.GetExtension(route).TrimStart('.'));
+            assets.Add(new AssetRequest
+            {
+                Route = route,
+                File = destination,
+                Gzip = compress ? destination + ".gz" : null,
+                Brotli = compress ? destination + ".br" : null,
+            });
+        }
+
+        return assets;
+    }
+
+    private static List<Endpoint> Describe(AssetRequest asset)
+    {
+        // Read once: every hash, length and compressed variant below comes from
+        // this buffer rather than from the file system again.
         var content = File.ReadAllBytes(asset.File);
         var hash = SHA256.HashData(content);
         var integrity = Convert.ToBase64String(hash);
@@ -119,12 +160,15 @@ internal static class Program
         // `AssetFile` is where the file sits under `wwwroot`, which for us is
         // always the route: the fingerprint lives in the route alone, so
         // nothing is ever renamed on disk.
-        yield return Plain(asset.Route, asset.Route, content.Length, contentType, integrity);
-        yield return Immutably(fingerprinted, asset.Route, content.Length, contentType, integrity, fingerprint, asset.Route);
-
-        foreach (var (path, encoding) in Compressed(asset))
+        var endpoints = new List<Endpoint>
         {
-            var compressed = File.ReadAllBytes(path);
+            Plain(asset.Route, asset.Route, content.Length, contentType, integrity),
+            Immutably(fingerprinted, asset.Route, content.Length, contentType, integrity, fingerprint, asset.Route),
+        };
+
+        foreach (var (path, encoding, suffix) in Variants(asset))
+        {
+            var compressed = Compress(content, path, encoding);
             var compressedIntegrity = Convert.ToBase64String(SHA256.HashData(compressed));
 
             // A shorter body wins content negotiation, so quality is the
@@ -135,48 +179,63 @@ internal static class Program
             // Served in place of the asset when the client accepts it. The
             // integrity stays the *original's*, because that is what the client
             // ends up with once it decompresses.
-            var suffix = encoding == "gzip" ? ".gz" : ".br";
             var assetFile = asset.Route + suffix;
 
-            var negotiated = Plain(asset.Route, assetFile, compressed.Length, contentType, integrity, encoding);
-            negotiated.Selectors = selectors;
-            negotiated.EndpointProperties.Add(new Property("original-resource", Quote(integrity)));
-            yield return negotiated;
-
-            var negotiatedImmutable = Immutably(fingerprinted, assetFile, compressed.Length, contentType, integrity, fingerprint, asset.Route, encoding);
-            negotiatedImmutable.Selectors = selectors;
-            negotiatedImmutable.EndpointProperties.Add(new Property("original-resource", Quote(integrity)));
-            yield return negotiatedImmutable;
+            endpoints.Add(Negotiated(
+                Plain(asset.Route, assetFile, compressed.Length, contentType, integrity, encoding),
+                selectors,
+                integrity));
+            endpoints.Add(Negotiated(
+                Immutably(fingerprinted, assetFile, compressed.Length, contentType, integrity, fingerprint, asset.Route, encoding),
+                selectors,
+                integrity));
 
             // And addressable directly, where it is its own resource.
-            yield return Plain(assetFile, assetFile, compressed.Length, contentType, compressedIntegrity, encoding);
-            yield return Immutably(fingerprinted + suffix, assetFile, compressed.Length, contentType, compressedIntegrity, fingerprint, assetFile, encoding);
+            endpoints.Add(Plain(assetFile, assetFile, compressed.Length, contentType, compressedIntegrity, encoding));
+            endpoints.Add(Immutably(fingerprinted + suffix, assetFile, compressed.Length, contentType, compressedIntegrity, fingerprint, assetFile, encoding));
         }
+
+        return endpoints;
     }
 
-    private static IEnumerable<(string Path, string Encoding)> Compressed(AssetRequest asset)
+    private static Endpoint Negotiated(Endpoint endpoint, List<Selector> selectors, string integrity)
+    {
+        endpoint.Selectors = selectors;
+        endpoint.EndpointProperties.Add(new Property("original-resource", Quote(integrity)));
+        return endpoint;
+    }
+
+    private static IEnumerable<(string Path, string Encoding, string Suffix)> Variants(AssetRequest asset)
     {
         if (asset.Gzip is { } gzip)
         {
-            Write(asset.File, gzip, path => new GZipStream(path, CompressionLevel.SmallestSize));
-            yield return (gzip, "gzip");
+            yield return (gzip, "gzip", ".gz");
         }
 
         if (asset.Brotli is { } brotli)
         {
-            Write(asset.File, brotli, path => new BrotliStream(path, CompressionLevel.SmallestSize));
-            yield return (brotli, "br");
+            yield return (brotli, "br", ".br");
         }
     }
 
-    private static void Write(string source, string destination, Func<Stream, Stream> compress)
+    private static byte[] Compress(byte[] content, string destination, string encoding)
     {
         Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(destination))!);
 
-        using var input = File.OpenRead(source);
-        using var output = File.Create(destination);
-        using var compressor = compress(output);
-        input.CopyTo(compressor);
+        // Compressed into memory rather than straight to disk, because the
+        // manifest needs the result's length and hash and would otherwise have
+        // to read it back.
+        using var buffer = new MemoryStream();
+        using (var compressor = encoding == "gzip"
+            ? new GZipStream(buffer, CompressionLevel.SmallestSize, leaveOpen: true)
+            : (Stream)new BrotliStream(buffer, CompressionLevel.SmallestSize, leaveOpen: true))
+        {
+            compressor.Write(content, 0, content.Length);
+        }
+
+        var compressed = buffer.ToArray();
+        File.WriteAllBytes(destination, compressed);
+        return compressed;
     }
 
     private static Endpoint Plain(

@@ -1,0 +1,33 @@
+load("@rules_shell//shell:sh_test.bzl", "sh_test")
+load(
+    "//dotnet:defs.bzl",
+    "csharp_binary",
+    "publish_binary",
+)
+
+csharp_binary(
+    name = "app",
+    srcs = [
+        "App.razor",
+        "Program.cs",
+        "_Imports.razor",
+    ],
+    project_sdk = "blazorwasm",
+    root_namespace = "BlazorApp",
+    static_web_assets = glob(["wwwroot/**"]),
+    target_frameworks = ["net10.0"],
+    deps = ["@paket.rules_dotnet_static_web_assets_tests//microsoft.aspnetcore.components.webassembly"],
+)
+
+publish_binary(
+    name = "publish",
+    binary = ":app",
+    target_framework = "net10.0",
+    wasm = True,
+)
+
+sh_test(
+    name = "publish_test",
+    srcs = ["test.sh"],
+    data = [":publish"],
+)

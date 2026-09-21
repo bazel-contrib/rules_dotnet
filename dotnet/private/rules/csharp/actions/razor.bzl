@@ -35,11 +35,9 @@ _RAZOR_EXTENSIONS = ["razor", "cshtml"]
 # rather than served.
 _SCOPED_CSS_SUFFIX = ".razor.css"
 
-# Razor sources are staged here, below the target's output directory. Roslyn
-# applies a plain .editorconfig only to files underneath it, so this is also
-# what decides where the configs can live: the `TargetPath` one sits above this
-# directory and the `CssScope` one inside it, because Roslyn rejects two
-# analyzer configs in the same directory (CS8700).
+# Razor sources are staged here, below the target's output directory. The
+# `TargetPath` config sits above it and the `CssScope` config inside it, because
+# Roslyn rejects two analyzer configs in one directory (CS8700).
 RAZOR_STAGING_DIR = "_razor"
 
 # MSBuild attaches this to any assembly carrying compiled .cshtml so that MVC
@@ -171,7 +169,15 @@ def _sanitize_namespace(value):
 
     return sanitized
 
-def _escape_section_name(path):
+def escape_section_name(path):
+    """Escapes a path for use as an editorconfig section name.
+
+    Args:
+      path: The path the section matches.
+
+    Returns:
+      The escaped path.
+    """
     for metacharacter in _GLOB_METACHARACTERS:
         path = path.replace(metacharacter, "\\" + metacharacter)
     return path
@@ -235,9 +241,8 @@ def razor_compile_inputs(
             "Sdks/Microsoft.NET.Sdk.Razor/source-generators.",
         )
 
-    # Roslyn applies a plain .editorconfig only to files under its own
-    # directory, so the sources are staged beside it. Symlinks keep this free:
-    # nothing is copied, and the action still depends on the real file.
+    # Symlinked rather than copied: staging costs nothing and the action still
+    # depends on the real file.
     staged = []
     sections = []
     seen = {}
@@ -266,7 +271,7 @@ def razor_compile_inputs(
         # `[Widget.razor]` would also match `sub/Widget.razor`.
         sections.append("[/{}/{}]".format(
             RAZOR_STAGING_DIR,
-            _escape_section_name(relative_path),
+            escape_section_name(relative_path),
         ))
 
         # The generator decodes this with Convert.FromBase64String

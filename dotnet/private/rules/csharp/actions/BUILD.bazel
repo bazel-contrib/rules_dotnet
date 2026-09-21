@@ -9,7 +9,6 @@ bzl_library(
         ":scoped_css",
         "//dotnet/private:common",
         "//dotnet/private:providers",
-        "//dotnet/private/rules/common:static_web_assets",
         "//dotnet/private/sdk:packs",
     ],
 )
@@ -18,7 +17,10 @@ bzl_library(
     name = "scoped_css",
     srcs = ["scoped_css.bzl"],
     visibility = ["//dotnet:__subpackages__"],
-    deps = [":razor"],
+    deps = [
+        ":razor",
+        "//dotnet/private/rules/common:static_web_assets",
+    ],
 )
 
 bzl_library(

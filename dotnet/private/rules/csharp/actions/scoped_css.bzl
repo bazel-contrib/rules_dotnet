@@ -1,19 +1,22 @@
 """Scoped CSS: per-component stylesheets.
 
-A `Foo.razor.css` beside `Foo.razor` applies only to that component. The SDK
-implements this by hashing the stylesheet's path into a scope identifier,
-rewriting every selector to carry it, and bundling the results. Those three
-steps ship as MSBuild tasks, and `//dotnet/private/tools/scoped_css` runs the
-SDK's own copies rather than reimplementing a CSS parser.
+A `Foo.razor.css` applies only to the `Foo.razor` beside it.
+`//dotnet/private/tools/scoped_css` runs the SDK's own tasks to derive the scope
+identifier, rewrite the selectors and bundle the result.
 
-The scope reaches two places: the rewritten CSS, and the Razor source
-generator, which reads it from an analyzer config. The scope is a hash and
-Starlark cannot compute one, so the tool writes that config too. It lands in the
-Razor staging directory while the `TargetPath` config sits one level above it,
-because Roslyn rejects two analyzer configs in a single directory.
+The scope is a hash, which Starlark cannot compute, so the tool also writes the
+analyzer config the Razor source generator reads it from. That lands inside the
+Razor staging directory, since the `TargetPath` config already occupies the one
+above it.
 """
 
-load("//dotnet/private/rules/csharp/actions:razor.bzl", "RAZOR_STAGING_DIR", "target_path")
+load("//dotnet/private/rules/common:static_web_assets.bzl", "base_path")
+load(
+    "//dotnet/private/rules/csharp/actions:razor.bzl",
+    "RAZOR_STAGING_DIR",
+    "escape_section_name",
+    "target_path",
+)
 
 # What MSBuild names a rewritten stylesheet and each kind of bundle.
 _REWRITTEN_SUFFIX = ".rz.scp.css"
@@ -42,7 +45,6 @@ def scoped_css_action(
         label,
         out_dir,
         assembly_name,
-        bundle_base_path,
         is_application,
         scoped_css_srcs,
         project_bundles,
@@ -55,7 +57,6 @@ def scoped_css_action(
       label: The label of the target being compiled.
       out_dir: The target's output directory prefix.
       assembly_name: The target's assembly name, which names the bundle.
-      bundle_base_path: Where the target's assets are served from.
       is_application: Whether this target produces the application bundle that
         imports its libraries' bundles, rather than a bundle of its own.
       scoped_css_srcs: The `.razor.css` sources.
@@ -68,6 +69,7 @@ def scoped_css_action(
       read.
     """
     tasks = _tasks_assembly(toolchain, label)
+    bundle_base_path = base_path(assembly_name, is_application)
 
     bundle = actions.declare_file("{}/{}{}".format(
         out_dir,
@@ -95,6 +97,7 @@ def scoped_css_action(
         files.append(struct(
             razorRelativePath = razor_relative_path,
             cssRelativePath = css_relative_path,
+            sectionName = escape_section_name(razor_relative_path),
             source = src.path,
             rewritten = rewritten.path,
         ))
