@@ -10,7 +10,7 @@ module(
 dotnet = use_extension("@rules_dotnet//dotnet:extensions.bzl", "dotnet")
 dotnet.toolchain(dotnet_version = "10.0.401")
 dotnet.bootstrap_toolchain(dotnet_version = "10.0.401")
-use_repo(dotnet, "dotnet.apphost_packs", "dotnet.crossgen2_packs", "dotnet.ilcompiler_packs", "dotnet.nativeaot_packs", "dotnet.runtime_packs", "dotnet.targeting_packs", "dotnet_bootstrap_toolchains", "dotnet_toolchains")
+use_repo(dotnet, "dotnet.apphost_packs", "dotnet.crossgen2_packs", "dotnet.ilcompiler_packs", "dotnet.nativeaot_packs", "dotnet.runtime_packs", "dotnet.targeting_packs", "dotnet.wasm_packs", "dotnet_bootstrap_toolchains", "dotnet_toolchains")
 
 register_toolchains(
     "@dotnet_toolchains//:all",
@@ -74,6 +74,7 @@ dev_paket.parse(
         "rules_dotnet_nuget_resource_assemblies_tests",
         "rules_dotnet_framework_override_not_provided_tests",
         "rules_dotnet_nuget_tool_tests",
+        "rules_dotnet_static_web_assets_tests",
     ],
     lock = "//:paket.lock",
 )
@@ -83,6 +84,7 @@ use_repo(
     "paket.rules_dotnet_framework_override_not_provided_tests",
     "paket.rules_dotnet_nuget_resource_assemblies_tests",
     "paket.rules_dotnet_nuget_tool_tests",
+    "paket.rules_dotnet_static_web_assets_tests",
 )
 
 internal_dev_deps = use_extension("@rules_dotnet//dotnet:internal_dev_deps.bzl", "internal_dev_deps", dev_dependency = True)

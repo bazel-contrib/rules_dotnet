@@ -41,6 +41,18 @@ DotnetAssemblyRuntimeInfo = provider(
     },
 )
 
+StaticWebAssetsInfo = provider(
+    doc = "The web-servable files a target contributes, and those of its dependencies.",
+    fields = {
+        "assets": """depset[struct]: the transitive assets. Each carries
+
+  * `file`: the `File` to serve.
+  * `serving_path`: where it is served from, relative to `wwwroot`.
+  * `scoped_css_bundle`: whether the file is the target's scoped CSS bundle,
+    which an application's own bundle has to `@import`.""",
+    },
+)
+
 DotnetDepVariantInfo = provider(
     doc = "A wrapper provider for a dependency. The dependency can be a project " +
           "dependency, in which case the `assembly_runtime_info` will be populated" +
@@ -62,10 +74,33 @@ NuGetInfo = provider(
     },
 )
 
+BlazorWasmSiteInfo = provider(
+    doc = """A built Blazor WebAssembly application, as the development server wants it.
+
+Carried by anything that produces one - a development build or a publish - so
+that `blazor_devserver` can serve either.""",
+    fields = {
+        "wwwroot": "File: the served directory.",
+        "manifest": "File: the endpoint manifest describing it.",
+        "assembly": "File: the application's own assembly.",
+    },
+)
+
+BlazorWasmInfo = provider(
+    doc = """Marks a target as a Blazor WebAssembly application.
+
+Carried only by a binary built with `project_sdk = "blazorwasm"`, so that the
+choice of SDK and the choice of publish cannot disagree.""",
+    fields = {},
+)
+
 DotnetBinaryInfo = provider(
     doc = "Information about a .Net binary",
     fields = {
         "dll": "File: The main binary dll",
+        "static_web_files": """list[struct]: The servable tree, as structs of a `file` and
+the `publish_path` it takes inside a publish directory. Already materialized by the
+binary, so a publish copies these rather than laying the tree out a second time.""",
         "transitive_runtime_deps": "list[DotnetAssemblyRuntimeInfo]: The transitive runtime dependencies of the binary",
         "apphost_pack_info": "DotnetApphostPackInfo: The apphost pack for the binary",
         "runtime_pack_info": "DotnetRuntimePackInfo: The runtime pack for the binary",

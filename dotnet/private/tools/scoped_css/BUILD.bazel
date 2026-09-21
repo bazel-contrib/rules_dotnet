@@ -1,0 +1,17 @@
+load(
+    "//dotnet/private/rules/csharp:binary.bzl",
+    "bootstrap_tool_binary",
+)
+
+# Runs the SDK's own scoped CSS tasks. See Program.cs.
+bootstrap_tool_binary(
+    name = "scoped_css",
+    srcs = [
+        "Program.cs",
+        "//dotnet/private/tools/msbuild:srcs",
+    ],
+    include_msbuild_dlls = True,
+    nullable = "enable",
+    target_frameworks = ["net10.0"],
+    visibility = ["//visibility:public"],
+)

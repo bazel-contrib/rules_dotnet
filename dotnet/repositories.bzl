@@ -86,6 +86,44 @@ import_dll(
     dll = "sdk/{sdk_version}/Microsoft.NET.HostModel.dll",
 )
 
+# The MSBuild interfaces a task is written against, so that a tool of ours can
+# run an SDK build task directly. Taken from the SDK rather than NuGet, so the
+# interfaces always match the tasks.
+import_dll(
+    name = "msbuild_framework",
+    version = "{runtime_version}",
+    dll = "sdk/{sdk_version}/Microsoft.Build.Framework.dll",
+)
+
+import_dll(
+    name = "msbuild_utilities",
+    version = "{runtime_version}",
+    dll = "sdk/{sdk_version}/Microsoft.Build.Utilities.Core.dll",
+)
+
+# The tasks that implement scoped CSS, and the CSS parser they use. The net472
+# copies are for MSBuild.exe on .NET Framework; ours run on the .NET host.
+filegroup(
+    name = "static_web_assets_tasks",
+    srcs = glob(
+        ["sdk/{sdk_version}/Sdks/Microsoft.NET.Sdk.StaticWebAssets/tasks/**/*.dll"],
+        exclude = ["**/net472/**"],
+        allow_empty = True,
+    ),
+    visibility = ["//visibility:public"],
+)
+
+# The assemblies `Microsoft.NET.Sdk.Razor` puts into `@(Analyzer)` to compile
+# `.razor` and `.cshtml`.
+filegroup(
+    name = "razor_source_generators",
+    srcs = glob(
+        ["sdk/{sdk_version}/Sdks/Microsoft.NET.Sdk.Razor/source-generators/*.dll"],
+        allow_empty = True,
+    ),
+    visibility = ["//visibility:public"],
+)
+
 filegroup(
     name = "fsc_binary",
     # We glob both fsc.dll and fsc.exe for backwards compatibility
@@ -114,6 +152,9 @@ dotnet_toolchain(
     csharp_compiler = ":csc_binary",
     fsharp_compiler = ":fsc_binary",
     host_model = ":host_model",
+    razor_source_generators = ":razor_source_generators",
+    static_web_assets_tasks = ":static_web_assets_tasks",
+    msbuild_dlls = [":msbuild_framework", ":msbuild_utilities"],
     os = "{os}",
     sdk_version = "{sdk_version}",
     runtime_version = "{runtime_version}",

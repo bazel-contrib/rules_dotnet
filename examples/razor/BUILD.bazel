@@ -1,0 +1,40 @@
+load(
+    "@rules_dotnet//dotnet:defs.bzl",
+    "csharp_library",
+    "csharp_test",
+)
+
+# A Razor class library: `project_sdk = "razor"` compiles the `.razor` sources
+# and resolves the ASP.NET Core reference pack they need.
+csharp_library(
+    name = "components",
+    srcs = [
+        "Counter.cs",
+        "Pages/Greeting.razor",
+        "_Imports.razor",
+    ],
+    project_sdk = "razor",
+    root_namespace = "Example.Components",
+    target_frameworks = ["net10.0"],
+)
+
+csharp_test(
+    name = "components_test",
+    srcs = ["ComponentsTest.cs"],
+    project_sdk = "razor",
+    target_frameworks = ["net10.0"],
+    deps = [":components"],
+)
+
+# MVC views compile the same way, and the assembly additionally gets the
+# ProvideApplicationPartFactory attribute so MVC discovers them at runtime.
+csharp_library(
+    name = "views",
+    srcs = [
+        "Views/Home/Index.cshtml",
+        "Views/_ViewImports.cshtml",
+    ],
+    project_sdk = "web",
+    root_namespace = "Example.Web",
+    target_frameworks = ["net10.0"],
+)

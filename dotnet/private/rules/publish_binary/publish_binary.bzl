@@ -2,6 +2,7 @@
 Rule for assembling the publish output of a .NET binary.
 """
 
+load("@bazel_skylib//lib:dicts.bzl", "dicts")
 load("@bazel_skylib//lib:paths.bzl", "paths")
 load("@bazel_skylib//lib:shell.bzl", "shell")
 load("@rules_cc//cc:action_names.bzl", "CPP_LINK_EXECUTABLE_ACTION_NAME")
@@ -15,6 +16,18 @@ load(
     "DotnetNativeAotPackInfo",
     "DotnetToolPackInfo",
 )
+load(
+    "//dotnet/private/rules/blazor:blazor_wasm_publish.bzl",
+    "blazor_wasm_publish",
+)
+load(
+    "//dotnet/private/rules/blazor:common.bzl",
+    "APPLICATION_ENVIRONMENT_DOC",
+    "INVARIANT_GLOBALIZATION_DOC",
+    "TRIM_MODES",
+    "TRIM_MODE_DOC",
+)
+load("//dotnet/private/sdk:packs.bzl", "WASM_RID")
 load("//dotnet/private/sdk/nativeaot_packs:nativeaot_pack_transition.bzl", "nativeaot_pack_transition")
 load("//dotnet/private/transitions:tfm_transition.bzl", "tfm_transition")
 
@@ -440,8 +453,8 @@ def _runtime_pack_files(runtime_pack_info, deps_json_struct):
 def _publish_layout(runtime_identifier, binary_info, assembly_files, runtime_pack_files, is_self_contained):
     """Every published file paired with the path it takes inside the publish directory.
 
-    The directory is flat apart from resource assemblies and, unless the publish
-    is self-contained, native libraries.
+    The directory is flat apart from resource assemblies, the servable `wwwroot`
+    tree and, unless the publish is self-contained, native libraries.
     """
     layout = [(binary_info.dll.basename, binary_info.dll)]
 
@@ -471,6 +484,12 @@ def _publish_layout(runtime_identifier, binary_info, assembly_files, runtime_pac
     for pack in runtime_pack_files:
         for file in pack.libs + pack.native + pack.data:
             layout.append((file.basename, file))
+
+    # The servable tree, and the manifest describing it, keep the shape the
+    # binary already gave them: `wwwroot/...` with the endpoint manifest beside
+    # the assembly, which is what a published ASP.NET Core application expects.
+    for entry in binary_info.static_web_files:
+        layout.append((entry.publish_path, entry.file))
 
     return layout
 
@@ -638,17 +657,35 @@ def _run_copy_script(ctx, copies, suffix, mnemonic, progress_message):
 
     return outputs
 
-def _copy_beside(ctx, executable, files):
-    """Copies files into the directory holding `executable`."""
-    if not files:
+def _copy_beside(ctx, executable, files, static_web_files = []):
+    """Copies files into the directory holding `executable`.
+
+    Args:
+        ctx: The rule context.
+        executable: The published executable they sit beside.
+        files: Files that land directly beside it.
+        static_web_files: The servable tree, which keeps the structure the
+            binary gave it.
+
+    Returns:
+        The copied files.
+    """
+    copies = [
+        (file, ctx.actions.declare_file(file.basename, sibling = executable))
+        for file in files
+    ] + [
+        (entry.file, ctx.actions.declare_file(entry.publish_path, sibling = executable))
+        for entry in static_web_files
+    ]
+    if not copies:
         return []
 
     return _run_copy_script(
         ctx,
-        [(file, ctx.actions.declare_file(file.basename, sibling = executable)) for file in files],
+        copies,
         "sidecars",
         "DotnetCopySidecars",
-        "Copying native dependencies for %{label}",
+        "Copying sidecars for %{label}",
     )
 
 def _get_assembly_files(assembly_info, transitive_runtime_deps, deps_json_struct):
@@ -789,7 +826,15 @@ def _publish_binary_impl(ctx):
             runtime_identifier,
             target_framework,
         )
-        sidecars = _copy_beside(ctx, executable, closure.native + closure.appsetting_files)
+
+        # A NativeAOT publish keeps nothing managed, but it still serves the
+        # same files, so the tree travels with the executable.
+        sidecars = _copy_beside(
+            ctx,
+            executable,
+            closure.native + closure.appsetting_files,
+            binary_info.static_web_files,
+        )
 
         return [DefaultInfo(
             executable = executable,
@@ -967,23 +1012,109 @@ cross-compiles, so what matters is the machine it runs on.""",
     cfg = tfm_transition,
 )
 
+# Settings that only describe a .NET application running on a .NET host, and so
+# mean nothing once the target is a browser.
+_NOT_FOR_WASM = [
+    "self_contained",
+    "ready_to_run",
+    "ready_to_run_composite",
+    "native_aot",
+    "roll_forward_behavior",
+]
+
+# The reverse: settings only a WebAssembly publish has. Naming them once means
+# the rejection below and the macro's own attributes cannot disagree.
+_WASM_ONLY_ATTRS = {
+    "trim_mode": attr.string(
+        doc = TRIM_MODE_DOC,
+        configurable = False,
+        values = [""] + TRIM_MODES,
+    ),
+    "application_environment": attr.string(
+        doc = APPLICATION_ENVIRONMENT_DOC,
+        configurable = False,
+    ),
+    "invariant_globalization": attr.bool(
+        doc = INVARIANT_GLOBALIZATION_DOC,
+        configurable = False,
+    ),
+}
+
+# The runtime identifier of the platform being built for. Resolved here because
+# the TFM/RID transition cannot see the target platform.
+_TARGET_RID = select({
+    "@rules_dotnet//dotnet/private:linux-arm64": "linux-arm64",
+    "@rules_dotnet//dotnet/private:linux-x64": "linux-x64",
+    "@rules_dotnet//dotnet/private:osx-arm64": "osx-arm64",
+    "@rules_dotnet//dotnet/private:osx-x64": "osx-x64",
+    "@rules_dotnet//dotnet/private:windows-arm64": "win-arm64",
+    "@rules_dotnet//dotnet/private:windows-x64": "win-x64",
+})
+
 def _publish_binary_macro_impl(name, **kwargs):
-    # Default the runtime identifier to the target platform's. It is resolved
-    # here because the TFM/RID transition cannot see the target platform.
+    if kwargs.pop("wasm", False):
+        _publish_wasm(name, kwargs)
+        return
+
     rid = kwargs.get("runtime_identifier", None)
+
+    # `runtime_identifier` stays configurable so that cross-compiling can
+    # resolve it per platform, which means it cannot also choose the kind of
+    # publish. Only the rendering of the value can be inspected here, because a
+    # configurable attribute arrives as a `select`.
+    if rid != None and WASM_RID in str(rid):
+        fail(
+            "{}: a browser publish is selected with `wasm = True`, not with ".format(name) +
+            "`runtime_identifier = \"{}\"`.".format(WASM_RID),
+        )
+
+    # By truthiness, unlike the inherited attributes below: an attribute the
+    # macro declares itself arrives as its type's zero value when unset, not as
+    # None.
+    for attribute in _WASM_ONLY_ATTRS:
+        if kwargs.pop(attribute, None):
+            fail(
+                "{}: `{}` only applies to a WebAssembly publish.\n".format(name, attribute) +
+                "Set `wasm = True` to publish for a browser.",
+            )
+
     if rid == None:
-        kwargs["runtime_identifier"] = select({
-            "@rules_dotnet//dotnet/private:linux-x64": "linux-x64",
-            "@rules_dotnet//dotnet/private:osx-x64": "osx-x64",
-            "@rules_dotnet//dotnet/private:windows-x64": "win-x64",
-            "@rules_dotnet//dotnet/private:linux-arm64": "linux-arm64",
-            "@rules_dotnet//dotnet/private:osx-arm64": "osx-arm64",
-            "@rules_dotnet//dotnet/private:windows-arm64": "win-arm64",
-        })
+        kwargs["runtime_identifier"] = _TARGET_RID
 
     _publish_binary(name = name, **kwargs)
 
+def _publish_wasm(name, kwargs):
+    """Hands a browser publish to the rule that builds a static site."""
+    for attribute in _NOT_FOR_WASM:
+        # Against None rather than by truthiness: an inherited attribute the
+        # user did not set arrives as None, and False is a value they did set.
+        if kwargs.pop(attribute, None) != None:
+            fail(
+                "{}: `{}` does not apply to a WebAssembly publish.\n".format(name, attribute) +
+                "A browser has no .NET host to be self-contained from, nothing to compile " +
+                "ahead of time for, and no runtime to roll forward onto.",
+            )
+
+    kwargs.pop("runtime_identifier", None)
+
+    # Unset attributes are dropped so that the rule's own defaults apply: an
+    # inherited one arrives as None and a declared one as its type's zero value.
+    blazor_wasm_publish(name = name, **{
+        key: value
+        for (key, value) in kwargs.items()
+        if value != None and value != ""
+    })
+
 publish_binary = macro(
     inherit_attrs = _publish_binary,
+    attrs = dicts.add(_WASM_ONLY_ATTRS, {
+        "wasm": attr.bool(
+            doc = """Publish a Blazor WebAssembly application as a static site.
+
+The output is a `wwwroot` directory rather than something to run, so it carries
+no apphost and no runtime configuration.""",
+            configurable = False,
+        ),
+    }),
     implementation = _publish_binary_macro_impl,
 )

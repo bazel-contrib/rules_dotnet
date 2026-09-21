@@ -29,14 +29,144 @@ By default Bazel sets the compilation mode to `fastbuild`.
 
 If you want to e.g. enable optimizations in CI you can add `common --compilation_mode=opt` to your CI `.bazelrc` file.
 
+### Embedded sources
+
+Sources are not embedded by default. To embed all sources into your `.pdb` files you can
+set the following flag for global application:
+
+```
+build --@rules_dotnet//dotnet/settings:embed_all_sources=true
+```
+
+Or per target, overriding the flag:
+
+```python
+csharp_library(
+    name = "lib",
+    embed_sources = True,
+    ...
+)
+```
+
+## Razor
+
+`.razor` and `.cshtml` files go in `srcs` alongside `.cs`, and `project_sdk`
+picks the SDK that compiles them:
+
+```python
+csharp_library(
+    name = "components",
+    srcs = glob(["**/*.cs", "**/*.razor"]),
+    project_sdk = "razor",
+    root_namespace = "MyApp.Components",
+    target_frameworks = ["net10.0"],
+)
+```
+
+Use `"razor"` for a Razor class library and `"web"` for an ASP.NET Core
+application. Both compile Razor and resolve the ASP.NET Core reference pack,
+because `Microsoft.NET.Sdk.Web` imports `Microsoft.NET.Sdk.Razor`.
+
+A component's namespace and its `@page` route come from `root_namespace` plus
+the source's path relative to the package that compiles it, so a Razor source
+has to live in that package or below it.
+
+### Scoped CSS
+
+A `Foo.razor.css` beside `Foo.razor` styles only that component. It goes in
+`srcs` next to the component, mirroring how MSBuild picks it up from beside the
+`.razor`:
+
+```python
+csharp_library(
+    name = "components",
+    srcs = glob(["**/*.cs", "**/*.razor", "**/*.razor.css"]),
+    project_sdk = "razor",
+    target_frameworks = ["net10.0"],
+)
+```
+
+Only `<component>.razor.css` belongs in `srcs`; any other stylesheet is a static
+web asset.
+
+## Static web assets
+
+Files a target serves over HTTP go in `static_web_assets`:
+
+```python
+csharp_library(
+    name = "components",
+    static_web_assets = glob(["wwwroot/**"]),
+    ...
+)
+```
+
+Each file is served at its path relative to the `wwwroot` directory it sits
+under. A library's assets are served below `_content/<assembly name>`, matching
+the base path MSBuild gives a Razor class library, so two libraries shipping
+`site.css` do not collide. A binary's own assets sit at the root.
+
+The tree is laid out next to the binary the way a published application expects
+it, with the endpoint manifest beside the assembly, so `app.MapStaticAssets()`
+works under `bazel run` with no further setup.
+
+Assets that arrive inside a NuGet package are picked up too. A packed Razor
+class library ships them in a `staticwebassets` folder, and they are served from
+`_content/<package id>` just like a library target's `wwwroot`, so referencing
+the package is all that is needed.
+
+## Blazor WebAssembly
+
+`publish_binary` turns a Blazor WebAssembly application into a static site:
+
+```python
+csharp_binary(
+    name = "app",
+    srcs = glob(["**/*.cs", "**/*.razor"]),
+    project_sdk = "blazorwasm",
+    static_web_assets = glob(["wwwroot/**"]),
+    target_frameworks = ["net10.0"],
+    deps = ["@paket.main//microsoft.aspnetcore.components.webassembly"],
+)
+
+publish_binary(
+    name = "publish",
+    binary = ":app",
+    target_framework = "net10.0",
+    wasm = True,
+)
+```
+
+The output is a `wwwroot` directory, ready to serve from anything that serves
+files.
+
+Running the binary starts the development server:
+
+```
+bazel run //path/to:app
+```
+
+`blazor_devserver` serves anything that produces an application, so a publish
+can be served exactly as it will be deployed - trimmed, compressed and
+fingerprinted - rather than as the development build:
+
+```python
+blazor_devserver(
+    name = "serve",
+    app = ":publish",
+)
+```
+
+`net10.0` or later is required: the WebAssembly toolchain only ships as NuGet
+packages from .NET 10 onwards.
+
 ## Unsupported workloads
 
 The following workloads are not supported by these rules at this given time:
 
 - VisualBasic
-- Razor
-- Blazor/WebAssembly
-- Workloads that require Mono
+- AOT compilation and native relinking for Blazor WebAssembly
+- Workloads that require Mono outside Blazor WebAssembly
 
 Contributions to add the missing workloads are welcomed and the maintainers
 will do their best to guide if needed.

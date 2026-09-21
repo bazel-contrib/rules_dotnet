@@ -1,0 +1,15 @@
+@page
+@model IndexModel
+@{
+    ViewData["Title"] = "Home";
+}
+
+<h1>@Model.Greeting</h1>
+
+<p>This page is a <code>.cshtml</code> file compiled by <code>rules_dotnet</code>.</p>
+
+<form method="get">
+    <label for="name">Name</label>
+    <input id="name" name="name" value="@Model.Name" />
+    <button type="submit">Greet</button>
+</form>

@@ -1,0 +1,11 @@
+load("//dotnet:defs.bzl", "csharp_library")
+
+# A library's assets are served under `_content/<assembly name>`, so the
+# consuming application does not have to know where they came from.
+csharp_library(
+    name = "lib",
+    srcs = ["Lib.cs"],
+    static_web_assets = glob(["wwwroot/**"]),
+    target_frameworks = ["net10.0"],
+    visibility = ["//dotnet/private/tests:__subpackages__"],
+)

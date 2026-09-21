@@ -16,6 +16,8 @@ load(
     "runtime_packs",
     "targeting_pack_tfms",
     "targeting_packs",
+    "wasm_pack_tfms",
+    "wasm_runtime_pack",
 )
 
 # Only the sets derived from `pack_bands.bzl` can drift; the netstandard and
@@ -205,6 +207,35 @@ def _pack_ids_test_impl(ctx):
 
 _pack_ids_test = unittest.make(_pack_ids_test_impl)
 
+def _wasm_test_impl(ctx):
+    env = unittest.begin(ctx)
+
+    # A browser runs Mono, so this is the one runtime pack id with an infix.
+    asserts.equals(
+        env,
+        ("Microsoft.NETCore.App.Runtime.Mono.browser-wasm", "10.0.12"),
+        wasm_runtime_pack("net10.0"),
+    )
+
+    for tfm in ["netcoreapp3.1", "net5.0", "net9.0"]:
+        asserts.equals(
+            env,
+            None,
+            wasm_runtime_pack(tfm),
+            "{} carries no WebAssembly toolchain".format(tfm),
+        )
+
+    for tfm in wasm_pack_tfms():
+        asserts.true(
+            env,
+            wasm_runtime_pack(tfm) != None,
+            "{} claims a WebAssembly pack and resolves one".format(tfm),
+        )
+
+    return unittest.end(env)
+
+_wasm_test = unittest.make(_wasm_test_impl)
+
 def packs_test_suite(name):
     unittest.suite(
         name,
@@ -212,4 +243,5 @@ def packs_test_suite(name):
         _pack_ids_test,
         _runtime_table_test,
         _targeting_table_test,
+        _wasm_test,
     )

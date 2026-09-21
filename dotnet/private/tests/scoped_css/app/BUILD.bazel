@@ -1,0 +1,15 @@
+load("//dotnet:defs.bzl", "csharp_test")
+
+csharp_test(
+    name = "app",
+    srcs = [
+        "Page.razor",
+        "Page.razor.css",
+        "Program.cs",
+        "_Imports.razor",
+    ],
+    project_sdk = "web",
+    root_namespace = "Scoped.App",
+    target_frameworks = ["net10.0"],
+    deps = ["//dotnet/private/tests/scoped_css/lib"],
+)

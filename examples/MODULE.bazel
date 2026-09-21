@@ -29,9 +29,14 @@ register_toolchains("@dotnet_toolchains//:all")
 paket = use_extension("@rules_dotnet//dotnet:paket.bzl", "paket")
 paket.parse(
     dependencies = "//:paket.dependencies",
+    groups = [
+        "blazor_deps",
+        "bolero_deps",
+        "example_deps",
+    ],
     lock = "//:paket.lock",
 )
-use_repo(paket, "paket.example_deps")
+use_repo(paket, "paket.blazor_deps", "paket.bolero_deps", "paket.example_deps")
 
 # A second lock file, showing that a package group is addressed by its name.
 paket_example = use_extension("@rules_dotnet//dotnet:paket.bzl", "paket")

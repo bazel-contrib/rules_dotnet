@@ -13,7 +13,10 @@ type Band =
       /// Set only where ASP.NET Core shipped a different set to .NET.
       webRids: string list option
       /// NativeAOT ships a runtime pack of its own from .NET 9 onwards.
-      hasAot: bool }
+      hasAot: bool
+      /// Blazor WebAssembly. Set only where every piece of the toolchain ships
+      /// as a package of its own.
+      hasWasm: bool }
 
 let private allRids =
     [ "linux-arm64"
@@ -33,7 +36,8 @@ let private band tfm hasWeb rids =
       hasWeb = hasWeb
       rids = rids
       webRids = None
-      hasAot = false }
+      hasAot = false
+      hasWasm = false }
 
 /// Releases before .NET 6 carry irregularities that are now frozen history:
 /// Apple silicon packs did not exist yet, and ASP.NET Core 3.0 shipped a
@@ -62,7 +66,8 @@ let private bands (channels: string list) =
             | true, version when version.Major >= 6 ->
                 Some
                     { band $"net{channel}" true allRids with
-                        hasAot = version.Major >= 9 }
+                        hasAot = version.Major >= 9
+                        hasWasm = version.Major >= 10 }
             | _ -> None)
 
     historicalBands @ modern
@@ -106,6 +111,25 @@ let private latestInBand (id: string) (tfm: string) =
             $"No stable {id} package for {tfm}. If {tfm} is still a preview or release candidate it should not be in the channel list yet."
     | versions -> (List.max versions).ToNormalizedString()
 
+/// The Mono runtime pack Blazor WebAssembly runs on. Unlike every other runtime
+/// pack its runtime identifier is fixed, because there is only one browser.
+let private wasmRuntimeId = "Microsoft.NETCore.App.Runtime.Mono.browser-wasm"
+
+/// Converts assemblies to the Webcil container a browser will serve, and holds
+/// the SDK logic that lays a published application out.
+let private wasmSdkId = "Microsoft.NET.Sdk.WebAssembly.Pack"
+
+/// Trims the application before it is converted. A Blazor WebAssembly publish
+/// trims by default.
+let private illinkId = "Microsoft.NET.ILLink.Tasks"
+
+/// Carries `blazor.webassembly.js`, the script that starts the runtime.
+let private internalAssetsId = "Microsoft.AspNetCore.App.Internal.Assets"
+
+/// Serves a development build to a browser, and proxies the browser's debugger
+/// onto the running application. This is what `dotnet run` starts.
+let private devServerId = "Microsoft.AspNetCore.Components.WebAssembly.DevServer"
+
 let private ridList (rids: string list) =
     rids |> List.map (sprintf "\"%s\"") |> String.concat ", "
 
@@ -140,6 +164,15 @@ let generatePackBands (output: string) (channels: string list) =
                 // one version covers both.
                 let ilcompilerId = "runtime." + band.rids.Head + ".Microsoft.DotNet.ILCompiler"
                 fields.Add(sprintf "\"ilcompiler\": \"%s\"" (latestInBand ilcompilerId band.tfm))
+
+        if band.hasWasm then
+            // Blazor WebAssembly compiles against the ordinary reference packs
+            // and runs on this one, so it is keyed by band rather than by RID.
+            fields.Add(sprintf "\"wasm\": \"%s\"" (latestInBand wasmRuntimeId band.tfm))
+            fields.Add(sprintf "\"wasm_sdk\": \"%s\"" (latestInBand wasmSdkId band.tfm))
+            fields.Add(sprintf "\"illink\": \"%s\"" (latestInBand illinkId band.tfm))
+            fields.Add(sprintf "\"internal_assets\": \"%s\"" (latestInBand internalAssetsId band.tfm))
+            fields.Add(sprintf "\"devserver\": \"%s\"" (latestInBand devServerId band.tfm))
 
         sb.Append(sprintf "    \"%s\": {%s},\n" band.tfm (String.concat ", " fields))
         |> ignore

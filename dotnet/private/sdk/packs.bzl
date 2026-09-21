@@ -13,8 +13,38 @@ load("//dotnet/private/sdk:pack_bands.bzl", "PACK_BANDS")
 
 DEFAULT_SDK = "default"
 WEB_SDK = "web"
+RAZOR_SDK = "razor"
+BLAZORWASM_SDK = "blazorwasm"
 
+# The SDKs that have a pack set of their own. `razor` and `blazorwasm` resolve
+# the same packs as `web`, so they have no set of their own and are normalized
+# away before lookup.
 PROJECT_SDKS = [DEFAULT_SDK, WEB_SDK]
+
+# What a user may write in `project_sdk`.
+USER_PROJECT_SDKS = PROJECT_SDKS + [RAZOR_SDK, BLAZORWASM_SDK]
+
+def normalize_project_sdk(project_sdk):
+    """Maps a project SDK onto the one whose packs back it.
+
+    Args:
+      project_sdk: The SDK named on the target.
+
+    Returns:
+      The project SDK whose packs should be resolved.
+    """
+    return WEB_SDK if project_sdk in [RAZOR_SDK, BLAZORWASM_SDK] else project_sdk
+
+def uses_razor(project_sdk):
+    """Whether a project SDK compiles Razor sources.
+
+    Args:
+      project_sdk: The SDK named on the target.
+
+    Returns:
+      True if `.razor` and `.cshtml` sources are supported.
+    """
+    return normalize_project_sdk(project_sdk) == WEB_SDK
 
 # A target compiles against the reference packs of the SDK that compiles it, so
 # there is one pack set per toolchain type. The sets are built identically and
@@ -117,6 +147,63 @@ def runtime_packs(tfm, rid, project_sdk = DEFAULT_SDK):
         packs.insert(0, (_app_pack_id(tfm, True, "Runtime." + rid), band["runtime"]))
 
     return packs
+
+# Blazor WebAssembly has exactly one target, so unlike every other runtime pack
+# this one's runtime identifier is fixed.
+WASM_RID = "browser-wasm"
+
+def wasm_pack_tfms():
+    """Returns the target frameworks that can run on WebAssembly.
+
+    Returns:
+      A list of target frameworks.
+    """
+    return [tfm for tfm in PACK_BANDS if "wasm" in PACK_BANDS[tfm]]
+
+def wasm_runtime_pack(tfm):
+    """Returns the runtime pack a Blazor WebAssembly application runs on.
+
+    Args:
+      tfm: The target framework.
+
+    Returns:
+      A (package id, version) tuple, or None if the band predates Blazor
+      WebAssembly.
+    """
+    band = PACK_BANDS.get(tfm)
+    if band == None or "wasm" not in band:
+        return None
+
+    # A browser runs Mono rather than CoreCLR, which is why this is the one
+    # runtime pack id carrying an infix.
+    return (_app_pack_id(tfm, False, "Runtime.Mono." + WASM_RID), band["wasm"])
+
+# The tools a WebAssembly publish runs, rather than anything it links against,
+# keyed by the pack band field carrying each one's version.
+_WASM_TOOL_PACKS = {
+    "wasm_sdk": "Microsoft.NET.Sdk.WebAssembly.Pack",
+    "illink": "Microsoft.NET.ILLink.Tasks",
+    "internal_assets": "Microsoft.AspNetCore.App.Internal.Assets",
+    "devserver": "Microsoft.AspNetCore.Components.WebAssembly.DevServer",
+}
+
+def wasm_tool_packs(tfm):
+    """Returns the tool packs a Blazor WebAssembly publish runs.
+
+    Args:
+      tfm: The target framework.
+
+    Returns:
+      A list of (name, (package id, version)) tuples, empty if the band carries
+      no WebAssembly toolchain.
+    """
+    band = PACK_BANDS.get(tfm, {})
+
+    return [
+        (name, (id, band[name]))
+        for (name, id) in _WASM_TOOL_PACKS.items()
+        if name in band
+    ]
 
 def apphost_pack(tfm, rid):
     """Returns the apphost pack that produces a native executable.
@@ -276,6 +363,8 @@ CROSSGEN2_PACK_REPO = "dotnet.crossgen2_packs"
 ILCOMPILER_PACK_REPO = "dotnet.ilcompiler_packs"
 
 NATIVEAOT_PACK_REPO = "dotnet.nativeaot_packs"
+
+WASM_PACK_REPO = "dotnet.wasm_packs"
 
 TARGETING_PACK_LOOKUP_TABLE = {
     pack_set: {

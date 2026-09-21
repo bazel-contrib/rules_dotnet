@@ -13,12 +13,11 @@ load(
     "//dotnet/private:common.bzl",
     "DEFAULT_RID",
     "DEFAULT_TFM",
-    "FRAMEWORK_COMPATIBILITY",
 )
-load("//dotnet/private:portable_rids.bzl", "PORTABLE_RUNTIME_GRAPH")
 load(
     "//dotnet/private/transitions:common.bzl",
     "FRAMEWORK_COMPATABILITY_TRANSITION_OUTPUTS",
+    "TFM_RID_TRANSITION_OUTPUTS",
     "rid_compatability_transition_outputs",
 )
 
@@ -37,7 +36,5 @@ def _impl(_settings, _attr):
 default_transition = transition(
     implementation = _impl,
     inputs = [],
-    outputs = ["//dotnet:target_framework", "//dotnet:rid"] +
-              ["//dotnet:framework_compatible_%s" % framework for framework in FRAMEWORK_COMPATIBILITY.keys()] +
-              ["//dotnet:rid_compatible_%s" % rid for rid in PORTABLE_RUNTIME_GRAPH.keys()],
+    outputs = TFM_RID_TRANSITION_OUTPUTS,
 )

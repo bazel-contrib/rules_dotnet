@@ -1,0 +1,104 @@
+load("@rules_pkg//pkg:tar.bzl", "pkg_tar")
+load("@rules_shell//shell:sh_test.bzl", "sh_test")
+load(
+    "//dotnet:defs.bzl",
+    "csharp_binary",
+    "publish_binary",
+)
+
+# The native link needs a C/C++ toolchain for the target platform, and Windows
+# goes through MSVC rather than the Unix driver these rules support.
+_NOT_WINDOWS = select({
+    "@platforms//os:windows": ["@platforms//:incompatible"],
+    "//conditions:default": [],
+})
+
+csharp_binary(
+    name = "app_to_publish",
+    srcs = ["Program.cs"],
+    project_sdk = "web",
+    static_web_assets = glob(["wwwroot/**"]),
+    target_frameworks = ["net10.0"],
+    deps = ["//dotnet/private/tests/static_web_assets/lib"],
+)
+
+publish_binary(
+    name = "static_web_assets",
+    binary = ":app_to_publish",
+    self_contained = False,
+    target_framework = "net10.0",
+)
+
+# Tarred to strip the platform specific prefix, the same way the other publish
+# tests do, which also proves the tree survives being packaged.
+pkg_tar(
+    name = "tar",
+    srcs = [":static_web_assets"],
+    include_runfiles = True,
+    mode = "0755",
+    package_dir = "/",
+    strip_prefix = select(
+        {
+            "//dotnet/private:linux-arm64": "static_web_assets/publish/linux-arm64",
+            "//dotnet/private:linux-x64": "static_web_assets/publish/linux-x64",
+            "//dotnet/private:osx-arm64": "static_web_assets/publish/osx-arm64",
+            "//dotnet/private:osx-x64": "static_web_assets/publish/osx-x64",
+            "//dotnet/private:windows-arm64": "static_web_assets/publish/win-arm64",
+            "//dotnet/private:windows-x64": "static_web_assets/publish/win-x64",
+        },
+    ),
+)
+
+sh_test(
+    name = "static_web_assets_test",
+    srcs = ["test.sh"],
+    args = ["$(DOTNET_BIN)"],
+    data = [
+        ":tar",
+        "//dotnet:resolved_toolchain",
+    ],
+    toolchains = ["//dotnet:resolved_toolchain"],
+)
+
+# A NativeAOT publish keeps nothing managed, so it copies the tree beside the
+# executable rather than building the publish layout the rule above goes
+# through. Managed-only and free of ASP.NET Core so that ILC can compile it.
+csharp_binary(
+    name = "aot_app_to_publish",
+    srcs = ["AotProgram.cs"],
+    static_web_assets = glob(["wwwroot/**"]),
+    target_frameworks = ["net10.0"],
+    deps = ["//dotnet/private/tests/static_web_assets/lib"],
+)
+
+publish_binary(
+    name = "native_aot",
+    binary = ":aot_app_to_publish",
+    native_aot = True,
+    self_contained = True,
+    target_compatible_with = _NOT_WINDOWS,
+    target_framework = "net10.0",
+)
+
+pkg_tar(
+    name = "native_aot_tar",
+    srcs = [":native_aot"],
+    include_runfiles = True,
+    mode = "0755",
+    package_dir = "/",
+    strip_prefix = select({
+        "//dotnet/private:linux-arm64": "native_aot/aot/linux-arm64",
+        "//dotnet/private:linux-x64": "native_aot/aot/linux-x64",
+        "//dotnet/private:osx-arm64": "native_aot/aot/osx-arm64",
+        "//dotnet/private:osx-x64": "native_aot/aot/osx-x64",
+    }),
+    target_compatible_with = _NOT_WINDOWS,
+)
+
+sh_test(
+    name = "native_aot_test",
+    size = "small",
+    srcs = ["native_aot_test.sh"],
+    data = [":native_aot_tar"],
+    target_compatible_with = _NOT_WINDOWS,
+)

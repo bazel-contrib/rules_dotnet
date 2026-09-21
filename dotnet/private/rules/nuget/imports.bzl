@@ -10,6 +10,11 @@ load(
     "get_toolchain",
 )
 load("//dotnet/private:providers.bzl", "DotnetAssemblyCompileInfo", "DotnetAssemblyRuntimeInfo", "NuGetInfo")
+load(
+    "//dotnet/private/rules/common:static_web_assets.bzl",
+    "PACKAGE_CONTENT_ROOT",
+    "collect_static_web_assets",
+)
 
 def _import_library(ctx):
     (
@@ -47,7 +52,7 @@ def _import_library(ctx):
         analyzers_csharp = ctx.files.analyzers_csharp,
         analyzers_fsharp = ctx.files.analyzers_fsharp,
         analyzers_vb = ctx.files.analyzers_vb,
-        compile_data = [],
+        compile_data = ctx.files.typeproviders,
         exports = [],
         transitive_compile_data = depset([]),
         transitive_refs = prefs,
@@ -79,6 +84,16 @@ def _import_library(ctx):
         ),
         dotnet_assembly_compile_info,
         dotnet_assembly_runtime_info,
+        # A packed Razor class library serves its files from
+        # `_content/<package id>`, the same base path a library target uses.
+        collect_static_web_assets(
+            label = ctx.label,
+            assembly_name = ctx.attr.library_name,
+            files = ctx.files.static_web_assets,
+            deps = ctx.attr.deps,
+            is_application = False,
+            content_root = PACKAGE_CONTENT_ROOT,
+        ),
         nuget_info,
     ]
 
@@ -92,6 +107,18 @@ import_library = rule(
         ),
         "version": attr.string(
             doc = "The version of the library",
+        ),
+        "typeproviders": attr.label_list(
+            doc = """The designer assemblies of any F# type providers the package ships.""",
+            allow_files = True,
+            allow_empty = True,
+            default = [],
+        ),
+        "static_web_assets": attr.label_list(
+            doc = "Files the package serves over HTTP, from its `staticwebassets` folder.",
+            allow_files = True,
+            allow_empty = True,
+            default = [],
         ),
         "libs": attr.label_list(
             doc = "Static runtime DLLs",

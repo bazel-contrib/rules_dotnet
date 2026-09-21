@@ -9,6 +9,11 @@ load(
 )
 load("//dotnet/private:portable_rids.bzl", "PORTABLE_RUNTIME_GRAPH", "to_portable_rid")
 
+# Every transition that moves the TFM/RID graph writes the same settings.
+TFM_RID_TRANSITION_OUTPUTS = ["//dotnet:target_framework", "//dotnet:rid"] + \
+                             ["//dotnet:framework_compatible_%s" % framework for framework in FRAMEWORK_COMPATIBILITY.keys()] + \
+                             ["//dotnet:rid_compatible_%s" % rid for rid in PORTABLE_RUNTIME_GRAPH.keys()]
+
 def platform_to_rid():
     """Determines the .Net runtime identifier (RID) of the host that Bazel is running on.
 

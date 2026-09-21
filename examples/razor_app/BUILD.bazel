@@ -1,0 +1,37 @@
+load(
+    "@rules_dotnet//dotnet:defs.bzl",
+    "csharp_binary",
+    "publish_binary",
+)
+
+# An ASP.NET Core application rendering Razor Pages. `project_sdk = "web"`
+# compiles the `.cshtml` sources and resolves the ASP.NET Core reference pack,
+# and gives the assembly the attribute that makes the framework discover the
+# compiled pages at runtime. A page is routed by its path within the package,
+# so `Pages/Index.cshtml` is served at `/`.
+#
+# bazel run //razor_app
+csharp_binary(
+    name = "razor_app",
+    srcs = [
+        "Pages/Index.cshtml",
+        "Pages/Index.cshtml.cs",
+        "Pages/Shared/_Layout.cshtml",
+        "Pages/_ViewImports.cshtml",
+        "Pages/_ViewStart.cshtml",
+        "Program.cs",
+    ],
+    appsetting_files = ["appsettings.json"],
+    project_sdk = "web",
+    # What `@namespace` in `Pages/_ViewImports.cshtml` extends, and what a page
+    # model has to be declared in for `@model` to find it.
+    root_namespace = "Example.RazorApp",
+    static_web_assets = glob(["wwwroot/**"]),
+    target_frameworks = ["net10.0"],
+)
+
+publish_binary(
+    name = "publish",
+    binary = ":razor_app",
+    target_framework = "net10.0",
+)

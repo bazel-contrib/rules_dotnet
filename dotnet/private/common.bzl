@@ -23,6 +23,7 @@ load(
     _DEFAULT_TARGET_FRAMEWORK = "DEFAULT_TARGET_FRAMEWORK",
     _FRAMEWORK_COMPATIBILITY = "FRAMEWORK_COMPATIBILITY",
 )
+load("//dotnet/private/sdk:packs.bzl", "WEB_SDK", "normalize_project_sdk")
 load("//dotnet/private/sdk:rids.bzl", "RUNTIME_GRAPH")
 
 def _collect_transitive():
@@ -695,11 +696,17 @@ def _tfm_family(tfm):
     # net5.0+ spells the version with a dot; net48/net481 do not.
     return _NETCOREAPP if "." in tfm else _NETFRAMEWORK
 
-def _tfm_version(tfm):
+def tfm_version(tfm):
     """A framework's version as a list of ints, for ordering.
 
     net48 -> [4, 8], net481 -> [4, 8, 1], net10.0 -> [10, 0],
     netstandard2.0 -> [2, 0], bare netstandard -> [].
+
+    Args:
+        tfm: The target framework moniker.
+
+    Returns:
+        The version as a list of ints.
     """
     digits = tfm
     for prefix in ["netstandard", "netcoreapp", "net"]:
@@ -737,7 +744,7 @@ def _or_greater_symbols(family, tfms):
     """The `_OR_GREATER` symbol each framework in a family contributes."""
     symbols = []
     for candidate in tfms:
-        version = _tfm_version(candidate)
+        version = tfm_version(candidate)
         symbols.append((version, _versioned_symbol(family, version) + "_OR_GREATER"))
     return symbols
 
@@ -766,7 +773,7 @@ def _compute_framework_preprocessor_symbols(tfm):
     if family == None:
         return []
 
-    version = _tfm_version(tfm)
+    version = tfm_version(tfm)
     is_net5_or_greater = family == _NETCOREAPP and version >= _NET5
 
     # GenerateTargetFrameworkDefineConstants.
@@ -1034,7 +1041,7 @@ def generate_runtimeconfig(target_framework, project_sdk, is_self_contained, rol
         frameworks = [
             {"name": "Microsoft.NETCore.App", "version": runtime_version},
         ]
-        if project_sdk == "web":
+        if normalize_project_sdk(project_sdk) == WEB_SDK:
             frameworks.append({"name": "Microsoft.AspNetCore.App", "version": runtime_version})
 
         base["runtimeOptions"]["frameworks"] = frameworks

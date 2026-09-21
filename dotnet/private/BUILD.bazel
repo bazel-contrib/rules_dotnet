@@ -1,4 +1,5 @@
 load("@bazel_lib//:bzl_library.bzl", "bzl_library")
+load("//dotnet/private/sdk:packs.bzl", "WASM_RID", "wasm_pack_tfms")
 
 exports_files(
     [
@@ -6,6 +7,8 @@ exports_files(
         "launcher.bat.tpl",
         "tool_launcher.sh.tpl",
         "tool_launcher.bat.tpl",
+        "devserver.sh.tpl",
+        "devserver.bat.tpl",
         "compiler_wrapper.sh",
         "compiler_wrapper.bat",
     ],
@@ -20,6 +23,7 @@ bzl_library(
         ":providers",
         ":semver",
         "//dotnet/private/sdk:frameworks",
+        "//dotnet/private/sdk:packs",
         "//dotnet/private/sdk:rids",
         "@bazel_skylib//lib:sets",
         "@bazel_skylib//lib:shell",
@@ -141,6 +145,38 @@ bzl_library(
     srcs = ["xml.bzl"],
     visibility = ["//dotnet:__subpackages__"],
 )
+
+# Stands in for a tool attribute on the rules that build rules_dotnet's own
+# tools, which cannot point at those tools without depending on themselves.
+filegroup(
+    name = "no_tool",
+    visibility = ["//dotnet:__subpackages__"],
+)
+
+# The runtime pack a Blazor WebAssembly application runs on, and the tools that
+# publish it, for the framework being published. Behind aliases because a rule
+# attribute default cannot itself be a select, and generated from the band table
+# so that a new framework needs no edit here.
+[
+    alias(
+        name = name,
+        actual = select(
+            {
+                "//dotnet:tfm_" + tfm: "@dotnet.wasm_packs//{}:{}".format(tfm, target)
+                for tfm in wasm_pack_tfms()
+            },
+            no_match_error = "Blazor WebAssembly needs one of " + ", ".join(sorted(wasm_pack_tfms())),
+        ),
+        visibility = ["//dotnet:__subpackages__"],
+    )
+    for (name, target) in {
+        "wasm_pack": WASM_RID,
+        "wasm_sdk": "wasm_sdk",
+        "illink": "illink",
+        "devserver": "devserver",
+        "internal_assets": "internal_assets",
+    }.items()
+]
 
 # The crossgen2 pack for the machine the build runs on. Behind an alias
 # because a rule attribute default cannot itself be a select; the rule depends

@@ -26,6 +26,7 @@ def _compile_action(ctx, tfm, toolchain):
         compiler_worker = get_fsharp_compiler_worker(ctx),
         label = ctx.label,
         debug = is_debug(ctx),
+        embed_sources = ctx.attr.embed_sources,
         defines = ctx.attr.defines,
         deps = ctx.attr.deps,
         exports = [],

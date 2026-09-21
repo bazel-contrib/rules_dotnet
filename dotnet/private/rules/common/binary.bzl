@@ -14,6 +14,13 @@ load(
     "to_rlocation_path",
 )
 load("//dotnet/private:providers.bzl", "DotnetApphostPackInfo", "DotnetAssemblyRuntimeInfo", "DotnetBinaryInfo", "DotnetRuntimePackInfo")
+load(
+    "//dotnet/private/rules/common:static_web_assets.bzl",
+    "WEB_ROOT",
+    "collect_static_web_assets",
+    "endpoints_manifest_action",
+    "plan_static_web_assets",
+)
 
 def _collect_native_dlls(assembly_runtime_info, deps):
     """Groups the native DLLs of a target and its dependencies by RID.
@@ -65,7 +72,8 @@ def build_binary(ctx, compile_action, toolchain):
     Args:
         ctx: Bazel build ctx.
         compile_action: A function taking (ctx, tfm, toolchain) that compiles the srcs
-            and returns a (DotnetAssemblyCompileInfo, DotnetAssemblyRuntimeInfo) tuple.
+            and returns a (DotnetAssemblyCompileInfo, DotnetAssemblyRuntimeInfo,
+            generated static web assets) tuple.
         toolchain: The .Net toolchain to build with.
     Returns:
         A collection of the references, runfiles and native dlls.
@@ -75,7 +83,7 @@ def build_binary(ctx, compile_action, toolchain):
     if is_standard_framework(tfm):
         fail("It doesn't make sense to build an executable for " + tfm)
 
-    (compile_provider, runtime_provider) = compile_action(ctx, tfm, toolchain)
+    (compile_provider, runtime_provider, generated_assets) = compile_action(ctx, tfm, toolchain)
     dll = runtime_provider.libs[0]
     appsetting_files = runtime_provider.appsetting_files.to_list()
     default_info_files = [dll] + runtime_provider.xml_docs + appsetting_files
@@ -144,8 +152,18 @@ def build_binary(ctx, compile_action, toolchain):
     # The apphost shimmer loads Microsoft.NET.HostModel.dll at run time.
     # `include_host_model_dll` makes it a compile dependency; the runtime needs
     # it staged as well. Only csharp_binary carries the attribute.
-    if getattr(ctx.attr, "include_host_model_dll", False):
-        runfiles = runfiles.merge(ctx.runfiles(files = toolchain.host_model[DotnetAssemblyRuntimeInfo].libs))
+    # Assemblies a tool of ours takes from the toolchain rather than from `deps`
+    # still have to be resolvable when it runs.
+    from_toolchain = (
+        ([toolchain.host_model] if getattr(ctx.attr, "include_host_model_dll", False) else []) +
+        (toolchain.msbuild_dlls if getattr(ctx.attr, "include_msbuild_dlls", False) else [])
+    )
+    if from_toolchain:
+        runfiles = runfiles.merge(ctx.runfiles(files = [
+            lib
+            for dep in from_toolchain
+            for lib in dep[DotnetAssemblyRuntimeInfo].libs
+        ]))
 
     # Due to how the .Net runtime loads native DLLs we need make the native
     # DLLs available in the application root directory with the folder structure:
@@ -166,6 +184,48 @@ def build_binary(ctx, compile_action, toolchain):
     if native_symlinks:
         runfiles = runfiles.merge(ctx.runfiles(files = native_symlinks))
 
+    # Laid out next to the binary, so `bazel run` sees the tree a published
+    # application has.
+    assembly_name = runtime_provider.name
+    out_dir = "{}/{}".format(ctx.label.name, tfm)
+    static_web_assets_info = collect_static_web_assets(
+        label = ctx.label,
+        assembly_name = assembly_name,
+        files = ctx.files.static_web_assets,
+        deps = ctx.attr.deps,
+        is_application = True,
+        generated = generated_assets,
+    )
+    static_web_assets = plan_static_web_assets(
+        ctx.actions,
+        label = ctx.label,
+        out_dir = out_dir,
+        assets_info = static_web_assets_info,
+    )
+    static_web_files = []
+    if static_web_assets:
+        # `MapStaticAssets` serves from this manifest rather than from disk, so
+        # the tree and the manifest describing it are written together.
+        described = endpoints_manifest_action(
+            ctx.actions,
+            label = ctx.label,
+            out_dir = out_dir,
+            assembly_name = assembly_name,
+            assets = static_web_assets,
+            tool = ctx.attr._static_web_assets_tool,
+        )
+
+        # Paired with where each file goes in a publish directory, so that a
+        # publish copies this tree rather than building its own.
+        static_web_files = [
+            struct(file = asset.file, publish_path = "{}/{}".format(WEB_ROOT, asset.route))
+            for asset in static_web_assets + described.compressed
+        ] + [struct(file = described.manifest, publish_path = described.manifest.basename)]
+
+        served = [entry.file for entry in static_web_files]
+        default_info_files.extend(served)
+        runfiles = runfiles.merge(ctx.runfiles(files = served))
+
     if not ctx.target_platform_has_constraint(ctx.attr._windows_constraint[platform_common.ConstraintValueInfo]):
         runfiles = runfiles.merge(ctx.attr._bash_runfiles[DefaultInfo].default_runfiles)
     default_info = DefaultInfo(
@@ -176,9 +236,10 @@ def build_binary(ctx, compile_action, toolchain):
 
     dotnet_binary_info = DotnetBinaryInfo(
         dll = dll,
+        static_web_files = static_web_files,
         transitive_runtime_deps = transitive_runtime_deps,
         apphost_pack_info = ctx.attr._apphost_pack[0][DotnetApphostPackInfo],
         runtime_pack_info = ctx.attr._runtime_pack[0][DotnetRuntimePackInfo],
     )
 
-    return [default_info, dotnet_binary_info, compile_provider, runtime_provider, RunEnvironmentInfo(environment = {key: expand_variables(ctx, expand_locations(ctx, value, ctx.attr.data)) for key, value in ctx.attr.envs.items()}, inherited_environment = ctx.attr.env_inherit)]
+    return [default_info, dotnet_binary_info, compile_provider, runtime_provider, static_web_assets_info, RunEnvironmentInfo(environment = {key: expand_variables(ctx, expand_locations(ctx, value, ctx.attr.data)) for key, value in ctx.attr.envs.items()}, inherited_environment = ctx.attr.env_inherit)]

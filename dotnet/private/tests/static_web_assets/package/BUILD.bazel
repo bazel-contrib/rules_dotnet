@@ -1,0 +1,11 @@
+load("//dotnet:defs.bzl", "csharp_test")
+
+# QuickGrid is a packed Razor class library. It ships both kinds of asset a
+# package can carry: a scoped CSS project bundle and a `.razor.js` module.
+csharp_test(
+    name = "package",
+    srcs = ["Program.cs"],
+    project_sdk = "web",
+    target_frameworks = ["net10.0"],
+    deps = ["@paket.rules_dotnet_static_web_assets_tests//microsoft.aspnetcore.components.quickgrid"],
+)
