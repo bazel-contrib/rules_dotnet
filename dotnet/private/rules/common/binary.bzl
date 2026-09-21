@@ -19,7 +19,7 @@ load(
     "WEB_ROOT",
     "collect_static_web_assets",
     "endpoints_manifest_action",
-    "materialize_static_web_assets",
+    "plan_static_web_assets",
 )
 
 def _collect_native_dlls(assembly_runtime_info, deps):
@@ -196,7 +196,7 @@ def build_binary(ctx, compile_action, toolchain):
         is_application = True,
         generated = generated_assets,
     )
-    static_web_assets = materialize_static_web_assets(
+    static_web_assets = plan_static_web_assets(
         ctx.actions,
         label = ctx.label,
         out_dir = out_dir,
@@ -204,8 +204,8 @@ def build_binary(ctx, compile_action, toolchain):
     )
     static_web_files = []
     if static_web_assets:
-        # `MapStaticAssets` reads the tree from this manifest rather than from
-        # disk, so it has to be generated even though the files are right there.
+        # `MapStaticAssets` serves from this manifest rather than from disk, so
+        # the tree and the manifest describing it are written together.
         described = endpoints_manifest_action(
             ctx.actions,
             label = ctx.label,

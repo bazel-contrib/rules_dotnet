@@ -15,6 +15,11 @@ manifest that points at their original locations, because only that layout works
 under remote execution and `bazel run`. It is also the layout `dotnet publish`
 produces, which is why no `{Assembly}.staticwebassets.runtime.json` is written:
 a published application does not carry one either.
+
+The tree holds copies rather than symlinks. `MapStaticAssets` sends each asset
+straight from the file with the `Content-Length` the manifest declares, and on
+Windows that send comes up short against a symlink, so every asset reached
+through one answers its request with a 500.
 """
 
 load("//dotnet/private:providers.bzl", "StaticWebAssetsInfo")
@@ -161,8 +166,8 @@ def collect_static_web_assets(
         ),
     )
 
-def materialize_static_web_assets(actions, label, out_dir, assets_info):
-    """Lays the transitive assets out as a servable `wwwroot` tree.
+def plan_static_web_assets(actions, label, out_dir, assets_info):
+    """Works out where the transitive assets sit in a servable `wwwroot` tree.
 
     Args:
       actions: The rule's `ctx.actions`.
@@ -171,10 +176,10 @@ def materialize_static_web_assets(actions, label, out_dir, assets_info):
       assets_info: The `StaticWebAssetsInfo` to lay out.
 
     Returns:
-      A list of structs of the `file` in the tree and the `route` it is served
-      at.
+      A list of structs of the `file` the tree will hold, the `source` its bytes
+      come from, and the `route` it is served at.
     """
-    outputs = []
+    planned = []
     by_serving_path = {}
 
     for asset in assets_info.assets.to_list():
@@ -194,10 +199,13 @@ def materialize_static_web_assets(actions, label, out_dir, assets_info):
         by_serving_path[asset.serving_path] = asset.file
 
         output = actions.declare_file("{}/{}/{}".format(out_dir, WEB_ROOT, asset.serving_path))
-        actions.symlink(output = output, target_file = asset.file)
-        outputs.append(struct(file = output, route = asset.serving_path))
+        planned.append(struct(
+            file = output,
+            source = asset.file,
+            route = asset.serving_path,
+        ))
 
-    return outputs
+    return planned
 
 def _is_compressible(route):
     parts = route.rsplit(".", 1)
@@ -227,14 +235,15 @@ def _describe_action(actions, label, out_dir, tool, request_fields, inputs, outp
     )
 
 def endpoints_manifest_action(actions, label, out_dir, assembly_name, assets, tool):
-    """Fingerprints and compresses the served tree, and describes it.
+    """Writes the served tree, fingerprints and compresses it, and describes it.
 
     Args:
       actions: The rule's `ctx.actions`.
       label: The label of the target, for the progress message.
       out_dir: The target's output directory prefix.
       assembly_name: The target's assembly name, which names the manifest.
-      assets: The materialized assets, as structs of a `file` and its `route`.
+      assets: The planned assets, as structs of the `file` to write, the
+        `source` its bytes come from, and its `route`.
       tool: The `static_web_assets` tool.
 
     Returns:
@@ -247,6 +256,8 @@ def endpoints_manifest_action(actions, label, out_dir, assembly_name, assets, to
     variants = []
     requests = []
     for asset in assets:
+        outputs.append(asset.file)
+
         compressed = []
         if _is_compressible(asset.route):
             for suffix in ["gz", "br"]:
@@ -259,6 +270,7 @@ def endpoints_manifest_action(actions, label, out_dir, assembly_name, assets, to
         requests.append(struct(
             route = asset.route,
             file = asset.file.path,
+            source = asset.source.path,
             gzip = compressed[0] if compressed else None,
             brotli = compressed[1] if compressed else None,
         ))
@@ -269,7 +281,7 @@ def endpoints_manifest_action(actions, label, out_dir, assembly_name, assets, to
         out_dir,
         tool,
         {"manifest": manifest.path, "assets": requests},
-        [asset.file for asset in assets],
+        [asset.source for asset in assets],
         outputs,
     )
 

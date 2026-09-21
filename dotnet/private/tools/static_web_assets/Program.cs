@@ -42,7 +42,12 @@ internal sealed class AssetRequest
     /// Where the asset is served from, relative to `wwwroot`.
     public string Route { get; set; } = "";
 
+    /// Where the served copy goes. The tool writes it rather than the build
+    /// symlinking it, because a symlinked asset is not servable on Windows.
     public string File { get; set; } = "";
+
+    /// Where its bytes come from.
+    public string Source { get; set; } = "";
 
     /// Where to write the compressed copies, or null to leave the asset
     /// uncompressed because its format already is.
@@ -129,13 +134,11 @@ internal static class Program
             var route = Path.GetRelativePath(root, source).Replace(Path.DirectorySeparatorChar, '/');
             var destination = Path.GetFullPath(Path.Combine(output, route));
 
-            Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
-            File.Copy(source, destination, overwrite: true);
-
             var compress = extensions.Contains(Path.GetExtension(route).TrimStart('.'));
             assets.Add(new AssetRequest
             {
                 Route = route,
+                Source = source,
                 File = destination,
                 Gzip = compress ? destination + ".gz" : null,
                 Brotli = compress ? destination + ".br" : null,
@@ -147,9 +150,12 @@ internal static class Program
 
     private static List<Endpoint> Describe(AssetRequest asset)
     {
-        // Read once: every hash, length and compressed variant below comes from
-        // this buffer rather than from the file system again.
-        var content = File.ReadAllBytes(asset.File);
+        // Read once: the served copy and every hash, length and compressed
+        // variant below come from this buffer rather than from the file system
+        // again.
+        var content = File.ReadAllBytes(asset.Source);
+        Write(asset.File, content);
+
         var hash = SHA256.HashData(content);
         var integrity = Convert.ToBase64String(hash);
         var fingerprint = ToBase36(hash);
@@ -218,10 +224,14 @@ internal static class Program
         }
     }
 
-    private static byte[] Compress(byte[] content, string destination, string encoding)
+    private static void Write(string destination, byte[] content)
     {
         Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(destination))!);
+        File.WriteAllBytes(destination, content);
+    }
 
+    private static byte[] Compress(byte[] content, string destination, string encoding)
+    {
         // Compressed into memory rather than straight to disk, because the
         // manifest needs the result's length and hash and would otherwise have
         // to read it back.
@@ -234,7 +244,7 @@ internal static class Program
         }
 
         var compressed = buffer.ToArray();
-        File.WriteAllBytes(destination, compressed);
+        Write(destination, compressed);
         return compressed;
     }
 
