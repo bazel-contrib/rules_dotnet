@@ -69,3 +69,30 @@ config_setting(
     flag_values = {":embed_all_sources": "True"},
     visibility = ["//visibility:public"],
 )
+
+# Whether every .NET process the rules start runs in globalization-invariant mode.
+bool_flag(
+    name = "invariant_globalization",
+    build_setting_default = False,
+    visibility = ["//visibility:public"],
+)
+
+label_flag(
+    name = "icu",
+    build_setting_default = ":system_icu",
+    visibility = ["//visibility:public"],
+)
+
+filegroup(
+    name = "system_icu",
+    visibility = ["//visibility:public"],
+)
+
+alias(
+    name = "hermetic_icu",
+    actual = select({
+        "@platforms//os:linux": "//dotnet/private/icu",
+        "//conditions:default": ":system_icu",
+    }),
+    visibility = ["//visibility:public"],
+)

@@ -13,6 +13,7 @@ to be where the application was built, so this stages the two it needs.
 
 load("//dotnet/private:common.bzl", "get_toolchain", "targets_windows", "to_rlocation_path")
 load("//dotnet/private:providers.bzl", "BlazorWasmSiteInfo")
+load("//dotnet/private/icu:settings.bzl", "icu_files", "icu_launcher_environment")
 load(":common.bzl", "only")
 
 def devserver_launcher(ctx, site):
@@ -53,6 +54,7 @@ def devserver_launcher(ctx, site):
             "TEMPLATED_devserver": to_rlocation_path(ctx, devserver),
             "TEMPLATED_application": to_rlocation_path(ctx, application),
             "TEMPLATED_wwwroot": to_rlocation_path(ctx, site.wwwroot),
+            "TEMPLATED_environment": icu_launcher_environment(ctx, toolchain, is_windows),
         },
         is_executable = True,
     )
@@ -62,6 +64,7 @@ def devserver_launcher(ctx, site):
         transitive_files = depset(transitive = [
             ctx.attr._devserver.files,
             toolchain.runtime.files,
+            icu_files(toolchain),
         ]),
     ).merge(
         # The launcher resolves its runfiles with Bazel's own bash library,

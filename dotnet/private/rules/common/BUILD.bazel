@@ -8,6 +8,7 @@ bzl_library(
         ":static_web_assets",
         "//dotnet/private:common",
         "//dotnet/private:providers",
+        "//dotnet/private/icu:settings",
         "@bazel_skylib//rules:common_settings",
     ],
 )

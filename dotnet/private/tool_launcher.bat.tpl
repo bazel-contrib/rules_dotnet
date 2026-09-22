@@ -50,6 +50,7 @@ set RUNFILES_MANIFEST_ONLY=1
 set DOTNET_MULTILEVEL_LOOKUP="false"
 set DOTNET_NOLOGO="1"
 set DOTNET_CLI_TELEMETRY_OPTOUT="1"
+TEMPLATED_environment
 
 set dotnet_executable="TEMPLATED_dotnet"
 call :rlocation "TEMPLATED_dotnet" dotnet_executable

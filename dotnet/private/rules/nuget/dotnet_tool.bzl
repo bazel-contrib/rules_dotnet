@@ -1,6 +1,7 @@
 """Rule that allows running .NET command-line tools hermetically within Bazel."""
 
 load("//dotnet/private:common.bzl", "get_highest_compatible_target_framework", "get_toolchain", "to_rlocation_path")
+load("//dotnet/private/icu:settings.bzl", "icu_files", "icu_launcher_environment")
 
 DotnetToolInfo = provider(
     doc = "Provider for grouping .NET tools by target framework.",
@@ -64,31 +65,21 @@ def _dotnet_tool_impl(ctx):
     if executable == None:
         fail("Tool {} does not ship its entrypoint '{}' for the target framework: {}".format(ctx.attr.name, entrypoint, framework))
 
-    windows_constraint = ctx.attr._windows_constraint[platform_common.ConstraintValueInfo]
-    launcher = ctx.actions.declare_file("{}.{}".format(ctx.label.name, "bat" if ctx.target_platform_has_constraint(windows_constraint) else "sh"))
-    if ctx.target_platform_has_constraint(windows_constraint):
-        ctx.actions.expand_template(
-            template = ctx.file._launcher_bat,
-            output = launcher,
-            substitutions = {
-                "TEMPLATED_dotnet": to_rlocation_path(ctx, runtime.files_to_run.executable),
-                "TEMPLATED_executable": executable,
-            },
-            is_executable = True,
-        )
-    else:
-        ctx.actions.expand_template(
-            template = ctx.file._launcher_sh,
-            output = launcher,
-            substitutions = {
-                "TEMPLATED_dotnet": to_rlocation_path(ctx, runtime.files_to_run.executable),
-                "TEMPLATED_executable": executable,
-            },
-            is_executable = True,
-        )
+    is_windows = ctx.target_platform_has_constraint(ctx.attr._windows_constraint[platform_common.ConstraintValueInfo])
+    launcher = ctx.actions.declare_file("{}.{}".format(ctx.label.name, "bat" if is_windows else "sh"))
+    ctx.actions.expand_template(
+        template = ctx.file._launcher_bat if is_windows else ctx.file._launcher_sh,
+        output = launcher,
+        substitutions = {
+            "TEMPLATED_dotnet": to_rlocation_path(ctx, runtime.files_to_run.executable),
+            "TEMPLATED_executable": executable,
+            "TEMPLATED_environment": icu_launcher_environment(ctx, toolchain, is_windows),
+        },
+        is_executable = True,
+    )
 
     runfiles = ctx.runfiles(transitive_files = depset(
-        transitive = [filegroup[DefaultInfo].files, dotnet_info.runtime_files],
+        transitive = [filegroup[DefaultInfo].files, dotnet_info.runtime_files, icu_files(toolchain)],
     ))
     runfiles = runfiles.merge(ctx.attr._bash_runfiles[DefaultInfo].default_runfiles)
 

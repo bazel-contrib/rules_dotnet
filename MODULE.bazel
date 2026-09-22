@@ -36,6 +36,20 @@ bazel_dep(name = "rules_shell", version = "0.5.0")
 
 # `publish_binary` links a NativeAOT publish with the cc toolchain APIs.
 bazel_dep(name = "rules_cc", version = "0.2.19")
+bazel_dep(name = "icu", version = "78.2.bcr.2")
+
+http_archive = use_repo_rule("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
+
+http_archive(
+    name = "rules_dotnet_icu_data",
+    build_file_content = 'exports_files(["icudt78l.dat"])',
+    integrity = "sha256-b8UaiBgkK/2DIHq4lVEWasL7S/UC0B5BzdyMtqC6TNo=",
+    urls = ["https://github.com/unicode-org/icu/releases/download/release-78.2/icu4c-78.2-data-bin-l.zip"],
+)
+
+icu_sources = use_repo_rule("//dotnet/private/icu:sources.bzl", "icu_sources")
+
+icu_sources(name = "rules_dotnet_icu_sources")
 
 # Dev dependencies
 bazel_dep(name = "rules_pkg", version = "1.1.0", dev_dependency = True)

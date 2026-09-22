@@ -14,6 +14,7 @@ load(
     "to_rlocation_path",
 )
 load("//dotnet/private:providers.bzl", "DotnetApphostPackInfo", "DotnetAssemblyRuntimeInfo", "DotnetBinaryInfo", "DotnetRuntimePackInfo")
+load("//dotnet/private/icu:settings.bzl", "icu_files", "icu_launcher_environment")
 load(
     "//dotnet/private/rules/common:static_web_assets.bzl",
     "WEB_ROOT",
@@ -60,6 +61,7 @@ def _create_launcher(ctx, executable, toolchain):
         substitutions = {
             "TEMPLATED_dotnet": to_rlocation_path(ctx, toolchain.runtime.files_to_run.executable),
             "TEMPLATED_executable": to_rlocation_path(ctx, executable),
+            "TEMPLATED_environment": icu_launcher_environment(ctx, toolchain, is_windows),
         },
         is_executable = True,
     )
@@ -145,7 +147,10 @@ def build_binary(ctx, compile_action, toolchain):
     runfiles = collect_transitive_runfiles(ctx, runtime_provider, ctx.attr.deps).merge(
         ctx.runfiles(
             files = additional_runfiles,
-            transitive_files = toolchain.dotnetinfo.runtime_files,
+            transitive_files = depset(transitive = [
+                toolchain.dotnetinfo.runtime_files,
+                icu_files(toolchain),
+            ]),
         ),
     )
 

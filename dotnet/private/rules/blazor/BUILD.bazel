@@ -33,6 +33,7 @@ bzl_library(
         ":common",
         "//dotnet/private:common",
         "//dotnet/private:providers",
+        "//dotnet/private/icu:settings",
     ],
 )
 

@@ -6,6 +6,13 @@ set -eou pipefail
 # allow overriding these paths using pathmaps. Since the paths can not be known
 # at analysis time we need to override them at execution time.
 
+# The ICU the build carries, if any: the runtime looks the libraries up by name,
+# so their directory goes on the loader's path.
+if [[ "${1:-}" == --icu=* ]]; then
+  export LD_LIBRARY_PATH="$PWD/$(dirname "${1#--icu=}")${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+  shift
+fi
+
 COMPILER="$2"
 PATHMAP_FLAG="-pathmap"
 

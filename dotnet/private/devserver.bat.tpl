@@ -45,6 +45,7 @@ exit /b 0
 set DOTNET_MULTILEVEL_LOOKUP="false"
 set DOTNET_NOLOGO="1"
 set DOTNET_CLI_TELEMETRY_OPTOUT="1"
+TEMPLATED_environment
 
 call :rlocation "TEMPLATED_dotnet" dotnet_executable
 for %%F in (%dotnet_executable%) do set DOTNET_ROOT=%%~dpF

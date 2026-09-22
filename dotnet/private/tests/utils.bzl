@@ -118,3 +118,83 @@ run_environment_info_test = analysistest.make(
     _run_environment_info_test_impl,
     attrs = RUN_ENVIRONMENT_INFO_TEST_ARGS,
 )
+
+def only_action(env, mnemonic):
+    """The target's single action with the given mnemonic.
+
+    Args:
+        env: The `analysistest` environment.
+        mnemonic: The mnemonic to look for.
+
+    Returns:
+        The action, failing when the target has no such action or several.
+    """
+
+    matching = [a for a in analysistest.target_actions(env) if a.mnemonic == mnemonic]
+    if len(matching) != 1:
+        fail("Expected one {} action, found {}".format(mnemonic, len(matching)))
+    return matching[0]
+
+def launcher_environment(env):
+    """The environment block a target's launcher template is expanded with.
+
+    Args:
+        env: The `analysistest` environment.
+
+    Returns:
+        The `TEMPLATED_environment` substitution, failing when the target
+        expands no launcher.
+    """
+
+    for action in analysistest.target_actions(env):
+        substitutions = action.substitutions
+        if substitutions and "TEMPLATED_environment" in substitutions:
+            return substitutions["TEMPLATED_environment"]
+    fail("No launcher expansion among the target's actions")
+
+def runs_with_settings_test(settings):
+    """A test rule that runs a binary built with the given build settings.
+
+    The binary's launcher finds its runfiles through the test runner's
+    environment, so it stands in for the test under another name.
+
+    Args:
+        settings: A dict of build setting label to the value to build with.
+
+    Returns:
+        A test rule with a `binary` attribute, which is to exit with zero.
+    """
+
+    def _transition_impl(_settings, _attr):
+        return settings
+
+    with_settings = transition(
+        implementation = _transition_impl,
+        inputs = [],
+        outputs = settings.keys(),
+    )
+
+    def _impl(ctx):
+        binary = ctx.attr.binary[0][DefaultInfo]
+        launcher = binary.files_to_run.executable
+        extension = ("." + launcher.extension) if launcher.extension else ""
+        executable = ctx.actions.declare_file(ctx.label.name + extension)
+        ctx.actions.symlink(output = executable, target_file = launcher, is_executable = True)
+        return [DefaultInfo(executable = executable, runfiles = binary.default_runfiles)]
+
+    return rule(
+        _impl,
+        doc = "Runs a binary, built with {}, as a test.".format(settings),
+        attrs = {
+            "binary": attr.label(
+                doc = "The binary to run, which is to exit with zero.",
+                cfg = with_settings,
+                executable = True,
+                mandatory = True,
+            ),
+            "_allowlist_function_transition": attr.label(
+                default = "@bazel_tools//tools/allowlists/function_transition_allowlist",
+            ),
+        },
+        test = True,
+    )
