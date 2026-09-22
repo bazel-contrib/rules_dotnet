@@ -11,6 +11,10 @@ SETLOCAL ENABLEDELAYEDEXPANSION
 
 set DOTNET_EXECUTABLE=%1
 set COMPILER=%2
+if defined RULES_DOTNET_ANALYZER_CONFIG_TEMPLATE (
+  set "ANALYZER_CONFIG_TEMPLATE=%~3"
+  set "RESPONSE_FILE_INPUT=%~4"
+)
 for %%F in ("%COMPILER%") do set COMPILER_BASENAME=%%~nxF
 
 set PATHMAP_FLAG=-pathmap
@@ -40,11 +44,10 @@ if defined RULES_DOTNET_ANALYZER_CONFIG_TEMPLATE (
   set ANALYZER_CONFIG=%TEMP%\rules-dotnet-analyzer-config-%RANDOM%-%RANDOM%.globalconfig
   set RESPONSE_FILE=%TEMP%\rules-dotnet-response-%RANDOM%-%RANDOM%.rsp
   set EXEC_ROOT=%cd:\=/%
-  for /f "usebackq delims=" %%L in ("!RULES_DOTNET_ANALYZER_CONFIG_TEMPLATE!") do (
+  for /f "usebackq delims=" %%L in ("!ANALYZER_CONFIG_TEMPLATE!") do (
     set LINE=%%L
     for /f "delims=" %%R in ("!EXEC_ROOT!") do echo(!LINE:__RULES_DOTNET_EXEC_ROOT__=%%R!>>"!ANALYZER_CONFIG!"
   )
-  set RESPONSE_FILE_INPUT=%3
   set RESPONSE_FILE_INPUT=!RESPONSE_FILE_INPUT:~1!
   for /f "usebackq delims=" %%L in ("!RESPONSE_FILE_INPUT!") do (
     set LINE=%%L

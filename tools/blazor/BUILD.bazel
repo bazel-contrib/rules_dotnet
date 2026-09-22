@@ -10,9 +10,14 @@ csharp_test(
     srcs = [
         "NativePublish.cs",
         "NativePublishTests.cs",
+        "Preprocess.cs",
     ],
     nullable = "enable",
     target_frameworks = ["net10.0"],
+    deps = [
+        "@paket.blazor_dependencies//excss",
+        "@paket.blazor_dependencies//system.commandline",
+    ],
 )
 
 csharp_bootstrap_binary(

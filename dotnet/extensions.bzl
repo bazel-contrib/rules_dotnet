@@ -12,7 +12,7 @@ _ATTRS = {
         default = _DEFAULT_NAME,
     ),
     "dotnet_version": attr.string(
-        doc = "Version of the .Net SDK",
+        doc = "SDK version. Host toolchains also accept a major or major/minor version prefix",
     ),
     "host": attr.bool(
         doc = "Use a preinstalled toolchain if available",

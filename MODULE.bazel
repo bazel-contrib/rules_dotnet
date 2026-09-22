@@ -6,8 +6,12 @@ module(
 )
 
 dotnet = use_extension("@rules_dotnet//dotnet:extensions.bzl", "dotnet")
-dotnet.toolchain(host = True)
 dotnet.toolchain(
+    dotnet_version = "10.0",
+    host = True,
+)
+dotnet.toolchain(
+    dotnet_version = "10.0",
     name = "dotnet_apphost",
     host = True,
 )

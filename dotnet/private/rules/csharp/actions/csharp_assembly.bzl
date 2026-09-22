@@ -561,7 +561,7 @@ def _compile(
         "DOTNET_CLI_HOME": toolchain.runtime.files_to_run.executable.dirname,
     }
     if analyzer_config_template:
-        action_env["RULES_DOTNET_ANALYZER_CONFIG_TEMPLATE"] = analyzer_config_template.path
+        action_env["RULES_DOTNET_ANALYZER_CONFIG_TEMPLATE"] = "1"
 
     if compiler_worker:
         executable = compiler_worker.executable
@@ -573,6 +573,14 @@ def _compile(
     else:
         executable = compiler_wrapper
         execution_requirements = {"supports-path-mapping": "1"}
+
+    compiler_args = actions.args()
+    compiler_args.add(toolchain.compiler_host.files_to_run.executable)
+    compiler_args.add(toolchain.csharp_compiler.files_to_run.executable)
+    if analyzer_config_template:
+        compiler_args.add(analyzer_config_template)
+    if unused_inputs:
+        compiler_args.add("--prune_unused_inputs")
 
     # dotnet.exe csc.dll /noconfig <other csc args>
     # https://docs.microsoft.com/en-us/dotnet/csharp/language-reference/compiler-options/command-line-building-with-csc-exe
@@ -596,10 +604,7 @@ def _compile(
         ),
         outputs = outputs,
         executable = executable,
-        arguments = [
-            toolchain.compiler_host.files_to_run.executable.path,
-            toolchain.csharp_compiler.files_to_run.executable.path,
-        ] + (["--prune_unused_inputs"] if unused_inputs else []) + [args],
+        arguments = [compiler_args, args],
         unused_inputs_list = unused_inputs,
         env = action_env,
         execution_requirements = execution_requirements,

@@ -22,6 +22,9 @@ internal sealed record NativePublishOptions(
     string Output,
     string Dotnet,
     string TargetFramework,
+    string SdkVersion,
+    string HostRuntimeVersion,
+    string WasmRuntimeVersion,
     string AssemblyName,
     string EntryAssembly,
     IReadOnlyList<string> References,
@@ -104,7 +107,12 @@ internal static class NativePublish
         try
         {
             Directory.CreateDirectory(workDirectory);
-            var layout = WorkloadLayout.Resolve(options.Dotnet, options.TargetFramework);
+            var layout = WorkloadLayout.Resolve(
+                options.Dotnet,
+                options.TargetFramework,
+                options.SdkVersion,
+                options.HostRuntimeVersion,
+                options.WasmRuntimeVersion);
             using var tasks = new WorkloadTasks(layout, options.ILLinkTask);
 
             var assemblies = ResolveAssemblies(options.EntryAssembly, options.References, layout);
@@ -126,7 +134,7 @@ internal static class NativePublish
             await BuildNativeAsync(tasks, options, layout, linkedAssemblies, nativeDirectory);
 
             var runtimeConfig = Path.Combine(workDirectory, options.AssemblyName + ".runtimeconfig.json");
-            await WriteRuntimeConfigAsync(runtimeConfig, layout.RuntimeVersion, options.TargetFramework.Split('-')[0]);
+            await WriteRuntimeConfigAsync(runtimeConfig, layout.WasmRuntimeVersion, options.TargetFramework.Split('-')[0]);
 
             var bundleDirectory = Path.Combine(workDirectory, "bundle");
             BuildAppBundle(tasks, options, layout, linkedAssemblies, nativeDirectory, runtimeConfig, bundleDirectory);
@@ -219,7 +227,7 @@ internal static class NativePublish
     {
         Directory.CreateDirectory(outputDirectory);
         var task = tasks.Create(options.ILLinkTask, "ILLink.Tasks.ILLink");
-        var illinkPath = PrepareILLink(options.ILLinkTask, layout.RuntimeVersion, Path.Combine(Path.GetDirectoryName(outputDirectory)!, "illink"));
+        var illinkPath = PrepareILLink(options.ILLinkTask, layout.HostRuntimeVersion, Path.Combine(Path.GetDirectoryName(outputDirectory)!, "illink"));
         tasks.Set(task, "AssemblyPaths", tasks.Items(assemblies.Values.Order(StringComparer.Ordinal)));
         tasks.Set(task, "ReferenceAssemblyPaths", tasks.Items([]));
 
@@ -882,7 +890,8 @@ internal static class NativePublish
     internal sealed record WorkloadLayout(
         string DotnetRoot,
         string SdkDirectory,
-        string RuntimeVersion,
+        string HostRuntimeVersion,
+        string WasmRuntimeVersion,
         string RuntimeLibDirectory,
         string RuntimeNativeDirectory,
         string WasmAppBuilder,
@@ -896,36 +905,42 @@ internal static class NativePublish
         string WasmOpt,
         string WebConfig)
     {
-        public static WorkloadLayout Resolve(string dotnet, string targetFramework, IEnumerable<string>? fallbackExecutableDirectories = null)
+        public static WorkloadLayout Resolve(
+            string dotnet,
+            string targetFramework,
+            string sdkVersion,
+            string hostRuntimeVersion,
+            string wasmRuntimeVersion,
+            IEnumerable<string>? fallbackExecutableDirectories = null)
         {
             var dotnetRoot = Path.GetDirectoryName(Path.GetFullPath(dotnet))!;
             var packsDirectory = Path.Combine(dotnetRoot, "packs");
-            var sdkDirectory = LatestDirectory(Path.Combine(dotnetRoot, "sdk"));
-            var runtimePack = LatestDirectory(Path.Combine(packsDirectory, "Microsoft.NETCore.App.Runtime.Mono.browser-wasm"));
-            var runtimeVersion = Path.GetFileName(runtimePack);
-            var wasmSdk = VersionDirectory(Path.Combine(packsDirectory, "Microsoft.NET.Runtime.WebAssembly.Sdk"), runtimeVersion);
-            var aotPack = VersionDirectory(Directory.EnumerateDirectories(packsDirectory, "Microsoft.NETCore.App.Runtime.AOT.*.Cross.browser-wasm").Single(), runtimeVersion);
             var runtimeTfm = targetFramework.EndsWith("-browser", StringComparison.Ordinal)
                 ? targetFramework[..^"-browser".Length]
                 : targetFramework;
-            var runtimeRoot = Path.Combine(runtimePack, "runtimes", "browser-wasm");
+            var sdkDirectory = VersionDirectory(Path.Combine(dotnetRoot, "sdk"), sdkVersion);
             var emccName = OperatingSystem.IsWindows() ? "emcc.bat" : "emcc";
-            var emcc = FindSingleFile(packsDirectory, runtimeVersion, path =>
+            var runtimePack = VersionDirectory(Path.Combine(packsDirectory, "Microsoft.NETCore.App.Runtime.Mono.browser-wasm"), wasmRuntimeVersion);
+            var wasmSdk = VersionDirectory(Path.Combine(packsDirectory, "Microsoft.NET.Runtime.WebAssembly.Sdk"), wasmRuntimeVersion);
+            var aotPack = VersionDirectory(Directory.EnumerateDirectories(packsDirectory, "Microsoft.NETCore.App.Runtime.AOT.*.Cross.browser-wasm").Single(), wasmRuntimeVersion);
+            var runtimeRoot = Path.Combine(runtimePack, "runtimes", "browser-wasm");
+            var emcc = FindSingleFile(packsDirectory, wasmRuntimeVersion, path =>
                 NormalizeEntryPath(path).EndsWith("/tools/emscripten/" + emccName, StringComparison.Ordinal));
             var emscriptenTools = Directory.GetParent(Path.GetDirectoryName(emcc)!)!.FullName;
-            var cache = FindSingleDirectory(packsDirectory, runtimeVersion, path => NormalizeEntryPath(path).EndsWith("/tools/emscripten/cache", StringComparison.Ordinal));
-            var python = FindSingleFileOrDefault(packsDirectory, runtimeVersion, path =>
+            var cache = FindSingleDirectory(packsDirectory, wasmRuntimeVersion, path => NormalizeEntryPath(path).EndsWith("/tools/emscripten/cache", StringComparison.Ordinal));
+            var python = FindSingleFileOrDefault(packsDirectory, wasmRuntimeVersion, path =>
                     path.Contains(".Python.", StringComparison.Ordinal) &&
                     FileNameIs(path, "python3", "python", "python3.exe", "python.exe"))
                 ?? FindExecutableOnPath(
                     fallbackExecutableDirectories ?? (OperatingSystem.IsWindows() ? [] : ["/usr/local/bin", "/usr/bin", "/bin"]),
                     OperatingSystem.IsWindows() ? ["python3.exe", "python.exe"] : ["python3", "python"]);
-            var node = FindSingleFile(packsDirectory, runtimeVersion, path => path.Contains(".Node.", StringComparison.Ordinal) && FileNameIs(path, "node", "node.exe"));
-            var wasmOpt = FindSingleFile(packsDirectory, runtimeVersion, path => path.Contains(".Sdk.", StringComparison.Ordinal) && FileNameIs(path, "wasm-opt", "wasm-opt.exe"));
+            var node = FindSingleFile(packsDirectory, wasmRuntimeVersion, path => path.Contains(".Node.", StringComparison.Ordinal) && FileNameIs(path, "node", "node.exe"));
+            var wasmOpt = FindSingleFile(packsDirectory, wasmRuntimeVersion, path => path.Contains(".Sdk.", StringComparison.Ordinal) && FileNameIs(path, "wasm-opt", "wasm-opt.exe"));
             return new WorkloadLayout(
                 dotnetRoot,
                 sdkDirectory,
-                runtimeVersion,
+                hostRuntimeVersion,
+                wasmRuntimeVersion,
                 Path.Combine(runtimeRoot, "lib", runtimeTfm),
                 Path.Combine(runtimeRoot, "native"),
                 Path.Combine(wasmSdk, "tasks", runtimeTfm, "WasmAppBuilder.dll"),
@@ -939,10 +954,6 @@ internal static class NativePublish
                 wasmOpt,
                 Path.Combine(sdkDirectory, "Sdks", "Microsoft.NET.Sdk.BlazorWebAssembly", "targets", "BlazorWasm.web.config"));
         }
-
-        private static string LatestDirectory(string parent) => Directory.EnumerateDirectories(parent)
-            .OrderByDescending(path => ParseVersion(Path.GetFileName(path)))
-            .First();
 
         private static string VersionDirectory(string parent, string version)
         {
@@ -969,12 +980,13 @@ internal static class NativePublish
                 .FirstOrDefault(predicate);
 
         private static string FindSingleDirectory(string packsDirectory, string version, Func<string, bool> predicate)
-        {
-            var result = VersionedPackDirectories(packsDirectory, version)
+            => FindSingleDirectoryOrDefault(packsDirectory, version, predicate)
+                ?? throw new DirectoryNotFoundException($"Unable to locate required workload directory for version {version} under {packsDirectory}.");
+
+        private static string? FindSingleDirectoryOrDefault(string packsDirectory, string version, Func<string, bool> predicate) =>
+            VersionedPackDirectories(packsDirectory, version)
                 .SelectMany(directory => Directory.EnumerateDirectories(directory, "*", SearchOption.AllDirectories))
                 .FirstOrDefault(predicate);
-            return result ?? throw new DirectoryNotFoundException($"Unable to locate required workload directory for version {version} under {packsDirectory}.");
-        }
 
         private static bool FileNameIs(string path, params string[] names) =>
             names.Contains(Path.GetFileName(path), OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);

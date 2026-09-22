@@ -120,6 +120,7 @@ def _dotnet_repo_impl(repository_ctx):
         substitutions = {
             "{sdk_version}": repository_ctx.attr.dotnet_version,
             "{runtime_version}": TOOL_VERSIONS[repository_ctx.attr.dotnet_version]["runtimeVersion"],
+            "{wasm_runtime_version}": TOOL_VERSIONS[repository_ctx.attr.dotnet_version]["runtimeVersion"],
             "{runtime_tfm}": TOOL_VERSIONS[repository_ctx.attr.dotnet_version]["runtimeTfm"],
             "{runtime_identifier}": PLATFORMS[repository_ctx.attr.platform].dotnet.rid,
             "{csharp_default_version}": TOOL_VERSIONS[repository_ctx.attr.dotnet_version]["csharpDefaultVersion"],

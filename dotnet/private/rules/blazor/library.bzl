@@ -323,7 +323,7 @@ BLAZOR_LIBRARY_ATTRS = dicts.add(
             default = ["CS1701", "CS1702"],
         ),
         "razor_langversion": attr.string(
-            doc = "Razor language version. Defaults to the target framework version.",
+            doc = "Razor language version. Defaults to the SDK-compatible version for the target framework.",
         ),
         "project_sdk": attr.string(
             doc = "The project SDK that is being targeted.",

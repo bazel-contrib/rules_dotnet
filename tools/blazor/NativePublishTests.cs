@@ -19,6 +19,7 @@ internal static class NativePublishTests
         Directory.CreateDirectory(Path.Combine(wwwroot, "_framework"));
         try
         {
+            VerifyRazorLanguageVersions();
             VerifyWorkloadResolution(directory);
             VerifyILLinkRuntimeConfig(directory);
 
@@ -109,6 +110,13 @@ internal static class NativePublishTests
         }
     }
 
+    private static void VerifyRazorLanguageVersions()
+    {
+        Require(PreprocessCmd.DefaultRazorLangVersion("v8.0") == "8.0", "Changed the Razor language version for net8.0.");
+        Require(PreprocessCmd.DefaultRazorLangVersion("v9.0") == "9.0", "Changed the Razor language version for net9.0.");
+        Require(PreprocessCmd.DefaultRazorLangVersion("v10.0") == "9.0", "Did not use the SDK-supported Razor language version for net10.0.");
+    }
+
     private static void VerifyILLinkRuntimeConfig(string directory)
     {
         var sourceDirectory = Path.Combine(directory, "illink-source");
@@ -134,11 +142,15 @@ internal static class NativePublishTests
         var packs = Path.Combine(dotnetRoot, "packs");
         var emccName = OperatingSystem.IsWindows() ? "emcc.bat" : "emcc";
         var executableSuffix = OperatingSystem.IsWindows() ? ".exe" : string.Empty;
-        Directory.CreateDirectory(Path.Combine(dotnetRoot, "sdk", "10.0.300"));
-        foreach (var version in new[] { "9.0.16", "10.0.8" })
+        var sdkDirectory = Path.Combine(dotnetRoot, "sdk", "10.0.109");
+        Directory.CreateDirectory(sdkDirectory);
+        Directory.CreateDirectory(Path.Combine(dotnetRoot, "sdk", "10.0.110"));
+        foreach (var version in new[] { "9.0.16", "10.0.10", "11.0.1" })
         {
             Directory.CreateDirectory(Path.Combine(packs, "Microsoft.NETCore.App.Runtime.Mono.browser-wasm", version));
             Directory.CreateDirectory(Path.Combine(packs, "Microsoft.NET.Runtime.WebAssembly.Sdk", version));
+            Directory.CreateDirectory(Path.Combine(packs, "Microsoft.NET.Runtime.MonoAOTCompiler.Task", version));
+            Directory.CreateDirectory(Path.Combine(packs, "Microsoft.NET.Runtime.MonoTargets.Sdk", version));
             Directory.CreateDirectory(Path.Combine(packs, "Microsoft.NETCore.App.Runtime.AOT.test.Cross.browser-wasm", version));
             CreateFile(Path.Combine(packs, "Microsoft.NET.Runtime.Emscripten.Test.Sdk.test", version, "tools", "emscripten", "emcc"));
             CreateFile(Path.Combine(packs, "Microsoft.NET.Runtime.Emscripten.Test.Sdk.test", version, "tools", "emscripten", "emcc.bat"));
@@ -146,6 +158,9 @@ internal static class NativePublishTests
             Directory.CreateDirectory(Path.Combine(packs, "Microsoft.NET.Runtime.Emscripten.Test.Cache.test", version, "tools", "emscripten", "cache"));
             CreateFile(Path.Combine(packs, "Microsoft.NET.Runtime.Emscripten.Test.Node.test", version, "tools", "bin", "node" + executableSuffix));
         }
+        Directory.CreateDirectory(Path.Combine(packs, "Microsoft.NETCore.App.Runtime.Mono.browser-wasm", "10.0.11"));
+        Directory.CreateDirectory(Path.Combine(packs, "Microsoft.NET.Runtime.WebAssembly.Sdk", "10.0.11"));
+        Directory.CreateDirectory(Path.Combine(packs, "Microsoft.NETCore.App.Runtime.AOT.test.Cross.browser-wasm", "10.0.11"));
 
         var bin = Path.Combine(directory, "bin");
         var python = Path.Combine(bin, OperatingSystem.IsWindows() ? "python3.exe" : "python3");
@@ -154,13 +169,21 @@ internal static class NativePublishTests
         try
         {
             Environment.SetEnvironmentVariable("PATH", string.Empty);
-            var layout = NativePublish.WorkloadLayout.Resolve(Path.Combine(dotnetRoot, "dotnet"), "net10.0-browser", [bin]);
-            Require(layout.RuntimeVersion == "10.0.8", "Did not select the latest runtime pack.");
-            Require(layout.Emcc.Contains(Path.Combine("10.0.8", "tools"), StringComparison.Ordinal), "Selected emcc from a different workload version.");
+            var layout = NativePublish.WorkloadLayout.Resolve(
+                Path.Combine(dotnetRoot, "dotnet"),
+                "net10.0-browser",
+                "10.0.109",
+                "10.0.9",
+                "10.0.10",
+                [bin]);
+            Require(layout.SdkDirectory == sdkDirectory, "Did not select the requested SDK version.");
+            Require(layout.HostRuntimeVersion == "10.0.9", "Did not select the SDK's host runtime version.");
+            Require(layout.WasmRuntimeVersion == "10.0.10", "Did not select the requested WASM workload runtime version.");
+            Require(layout.Emcc.Contains(Path.Combine("10.0.10", "tools"), StringComparison.Ordinal), "Selected emcc from a different workload version.");
             Require(Path.GetFileName(layout.Emcc) == emccName, "Selected emcc for a different operating system.");
-            Require(layout.EmscriptenCache.Contains(Path.Combine("10.0.8", "tools"), StringComparison.Ordinal), "Selected the cache from a different workload version.");
-            Require(layout.Node.Contains(Path.Combine("10.0.8", "tools"), StringComparison.Ordinal), "Selected Node from a different workload version.");
-            Require(layout.WasmOpt.Contains(Path.Combine("10.0.8", "tools"), StringComparison.Ordinal), "Selected wasm-opt from a different workload version.");
+            Require(layout.EmscriptenCache.Contains(Path.Combine("10.0.10", "tools"), StringComparison.Ordinal), "Selected the cache from a different workload version.");
+            Require(layout.Node.Contains(Path.Combine("10.0.10", "tools"), StringComparison.Ordinal), "Selected Node from a different workload version.");
+            Require(layout.WasmOpt.Contains(Path.Combine("10.0.10", "tools"), StringComparison.Ordinal), "Selected wasm-opt from a different workload version.");
             Require(layout.Python == Path.GetFullPath(python), "Did not fall back to Python from PATH.");
         }
         finally

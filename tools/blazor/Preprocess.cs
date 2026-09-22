@@ -288,7 +288,7 @@ public static class PreprocessCmd
     {
         var targetFrameworkVersion = ToTargetFrameworkVersion(targetFramework);
         var effectiveRazorLangVersion = string.IsNullOrEmpty(razorLangVersion)
-            ? targetFrameworkVersion.TrimStart('v')
+            ? DefaultRazorLangVersion(targetFrameworkVersion)
             : razorLangVersion;
 
         var builder = new StringBuilder();
@@ -717,6 +717,12 @@ public static class PreprocessCmd
         }
 
         return string.Empty;
+    }
+
+    internal static string DefaultRazorLangVersion(string targetFrameworkVersion)
+    {
+        var version = Version.Parse(targetFrameworkVersion.TrimStart('v'));
+        return version.Major > 9 ? "9.0" : version.ToString(2);
     }
 
     private static string ToBase64(string value) => Convert.ToBase64String(Encoding.UTF8.GetBytes(NormalizePath(value)));

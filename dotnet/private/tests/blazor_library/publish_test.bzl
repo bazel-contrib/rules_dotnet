@@ -23,6 +23,9 @@ def _publish_test_impl(ctx):
     asserts.true(env, any([argument.startswith("/out:") and argument.endswith("/" + entry_assembly.short_path) for argument in compile_action.argv]))
     asserts.true(env, all([path.endswith("/" + entry_assembly.short_path) for path in _values(publish_action, "--entry-assembly")]))
     asserts.equals(env, ["basic_two"], _values(publish_action, "--assembly-name"))
+    asserts.equals(env, 1, len(_values(publish_action, "--sdk-version")))
+    asserts.equals(env, 1, len(_values(publish_action, "--host-runtime-version")))
+    asserts.equals(env, 1, len(_values(publish_action, "--wasm-runtime-version")))
 
     references = [path.split("/")[-1] for path in _values(publish_action, "--reference")]
     asserts.true(env, "basic.dll" in references)

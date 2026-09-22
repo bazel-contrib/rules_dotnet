@@ -32,6 +32,20 @@ def _find_dotnet_executable(ctx):
     fail("Could not find 'dotnet' executable for architecture {}".format(ctx.attr.dotnet_arch))
 
 def _find_default_dotnet_executable(ctx):
+    arch = ctx.os.arch.lower()
+    arch_root_env = ""
+    if arch in ["amd64", "x86_64"]:
+        arch_root_env = "DOTNET_ROOT_X64"
+    elif arch in ["aarch64", "arm64"]:
+        arch_root_env = "DOTNET_ROOT_ARM64"
+
+    if arch_root_env:
+        p = ctx.getenv(arch_root_env)
+        if p:
+            dotnet_bin = _dotnet_from_root(ctx, p)
+            if dotnet_bin:
+                return dotnet_bin
+
     p = ctx.getenv("DOTNET_ROOT")
     if p:
         dotnet_bin = _dotnet_from_root(ctx, p)
@@ -47,22 +61,92 @@ def _find_default_dotnet_executable(ctx):
 def _version_key(version):
     return [int(part) for part in version.split("-", 1)[0].split(".")]
 
+def _matches_version_prefix(version, requested):
+    requested_parts = requested.split(".")
+    version_parts = version.split("-", 1)[0].split(".")
+    return len(requested_parts) < 3 and version_parts[:len(requested_parts)] == requested_parts
+
 def _find_sdk_version(ctx, dotnet_root):
     sdk_root = dotnet_root.get_child("sdk")
-    if ctx.attr.dotnet_version:
-        sdk = sdk_root.get_child(ctx.attr.dotnet_version)
-        if not sdk.get_child("Microsoft.NETCoreSdk.BundledVersions.props").exists:
-            fail("Host .NET SDK {} is not installed under {}.".format(ctx.attr.dotnet_version, dotnet_root))
-        return ctx.attr.dotnet_version
-
     versions = [
         path.basename
         for path in sdk_root.readdir()
         if path.get_child("Microsoft.NETCoreSdk.BundledVersions.props").exists
     ]
+    if ctx.attr.dotnet_version:
+        matching_versions = [
+            version
+            for version in versions
+            if version == ctx.attr.dotnet_version or _matches_version_prefix(version, ctx.attr.dotnet_version)
+        ]
+        if len(matching_versions) == 0:
+            fail("Host .NET SDK {} is not installed under {}. Installed SDKs: {}.".format(
+                ctx.attr.dotnet_version,
+                dotnet_root,
+                ", ".join(sorted(versions, key = _version_key)),
+            ))
+        return sorted(matching_versions, key = _version_key)[-1]
+
     if len(versions) == 0:
         fail("No .NET SDK is installed under {}.".format(dotnet_root))
     return sorted(versions, key = _version_key)[-1]
+
+def _pack_versions(packs_root, exact = "", prefix = "", contains = "", suffix = ""):
+    versions = {}
+    for pack in packs_root.readdir():
+        name = pack.basename
+        if exact and name != exact:
+            continue
+        if prefix and not name.startswith(prefix):
+            continue
+        if contains and contains not in name:
+            continue
+        if suffix and not name.endswith(suffix):
+            continue
+        for version in pack.readdir():
+            versions[version.basename] = True
+    return versions
+
+def _find_wasm_runtime_version(dotnet_root, runtime_version, required):
+    packs_root = dotnet_root.get_child("packs")
+    pack_groups = [
+        struct(exact = "Microsoft.NET.Runtime.WebAssembly.Sdk"),
+        struct(exact = "Microsoft.NETCore.App.Runtime.Mono.browser-wasm"),
+        struct(prefix = "Microsoft.NETCore.App.Runtime.AOT.", suffix = ".Cross.browser-wasm"),
+        struct(exact = "Microsoft.NET.Runtime.MonoAOTCompiler.Task"),
+        struct(exact = "Microsoft.NET.Runtime.MonoTargets.Sdk"),
+        struct(prefix = "Microsoft.NET.Runtime.Emscripten.", contains = ".Sdk."),
+        struct(prefix = "Microsoft.NET.Runtime.Emscripten.", contains = ".Cache."),
+        struct(prefix = "Microsoft.NET.Runtime.Emscripten.", contains = ".Node."),
+    ]
+    candidates = None
+    for group in pack_groups:
+        versions = _pack_versions(
+            packs_root,
+            exact = getattr(group, "exact", ""),
+            prefix = getattr(group, "prefix", ""),
+            contains = getattr(group, "contains", ""),
+            suffix = getattr(group, "suffix", ""),
+        )
+        if candidates == None:
+            candidates = versions
+        else:
+            candidates = {version: True for version in candidates if version in versions}
+
+    runtime_family = runtime_version.split(".")[:2]
+    matching_versions = [
+        version
+        for version in candidates
+        if version.split("-", 1)[0].split(".")[:2] == runtime_family
+    ]
+    if len(matching_versions) > 0:
+        return sorted(matching_versions, key = _version_key)[-1]
+    if required:
+        fail("The host SDK root {} does not contain a complete wasm-tools workload compatible with .NET {}. Install wasm-tools into that SDK root; user-local workload locations are not searched.".format(
+            dotnet_root,
+            ".".join(runtime_family),
+        ))
+    return ""
 
 def _read_property(content, name):
     start_tag = "<{}>".format(name)
@@ -81,10 +165,12 @@ def _inspect_dotnet_root(ctx, dotnet_bin):
     sdk_version = _find_sdk_version(ctx, dotnet_root)
     props = ctx.read(dotnet_root.get_child("sdk").get_child(sdk_version).get_child("Microsoft.NETCoreSdk.BundledVersions.props"))
     sdk_major = int(sdk_version.split(".")[0])
+    runtime_version = _read_property(props, "BundledNETCoreAppPackageVersion")
     return struct(
         dotnet_root = dotnet_root,
         sdk_version = sdk_version,
-        runtime_version = _read_property(props, "BundledNETCoreAppPackageVersion"),
+        runtime_version = runtime_version,
+        wasm_runtime_version = _find_wasm_runtime_version(dotnet_root, runtime_version, False),
         runtime_identifier = _read_property(props, "NETCoreSdkRuntimeIdentifier"),
         csharp_default = "{}.0".format(sdk_major + 4),
         fsharp_default = ".".join(sdk_version.split(".")[:2]),
@@ -101,6 +187,7 @@ def _dotnet_host_repo_impl(ctx):
     ctx.template("BUILD.bazel", Label("//dotnet/private/sdk:toolchain.build.tmpl"), substitutions = {
         "{sdk_version}": host_info.sdk_version,
         "{runtime_version}": host_info.runtime_version,
+        "{wasm_runtime_version}": host_info.wasm_runtime_version,
         "{runtime_tfm}": "net" + ".".join(host_info.runtime_version.split(".")[:2]),
         "{csharp_default_version}": host_info.csharp_default,
         "{fsharp_default_version}": host_info.fsharp_default,
@@ -123,18 +210,7 @@ def _dotnet_host_wasm_workload_repo_impl(ctx):
     dotnet_bin = _find_default_dotnet_executable(ctx)
     host_info = _inspect_dotnet_root(ctx, dotnet_bin)
     dotnet_root = host_info.dotnet_root
-    required_packs = [
-        "Microsoft.NET.Runtime.WebAssembly.Sdk",
-        "Microsoft.NETCore.App.Runtime.Mono.browser-wasm",
-    ]
-    for pack in required_packs:
-        pack_path = dotnet_root.get_child("packs").get_child(pack).get_child(host_info.runtime_version)
-        if not pack_path.exists:
-            fail("The host SDK root {} does not contain {} {}. Install wasm-tools into that SDK root; user-local workload locations are not searched.".format(
-                dotnet_root,
-                pack,
-                host_info.runtime_version,
-            ))
+    _find_wasm_runtime_version(dotnet_root, host_info.runtime_version, True)
     for item in ctx.path(dotnet_root).readdir():
         ctx.symlink(item, item.basename)
 
@@ -156,7 +232,7 @@ dotnet_host_wasm_workload_repository = repository_rule(
     attrs = {
         "dotnet_version": attr.string(default = ""),
     },
-    environ = ["DOTNET_ROOT", "PATH"],
+    environ = ["DOTNET_ROOT", "DOTNET_ROOT_ARM64", "DOTNET_ROOT_X64", "PATH"],
     doc = "Exposes wasm-tools files from a preinstalled host .NET SDK if present.",
 )
 
@@ -171,8 +247,8 @@ def dotnet_register_host_toolchains(name, dotnet_version, **kwargs):
 
     Args:
         name: base name for all created repos, like "dotnet"
-        dotnet_version: The .Net SDK version to use e.g. 8.0.100 - must be
-                        available on the host
+        dotnet_version: The .NET SDK version to use, such as 8.0.100 for an
+                        exact version or 8.0 for the latest matching installed SDK
         **kwargs: passed to each dotnet_repositories call
     """
     for platform, desc in PLATFORMS.items():

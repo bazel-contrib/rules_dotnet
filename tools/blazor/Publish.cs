@@ -13,6 +13,9 @@ public static class PublishCmd
     private static readonly Option<string> OptMode = RequiredOption("--mode", "Publish mode");
     private static readonly Option<string> OptDotnet = RequiredOption("--dotnet", ".NET SDK executable");
     private static readonly Option<string> OptTargetFramework = RequiredOption("--target-framework", "Target framework moniker");
+    private static readonly Option<string> OptSdkVersion = RequiredOption("--sdk-version", ".NET SDK version");
+    private static readonly Option<string> OptHostRuntimeVersion = RequiredOption("--host-runtime-version", ".NET host runtime version");
+    private static readonly Option<string> OptWasmRuntimeVersion = RequiredOption("--wasm-runtime-version", ".NET WebAssembly workload runtime version");
     private static readonly Option<string> OptAssemblyName = RequiredOption("--assembly-name", "Application assembly name");
     private static readonly Option<string> OptEntryAssembly = RequiredOption("--entry-assembly", "Precompiled application assembly");
     private static readonly Option<string> OptILLinkTask = RequiredOption("--illink-task", "Paket-provided ILLink task assembly");
@@ -51,6 +54,9 @@ public static class PublishCmd
                 OptMode,
                 OptDotnet,
                 OptTargetFramework,
+                OptSdkVersion,
+                OptHostRuntimeVersion,
+                OptWasmRuntimeVersion,
                 OptAssemblyName,
                 OptEntryAssembly,
                 OptILLinkTask,
@@ -78,6 +84,9 @@ public static class PublishCmd
             Path.GetFullPath(Required(args, OptOutput)),
             Path.GetFullPath(Required(args, OptDotnet)),
             Required(args, OptTargetFramework),
+            Required(args, OptSdkVersion),
+            Required(args, OptHostRuntimeVersion),
+            Required(args, OptWasmRuntimeVersion),
             Required(args, OptAssemblyName),
             Path.GetFullPath(Required(args, OptEntryAssembly)),
             (args.GetValue(OptReference) ?? []).Select(Path.GetFullPath).ToArray(),

@@ -81,6 +81,7 @@ May be empty if the fsharp_compiler_path points to a locally installed tool bina
 May be empty if the apphost_path points to a locally installed tool binary.""",
         "sdk_version": "Version of the dotnet SDK",
         "runtime_version": "Version of the dotnet runtime",
+        "wasm_runtime_version": "Version of the WebAssembly workload runtime",
         "runtime_tfm": "The target framework moniker for the current SDK",
         "csharp_default_version": "Default version of the C# language",
         "fsharp_default_version": "Default version of the F# language",
@@ -204,6 +205,7 @@ def _dotnet_toolchain_impl(ctx):
         fsharp_compiler_files = fsharp_compiler_files,
         sdk_version = ctx.attr.sdk_version,
         runtime_version = ctx.attr.runtime_version,
+        wasm_runtime_version = ctx.attr.wasm_runtime_version or ctx.attr.runtime_version,
         runtime_tfm = ctx.attr.runtime_tfm,
         csharp_default_version = ctx.attr.csharp_default_version,
         fsharp_default_version = ctx.attr.fsharp_default_version,
@@ -292,6 +294,9 @@ Defaults to `runtime`, which also carries the SDK a binary does not need.""",
         "runtime_version": attr.string(
             doc = "The runtime version of the current dotnet SDK",
             mandatory = True,
+        ),
+        "wasm_runtime_version": attr.string(
+            doc = "The WebAssembly workload runtime version available to the current SDK",
         ),
         "runtime_tfm": attr.string(
             doc = "The runtime target framework moniker of the current dotnet SDK",
