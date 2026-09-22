@@ -1,0 +1,99 @@
+"""The ICU `//dotnet/settings:hermetic_icu` resolves to.
+
+The runtime looks `libicuuc.so.<version>` and `libicui18n.so.<version>` up by
+name and resolves their functions with the version as a suffix, so the names
+here carry ICU's major version and the symbols keep ICU's renaming. The locale
+data is linked into `libicudata.so.<version>`, so that nothing is looked up on
+disk at run time. See docs/README.md#globalization-and-icu.
+"""
+
+load("@bazel_lib//:bzl_library.bzl", "bzl_library")
+load("@rules_cc//cc:cc_library.bzl", "cc_library")
+load("@rules_cc//cc:cc_shared_library.bzl", "cc_shared_library")
+load(":sources.bzl", "ICU_MAJOR_VERSION")
+
+package(default_visibility = ["//dotnet:__subpackages__"])
+
+_LINUX = ["@platforms//os:linux"]
+
+# Compiling ICU takes minutes, so only a build that asks for it through
+# `//dotnet/settings:icu` pays for it, never a wildcard build.
+_MANUAL = ["manual"]
+
+_DATA_FILE = "@rules_dotnet_icu_data//:icudt" + ICU_MAJOR_VERSION + "l.dat"
+
+# Each library is also given its name as its soname, so that the ones depending
+# on it record that rather than the output path they were linked against.
+_ICUDATA = "libicudata.so." + ICU_MAJOR_VERSION
+
+_ICUUC = "libicuuc.so." + ICU_MAJOR_VERSION
+
+_ICUI18N = "libicui18n.so." + ICU_MAJOR_VERSION
+
+cc_library(
+    name = "icudata_lib",
+    srcs = ["icudata.S"],
+    additional_compiler_inputs = [_DATA_FILE],
+    copts = [
+        "-DICU_DATA_FILE=\\\"$(location " + _DATA_FILE + ")\\\"",
+        "-DICU_DATA_SYMBOL=icudt" + ICU_MAJOR_VERSION + "_dat",
+    ],
+    tags = _MANUAL,
+    target_compatible_with = _LINUX,
+)
+
+cc_shared_library(
+    name = "icudata",
+    shared_lib_name = _ICUDATA,
+    tags = _MANUAL,
+    target_compatible_with = _LINUX,
+    user_link_flags = ["-Wl,-soname," + _ICUDATA],
+    deps = [":icudata_lib"],
+)
+
+cc_shared_library(
+    name = "icuuc",
+    dynamic_deps = [":icudata"],
+    shared_lib_name = _ICUUC,
+    tags = _MANUAL,
+    target_compatible_with = _LINUX,
+    user_link_flags = ["-Wl,-soname," + _ICUUC],
+    deps = ["@rules_dotnet_icu_sources//:common"],
+)
+
+cc_shared_library(
+    name = "icui18n",
+    dynamic_deps = [":icuuc"],
+    shared_lib_name = _ICUI18N,
+    tags = _MANUAL,
+    target_compatible_with = _LINUX,
+    user_link_flags = ["-Wl,-soname," + _ICUI18N],
+    deps = ["@rules_dotnet_icu_sources//:i18n"],
+)
+
+# The three libraries, which the launchers and the compiler wrapper put on the
+# loader's path.
+filegroup(
+    name = "icu",
+    srcs = [
+        ":icudata",
+        ":icui18n",
+        ":icuuc",
+    ],
+    tags = _MANUAL,
+    target_compatible_with = _LINUX,
+)
+
+bzl_library(
+    name = "settings",
+    srcs = ["settings.bzl"],
+    deps = [
+        "//dotnet/private:common",
+        "@bazel_skylib//rules:common_settings",
+    ],
+)
+
+bzl_library(
+    name = "sources",
+    srcs = ["sources.bzl"],
+)

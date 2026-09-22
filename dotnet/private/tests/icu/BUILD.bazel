@@ -1,0 +1,32 @@
+"Tests for `//dotnet/settings:icu` set to the ICU the rules build, on the platform that loads it."
+
+load("//dotnet:defs.bzl", "csharp_binary")
+load(":tests.bzl", "compile_env_test", "launcher_test", "runs_with_hermetic_icu_test")
+
+_LINUX = ["@platforms//os:linux"]
+
+# Exits with zero only when the runtime loaded the ICU the build carries, data included.
+csharp_binary(
+    name = "reports_icu",
+    srcs = ["Program.cs"],
+    target_compatible_with = _LINUX,
+    target_frameworks = ["net10.0"],
+)
+
+compile_env_test(
+    name = "compile_env_test",
+    target_compatible_with = _LINUX,
+    target_under_test = ":reports_icu",
+)
+
+launcher_test(
+    name = "launcher_test",
+    target_compatible_with = _LINUX,
+    target_under_test = ":reports_icu",
+)
+
+runs_with_hermetic_icu_test(
+    name = "runs_with_hermetic_icu_test",
+    binary = ":reports_icu",
+    target_compatible_with = _LINUX,
+)

@@ -30,6 +30,7 @@ set -o pipefail -o errexit -o nounset
 export DOTNET_MULTILEVEL_LOOKUP="false"
 export DOTNET_NOLOGO="1"
 export DOTNET_CLI_TELEMETRY_OPTOUT="1"
+TEMPLATED_environment
 
 dotnet="$(rlocation TEMPLATED_dotnet)"
 executable="$(rlocation TEMPLATED_executable)"

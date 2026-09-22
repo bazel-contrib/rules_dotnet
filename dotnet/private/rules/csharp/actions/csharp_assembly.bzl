@@ -2,6 +2,7 @@
 Actions for compiling targets with C#.
 """
 
+load("@bazel_skylib//lib:dicts.bzl", "dicts")
 load(
     "//dotnet/private:common.bzl",
     "add_resource_args",
@@ -19,6 +20,7 @@ load(
     "DotnetAssemblyRuntimeInfo",
     "StaticWebAssetsInfo",
 )
+load("//dotnet/private/icu:settings.bzl", "globalization_env", "icu_wrapper_arguments")
 load(
     "//dotnet/private/rules/csharp/actions:razor.bzl",
     "partition_srcs",
@@ -655,6 +657,7 @@ def _compile(
     if razor:
         direct_inputs += razor.analyzers + razor.additionalfiles + razor.configs
 
+    icu_arguments, icu_tools = [], []
     if compiler_worker:
         # A `FilesToRunProvider` rather than a `File`, so that the worker's own
         # runfiles reach the action without being listed as tools.
@@ -669,6 +672,8 @@ def _compile(
         executable = compiler_wrapper
         extra_tools = [compiler_wrapper]
         execution_requirements = {"supports-path-mapping": "1"}
+
+        icu_arguments, icu_tools = icu_wrapper_arguments(actions, toolchain)
 
     # Both the worker and the wrapper script take the dotnet host and csc.dll
     # first, then the csc arguments:
@@ -685,20 +690,21 @@ def _compile(
                 toolchain.compiler_host.files_to_run.executable,
                 toolchain.csharp_compiler.files_to_run.executable,
             ],
-            transitive = [
+            transitive = icu_tools + [
                 toolchain.compiler_host.default_runfiles.files,
                 toolchain.csharp_compiler.default_runfiles.files,
             ],
         ),
         outputs = outputs,
         executable = executable,
-        arguments = [
+        arguments = icu_arguments + [
             toolchain.compiler_host.files_to_run.executable.path,
             toolchain.csharp_compiler.files_to_run.executable.path,
         ] + (["--prune_unused_inputs"] if unused_inputs else []) + [args],
         unused_inputs_list = unused_inputs,
-        env = {
-            "DOTNET_CLI_HOME": toolchain.compiler_host.files_to_run.executable.dirname,
-        },
+        env = dicts.add(
+            {"DOTNET_CLI_HOME": toolchain.compiler_host.files_to_run.executable.dirname},
+            globalization_env(toolchain),
+        ),
         execution_requirements = execution_requirements,
     )

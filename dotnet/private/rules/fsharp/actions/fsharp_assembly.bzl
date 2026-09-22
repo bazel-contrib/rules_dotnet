@@ -2,6 +2,7 @@
 Actions for compiling targets with F#.
 """
 
+load("@bazel_skylib//lib:dicts.bzl", "dicts")
 load(
     "//dotnet/private:common.bzl",
     "add_resource_args",
@@ -21,6 +22,7 @@ load(
     "DotnetAssemblyCompileInfo",
     "DotnetAssemblyRuntimeInfo",
 )
+load("//dotnet/private/icu:settings.bzl", "globalization_env", "icu_wrapper_arguments")
 
 def _format_targetprofile(tfm):
     if is_standard_framework(tfm):
@@ -458,6 +460,7 @@ def _compile(
     direct_inputs = srcs + resources
     direct_inputs += [keyfile] if keyfile else []
 
+    icu_arguments, icu_tools = [], []
     if compiler_worker:
         executable = compiler_worker
         extra_tools = []
@@ -471,6 +474,8 @@ def _compile(
         extra_tools = [compiler_wrapper]
         execution_requirements = {"supports-path-mapping": "1"}
 
+        icu_arguments, icu_tools = icu_wrapper_arguments(actions, toolchain)
+
     actions.run(
         mnemonic = "FSharpCompile",
         progress_message = "Compiling " + target_name + (" (internals ref-only dll)" if out_dll == None else ""),
@@ -483,20 +488,21 @@ def _compile(
                 toolchain.compiler_host.files_to_run.executable,
                 toolchain.fsharp_compiler.files_to_run.executable,
             ],
-            transitive = [
+            transitive = icu_tools + [
                 toolchain.compiler_host.default_runfiles.files,
                 toolchain.fsharp_compiler.default_runfiles.files,
             ],
         ),
         outputs = outputs,
         executable = executable,
-        arguments = [
+        arguments = icu_arguments + [
             toolchain.compiler_host.files_to_run.executable.path,
             toolchain.fsharp_compiler.files_to_run.executable.path,
             args,
         ],
-        env = {
-            "DOTNET_CLI_HOME": toolchain.compiler_host.files_to_run.executable.dirname,
-        },
+        env = dicts.add(
+            {"DOTNET_CLI_HOME": toolchain.compiler_host.files_to_run.executable.dirname},
+            globalization_env(toolchain),
+        ),
         execution_requirements = execution_requirements,
     )

@@ -137,6 +137,8 @@ def _dotnet_toolchain_impl(ctx):
         static_web_assets_tasks = ctx.attr.static_web_assets_tasks,
         msbuild_dlls = ctx.attr.msbuild_dlls,
         strict_deps = ctx.attr._strict_deps,
+        invariant_globalization = ctx.attr._invariant_globalization,
+        icu = ctx.attr._icu,
     )
     return [
         default,
@@ -251,6 +253,14 @@ rather than the target framework, as it does under MSBuild.""",
         "_strict_deps": attr.label(
             doc = "Whether to use strict deps or not",
             default = "//dotnet/settings:strict_deps",
+        ),
+        "_invariant_globalization": attr.label(
+            doc = "Whether every .NET process the rules start runs in globalization-invariant mode",
+            default = "//dotnet/settings:invariant_globalization",
+        ),
+        "_icu": attr.label(
+            doc = "The ICU shared libraries the runtime loads in place of the machine's, if any",
+            default = "//dotnet/settings:icu",
         ),
     },
     doc = """Defines a dotnet compiler/runtime toolchain.

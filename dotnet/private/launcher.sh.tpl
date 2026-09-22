@@ -30,6 +30,7 @@ set -o pipefail -o errexit -o nounset
 export DOTNET_MULTILEVEL_LOOKUP="false"
 export DOTNET_NOLOGO="1"
 export DOTNET_CLI_TELEMETRY_OPTOUT="1"
+TEMPLATED_environment
 export DOTNET_ROOT="$(dirname $(rlocation TEMPLATED_dotnet))"
 
 exec $(rlocation TEMPLATED_dotnet) exec $(rlocation TEMPLATED_executable) "$@"

@@ -325,7 +325,39 @@ also exposes it as an executable, at `@paket.<group>//<package>/tools:<tool>`.
 ## Remote execution
 
 The rules support remote execution out of the box. The remote runners do need to have the required .Net
-system dependencies installed though. A common missing system dependency in existing RBE images is `libicu`.
+system dependencies installed though. A common missing system dependency in existing RBE images is `libicu`;
+[Globalization and ICU](#globalization-and-icu) covers how to build without it.
+
+## Globalization and ICU
+
+On Linux the .NET runtime takes its culture data from the system `libicu`, and a process fails to start
+without it:
+
+```
+Couldn't find a valid ICU package installed on the system.
+```
+
+There are two ways to work around this:
+
+1. Run everything in [globalization-invariant mode](https://learn.microsoft.com/dotnet/core/runtime-config/globalization#invariant-mode) by setting the `invariant_globalization` flag.
+
+```
+build --@rules_dotnet//dotnet/settings:invariant_globalization=true
+```
+
+2. Use the hermetic ICU provided by rules_dotnet
+
+This pulls a hermetic ICU into the build using [icu module](https://registry.bazel.build/modules/icu) from the Bazel registry.
+
+```
+build --@rules_dotnet//dotnet/settings:icu=@rules_dotnet//dotnet/settings:hermetic_icu
+```
+
+It needs a C++ toolchain, the auto-configured one or a hermetic one, and the first build spends a few minutes
+compiling ICU. The flag has no effect on macOS and Windows, whose runtime uses the ICU the operating system
+ships.
+
+A published application do not carry this ICU. This is purely for the build and test environment within Bazel.
 
 ## Persistent workers
 

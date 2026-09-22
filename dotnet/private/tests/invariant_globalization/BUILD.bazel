@@ -1,0 +1,66 @@
+"Tests for `//dotnet/settings:invariant_globalization`."
+
+load("//dotnet:defs.bzl", "csharp_binary", "fsharp_library")
+load(
+    ":tests.bzl",
+    "compile_env_with_flag_test",
+    "compile_env_without_flag_test",
+    "launcher_with_flag_test",
+    "launcher_without_flag_test",
+    "runs_with_flag_test",
+)
+
+# Exits with zero only when the runtime runs in globalization-invariant mode.
+csharp_binary(
+    name = "reports_globalization_mode",
+    srcs = ["Program.cs"],
+    target_frameworks = ["net10.0"],
+)
+
+fsharp_library(
+    name = "fsharp",
+    srcs = ["Library.fs"],
+    target_frameworks = ["net10.0"],
+)
+
+compile_env_with_flag_test(
+    name = "csharp_compile_env_with_flag_test",
+    expected = "1",
+    mnemonic = "CSharpCompile",
+    target_under_test = ":reports_globalization_mode",
+)
+
+compile_env_without_flag_test(
+    name = "csharp_compile_env_without_flag_test",
+    mnemonic = "CSharpCompile",
+    target_under_test = ":reports_globalization_mode",
+)
+
+compile_env_with_flag_test(
+    name = "fsharp_compile_env_with_flag_test",
+    expected = "1",
+    mnemonic = "FSharpCompile",
+    target_under_test = ":fsharp",
+)
+
+compile_env_without_flag_test(
+    name = "fsharp_compile_env_without_flag_test",
+    mnemonic = "FSharpCompile",
+    target_under_test = ":fsharp",
+)
+
+launcher_with_flag_test(
+    name = "launcher_with_flag_test",
+    expect_line = True,
+    target_under_test = ":reports_globalization_mode",
+)
+
+launcher_without_flag_test(
+    name = "launcher_without_flag_test",
+    target_under_test = ":reports_globalization_mode",
+)
+
+runs_with_flag_test(
+    name = "runs_with_flag_test",
+    binary = ":reports_globalization_mode",
+)
