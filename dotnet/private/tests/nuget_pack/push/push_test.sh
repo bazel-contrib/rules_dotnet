@@ -27,6 +27,18 @@ export DOTNET_CLI_HOME="$HOME"
 export NUGET_PACKAGES="$TEST_TMPDIR/nuget"
 mkdir -p "$HOME"
 
+# On Windows NuGet finds its user settings, its caches and the machine-wide
+# settings through these instead, and fails when they are unset, as they are
+# in a test. PROGRAMFILES is what it falls back to without PROGRAMFILES(X86).
+case "$OSTYPE" in
+  msys*|cygwin*)
+    for name in APPDATA LOCALAPPDATA PROGRAMFILES; do
+      mkdir -p "$TEST_TMPDIR/$name"
+      export "$name=$(cygpath -w "$TEST_TMPDIR/$name")"
+    done
+    ;;
+esac
+
 # Runs a launcher as a user would. On Windows that is the .bat through cmd.exe
 # itself: MSYS's `cmd` is a script around $COMSPEC, which a test does not get.
 # The arguments go through as they are, not converted as MSYS paths, and the
