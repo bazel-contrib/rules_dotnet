@@ -79,10 +79,7 @@ for %%a in (%*) do (
 
 set args=
 if "!has_source!"=="0" (
-  if "!source_from_target!"=="" (
-    echo>&2 nuget_push: no package source. Set `source` on the target or pass --source ^<feed^>.
-    exit /b 1
-  )
+  if "!source_from_target!"=="" goto :no_source
   set args=--source "!source_from_target!"
 )
 if "!has_api_key!"=="0" if defined NUGET_API_KEY set args=!args! --api-key "!NUGET_API_KEY!"
@@ -107,7 +104,19 @@ for /L %%i in (0,1,!last!) do (
     echo "!dotnet_executable!" nuget push "!package_%%i!" TEMPLATED_push_args !args! %*
   ) else (
     "!dotnet_executable!" nuget push "!package_%%i!" TEMPLATED_push_args !args! %*
-    if errorlevel 1 exit /b !errorlevel!
+    if errorlevel 1 (
+      set failed=!errorlevel!
+      goto :push_failed
+    )
   )
 )
 exit /b 0
+
+rem Every failure exits here, outside all blocks: an `exit /b` inside one does
+rem not become the exit code of `cmd /c`, which is how the launcher runs.
+:no_source
+echo>&2 nuget_push: no package source. Set `source` on the target or pass --source ^<feed^>.
+exit /b 1
+
+:push_failed
+exit /b !failed!

@@ -101,13 +101,15 @@ fi
 """
 
 # A test runs from the output tree on Windows, where the report sits beside it.
+# It fails outside all blocks: an `exit /b` inside one does not become the exit
+# code of `cmd /c`, and the test would pass.
 _BAT = """@echo off
 set "report=%~dp0{report}"
-for %%A in ("%report%") do if %%~zA GTR 0 (
-  type "%report%"
-  exit /b 1
-)
+for %%A in ("%report%") do if %%~zA GTR 0 goto :fail
 exit /b 0
+:fail
+type "%report%"
+exit /b 1
 """
 
 def _expected_contents(contents, actual, existing):
