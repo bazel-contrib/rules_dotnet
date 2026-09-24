@@ -45,3 +45,20 @@ paket_example.parse(
     lock = "//paket:paket.lock",
 )
 use_repo(paket_example, "paket.main", "paket.othergroup")
+
+# Builds the container images in //container_image.
+bazel_dep(name = "rules_img", version = "0.3.22")
+
+pull = use_repo_rule("@rules_img//img:pull.bzl", "pull")
+
+# What a self-contained publish needs from the OS: the native libraries the
+# runtime links against. A framework-dependent one needs the runtime too, from
+# `dotnet/runtime` or `dotnet/aspnet`.
+pull(
+    name = "dotnet_runtime_deps",
+    digest = "sha256:099f6f87ed745377dd27bd722f0d1a352bca71b4fddaabfd75e7c064bcaa82da",
+    platforms = ["linux/amd64"],
+    registry = "mcr.microsoft.com",
+    repository = "dotnet/runtime-deps",
+    tag = "10.0",
+)

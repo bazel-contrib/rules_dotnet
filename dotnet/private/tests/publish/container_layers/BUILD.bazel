@@ -1,0 +1,110 @@
+load("@rules_img//img:image.bzl", "image_manifest")
+load("@rules_img//img:layer.bzl", "image_layer", "layer_from_binary")
+load("@rules_shell//shell:sh_test.bzl", "sh_test")
+load("//dotnet:defs.bzl", "csharp_binary", "csharp_library", "publish_binary")
+load(":tests.bzl", "LAYERS", "container_layers_test_suite")
+
+container_layers_test_suite(name = "container_layers_test_suite")
+
+# An application and a library that each carry a data file, which land in
+# different layers.
+csharp_library(
+    name = "data_lib",
+    srcs = ["DataLib.cs"],
+    data = ["lib-data.txt"],
+    target_frameworks = ["net10.0"],
+)
+
+csharp_binary(
+    name = "data_app",
+    srcs = ["DataApp.cs"],
+    data = ["app-data.txt"],
+    target_frameworks = ["net10.0"],
+    deps = [
+        ":data_lib",
+        "//tools/runfiles",
+    ],
+)
+
+# Each publish is packed into image layers, which a test stacks and runs. The
+# NativeAOT one carries its sidecars as runfiles too.
+PUBLISHES = {
+    "publish": "//dotnet/private/tests/publish/app_to_publish",
+    "data_publish": ":data_app",
+    "native_aot_publish": "//dotnet/private/tests/publish/app_to_publish",
+}
+
+[
+    publish_binary(
+        name = publish,
+        binary = binary,
+        native_aot = publish == "native_aot_publish",
+        self_contained = True,
+        # The linker for NativeAOT only drives Unix toolchains.
+        target_compatible_with = select({
+            "@platforms//os:windows": ["@platforms//:incompatible"],
+            "//conditions:default": [],
+        }) if publish == "native_aot_publish" else [],
+        target_framework = "net10.0",
+    )
+    for (publish, binary) in PUBLISHES.items()
+]
+
+[
+    filegroup(
+        name = "{}_{}".format(publish, layer),
+        srcs = [":" + publish],
+        output_group = layer + "_layer",
+    )
+    for publish in PUBLISHES
+    for layer in LAYERS
+]
+
+# The filegroup carries the publish's runfiles, which would make rules_img treat
+# it as an executable and fail on the layer directory.
+[
+    image_layer(
+        name = "{}_{}_layer".format(publish, layer),
+        srcs = {"/app": ":{}_{}".format(publish, layer)},
+        include_runfiles = False,
+    )
+    for publish in PUBLISHES
+    for layer in LAYERS
+]
+
+# What rules_img packs from the publish on its own, which the stacked layers
+# have to match.
+[
+    layer_from_binary(
+        name = publish + "_single_layer",
+        binary = ":" + publish,
+        path = "/app/",
+    )
+    for publish in PUBLISHES
+]
+
+# Checks that the layers make up an image.
+image_manifest(
+    name = "image",
+    layers = [":publish_{}_layer".format(layer) for layer in LAYERS],
+)
+
+[
+    sh_test(
+        name = publish + "_layers_test",
+        size = "small",
+        srcs = ["layers_test.sh"],
+        args = [
+            "$(rootpath :{})".format(publish),
+            "$(rootpath :{}_single_layer)".format(publish),
+        ] + [
+            "$(rootpath :{}_{}_layer)".format(publish, layer)
+            for layer in LAYERS
+        ],
+        data = [
+            ":" + publish,
+            ":{}_single_layer".format(publish),
+        ] + [":{}_{}_layer".format(publish, layer) for layer in LAYERS],
+    )
+    for publish in PUBLISHES
+]

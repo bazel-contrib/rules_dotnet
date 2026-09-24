@@ -878,6 +878,19 @@ def framework_preprocessor_symbols(tfm):
     """
     return _FRAMEWORK_PREPROCESSOR_SYMBOLS.get(tfm, _compute_framework_preprocessor_symbols(tfm))
 
+def is_from_nuget_package(dep):
+    """Whether a dependency was unpacked from a `.nupkg`.
+
+    An `import_library` that names no package wraps a file this repository
+    builds or checks in.
+
+    Args:
+        dep: (DotnetAssemblyRuntimeInfo) The dependency.
+    Returns:
+        True if the dependency came out of a NuGet package.
+    """
+    return dep.nuget_info != None and dep.nuget_info.nupkg != None
+
 def runtime_target_path(file):
     """The key a native asset takes in the `runtimeTargets` of a deps.json.
 
@@ -1025,7 +1038,7 @@ def generate_depsjson(
             # Otherwise we followe the conventions mentioned here: https://github.com/dotnet/sdk/blob/main/documentation/specs/runtime-configuration-file.md#framework-dependent-deployment-model
             if is_self_contained:
                 target_fragment["native"] = {native_file.basename: {"fileVersion": "0.0.0.0"} for native_file in runtime_dep.native}
-            elif runtime_dep.nuget_info == None or runtime_dep.nuget_info.nupkg == None:
+            elif not is_from_nuget_package(runtime_dep):
                 # For non self-contained binaries that are not from a NuGet package, assume we built
                 # them and point to their relative location within the execroot.
                 target_fragment["native"] = {(native_file.basename if not use_relative_paths else to_rlocation_path(ctx, native_file)): {"fileVersion": "0.0.0.0"} for native_file in runtime_dep.native}

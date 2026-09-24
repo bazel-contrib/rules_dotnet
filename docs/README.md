@@ -220,6 +220,11 @@ publishes NativeAOT — Xcode's command line tools on macOS, clang or gcc on
 Linux — and it cannot cross-compile, because a host toolchain only targets its
 own platform.
 
+## Container images
+
+The output from `publish_binary` can easily be used to build container images.
+See the [container image example](../examples/container_image) for how to do this with `rules_img`.
+
 ## Usage
 
 ### Installation

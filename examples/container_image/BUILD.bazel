@@ -1,0 +1,114 @@
+load(
+    "@rules_dotnet//dotnet:defs.bzl",
+    "csharp_binary",
+    "csharp_library",
+    "publish_binary",
+)
+load("@rules_img//img:image.bzl", "image_from_binary", "image_manifest")
+load("@rules_img//img:layer.bzl", "image_layer")
+load("@rules_img//img:load.bzl", "image_load")
+
+csharp_library(
+    name = "greeting",
+    srcs = ["Greeting.cs"],
+    data = ["greeting.txt"],
+    target_frameworks = ["net10.0"],
+    deps = ["@rules_dotnet//tools/runfiles"],
+)
+
+csharp_binary(
+    name = "hello",
+    srcs = ["Program.cs"],
+    target_frameworks = ["net10.0"],
+    deps = [
+        ":greeting",
+        "@paket.example_deps//mono.cecil",
+    ],
+)
+
+publish_binary(
+    name = "publish",
+    binary = ":hello",
+    self_contained = True,
+    target_framework = "net10.0",
+)
+
+platform(
+    name = "linux_x86_64",
+    constraint_values = [
+        "@platforms//cpu:x86_64",
+        "@platforms//os:linux",
+    ],
+)
+
+# Example 1: The whole publish in one layer
+# ------------------------------------------
+# The publish, and the runfiles tree its data files are found in, as one layer.
+# Any change to the application pushes all of it again, runtime included.
+image_from_binary(
+    name = "image",
+    base = "@dotnet_runtime_deps",
+    binary = ":publish",
+    path = "/app/",
+    platforms = [":linux_x86_64"],
+)
+
+# Example 2: One layer per rate of change
+# The same files split four ways, from the layer that changes least to the one
+# that changes with every build. Changing the application pushes only `app`.
+LAYERS = [
+    "runtime",
+    "third_party",
+    "first_party",
+    "app",
+]
+
+[
+    filegroup(
+        name = "publish_" + layer,
+        srcs = [":publish"],
+        output_group = layer + "_layer",
+    )
+    for layer in LAYERS
+]
+
+[
+    image_layer(
+        name = layer + "_layer",
+        srcs = {"/app": ":publish_" + layer},
+        # The filegroup carries the publish's runfiles, which would make
+        # rules_img treat it as an executable. The layers hold the runfiles
+        # tree already.
+        include_runfiles = False,
+    )
+    for layer in LAYERS
+]
+
+image_manifest(
+    name = "layered_image",
+    base = "@dotnet_runtime_deps",
+    entrypoint = ["/app/hello"],
+    layers = [":{}_layer".format(layer) for layer in LAYERS],
+    platform = ":linux_x86_64",
+    working_dir = "/app/hello.runfiles/_main",
+)
+
+# --- Running them ------------------------------------------------------------
+
+#   bazel run //container_image:load && docker run --rm localhost/hello:single_layer
+image_load(
+    name = "load",
+    image = ":image",
+    registry = "localhost",
+    repository = "hello",
+    tag = "single_layer",
+)
+
+#   bazel run //container_image:load_layered && docker run --rm localhost/hello:layered
+image_load(
+    name = "load_layered",
+    image = ":layered_image",
+    registry = "localhost",
+    repository = "hello",
+    tag = "layered",
+)
