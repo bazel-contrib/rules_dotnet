@@ -1,0 +1,12 @@
+{
+  "runtimeOptions": {
+    "frameworks": [
+      {
+        "name": "Microsoft.NETCore.App",
+        "version": "9.0.0"
+      }
+    ],
+    "rollForward": "Major",
+    "tfm": "net9.0"
+  }
+}

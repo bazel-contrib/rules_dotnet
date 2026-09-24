@@ -1,0 +1,148 @@
+# Analyzer packages, and the analyzer failures.
+#
+# NU5128 is expected of both: they declare an empty dependency group for a
+# framework they ship nothing under `lib/` for.
+
+load("//dotnet:defs.bzl", "csharp_library", "nuget_pack")
+load("//dotnet/private/tests/nuget_pack:nuget_pack_test.bzl", "fails_with_test", "nuget_pack_test")
+
+package(default_visibility = ["//dotnet/private/tests/nuget_pack:__subpackages__"])
+
+csharp_library(
+    name = "generator_support",
+    srcs = ["GeneratorSupport.cs"],
+    target_frameworks = ["netstandard2.0"],
+    version = "1.0.0",
+)
+
+# A source generator. `is_language_specific_analyzer` is what puts it under
+# `analyzers/dotnet/cs`; the Roslyn packages it compiles against stay out of the
+# package, and the first-party assembly it loads travels with it.
+csharp_library(
+    name = "generator",
+    srcs = ["Generator.cs"],
+    analyzer_configs = [".analyzerconfig"],
+    is_analyzer = True,
+    is_language_specific_analyzer = True,
+    target_frameworks = ["netstandard2.0"],
+    version = "1.0.0",
+    deps = [
+        ":generator_support",
+        "@paket.rules_dotnet_dev_nuget_packages//microsoft.codeanalysis.analyzers",
+        "@paket.rules_dotnet_dev_nuget_packages//microsoft.codeanalysis.common",
+        "@paket.rules_dotnet_dev_nuget_packages//microsoft.codeanalysis.csharp",
+    ],
+)
+
+nuget_pack(
+    name = "generator_pack",
+    authors = ["rules_dotnet"],
+    description = "A source generator packed by rules_dotnet's own tests.",
+    development_dependency = True,
+    library = ":generator",
+    package_id = "RulesDotnet.Tests.Generator",
+    symbols = "embedded",
+    target_frameworks = ["netstandard2.0"],
+)
+
+nuget_pack_test(
+    name = "generator_pack_test",
+    contents = {
+        "expected/generator_pack.nuspec": "RulesDotnet.Tests.Generator.nuspec",
+    },
+    files = [
+        "analyzers/dotnet/cs/generator.dll",
+        "analyzers/dotnet/cs/generator.pdb",
+        "analyzers/dotnet/cs/generator_support.dll",
+    ],
+    package = ":generator_pack",
+    warnings = ["NU5128"],
+)
+
+# The same generator for any language: under `analyzers/dotnet`, with its pdb
+# in the symbol package.
+csharp_library(
+    name = "analyzer",
+    srcs = ["Generator.cs"],
+    analyzer_configs = [".analyzerconfig"],
+    is_analyzer = True,
+    target_frameworks = ["netstandard2.0"],
+    version = "1.0.0",
+    deps = [
+        ":generator_support",
+        "@paket.rules_dotnet_dev_nuget_packages//microsoft.codeanalysis.analyzers",
+        "@paket.rules_dotnet_dev_nuget_packages//microsoft.codeanalysis.common",
+        "@paket.rules_dotnet_dev_nuget_packages//microsoft.codeanalysis.csharp",
+    ],
+)
+
+nuget_pack(
+    name = "analyzer_pack",
+    authors = ["rules_dotnet"],
+    description = "An analyzer for any language packed by rules_dotnet's own tests.",
+    development_dependency = True,
+    library = ":analyzer",
+    package_id = "RulesDotnet.Tests.Analyzer",
+    symbols = "snupkg",
+    target_frameworks = ["netstandard2.0"],
+)
+
+nuget_pack_test(
+    name = "analyzer_pack_test",
+    contents = {
+        "expected/analyzer_pack.nuspec": "RulesDotnet.Tests.Analyzer.nuspec",
+    },
+    files = [
+        "analyzers/dotnet/analyzer.dll",
+        "analyzers/dotnet/generator_support.dll",
+    ],
+    package = ":analyzer_pack",
+    symbol_files = ["analyzers/dotnet/analyzer.pdb"],
+    warnings = ["NU5128"],
+)
+
+# --- Failures ----------------------------------------------------------------
+
+csharp_library(
+    name = "generated",
+    srcs = ["Generated.cs"],
+    target_frameworks = ["netstandard2.0"],
+    deps = [":generator"],
+)
+
+nuget_pack(
+    name = "bundled_analyzer",
+    authors = ["rules_dotnet"],
+    description = "d",
+    first_party_deps = "bundle",
+    library = ":generated",
+    tags = ["manual"],
+    target_frameworks = ["netstandard2.0"],
+)
+
+fails_with_test(
+    name = "bundled_analyzer_test",
+    size = "small",
+    expected_message_fragments = [
+        "generator (a dependency of generated) ships no assembly to copy into this package",
+        "list its nuget_pack in `deps`",
+    ],
+    target_under_test = ":bundled_analyzer",
+)
+
+nuget_pack(
+    name = "analyzer_with_rids",
+    authors = ["rules_dotnet"],
+    description = "d",
+    library = ":generator",
+    runtime_identifiers = ["linux-x64"],
+    tags = ["manual"],
+    target_frameworks = ["netstandard2.0"],
+)
+
+fails_with_test(
+    name = "analyzer_with_rids_test",
+    size = "small",
+    expected_message_fragments = ["an analyzer runs inside the compiler, not on a runtime"],
+    target_under_test = ":analyzer_with_rids",
+)

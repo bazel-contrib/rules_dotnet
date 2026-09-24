@@ -322,6 +322,12 @@ groups can hold incompatible versions of the same transitive dependency.
 A package that ships a [dotnet tool](https://learn.microsoft.com/en-us/dotnet/core/tools/global-tools)
 also exposes it as an executable, at `@paket.<group>//<package>/tools:<tool>`.
 
+## Producing NuGet packages
+
+`nuget_pack` builds a `.nupkg` from a library, or a .NET tool package from a
+binary, and `nuget_push` publishes it. See
+[examples/nuget_pack](../examples/nuget_pack).
+
 ## Remote execution
 
 The rules support remote execution out of the box. The remote runners do need to have the required .Net

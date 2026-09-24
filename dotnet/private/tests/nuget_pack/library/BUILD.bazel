@@ -1,0 +1,500 @@
+# Library packages: what a library and its dependencies become in a package,
+# the `version` attribute, and the library failures.
+#
+# NU5131 is expected of every package with a `ref/` folder: `nuget_pack` writes
+# no `<references>` into the manifest, and NuGet asks for them regardless.
+
+load("@bazel_lib//lib:diff_test.bzl", "diff_test")
+load("@bazel_skylib//rules:select_file.bzl", "select_file")
+load("@bazel_skylib//rules:write_file.bzl", "write_file")
+load("//dotnet:defs.bzl", "csharp_library", "nuget_pack")
+load("//dotnet/private/tests/nuget_pack:nuget_pack_test.bzl", "fails_with_test", "nuget_pack_test")
+
+package(default_visibility = ["//dotnet/private/tests/nuget_pack:__subpackages__"])
+
+# --- Libraries ---------------------------------------------------------------
+#
+#   lib ─┬─ bundled ── deeper
+#        ├─ referenced ── System.Memory
+#        ├─ mapped ── mapped_support
+#        └─ System.Memory
+
+csharp_library(
+    name = "lib",
+    srcs = ["Lib.cs"],
+    target_frameworks = [
+        "netstandard2.0",
+        "net9.0",
+    ],
+    version = "1.2.3-beta.1+abc",
+    deps = [
+        ":bundled",
+        ":mapped",
+        ":referenced",
+        "@paket.rules_dotnet_dev_nuget_packages//system.memory",
+    ],
+)
+
+# No version: the assembly has none, and a package depending on it asks for 1.0.0.
+csharp_library(
+    name = "bundled",
+    srcs = ["Bundled.cs"],
+    target_frameworks = [
+        "netstandard2.0",
+        "net9.0",
+    ],
+    deps = [":deeper"],
+)
+
+csharp_library(
+    name = "deeper",
+    srcs = ["Deeper.cs"],
+    target_frameworks = [
+        "netstandard2.0",
+        "net9.0",
+    ],
+    version = "4.0.0",
+)
+
+csharp_library(
+    name = "referenced",
+    srcs = ["Referenced.cs"],
+    target_frameworks = [
+        "netstandard2.0",
+        "net9.0",
+    ],
+    version = "2.0.0",
+    deps = ["@paket.rules_dotnet_dev_nuget_packages//system.memory"],
+)
+
+csharp_library(
+    name = "mapped",
+    srcs = ["Mapped.cs"],
+    target_frameworks = [
+        "netstandard2.0",
+        "net9.0",
+    ],
+    version = "3.0.0",
+    deps = [":mapped_support"],
+)
+
+csharp_library(
+    name = "mapped_support",
+    srcs = ["MappedSupport.cs"],
+    target_frameworks = [
+        "netstandard2.0",
+        "net9.0",
+    ],
+)
+
+# --- A package that others map an assembly to ---------------------------------
+
+# Copies `mapped_support` in, so that a package depending on this one stops at
+# it. Its pdbs go beside the assemblies, and it ships no reference assemblies.
+nuget_pack(
+    name = "mapped_pack",
+    authors = ["rules_dotnet"],
+    description = "Shipped by its own package and mapped through `deps`.",
+    first_party_deps = "bundle",
+    library = ":mapped",
+    package_id = "RulesDotnet.Tests.Mapped",
+    reference_assemblies = False,
+    symbols = "embedded",
+    target_frameworks = [
+        "netstandard2.0",
+        "net9.0",
+    ],
+)
+
+nuget_pack_test(
+    name = "mapped_pack_test",
+    contents = {
+        "expected/mapped_pack.nuspec": "RulesDotnet.Tests.Mapped.nuspec",
+    },
+    files = [
+        "lib/net9.0/mapped.dll",
+        "lib/net9.0/mapped.pdb",
+        "lib/net9.0/mapped.xml",
+        "lib/net9.0/mapped_support.dll",
+        "lib/net9.0/mapped_support.pdb",
+        "lib/net9.0/mapped_support.xml",
+        "lib/netstandard2.0/mapped.dll",
+        "lib/netstandard2.0/mapped.pdb",
+        "lib/netstandard2.0/mapped.xml",
+        "lib/netstandard2.0/mapped_support.dll",
+        "lib/netstandard2.0/mapped_support.pdb",
+        "lib/netstandard2.0/mapped_support.xml",
+    ],
+    package = ":mapped_pack",
+)
+
+alias(
+    name = "mapped_pack_alias",
+    actual = ":mapped_pack",
+)
+
+# --- A version read when the package is built --------------------------------
+
+# As a stamped one would be; the first non-empty line counts.
+write_file(
+    name = "deeper_version",
+    out = "deeper_version.txt",
+    content = [
+        "",
+        "4.5.6-nightly.7",
+        "",
+    ],
+)
+
+nuget_pack(
+    name = "deeper_pack",
+    authors = ["rules_dotnet"],
+    description = "Published nightly, with a version read from a file.",
+    library = ":deeper",
+    package_id = "RulesDotnet.Tests.Deeper",
+    target_frameworks = [
+        "netstandard2.0",
+        "net9.0",
+    ],
+    version_file = ":deeper_version",
+)
+
+# Named after the target, since the version is not known when it is declared.
+# The assembly keeps the version it was compiled with.
+nuget_pack_test(
+    name = "deeper_pack_test",
+    assemblies = {
+        "lib/net9.0/deeper.dll": "deeper 4.0.0.0, file 4.0.0.0, informational 4.0.0, against System.Runtime 9.0.0.0",
+    },
+    contents = {
+        "expected/deeper_pack.nuspec": "RulesDotnet.Tests.Deeper.nuspec",
+    },
+    files = [
+        "lib/net9.0/deeper.dll",
+        "lib/net9.0/deeper.xml",
+        "lib/netstandard2.0/deeper.dll",
+        "lib/netstandard2.0/deeper.xml",
+        "ref/net9.0/deeper.dll",
+        "ref/netstandard2.0/deeper.dll",
+    ],
+    package = ":deeper_pack",
+    warnings = ["NU5131"],
+)
+
+# --- Copying first-party dependencies in -------------------------------------
+
+# `bundled`, `deeper` below it and `referenced` are copied in; `mapped` is a
+# dependency on its package, which ships `mapped_support` too. System.Memory,
+# reached twice, is one dependency.
+nuget_pack(
+    name = "pack",
+    authors = [
+        "rules_dotnet",
+        "contributors",
+    ],
+    copyright = "Copyright rules_dotnet",
+    description = "A library packed by rules_dotnet's own tests.",
+    first_party_deps = "bundle",
+    library = ":lib",
+    license_expression = "Apache-2.0",
+    package_id = "RulesDotnet.Tests.Lib",
+    package_tags = [
+        "test",
+        "rules_dotnet",
+    ],
+    project_url = "https://github.com/bazel-contrib/rules_dotnet",
+    readme = "README.md",
+    release_notes = "First.",
+    repository_commit = "0123456789abcdef0123456789abcdef01234567",
+    repository_url = "https://github.com/bazel-contrib/rules_dotnet.git",
+    symbols = "snupkg",
+    target_frameworks = [
+        "netstandard2.0",
+        "net9.0",
+    ],
+    deps = [":mapped_pack"],
+)
+
+# `version` gives an assembly its versions, and no `version` gives it none.
+# `ref/` has the library's reference assembly and the implementations of what
+# was copied in, which have none of their own there.
+nuget_pack_test(
+    name = "pack_test",
+    assemblies = {
+        "lib/net9.0/bundled.dll": "bundled 0.0.0.0, against System.Runtime 9.0.0.0",
+        "lib/net9.0/lib.dll": "lib 1.2.3.0, file 1.2.3.0, informational 1.2.3-beta.1+abc, against System.Runtime 9.0.0.0",
+        "lib/netstandard2.0/lib.dll": "lib 1.2.3.0, file 1.2.3.0, informational 1.2.3-beta.1+abc, against netstandard 2.0.0.0",
+        "ref/net9.0/bundled.dll": "same bytes as lib/net9.0/bundled.dll",
+        "ref/net9.0/lib.dll": "lib 1.2.3.0, file 1.2.3.0, informational 1.2.3-beta.1+abc, against System.Runtime 9.0.0.0, reference",
+    },
+    contents = {
+        "expected/pack.nuspec": "RulesDotnet.Tests.Lib.nuspec",
+    },
+    files = [
+        "README.md",
+        "lib/net9.0/bundled.dll",
+        "lib/net9.0/bundled.xml",
+        "lib/net9.0/deeper.dll",
+        "lib/net9.0/deeper.xml",
+        "lib/net9.0/lib.dll",
+        "lib/net9.0/lib.xml",
+        "lib/net9.0/referenced.dll",
+        "lib/net9.0/referenced.xml",
+        "lib/netstandard2.0/bundled.dll",
+        "lib/netstandard2.0/bundled.xml",
+        "lib/netstandard2.0/deeper.dll",
+        "lib/netstandard2.0/deeper.xml",
+        "lib/netstandard2.0/lib.dll",
+        "lib/netstandard2.0/lib.xml",
+        "lib/netstandard2.0/referenced.dll",
+        "lib/netstandard2.0/referenced.xml",
+        "ref/net9.0/bundled.dll",
+        "ref/net9.0/deeper.dll",
+        "ref/net9.0/lib.dll",
+        "ref/net9.0/referenced.dll",
+        "ref/netstandard2.0/bundled.dll",
+        "ref/netstandard2.0/deeper.dll",
+        "ref/netstandard2.0/lib.dll",
+        "ref/netstandard2.0/referenced.dll",
+    ],
+    package = ":pack",
+    symbol_contents = {
+        "expected/pack.symbols.nuspec": "RulesDotnet.Tests.Lib.nuspec",
+    },
+    symbol_files = [
+        "lib/net9.0/bundled.pdb",
+        "lib/net9.0/deeper.pdb",
+        "lib/net9.0/lib.pdb",
+        "lib/net9.0/referenced.pdb",
+        "lib/netstandard2.0/bundled.pdb",
+        "lib/netstandard2.0/deeper.pdb",
+        "lib/netstandard2.0/lib.pdb",
+        "lib/netstandard2.0/referenced.pdb",
+    ],
+    warnings = ["NU5131"],
+)
+
+# --- Depending on first-party packages ---------------------------------------
+
+# The default: the direct dependencies `bundled` and `referenced` become
+# dependencies on packages named after them, and `deeper` is left to
+# `bundled`'s. Every package in `deps` is declared whether or not anything
+# resolves to it, as a PackageReference is: `deeper_pack` with the version it
+# reads when it is built, and `mapped_pack` once although it is listed twice.
+nuget_pack(
+    name = "pack_ref",
+    authors = ["rules_dotnet"],
+    description = "The same library, depending on its first-party dependencies as packages.",
+    library = ":lib",
+    package_id = "RulesDotnet.Tests.Lib",
+    target_frameworks = [
+        "netstandard2.0",
+        "net9.0",
+    ],
+    deps = [
+        ":deeper_pack",
+        ":mapped_pack",
+        ":mapped_pack_alias",
+    ],
+)
+
+nuget_pack_test(
+    name = "pack_ref_test",
+    contents = {
+        "expected/pack_ref.nuspec": "RulesDotnet.Tests.Lib.nuspec",
+    },
+    files = [
+        "lib/net9.0/lib.dll",
+        "lib/net9.0/lib.xml",
+        "lib/netstandard2.0/lib.dll",
+        "lib/netstandard2.0/lib.xml",
+        "ref/net9.0/lib.dll",
+        "ref/netstandard2.0/lib.dll",
+    ],
+    package = ":pack_ref",
+    warnings = ["NU5131"],
+)
+
+# --- Determinism -------------------------------------------------------------
+#
+# Two packages built from the same inputs in different output folders: identical
+# bytes mean no path, time or random name got in.
+
+nuget_pack(
+    name = "det_a",
+    authors = ["rules_dotnet"],
+    description = "Determinism check.",
+    first_party_deps = "bundle",
+    library = ":lib",
+    package_id = "RulesDotnet.Tests.Det",
+    readme = "README.md",
+    symbols = "snupkg",
+    target_frameworks = [
+        "netstandard2.0",
+        "net9.0",
+    ],
+    deps = [":mapped_pack"],
+)
+
+nuget_pack(
+    name = "det_b",
+    authors = ["rules_dotnet"],
+    description = "Determinism check.",
+    first_party_deps = "bundle",
+    library = ":lib",
+    package_id = "RulesDotnet.Tests.Det",
+    readme = "README.md",
+    symbols = "snupkg",
+    target_frameworks = [
+        "netstandard2.0",
+        "net9.0",
+    ],
+    deps = [":mapped_pack"],
+)
+
+[
+    select_file(
+        name = "det_{}_{}".format(side, extension),
+        srcs = ":det_{}".format(side),
+        subpath = "det_{}/RulesDotnet.Tests.Det.1.2.3-beta.1.{}".format(side, extension),
+    )
+    for side in [
+        "a",
+        "b",
+    ]
+    for extension in [
+        "nupkg",
+        "snupkg",
+    ]
+]
+
+[
+    diff_test(
+        name = "deterministic_{}".format(extension),
+        file1 = ":det_a_{}".format(extension),
+        file2 = ":det_b_{}".format(extension),
+    )
+    for extension in [
+        "nupkg",
+        "snupkg",
+    ]
+]
+
+# --- Failures ----------------------------------------------------------------
+#
+# The targets under test are `manual`: they exist to fail, and only the tests
+# that expect the failure build them.
+
+csharp_library(
+    name = "bad_version",
+    srcs = ["Simple.cs"],
+    tags = ["manual"],
+    target_frameworks = ["net9.0"],
+    version = "1",
+)
+
+fails_with_test(
+    name = "bad_version_test",
+    size = "small",
+    expected_message_fragments = ["version \"1\" must have two to four numeric components"],
+    target_under_test = ":bad_version",
+)
+
+csharp_library(
+    name = "net9_only",
+    srcs = ["Simple.cs"],
+    target_frameworks = ["net9.0"],
+)
+
+# Asks for net10.0, which the library resolves to its net9.0 build.
+nuget_pack(
+    name = "wrong_framework",
+    authors = ["rules_dotnet"],
+    description = "d",
+    library = ":net9_only",
+    tags = ["manual"],
+    target_frameworks = [
+        "net9.0",
+        "net10.0",
+    ],
+)
+
+fails_with_test(
+    name = "wrong_framework_test",
+    size = "small",
+    expected_message_fragments = [
+        "for net10.0, but that target builds the same assembly for it as for another framework",
+        "Add net10.0 to its target_frameworks",
+    ],
+    target_under_test = ":wrong_framework",
+)
+
+# Asks for net10.0 alone, so the one branch there is builds net9.0 under a net10.0 key.
+nuget_pack(
+    name = "wrong_only_framework",
+    authors = ["rules_dotnet"],
+    description = "d",
+    library = ":net9_only",
+    tags = ["manual"],
+    target_frameworks = ["net10.0"],
+)
+
+fails_with_test(
+    name = "wrong_only_framework_test",
+    size = "small",
+    expected_message_fragments = [
+        "for net10.0, but that target builds net9.0 for it",
+        "Add net10.0 to its target_frameworks",
+    ],
+    target_under_test = ":wrong_only_framework",
+)
+
+nuget_pack(
+    name = "unmapped_dependency",
+    authors = ["rules_dotnet"],
+    description = "d",
+    first_party_deps = "error",
+    library = ":lib",
+    tags = ["manual"],
+    target_frameworks = ["net9.0"],
+    deps = [":mapped_pack"],
+)
+
+fails_with_test(
+    name = "unmapped_dependency_test",
+    size = "small",
+    expected_message_fragments = ["bundled (a dependency of lib) is not shipped by any package in `deps`"],
+    target_under_test = ":unmapped_dependency",
+)
+
+nuget_pack(
+    name = "mapped_pack_again",
+    authors = ["rules_dotnet"],
+    description = "d",
+    library = ":mapped",
+    package_id = "RulesDotnet.Tests.MappedAgain",
+    target_frameworks = [
+        "netstandard2.0",
+        "net9.0",
+    ],
+)
+
+nuget_pack(
+    name = "two_packages_one_assembly",
+    authors = ["rules_dotnet"],
+    description = "d",
+    library = ":lib",
+    tags = ["manual"],
+    target_frameworks = ["net9.0"],
+    deps = [
+        ":mapped_pack",
+        ":mapped_pack_again",
+    ],
+)
+
+fails_with_test(
+    name = "two_packages_one_assembly_test",
+    size = "small",
+    expected_message_fragments = ["both ship the assembly mapped"],
+    target_under_test = ":two_packages_one_assembly",
+)

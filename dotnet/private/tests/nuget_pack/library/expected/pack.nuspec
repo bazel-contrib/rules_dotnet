@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<package xmlns="http://schemas.microsoft.com/packaging/2013/05/nuspec.xsd">
+  <metadata>
+    <id>RulesDotnet.Tests.Lib</id>
+    <version>1.2.3-beta.1+abc</version>
+    <authors>rules_dotnet,contributors</authors>
+    <requireLicenseAcceptance>false</requireLicenseAcceptance>
+    <license type="expression">Apache-2.0</license>
+    <readme>README.md</readme>
+    <projectUrl>https://github.com/bazel-contrib/rules_dotnet</projectUrl>
+    <description>A library packed by rules_dotnet's own tests.</description>
+    <releaseNotes>First.</releaseNotes>
+    <copyright>Copyright rules_dotnet</copyright>
+    <tags>test rules_dotnet</tags>
+    <repository type="git" url="https://github.com/bazel-contrib/rules_dotnet.git" commit="0123456789abcdef0123456789abcdef01234567" />
+    <dependencies>
+      <group targetFramework="net9.0">
+        <dependency id="RulesDotnet.Tests.Mapped" version="3.0.0" exclude="Build,Analyzers" />
+        <dependency id="System.Memory" version="4.5.5" exclude="Build,Analyzers" />
+      </group>
+      <group targetFramework=".NETStandard2.0">
+        <dependency id="RulesDotnet.Tests.Mapped" version="3.0.0" exclude="Build,Analyzers" />
+        <dependency id="System.Memory" version="4.5.5" exclude="Build,Analyzers" />
+      </group>
+    </dependencies>
+  </metadata>
+</package>

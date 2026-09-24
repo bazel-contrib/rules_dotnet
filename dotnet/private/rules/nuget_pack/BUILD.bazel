@@ -1,0 +1,50 @@
+load("@bazel_lib//:bzl_library.bzl", "bzl_library")
+
+bzl_library(
+    name = "transitions",
+    srcs = ["transitions.bzl"],
+    visibility = ["//dotnet:__subpackages__"],
+    deps = [
+        "//dotnet/private/transitions:common",
+        "@bazel_skylib//lib:dicts",
+    ],
+)
+
+bzl_library(
+    name = "layout",
+    srcs = ["layout.bzl"],
+    visibility = ["//dotnet:__subpackages__"],
+    deps = [
+        "//dotnet/private:common",
+        "//dotnet/private:nuget_version",
+        "//dotnet/private/rules/common:publish_layout",
+        "//dotnet/private/rules/common:static_web_assets",
+        "//dotnet/private/sdk:packs",
+    ],
+)
+
+bzl_library(
+    name = "nuget_pack",
+    srcs = ["nuget_pack.bzl"],
+    visibility = ["//dotnet:__subpackages__"],
+    deps = [
+        ":layout",
+        ":transitions",
+        "//dotnet/private:common",
+        "//dotnet/private:nuget_version",
+        "//dotnet/private:providers",
+        "//dotnet/private/rules/common:publish_layout",
+        "//dotnet/private/transitions:default_transition",
+    ],
+)
+
+bzl_library(
+    name = "nuget_push",
+    srcs = ["nuget_push.bzl"],
+    visibility = ["//dotnet:__subpackages__"],
+    deps = [
+        "//dotnet/private:common",
+        "//dotnet/private:providers",
+        "@bazel_skylib//lib:shell",
+    ],
+)

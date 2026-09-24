@@ -65,6 +65,14 @@ load(
     _nuget_repo = "nuget_repo",
 )
 load(
+    "//dotnet/private/rules/nuget_pack:nuget_pack.bzl",
+    _nuget_pack = "nuget_pack",
+)
+load(
+    "//dotnet/private/rules/nuget_pack:nuget_push.bzl",
+    _nuget_push = "nuget_push",
+)
+load(
     "//dotnet/private/rules/publish_binary:publish_binary.bzl",
     _publish_binary = "publish_binary",
 )
@@ -160,3 +168,5 @@ import_dll = _import_dll
 nuget_repo = _nuget_repo
 nuget_archive = _nuget_archive
 dotnet_tool = _dotnet_tool
+nuget_pack = _nuget_pack
+nuget_push = _nuget_push

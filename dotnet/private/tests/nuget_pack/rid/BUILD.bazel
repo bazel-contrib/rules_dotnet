@@ -1,0 +1,53 @@
+# A RID-specific package.
+
+load("//dotnet:defs.bzl", "csharp_library", "nuget_pack")
+load("//dotnet/private/tests/nuget_pack:nuget_pack_test.bzl", "nuget_pack_test")
+
+package(default_visibility = ["//dotnet/private/tests/nuget_pack:__subpackages__"])
+
+csharp_library(
+    name = "ridlib",
+    srcs = ["RidLib.cs"] + select({
+        "//dotnet:rid_linux-x64": ["RidLinux.cs"],
+        "//dotnet:rid_win-x64": ["RidWindows.cs"],
+        "//conditions:default": ["RidOther.cs"],
+    }),
+    target_frameworks = ["net9.0"],
+    version = "1.0.0",
+)
+
+nuget_pack(
+    name = "rid_pack",
+    authors = ["rules_dotnet"],
+    description = "A RID-specific library packed by rules_dotnet's own tests.",
+    library = ":ridlib",
+    package_id = "RulesDotnet.Tests.RidLib",
+    runtime_identifiers = [
+        "linux-x64",
+        "win-x64",
+    ],
+    target_frameworks = ["net9.0"],
+)
+
+# One build per runtime identifier, each with the source the `select` gave it:
+# two copies of the same bytes would say so. One reference assembly for both,
+# with the docs a compile reads.
+nuget_pack_test(
+    name = "rid_pack_test",
+    assemblies = {
+        "ref/net9.0/ridlib.dll": "ridlib 1.0.0.0, file 1.0.0.0, informational 1.0.0, against System.Runtime 9.0.0.0, reference",
+        "runtimes/linux-x64/lib/net9.0/ridlib.dll": "ridlib 1.0.0.0, file 1.0.0.0, informational 1.0.0, against System.Runtime 9.0.0.0",
+        "runtimes/win-x64/lib/net9.0/ridlib.dll": "ridlib 1.0.0.0, file 1.0.0.0, informational 1.0.0, against System.Runtime 9.0.0.0",
+    },
+    contents = {
+        "expected/rid_pack.nuspec": "RulesDotnet.Tests.RidLib.nuspec",
+    },
+    files = [
+        "ref/net9.0/ridlib.dll",
+        "ref/net9.0/ridlib.xml",
+        "runtimes/linux-x64/lib/net9.0/ridlib.dll",
+        "runtimes/win-x64/lib/net9.0/ridlib.dll",
+    ],
+    package = ":rid_pack",
+    warnings = ["NU5131"],
+)

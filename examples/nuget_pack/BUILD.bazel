@@ -1,0 +1,273 @@
+load(
+    "@rules_dotnet//dotnet:defs.bzl",
+    "csharp_binary",
+    "csharp_library",
+    "csharp_nunit_test",
+    "nuget_pack",
+    "nuget_push",
+)
+
+# --- Library packages --------------------------------------------------------
+
+# Two libraries, each published as its own package. `version` is what both the
+# assemblies and the packages carry.
+csharp_library(
+    name = "formatting",
+    srcs = ["Formatting.cs"],
+    target_frameworks = [
+        "netstandard2.0",
+        "net9.0",
+    ],
+    version = "1.0.0",
+)
+
+nuget_pack(
+    name = "formatting_pack",
+    authors = ["rules_dotnet"],
+    description = "Formats greetings.",
+    library = ":formatting",
+    license_expression = "Apache-2.0",
+    target_frameworks = [
+        "netstandard2.0",
+        "net9.0",
+    ],
+)
+
+csharp_library(
+    name = "greeter",
+    srcs = ["Greeter.cs"],
+    target_frameworks = [
+        "netstandard2.0",
+        "net9.0",
+    ],
+    version = "1.0.0",
+    deps = [
+        ":formatting",
+        "@paket.example_deps//system.collections.immutable",
+    ],
+)
+
+# Depends on `formatting >= 1.0.0` - a package named after the assembly, which
+# is what `formatting_pack` is - and on System.Collections.Immutable.
+# `first_party_deps = "bundle"` would copy `formatting` in instead; listing a
+# `nuget_pack` in `deps` maps the assembly to a package of another id.
+nuget_pack(
+    name = "greeter_pack",
+    authors = ["rules_dotnet"],
+    description = "Greets people, formatted.",
+    library = ":greeter",
+    license_expression = "Apache-2.0",
+    package_id = "Example.Greeter",
+    package_tags = [
+        "example",
+        "greeting",
+    ],
+    readme = "README.md",
+    repository_url = "https://github.com/bazel-contrib/rules_dotnet",
+    symbols = "snupkg",
+    target_frameworks = [
+        "netstandard2.0",
+        "net9.0",
+    ],
+)
+
+# --- Versioning --------------------------------------------------------------
+
+# The same library packed again as a release candidate. `version` overrides the
+# package alone: the assembly keeps the 1.0.0 it was compiled with, so the feed
+# gets `formatting` 1.0.0 and 2.0.0-rc.1 around the very same assembly.
+nuget_pack(
+    name = "formatting_rc",
+    authors = ["rules_dotnet"],
+    description = "Formats greetings.",
+    library = ":formatting",
+    license_expression = "Apache-2.0",
+    target_frameworks = [
+        "netstandard2.0",
+        "net9.0",
+    ],
+    version = "2.0.0-rc.1",
+)
+
+# A version known only once the package is built goes in `version_file`, a file
+# whose first non-empty line is the version. `version.sh` beside this file is a
+# workspace status command that provides one:
+#
+#   bazel build --workspace_status_command=nuget_pack/version.sh //nuget_pack:formatting_nightly
+#
+# The fallback keeps the example building without that status command.
+genrule(
+    name = "package_version",
+    outs = ["package_version.txt"],
+    cmd = "sed -n 's/^STABLE_PACKAGE_VERSION //p' bazel-out/stable-status.txt > $@ ; " +
+          "[ -s $@ ] || echo 0.0.0-dev > $@",
+    stamp = 1,
+)
+
+# The package is named after the target, since its version is not known when the
+# file is declared. What is inside carries the stamped version.
+nuget_pack(
+    name = "formatting_nightly",
+    authors = ["rules_dotnet"],
+    description = "Formats greetings, built nightly.",
+    library = ":formatting",
+    license_expression = "Apache-2.0",
+    target_frameworks = [
+        "netstandard2.0",
+        "net9.0",
+    ],
+    version_file = ":package_version",
+)
+
+# --- A platform-specific package ---------------------------------------------
+
+# A library with a different implementation per runtime identifier: the `select`
+# gives each one its own source file.
+csharp_library(
+    name = "platform",
+    srcs = ["platform/Platform.cs"] + select({
+        "@rules_dotnet//dotnet:rid_linux-x64": ["platform/PlatformLinux.cs"],
+        "@rules_dotnet//dotnet:rid_win-x64": ["platform/PlatformWindows.cs"],
+        "//conditions:default": ["platform/PlatformOther.cs"],
+    }),
+    out = "Example.Platform",
+    target_frameworks = ["net9.0"],
+    version = "1.0.0",
+)
+
+# `runtime_identifiers` builds the library once per runtime identifier and ships
+# each build under `runtimes/<rid>/lib/<tfm>/`, with one `ref/<tfm>/` to compile
+# against. Every runtime identifier builds the whole dependency graph again, so
+# this is for the packages that really do differ per platform.
+nuget_pack(
+    name = "platform_pack",
+    authors = ["rules_dotnet"],
+    description = "Names the runtime it was built for.",
+    library = ":platform",
+    license_expression = "Apache-2.0",
+    package_id = "Example.Platform",
+    runtime_identifiers = [
+        "linux-x64",
+        "win-x64",
+    ],
+    target_frameworks = ["net9.0"],
+)
+
+# --- An analyzer package -----------------------------------------------------
+
+# A source generator, packed as an analyzer package: the assembly goes under
+# `analyzers/dotnet/cs/` and nothing under `lib/`. The Roslyn packages it builds
+# against stay out - the compiler running it brings its own - and
+# `development_dependency` keeps it from flowing on to downstream consumers.
+csharp_library(
+    name = "greeting_generator",
+    srcs = ["analyzer/GreetingGenerator.cs"],
+    out = "Example.Greeter.Generator",
+    analyzer_configs = ["analyzer/.analyzerconfig"],
+    is_analyzer = True,
+    is_language_specific_analyzer = True,
+    target_frameworks = ["netstandard2.0"],
+    version = "1.0.0",
+    deps = [
+        "@paket.example_deps//microsoft.codeanalysis.analyzers",
+        "@paket.example_deps//microsoft.codeanalysis.common",
+        "@paket.example_deps//microsoft.codeanalysis.csharp",
+    ],
+)
+
+nuget_pack(
+    name = "greeting_generator_pack",
+    authors = ["rules_dotnet"],
+    description = "Generates a greeting constant.",
+    development_dependency = True,
+    library = ":greeting_generator",
+    license_expression = "Apache-2.0",
+    package_id = "Example.Greeter.Generator",
+    target_frameworks = ["netstandard2.0"],
+)
+
+# --- A Razor class library package -------------------------------------------
+
+# A Razor class library: its assembly goes under `lib/<tfm>/` like any other,
+# and the files it serves - `wwwroot`, and the bundle its scoped CSS compiles to
+# - go under `staticwebassets/`.
+#
+# A library serves its files under `_content/<assembly name>` in a Bazel build
+# and under `_content/<package id>` out of a package, so `out` names the
+# assembly after the package and `_content/Example.Components/badge.js` means
+# the same thing either way.
+csharp_library(
+    name = "components",
+    srcs = [
+        "components/Badge.razor",
+        "components/Badge.razor.css",
+        "components/_Imports.razor",
+    ],
+    out = "Example.Components",
+    project_sdk = "razor",
+    root_namespace = "Example.Components",
+    static_web_assets = glob(["components/wwwroot/**"]),
+    target_frameworks = ["net10.0"],
+    version = "1.0.0",
+)
+
+nuget_pack(
+    name = "components_pack",
+    authors = ["rules_dotnet"],
+    description = "A badge component.",
+    library = ":components",
+    license_expression = "Apache-2.0",
+    package_id = "Example.Components",
+    target_frameworks = ["net10.0"],
+)
+
+# --- A tool package ----------------------------------------------------------
+
+# A command-line tool, packed as a .NET tool: after
+#   dotnet tool install --add-source <feed> --tool-path <dir> Example.Greet
+# it runs as `greet`.
+csharp_binary(
+    name = "greet",
+    srcs = ["Program.cs"],
+    target_frameworks = ["net9.0"],
+    version = "1.0.0",
+    deps = [":greeter"],
+)
+
+nuget_pack(
+    name = "greet_tool",
+    authors = ["rules_dotnet"],
+    binary = ":greet",
+    command_name = "greet",
+    description = "Greets from the command line.",
+    package_id = "Example.Greet",
+    target_frameworks = ["net9.0"],
+)
+
+# --- Publishing --------------------------------------------------------------
+
+# Publishes every package above:
+#   bazel run //nuget_pack:push -- --source ./local-feed        a folder, no network
+#   NUGET_API_KEY=... bazel run //nuget_pack:push                nuget.org
+#   bazel run //nuget_pack:push -- --api-key ... --source <url>  any other feed
+nuget_push(
+    name = "push",
+    packages = [
+        ":components_pack",
+        ":formatting_nightly",
+        ":formatting_pack",
+        ":formatting_rc",
+        ":greet_tool",
+        ":greeter_pack",
+        ":greeting_generator_pack",
+        ":platform_pack",
+    ],
+    source = "https://api.nuget.org/v3/index.json",
+)
+
+csharp_nunit_test(
+    name = "greeter_test",
+    srcs = ["GreeterTest.cs"],
+    target_frameworks = ["net9.0"],
+    deps = [":greeter"],
+)

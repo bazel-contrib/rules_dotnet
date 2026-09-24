@@ -58,6 +58,17 @@ COMMON_ATTRS = {
     "out": attr.string(
         doc = "File name, without extension, of the built assembly.",
     ),
+    "version": attr.string(
+        doc = """The version of the assembly, as a NuGet version string: `1.2.3`,
+        `1.2.3-beta.1` or `1.2.3-beta.1+sha.abcdef`.
+
+        The compile generates the `AssemblyVersion` and `AssemblyFileVersion`
+        attributes from the numeric part padded to four components (`1.2.3` becomes
+        `1.2.3.0`.
+
+        Unset, no attributes are generated and the assembly is reported as `1.0.0`.""",
+        default = "",
+    ),
     "target_frameworks": attr.string_list(
         doc = "A list of target framework monikers to build" +
               "See https://docs.microsoft.com/en-us/dotnet/standard/frameworks",

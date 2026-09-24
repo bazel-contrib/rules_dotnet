@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<package xmlns="http://schemas.microsoft.com/packaging/2013/05/nuspec.xsd">
+  <metadata>
+    <id>RulesDotnet.Tests.Deeper</id>
+    <version>4.5.6-nightly.7</version>
+    <authors>rules_dotnet</authors>
+    <requireLicenseAcceptance>false</requireLicenseAcceptance>
+    <description>Published nightly, with a version read from a file.</description>
+    <dependencies>
+      <group targetFramework="net9.0" />
+      <group targetFramework=".NETStandard2.0" />
+    </dependencies>
+  </metadata>
+</package>

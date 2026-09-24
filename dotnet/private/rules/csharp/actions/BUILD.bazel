@@ -8,6 +8,7 @@ bzl_library(
         ":razor",
         ":scoped_css",
         "//dotnet/private:common",
+        "//dotnet/private:nuget_version",
         "//dotnet/private:providers",
         "//dotnet/private/icu:settings",
         "//dotnet/private/sdk:packs",

@@ -9,6 +9,8 @@ exports_files(
         "tool_launcher.bat.tpl",
         "devserver.sh.tpl",
         "devserver.bat.tpl",
+        "nuget_push.sh.tpl",
+        "nuget_push.bat.tpl",
         "compiler_wrapper.sh",
         "compiler_wrapper.bat",
     ],
@@ -107,6 +109,12 @@ config_setting(
         "@platforms//os:windows",
     ],
     visibility = ["//visibility:public"],
+)
+
+bzl_library(
+    name = "nuget_version",
+    srcs = ["nuget_version.bzl"],
+    visibility = ["//dotnet:__subpackages__"],
 )
 
 bzl_library(

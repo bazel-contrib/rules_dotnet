@@ -1,0 +1,32 @@
+# Tests for `nuget_pack` and the `version` attribute it builds on, one folder
+# per kind of package: `library`, `fsharp`, `analyzer`, `razor`, `tool` and
+# `rid`. Each holds the targets that are the inputs, a `nuget_pack_test` per
+# package declaring what it holds, and the failures of that kind: a target that
+# must not build, and the error it fails with.
+#
+# `unit` tests the pure functions underneath, over tables of inputs, and `push`
+# tests `nuget_push`. `check` is the program the package tests run.
+
+load("@bazel_lib//lib:write_source_files.bzl", "write_source_files")
+
+# Rewrites every expected file from what the packages hold, after a change that
+# moves them on purpose:
+#
+#   bazel run //dotnet/private/tests/nuget_pack:update_expected
+write_source_files(
+    name = "update_expected",
+    additional_update_targets = [
+        "//dotnet/private/tests/nuget_pack/analyzer:analyzer_pack_test.update",
+        "//dotnet/private/tests/nuget_pack/analyzer:generator_pack_test.update",
+        "//dotnet/private/tests/nuget_pack/fsharp:fs_pack_test.update",
+        "//dotnet/private/tests/nuget_pack/library:deeper_pack_test.update",
+        "//dotnet/private/tests/nuget_pack/library:mapped_pack_test.update",
+        "//dotnet/private/tests/nuget_pack/library:pack_ref_test.update",
+        "//dotnet/private/tests/nuget_pack/library:pack_test.update",
+        "//dotnet/private/tests/nuget_pack/razor:components_pack_test.update",
+        "//dotnet/private/tests/nuget_pack/razor:panel_pack_test.update",
+        "//dotnet/private/tests/nuget_pack/rid:rid_pack_test.update",
+        "//dotnet/private/tests/nuget_pack/tool:fs_tool_pack_test.update",
+        "//dotnet/private/tests/nuget_pack/tool:tool_pack_test.update",
+    ],
+)

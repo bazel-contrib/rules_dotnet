@@ -1,0 +1,22 @@
+load(
+    "//dotnet/private/rules/csharp:binary.bzl",
+    "bootstrap_tool_binary",
+)
+
+# Writes a `.nupkg` (and `.snupkg`) from a JSON request. See Program.cs.
+bootstrap_tool_binary(
+    name = "nuget_pack",
+    srcs = [
+        "NuGetVersion.cs",
+        "NupkgBuilder.cs",
+        "NuspecWriter.cs",
+        "OpcParts.cs",
+        "Program.cs",
+        "Request.cs",
+        "ToolSettingsWriter.cs",
+        "Validation.cs",
+    ],
+    nullable = "enable",
+    target_frameworks = ["net10.0"],
+    visibility = ["//visibility:public"],
+)

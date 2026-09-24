@@ -1,0 +1,141 @@
+# .NET tool packages, and the tool failures.
+#
+# NU5128 is expected of both: they declare an empty dependency group for the
+# framework they run on, and ship nothing under `lib/`.
+
+load("//dotnet:defs.bzl", "csharp_binary", "fsharp_binary", "nuget_pack")
+load("//dotnet/private/tests/nuget_pack:nuget_pack_test.bzl", "fails_with_test", "nuget_pack_test")
+
+package(default_visibility = ["//dotnet/private/tests/nuget_pack:__subpackages__"])
+
+csharp_binary(
+    name = "tool",
+    srcs = ["Tool.cs"],
+    target_frameworks = ["net9.0"],
+    version = "0.1.0",
+    deps = ["//dotnet/private/tests/nuget_pack/library:referenced"],
+)
+
+nuget_pack(
+    name = "tool_pack",
+    authors = ["rules_dotnet"],
+    binary = ":tool",
+    command_name = "rdtool",
+    description = "A .NET tool packed by rules_dotnet's own tests.",
+    package_id = "RulesDotnet.Tests.Tool",
+    target_frameworks = ["net9.0"],
+)
+
+# Its whole closure, with the deps.json and runtimeconfig.json of a publish;
+# unpacked, it runs as `dotnet tool` would run it.
+nuget_pack_test(
+    name = "tool_pack_test",
+    contents = {
+        "expected/tool_pack.nuspec": "RulesDotnet.Tests.Tool.nuspec",
+        "expected/tool_pack.DotnetToolSettings.xml": "tools/net9.0/any/DotnetToolSettings.xml",
+        "expected/tool_pack.deps.json": "tools/net9.0/any/tool.deps.json",
+        "expected/tool_pack.runtimeconfig.json": "tools/net9.0/any/tool.runtimeconfig.json",
+    },
+    files = [
+        "tools/net9.0/any/DotnetToolSettings.xml",
+        "tools/net9.0/any/referenced.dll",
+        "tools/net9.0/any/referenced.pdb",
+        "tools/net9.0/any/tool.deps.json",
+        "tools/net9.0/any/tool.dll",
+        "tools/net9.0/any/tool.pdb",
+        "tools/net9.0/any/tool.runtimeconfig.json",
+    ],
+    output = "Hello world from 0.1.0",
+    package = ":tool_pack",
+    run = ["world"],
+    warnings = ["NU5128"],
+)
+
+fsharp_binary(
+    name = "fs_tool",
+    srcs = ["FsTool.fs"],
+    target_frameworks = ["net9.0"],
+    version = "0.2.0",
+    deps = ["@paket.rules_dotnet_dev_nuget_packages//fsharp.core"],
+)
+
+# No `package_id` or `command_name`: both are the assembly name.
+nuget_pack(
+    name = "fs_tool_pack",
+    authors = ["rules_dotnet"],
+    binary = ":fs_tool",
+    description = "An F# .NET tool packed by rules_dotnet's own tests.",
+    target_frameworks = ["net9.0"],
+)
+
+nuget_pack_test(
+    name = "fs_tool_pack_test",
+    contents = {
+        "expected/fs_tool_pack.nuspec": "fs_tool.nuspec",
+        "expected/fs_tool_pack.DotnetToolSettings.xml": "tools/net9.0/any/DotnetToolSettings.xml",
+    },
+    files = [
+        "tools/net9.0/any/DotnetToolSettings.xml",
+        "tools/net9.0/any/FSharp.Core.dll",
+        "tools/net9.0/any/cs/FSharp.Core.resources.dll",
+        "tools/net9.0/any/de/FSharp.Core.resources.dll",
+        "tools/net9.0/any/es/FSharp.Core.resources.dll",
+        "tools/net9.0/any/fr/FSharp.Core.resources.dll",
+        "tools/net9.0/any/fs_tool.deps.json",
+        "tools/net9.0/any/fs_tool.dll",
+        "tools/net9.0/any/fs_tool.pdb",
+        "tools/net9.0/any/fs_tool.runtimeconfig.json",
+        "tools/net9.0/any/it/FSharp.Core.resources.dll",
+        "tools/net9.0/any/ja/FSharp.Core.resources.dll",
+        "tools/net9.0/any/ko/FSharp.Core.resources.dll",
+        "tools/net9.0/any/pl/FSharp.Core.resources.dll",
+        "tools/net9.0/any/pt-BR/FSharp.Core.resources.dll",
+        "tools/net9.0/any/ru/FSharp.Core.resources.dll",
+        "tools/net9.0/any/tr/FSharp.Core.resources.dll",
+        "tools/net9.0/any/zh-Hans/FSharp.Core.resources.dll",
+        "tools/net9.0/any/zh-Hant/FSharp.Core.resources.dll",
+    ],
+    output = "Hello world from 0.2.0",
+    package = ":fs_tool_pack",
+    run = ["world"],
+    warnings = ["NU5128"],
+)
+
+# --- Failures ----------------------------------------------------------------
+#
+# The targets under test are `manual`: they exist to fail, and only the tests
+# that expect the failure build them.
+
+nuget_pack(
+    name = "tool_with_rids",
+    authors = ["rules_dotnet"],
+    binary = ":tool",
+    description = "d",
+    runtime_identifiers = ["linux-x64"],
+    tags = ["manual"],
+    target_frameworks = ["net9.0"],
+)
+
+fails_with_test(
+    name = "tool_with_rids_test",
+    size = "small",
+    expected_message_fragments = ["a tool package is not RID-specific"],
+    target_under_test = ":tool_with_rids",
+)
+
+nuget_pack(
+    name = "tool_depending_on_a_package",
+    authors = ["rules_dotnet"],
+    binary = ":tool",
+    description = "d",
+    tags = ["manual"],
+    target_frameworks = ["net9.0"],
+    deps = ["//dotnet/private/tests/nuget_pack/library:mapped_pack"],
+)
+
+fails_with_test(
+    name = "tool_depending_on_a_package_test",
+    size = "small",
+    expected_message_fragments = ["a tool package ships its whole closure"],
+    target_under_test = ":tool_depending_on_a_package",
+)

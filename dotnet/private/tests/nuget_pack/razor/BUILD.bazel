@@ -1,0 +1,165 @@
+# Razor class library packages, and the Razor failures.
+#
+# NU5129 is a known bug: `nuget_pack` ships no `build/<package id>.props`, the
+# only one NuGet imports, so a project built with MSBuild never sees
+# `build/Microsoft.AspNetCore.StaticWebAssets.props`. The SDK writes one that
+# imports it. NU5131 is as for every package with a `ref/` folder.
+
+load("//dotnet:defs.bzl", "csharp_library", "nuget_pack")
+load("//dotnet/private/tests/nuget_pack:nuget_pack_test.bzl", "fails_with_test", "nuget_pack_test")
+
+package(default_visibility = ["//dotnet/private/tests/nuget_pack:__subpackages__"])
+
+# `out` names the assembly after the package: the library serves its files under
+# `_content/<assembly name>` in this build and under `_content/<package id>` out
+# of the package, so the two have to agree.
+csharp_library(
+    name = "components",
+    srcs = [
+        "Widget.razor",
+        "Widget.razor.css",
+        "_Imports.razor",
+    ],
+    out = "RulesDotnet.Tests.Components",
+    project_sdk = "razor",
+    root_namespace = "RulesDotnet.Tests.Components",
+    static_web_assets = glob(["wwwroot/**"]),
+    target_frameworks = ["net10.0"],
+    version = "1.0.0",
+)
+
+nuget_pack(
+    name = "components_pack",
+    authors = ["rules_dotnet"],
+    description = "A Razor class library packed by rules_dotnet's own tests.",
+    library = ":components",
+    package_id = "RulesDotnet.Tests.Components",
+    target_frameworks = ["net10.0"],
+)
+
+# Its consumers compile against the shared framework too, and the props file
+# names every file it serves, under the package id.
+nuget_pack_test(
+    name = "components_pack_test",
+    contents = {
+        "expected/components_pack.nuspec": "RulesDotnet.Tests.Components.nuspec",
+        "expected/components_pack.StaticWebAssets.props": "build/Microsoft.AspNetCore.StaticWebAssets.props",
+    },
+    files = [
+        "build/Microsoft.AspNetCore.StaticWebAssets.props",
+        "lib/net10.0/RulesDotnet.Tests.Components.dll",
+        "lib/net10.0/RulesDotnet.Tests.Components.xml",
+        "ref/net10.0/RulesDotnet.Tests.Components.dll",
+        "staticwebassets/RulesDotnet.Tests.Components.bundle.scp.css",
+        "staticwebassets/css/widget.css",
+        "staticwebassets/widget.js",
+    ],
+    package = ":components_pack",
+    warnings = [
+        "NU5129",
+        "NU5131",
+    ],
+)
+
+# Serves files of its own and uses a library that serves its own: its package
+# ships only its own, and depends on the other's for the rest.
+csharp_library(
+    name = "panel",
+    srcs = [
+        "Panel.razor",
+        "Panel.razor.css",
+        "_Imports.razor",
+    ],
+    out = "RulesDotnet.Tests.Panel",
+    project_sdk = "razor",
+    root_namespace = "RulesDotnet.Tests.Panel",
+    target_frameworks = ["net10.0"],
+    version = "1.0.0",
+    deps = [":components"],
+)
+
+nuget_pack(
+    name = "panel_pack",
+    authors = ["rules_dotnet"],
+    description = "A Razor class library using another, packed by rules_dotnet's own tests.",
+    library = ":panel",
+    package_id = "RulesDotnet.Tests.Panel",
+    target_frameworks = ["net10.0"],
+    deps = [":components_pack"],
+)
+
+nuget_pack_test(
+    name = "panel_pack_test",
+    contents = {
+        "expected/panel_pack.nuspec": "RulesDotnet.Tests.Panel.nuspec",
+        "expected/panel_pack.StaticWebAssets.props": "build/Microsoft.AspNetCore.StaticWebAssets.props",
+    },
+    files = [
+        "build/Microsoft.AspNetCore.StaticWebAssets.props",
+        "lib/net10.0/RulesDotnet.Tests.Panel.dll",
+        "lib/net10.0/RulesDotnet.Tests.Panel.xml",
+        "ref/net10.0/RulesDotnet.Tests.Panel.dll",
+        "staticwebassets/RulesDotnet.Tests.Panel.bundle.scp.css",
+    ],
+    package = ":panel_pack",
+    warnings = [
+        "NU5129",
+        "NU5131",
+    ],
+)
+
+# --- Failures ----------------------------------------------------------------
+#
+# The targets under test are `manual`: they exist to fail, and only the tests
+# that expect the failure build them.
+
+# The served files would move from `_content/RulesDotnet.Tests.Components` to
+# `_content/RulesDotnet.Tests.Renamed` the moment the package was installed.
+nuget_pack(
+    name = "renamed_components",
+    authors = ["rules_dotnet"],
+    description = "d",
+    library = ":components",
+    package_id = "RulesDotnet.Tests.Renamed",
+    tags = ["manual"],
+    target_frameworks = ["net10.0"],
+)
+
+fails_with_test(
+    name = "renamed_components_test",
+    size = "small",
+    expected_message_fragments = [
+        "serves files under `_content/RulesDotnet.Tests.Components`",
+        "under `_content/RulesDotnet.Tests.Renamed`, the package id",
+    ],
+    target_under_test = ":renamed_components",
+)
+
+# A copied-in assembly's files would be served under this package's id, not
+# under its own, so they cannot come along.
+csharp_library(
+    name = "uses_components",
+    srcs = ["UsesComponents.cs"],
+    target_frameworks = ["net10.0"],
+    deps = [":components"],
+)
+
+nuget_pack(
+    name = "bundled_components",
+    authors = ["rules_dotnet"],
+    description = "d",
+    first_party_deps = "bundle",
+    library = ":uses_components",
+    tags = ["manual"],
+    target_frameworks = ["net10.0"],
+)
+
+fails_with_test(
+    name = "bundled_components_test",
+    size = "small",
+    expected_message_fragments = [
+        "RulesDotnet.Tests.Components is copied into this package and serves",
+        "List its nuget_pack in `deps` rather than copying it in",
+    ],
+    target_under_test = ":bundled_components",
+)
