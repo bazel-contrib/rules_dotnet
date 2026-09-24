@@ -1,3 +1,0 @@
-load(":nuget_version_test.bzl", "nuget_version_test_suite")
-
-nuget_version_test_suite(name = "nuget_version_test")

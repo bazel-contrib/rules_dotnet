@@ -1,0 +1,52 @@
+# An F# library package.
+
+load("//dotnet:defs.bzl", "fsharp_library", "nuget_pack")
+load("//dotnet/private/tests/nuget_pack:nuget_pack_test.bzl", "nuget_pack_test")
+
+package(default_visibility = ["//dotnet/private/tests/nuget_pack:__subpackages__"])
+
+fsharp_library(
+    name = "fslib",
+    srcs = ["FsLib.fs"],
+    target_frameworks = [
+        "netstandard2.0",
+        "net9.0",
+    ],
+    version = "2.0.0.0",
+    deps = ["@paket.rules_dotnet_dev_nuget_packages//fsharp.core"],
+)
+
+nuget_pack(
+    name = "fs_pack",
+    authors = ["rules_dotnet"],
+    description = "An F# library packed by rules_dotnet's own tests.",
+    library = ":fslib",
+    package_id = "RulesDotnet.Tests.FsLib",
+    target_frameworks = [
+        "netstandard2.0",
+        "net9.0",
+    ],
+)
+
+# `version` gives an F# assembly its versions too. Unlike C# ones, its
+# reference assemblies carry no ReferenceAssemblyAttribute.
+nuget_pack_test(
+    name = "fs_pack_test",
+    assemblies = {
+        "lib/net9.0/fslib.dll": "fslib 2.0.0.0, file 2.0.0.0, informational 2.0.0.0, against System.Runtime 9.0.0.0",
+        "ref/net9.0/fslib.dll": "fslib 2.0.0.0, file 2.0.0.0, informational 2.0.0.0, against System.Runtime 9.0.0.0",
+    },
+    contents = {
+        "expected/fs_pack.nuspec": "RulesDotnet.Tests.FsLib.nuspec",
+    },
+    files = [
+        "lib/net9.0/fslib.dll",
+        "lib/net9.0/fslib.xml",
+        "lib/netstandard2.0/fslib.dll",
+        "lib/netstandard2.0/fslib.xml",
+        "ref/net9.0/fslib.dll",
+        "ref/netstandard2.0/fslib.dll",
+    ],
+    package = ":fs_pack",
+    warnings = ["NU5131"],
+)

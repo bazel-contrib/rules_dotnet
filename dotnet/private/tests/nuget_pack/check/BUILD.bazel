@@ -1,0 +1,24 @@
+load("//dotnet:defs.bzl", "csharp_binary")
+
+# Checks a package against what its `nuget_pack_test` expects. See Program.cs.
+csharp_binary(
+    name = "check",
+    srcs = [
+        "Assemblies.cs",
+        "Compare.cs",
+        "LineDiff.cs",
+        "PackageFile.cs",
+        "Program.cs",
+        "Requests.cs",
+        "ToolRun.cs",
+    ],
+    nullable = "enable",
+    target_frameworks = ["net10.0"],
+    visibility = ["//dotnet/private/tests/nuget_pack:__subpackages__"],
+    deps = [
+        "@paket.sdk_gen_dependencies//nuget.common",
+        "@paket.sdk_gen_dependencies//nuget.frameworks",
+        "@paket.sdk_gen_dependencies//nuget.packaging",
+        "@paket.sdk_gen_dependencies//nuget.versioning",
+    ],
+)

@@ -1,0 +1,60 @@
+{
+  "compilationOptions": {},
+  "libraries": {
+    "System.Memory/4.5.5": {
+      "hashPath": "system.memory.4.5.5.nupkg.sha512",
+      "path": "system.memory/4.5.5",
+      "serviceable": true,
+      "sha512": "sha512-6MjlNsl7lKw0Q8lAsw2tQ89ul9x6jD2Yk3EEj+dOFoYGOE9eAUO9wNhvd4O/n97oQXlkyzqKXXUnE+kLElFy3A==",
+      "type": "package"
+    },
+    "referenced/2.0.0": {
+      "serviceable": false,
+      "sha512": "",
+      "type": "project"
+    },
+    "tool/0.1.0": {
+      "serviceable": false,
+      "sha512": "",
+      "type": "project"
+    }
+  },
+  "runtimeTarget": {
+    "name": ".NETCoreApp,Version=v9.0.0",
+    "signature": ""
+  },
+  "targets": {
+    ".NETCoreApp,Version=v9.0.0": {
+      "System.Memory/4.5.5": {
+        "dependencies": {},
+        "resources": {},
+        "runtime": {},
+        "runtimeTargets": {}
+      },
+      "referenced/2.0.0": {
+        "dependencies": {
+          "System.Memory": "4.5.5"
+        },
+        "native": {},
+        "resources": {},
+        "runtime": {
+          "referenced.dll": {
+            "assemblyVersion": "2.0.0.0"
+          }
+        }
+      },
+      "tool/0.1.0": {
+        "dependencies": {
+          "referenced": "2.0.0"
+        },
+        "native": {},
+        "resources": {},
+        "runtime": {
+          "tool.dll": {
+            "assemblyVersion": "0.1.0.0"
+          }
+        }
+      }
+    }
+  }
+}

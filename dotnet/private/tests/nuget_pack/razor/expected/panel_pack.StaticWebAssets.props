@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project>
+  <ItemGroup>
+    <StaticWebAsset Include="$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)../staticwebassets/RulesDotnet.Tests.Panel.bundle.scp.css'))">
+      <SourceType>Package</SourceType>
+      <SourceId>RulesDotnet.Tests.Panel</SourceId>
+      <ContentRoot>$(MSBuildThisFileDirectory)../staticwebassets/</ContentRoot>
+      <BasePath>_content/RulesDotnet.Tests.Panel</BasePath>
+      <RelativePath>RulesDotnet.Tests.Panel.bundle.scp.css</RelativePath>
+    </StaticWebAsset>
+  </ItemGroup>
+</Project>

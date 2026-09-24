@@ -6,13 +6,13 @@ load("//dotnet:defs.bzl", "nuget_push")
 nuget_push(
     name = "push",
     timeout = 42,
-    packages = ["//dotnet/private/tests/nuget_pack:pack"],
+    packages = ["//dotnet/private/tests/nuget_pack/library:pack"],
     source = "https://example.invalid/never-used/v3/index.json",
 )
 
 nuget_push(
     name = "push_no_source",
-    packages = ["//dotnet/private/tests/nuget_pack:pack"],
+    packages = ["//dotnet/private/tests/nuget_pack/library:pack"],
     skip_duplicate = False,
 )
 
