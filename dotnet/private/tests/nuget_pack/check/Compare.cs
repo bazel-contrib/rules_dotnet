@@ -1,5 +1,6 @@
 // Holds what `extract` found against what the test expects, and writes what
-// differs as a report for the test to print: empty when everything matches.
+// differs as a report, empty when everything matches, and the test that
+// prints it and fails, or passes.
 // Where an attribute is wrong it gives the value to paste instead; where a
 // file is, the command that rewrites it.
 using System.Collections.Generic;
@@ -43,6 +44,7 @@ internal static class Compare
             }
         }
         File.WriteAllText(request.Report, report.ToString(), Json.Utf8);
+        TestScript.Write(request.Script, request.Windows, report.ToString());
     }
 
     private static void Paths(List<string> problems, string attribute, string where, List<string> expected, List<string> actual)

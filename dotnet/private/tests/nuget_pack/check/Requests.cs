@@ -35,7 +35,7 @@ internal sealed record Actual(
     List<string> MissingContents,
     List<string> MissingSymbolContents);
 
-/// <summary>What the test expects, and where to write what differs.</summary>
+/// <summary>What the test expects, where to write what differs, and the test's executable to write with it.</summary>
 internal sealed record CompareRequest(
     string Label,
     string? Update,
@@ -47,7 +47,9 @@ internal sealed record CompareRequest(
     string? Output,
     List<ExpectedContent> Contents,
     List<ExpectedContent> SymbolContents,
-    string Report);
+    string Report,
+    string Script,
+    bool Windows);
 
 /// <summary>An entry the test compares with a file: what the package holds, and the file, which may not exist yet.</summary>
 internal sealed record ExpectedContent(string Path, string Actual, string? Expected, string ExpectedName);

@@ -10,6 +10,7 @@ csharp_binary(
         "PackageFile.cs",
         "Program.cs",
         "Requests.cs",
+        "TestScript.cs",
         "ToolRun.cs",
     ],
     nullable = "enable",

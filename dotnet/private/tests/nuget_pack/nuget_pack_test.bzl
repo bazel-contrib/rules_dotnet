@@ -92,26 +92,6 @@ _nuget_pack_actual = rule(
     },
 )
 
-_SH = """#!/usr/bin/env bash
-report="${{TEST_SRCDIR}}/${{TEST_WORKSPACE}}/{report}"
-if [[ -s "$report" ]]; then
-  cat "$report"
-  exit 1
-fi
-"""
-
-# A test runs from the output tree on Windows, where the report sits beside it.
-# It fails outside all blocks: an `exit /b` inside one does not become the exit
-# code of `cmd /c`, and the test would pass.
-_BAT = """@echo off
-set "report=%~dp0{report}"
-for %%A in ("%report%") do if %%~zA GTR 0 goto :fail
-exit /b 0
-:fail
-type "%report%"
-exit /b 1
-"""
-
 def _expected_contents(contents, actual, existing):
     return [
         struct(
@@ -129,6 +109,11 @@ def _nuget_pack_test_impl(ctx):
     report = ctx.actions.declare_file(ctx.label.name + ".report.txt")
     request = ctx.actions.declare_file(ctx.label.name + ".request.json")
 
+    # Written by the comparison with its verdict in it, so that nothing has to
+    # be found when the test runs.
+    is_windows = ctx.target_platform_has_constraint(ctx.attr._windows_constraint[platform_common.ConstraintValueInfo])
+    script = ctx.actions.declare_file(ctx.label.name + (".bat" if is_windows else ".sh"))
+
     ctx.actions.write(request, json.encode(struct(
         label = "//{}:{}".format(ctx.label.package, ctx.label.name),
         update = "//{}:{}".format(ctx.label.package, ctx.attr.update) if ctx.attr.update else None,
@@ -141,6 +126,8 @@ def _nuget_pack_test_impl(ctx):
         contents = _expected_contents(ctx.attr.contents, actual.contents, existing),
         symbolContents = _expected_contents(ctx.attr.symbol_contents, actual.symbol_contents, existing),
         report = report.path,
+        script = script.path,
+        windows = is_windows,
     )))
 
     ctx.actions.run(
@@ -150,20 +137,15 @@ def _nuget_pack_test_impl(ctx):
             [request, actual.json] + actual.contents.values() + actual.symbol_contents.values(),
             transitive = [target.files for target in ctx.attr.expected_files],
         ),
-        outputs = [report],
+        outputs = [report, script],
         mnemonic = "NuGetPackCompare",
         progress_message = "Comparing %{label} with what it expects",
     )
 
-    is_windows = ctx.target_platform_has_constraint(ctx.attr._windows_constraint[platform_common.ConstraintValueInfo])
-    script = ctx.actions.declare_file(ctx.label.name + (".bat" if is_windows else ".sh"))
-    ctx.actions.write(
-        script,
-        _BAT.format(report = report.basename) if is_windows else _SH.format(report = report.short_path),
-        is_executable = True,
-    )
-
-    return [DefaultInfo(executable = script, runfiles = ctx.runfiles(files = [report]))]
+    return [
+        DefaultInfo(executable = script),
+        OutputGroupInfo(report = depset([report])),
+    ]
 
 _nuget_pack_test = rule(
     _nuget_pack_test_impl,
