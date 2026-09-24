@@ -27,9 +27,18 @@ export DOTNET_CLI_HOME="$HOME"
 export NUGET_PACKAGES="$TEST_TMPDIR/nuget"
 mkdir -p "$HOME"
 
+# Runs a launcher as a user would. On Windows that is the .bat through cmd.exe
+# itself: MSYS's `cmd` is a script around $COMSPEC, which a test does not get.
+# The arguments go through as they are, not converted as MSYS paths, and the
+# quotes cmd puts around every argument are dropped, so that the checks below
+# read the same on every platform.
 run_launcher() {
   case "$OSTYPE" in
-    msys*|cygwin*) cmd //c "$(cygpath -w "$1")" "${@:2}" ;;
+    msys*|cygwin*)
+      local cmd_exe
+      cmd_exe="$(cygpath -u "${COMSPEC:-${SYSTEMROOT:-C:\\Windows}\\System32\\cmd.exe}")"
+      MSYS_NO_PATHCONV=1 MSYS2_ARG_CONV_EXCL='*' "$cmd_exe" /c "$(cygpath -w "$1")" "${@:2}" | tr -d '"'
+      ;;
     *) "$@" ;;
   esac
 }
