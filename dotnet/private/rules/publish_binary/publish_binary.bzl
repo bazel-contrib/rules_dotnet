@@ -7,7 +7,7 @@ load("@bazel_skylib//lib:paths.bzl", "paths")
 load("@bazel_skylib//lib:shell.bzl", "shell")
 load("@rules_cc//cc:action_names.bzl", "CPP_LINK_EXECUTABLE_ACTION_NAME")
 load("@rules_cc//cc/common:cc_common.bzl", "cc_common")
-load("//dotnet/private:common.bzl", "generate_depsjson", "generate_runtimeconfig", "get_toolchain")
+load("//dotnet/private:common.bzl", "generate_depsjson", "generate_runtimeconfig", "get_toolchain", "is_from_nuget_package", "to_rlocation_path")
 load(
     "//dotnet/private:providers.bzl",
     "DotnetAssemblyCompileInfo",
@@ -42,7 +42,7 @@ load("//dotnet/private/transitions:tfm_transition.bzl", "tfm_transition")
 # the command line grows long enough to risk the execve argument limit.
 _COPY_BATCH = 128
 
-def _render_copy_script(copies, is_windows):
+def _render_copy_script(copies, is_windows, directories = []):
     """The script that puts every published file in its place.
 
     A self-contained publish copies the whole runtime pack, so one process per
@@ -51,8 +51,9 @@ def _render_copy_script(copies, is_windows):
     are copied in batches.
 
     Args:
-        copies: The (source, destination) pairs to copy, one pair per destination.
+        copies: The (source, destination path) pairs to copy, one pair per destination.
         is_windows: Whether the script is a batch file rather than a shell script.
+        directories: Directories to create even when no file lands in them.
 
     Returns:
         A list of script lines.
@@ -62,13 +63,13 @@ def _render_copy_script(copies, is_windows):
     # Grouped by destination directory, in first-seen order. A file published
     # under a different name cannot join a batch, but its directory is still
     # created along with the rest.
-    same_name = {}
+    same_name = {directory: [] for directory in directories}
     renamed = []
 
     for (src, dst) in copies:
-        same_name.setdefault(dst.dirname, [])
-        if src.basename == dst.basename:
-            same_name[dst.dirname].append(src)
+        same_name.setdefault(paths.dirname(dst), [])
+        if src.basename == paths.basename(dst):
+            same_name[paths.dirname(dst)].append(src)
         else:
             renamed.append((src, dst))
 
@@ -97,10 +98,10 @@ def _render_copy_script(copies, is_windows):
         if is_windows:
             script_body.append("@copy /Y \"{src}\" \"{dst}\" >NUL".format(
                 src = src.path.replace("/", "\\"),
-                dst = dst.path.replace("/", "\\"),
+                dst = dst.replace("/", "\\"),
             ))
         else:
-            script_body.append("cp -f {src} {dst}".format(src = shell.quote(src.path), dst = shell.quote(dst.path)))
+            script_body.append("cp -f {src} {dst}".format(src = shell.quote(src.path), dst = shell.quote(dst)))
 
     return script_body
 
@@ -456,6 +457,179 @@ def _runtime_pack_files(runtime_pack_info, deps_json_struct):
 
     return packs
 
+# The layers of a publish, from the one that changes least to the one that
+# changes with every build. Stacked in this order they give the publish
+# directory.
+_LAYERS = ["runtime", "third_party", "first_party", "app"]
+
+def _dependency_layers(transitive_runtime_deps, runtime_pack_info, ready_to_run = _NO_READY_TO_RUN):
+    """The layer of each dependency's files, keyed by path.
+
+    A ReadyToRun image takes the layer of the assembly it replaces. A file
+    missing from it, such as the binary's own assembly, a composite image or
+    one generated for the publish, belongs to `app`.
+    """
+    layers = {}
+
+    for dep in transitive_runtime_deps:
+        layer = "third_party" if is_from_nuget_package(dep) else "first_party"
+
+        for file in dep.libs + dep.native + dep.resource_assemblies + dep.data:
+            layers[file.path] = layer
+
+    if runtime_pack_info:
+        for pack in runtime_pack_info.assembly_runtime_infos:
+            for file in pack.libs + pack.native + pack.data:
+                layers[file.path] = "runtime"
+
+    for (assembly, image) in ready_to_run.replace.items():
+        layers[image.path] = layers.get(assembly, "app")
+
+    return layers
+
+def _publish_entries(layout, ready_to_run = _NO_READY_TO_RUN):
+    """The file each publish path holds.
+
+    Keyed by path because the binary's own assembly arrives twice, as the main
+    DLL and again among the assemblies to publish. A ReadyToRun image takes the
+    place of its assembly.
+    """
+    entries = {path: ready_to_run.replace.get(file.path, file) for (path, file) in layout}
+
+    for file in ready_to_run.extra:
+        entries[file.basename] = file
+
+    return entries
+
+def _runfiles_entries(ctx, executable, data, beside = []):
+    """The runfiles tree beside a publish's executable, as Bazel lays it out.
+
+    The runfiles library looks for `<executable>.runfiles` beside the running
+    executable, and resolves repository names through the `_repo_mapping` at
+    its top. Bazel lays out that tree for the publish itself, but a layer has
+    to carry its own, so it holds what Bazel's does: every runfile at its
+    rlocation path, the executable included, and a repository mapping both
+    there and beside the executable. The mapping is the binary's, as a rule
+    cannot reach its own; its extra rows only name repositories the tree does
+    not hold.
+
+    Args:
+        ctx: The rule context.
+        executable: The published executable the library starts from.
+        data: The data files the publish carries as runfiles.
+        beside: The (path, file) pairs the publish also carries as runfiles
+            beside the executable, each file the source of the copy there.
+
+    Returns:
+        The runfiles paths, each with the file it holds.
+    """
+    root = executable.basename + ".runfiles"
+    here = paths.dirname(to_rlocation_path(ctx, executable))
+
+    entries = {"{}/{}".format(root, to_rlocation_path(ctx, file)): file for file in data + [executable]}
+
+    for (path, file) in beside:
+        entries["{}/{}/{}".format(root, here, path)] = file
+
+    repo_mapping = ctx.attr.binary[0][DefaultInfo].files_to_run.repo_mapping_manifest
+    if repo_mapping:
+        entries[root + "/_repo_mapping"] = repo_mapping
+        entries[executable.basename + ".repo_mapping"] = repo_mapping
+
+    return entries
+
+def _publish_layers(ctx, entries, dependency_layers):
+    """Lays out each layer of a publish as a directory of its own.
+
+    A directory lands wherever a packaging rule puts it, while files under
+    `<name>/publish/<rid>` keep that prefix unless every rule strips it.
+
+    A layer is copied from the files the publish copies rather than from the
+    publish directory, so that it depends only on its own files. Its script
+    lists them sorted by path, so that it changes only when they do, not when
+    a dependency elsewhere in the graph reorders them.
+
+    Args:
+        ctx: The rule context.
+        entries: The file each path in the layers holds.
+        dependency_layers: The layer of each dependency's files, by path.
+
+    Returns:
+        The directory of each layer, as its `<layer>_layer` output group.
+    """
+    layers = {layer: [] for layer in _LAYERS}
+
+    for path in sorted(entries):
+        file = entries[path]
+        layers[dependency_layers.get(file.path, "app")].append((file, path))
+
+    output_groups = {}
+
+    # One action per layer, which runs only when its output group is asked for.
+    for (layer, copies) in layers.items():
+        directory = ctx.actions.declare_directory("{}/layers/{}".format(ctx.label.name, layer))
+
+        _run_copy_script(
+            ctx,
+            copies,
+            "layer_" + layer,
+            "DotnetPublishLayer",
+            "Assembling the {} layer of %{{label}}".format(layer),
+            directory = directory,
+        )
+
+        output_groups[layer + "_layer"] = depset([directory])
+
+    return output_groups
+
+def _ready_to_run_references(binary_info, assembly_files):
+    """What crossgen2 resolves each published assembly against, besides the framework.
+
+    Handing every compilation the whole publish would make each image depend
+    on every assembly, so that changing the application recompiled all of its
+    dependencies. An assembly sees what it can reference instead:
+
+    * an assembly from a NuGet package, every package's assemblies, since a
+      package can reference one its metadata never declares. That set changes
+      only with the lock file;
+    * a library built here, those and its own dependencies' assemblies;
+    * the application, everything.
+
+    Each list is sorted, so that the order of the dependency graph cannot
+    change a command line.
+
+    Returns:
+        The references of each published assembly, keyed by its path.
+    """
+    published = {lib.path: lib for lib in [binary_info.dll] + assembly_files.libs}
+
+    def published_libs(deps):
+        return [lib for dep in deps for lib in dep.libs if lib.path in published]
+
+    def sorted_unique(files):
+        by_path = {file.path: file for file in files}
+        return [by_path[path] for path in sorted(by_path)]
+
+    everything = sorted_unique(published.values())
+    references = {path: everything for path in published}
+    packages = published_libs([dep for dep in binary_info.transitive_runtime_deps if is_from_nuget_package(dep)])
+
+    for dep in binary_info.transitive_runtime_deps:
+        libs = published_libs([dep])
+
+        if not libs:
+            continue
+
+        visible = libs + packages
+        if not is_from_nuget_package(dep):
+            visible += published_libs(dep.deps.to_list())
+
+        visible = sorted_unique(visible)
+        for lib in libs:
+            references[lib.path] = visible
+
+    return references
+
 def _ready_to_run_images(ctx, binary_info, assembly_files, runtime_pack_files, runtime_identifier):
     """Compiles the published assemblies to ReadyToRun.
 
@@ -470,6 +644,8 @@ def _ready_to_run_images(ctx, binary_info, assembly_files, runtime_pack_files, r
         for runtime_pack in binary_info.runtime_pack_info.assembly_runtime_infos
         for lib in runtime_pack.libs
     ]
+    framework_paths = {lib.path: None for lib in framework}
+    framework_depset = depset(framework)
 
     # Runtime pack assemblies already ship as ReadyToRun images, so only a
     # composite image, which has to cover the framework, recompiles them.
@@ -480,12 +656,13 @@ def _ready_to_run_images(ctx, binary_info, assembly_files, runtime_pack_files, r
             compiled.extend(pack.libs)
 
     assemblies = {assembly.path: assembly for assembly in compiled}.values()
-    references = {reference.path: reference for reference in framework + assemblies}.values()
-    inputs = depset(references, transitive = [crossgen2.files])
     root = "{}/r2r/{}".format(ctx.label.name, runtime_identifier)
 
-    def common_args():
+    def common_args(references):
         """The arguments every crossgen2 action here starts with.
+
+        The framework comes first, so that it takes precedence over a package
+        shipping an assembly of the same name.
 
         The references alone run past any OS command line limit, so they always
         go into a parameter file. Each action builds its own rather than sharing
@@ -497,11 +674,15 @@ def _ready_to_run_images(ctx, binary_info, assembly_files, runtime_pack_files, r
         args.add("--targetos:" + target_os)
         args.add("--targetarch:" + target_arch)
         args.add("-O")
-        args.add_all(references, format_each = "-r:%s")
+        args.add_all(framework, format_each = "-r:%s")
+        args.add_all([file for file in references if file.path not in framework_paths], format_each = "-r:%s")
         args.set_param_file_format("multiline")
         args.use_param_file("@%s", use_always = True)
 
         return args
+
+    def inputs(references):
+        return depset(references, transitive = [framework_depset, crossgen2.files])
 
     if ctx.attr.ready_to_run_composite:
         image = ctx.actions.declare_file("{}/composite/{}.r2r.dll".format(
@@ -517,7 +698,8 @@ def _ready_to_run_images(ctx, binary_info, assembly_files, runtime_pack_files, r
             components[assembly.path] = component
             outputs.append(component)
 
-        args = common_args()
+        # One image covers every assembly, so it depends on all of them anyway.
+        args = common_args(assemblies)
         args.add("--composite")
         args.add(image, format = "--out:%s")
         args.add_all(assemblies)
@@ -525,7 +707,7 @@ def _ready_to_run_images(ctx, binary_info, assembly_files, runtime_pack_files, r
         ctx.actions.run(
             executable = crossgen2.tool,
             arguments = [args],
-            inputs = inputs,
+            inputs = inputs(assemblies),
             outputs = outputs,
             mnemonic = "Crossgen2Composite",
             progress_message = "Compiling composite ReadyToRun image for %{label}",
@@ -534,18 +716,20 @@ def _ready_to_run_images(ctx, binary_info, assembly_files, runtime_pack_files, r
 
         return struct(replace = components, extra = [image])
 
+    references = _ready_to_run_references(binary_info, assembly_files)
     images = {}
 
     for assembly in assemblies:
         image = ctx.actions.declare_file("{}/{}".format(root, assembly.basename))
-        args = common_args()
+        visible = references[assembly.path]
+        args = common_args(visible)
         args.add(image, format = "--out:%s")
         args.add(assembly)
 
         ctx.actions.run(
             executable = crossgen2.tool,
             arguments = [args],
-            inputs = inputs,
+            inputs = inputs(visible),
             outputs = [image],
             mnemonic = "Crossgen2",
             progress_message = "Compiling %{input} to ReadyToRun",
@@ -556,20 +740,20 @@ def _ready_to_run_images(ctx, binary_info, assembly_files, runtime_pack_files, r
 
     return struct(replace = images, extra = [])
 
-def _run_copy_script(ctx, copies, suffix, mnemonic, progress_message):
+def _run_copy_script(ctx, copies, suffix, mnemonic, progress_message, directory = None):
     """Runs one action that puts every (source, destination) pair in place.
-
-    The pairs are also the action's inputs and outputs.
 
     Args:
         ctx: The rule context.
-        copies: The (source, destination) pairs to copy.
+        copies: The (source, destination) pairs to copy. A destination is a
+            File, or a path inside `directory` when one is given.
         suffix: Distinguishes this script from the target's other copy scripts.
         mnemonic: The action's mnemonic.
         progress_message: The action's progress message.
+        directory: The directory to copy into, which is then the only output.
 
     Returns:
-        The destination files.
+        The action's outputs.
     """
 
     # The script runs on the machine building the publish, not the one the
@@ -578,12 +762,23 @@ def _run_copy_script(ctx, copies, suffix, mnemonic, progress_message):
     # The toolchain is resolved for the execution platform, so it is what knows
     # which machine that is.
     is_windows = get_toolchain(ctx).dotnetinfo.os == "windows"
-    outputs = [dst for (_, dst) in copies]
+
+    if directory:
+        # Created even when nothing lands in it, because a remote worker does
+        # not create a declared directory.
+        outputs = [directory]
+        directories = [directory.path]
+        pairs = [(src, "{}/{}".format(directory.path, dst)) for (src, dst) in copies]
+    else:
+        outputs = [dst for (_, dst) in copies]
+        directories = []
+        pairs = [(src, dst.path) for (src, dst) in copies]
+
     script = ctx.actions.declare_file("{}.{}.{}".format(ctx.label.name, suffix, "bat" if is_windows else "sh"))
 
     ctx.actions.write(
         output = script,
-        content = ("\r\n" if is_windows else "\n").join(_render_copy_script(copies, is_windows)),
+        content = ("\r\n" if is_windows else "\n").join(_render_copy_script(pairs, is_windows, directories)),
         is_executable = True,
     )
     ctx.actions.run(
@@ -597,25 +792,21 @@ def _run_copy_script(ctx, copies, suffix, mnemonic, progress_message):
 
     return outputs
 
-def _copy_beside(ctx, executable, files, static_web_files = []):
+def _copy_beside(ctx, executable, layout):
     """Copies files into the directory holding `executable`.
 
     Args:
         ctx: The rule context.
         executable: The published executable they sit beside.
-        files: Files that land directly beside it.
-        static_web_files: The servable tree, which keeps the structure the
-            binary gave it.
+        layout: The (path, file) pairs to copy, each path relative to that
+            directory.
 
     Returns:
         The copied files.
     """
     copies = [
-        (file, ctx.actions.declare_file(file.basename, sibling = executable))
-        for file in files
-    ] + [
-        (entry.file, ctx.actions.declare_file(entry.publish_path, sibling = executable))
-        for entry in static_web_files
+        (file, ctx.actions.declare_file(path, sibling = executable))
+        for (path, file) in layout
     ]
     if not copies:
         return []
@@ -628,25 +819,17 @@ def _copy_beside(ctx, executable, files, static_web_files = []):
         "Copying sidecars for %{label}",
     )
 
-def _copy_to_publish(ctx, runtime_identifier, layout, binary_info, ready_to_run = _NO_READY_TO_RUN):
+def _copy_to_publish(ctx, runtime_identifier, entries, binary_info):
     root = "{}/publish/{}".format(ctx.label.name, runtime_identifier)
 
-    # Keyed by destination because the binary's own assembly arrives twice, as
-    # the main DLL and again in the list of assemblies to publish.
-    copies = {
-        path: (
-            ready_to_run.replace.get(file.path, file),
-            ctx.actions.declare_file("{}/{}".format(root, path)),
-        )
-        for (path, file) in layout
-    }
-
-    for file in ready_to_run.extra:
-        copies[file.basename] = (file, ctx.actions.declare_file("{}/{}".format(root, file.basename)))
+    copies = [
+        (file, ctx.actions.declare_file("{}/{}".format(root, path)))
+        for (path, file) in entries.items()
+    ]
 
     outputs = _run_copy_script(
         ctx,
-        copies.values(),
+        copies,
         "copy",
         "DotnetPublishCopy",
         "Assembling publish output for %{label}",
@@ -665,7 +848,10 @@ def _create_shim_exe(ctx, apphost_pack_info, dll, runtime_identifier):
         progress_message = "Creating apphost shim for %{label}",
         executable = ctx.attr._apphost_shimmer.files_to_run,
         arguments = [apphost.path, dll.path, output.path, runtime_identifier],
-        inputs = depset([apphost, dll], transitive = [ctx.attr._apphost_shimmer.default_runfiles.files]),
+        # The shim only records the assembly's path relative to itself.
+        # Depending on the assembly would tie the shim, and so the app layer,
+        # to the action copying the whole publish.
+        inputs = depset([apphost], transitive = [ctx.attr._apphost_shimmer.default_runfiles.files]),
         tools = [ctx.attr._apphost_shimmer.files, ctx.attr._apphost_shimmer.default_runfiles.files],
         outputs = [output],
     )
@@ -730,18 +916,33 @@ def _publish_binary_impl(ctx):
 
         # A NativeAOT publish keeps nothing managed, but it still serves the
         # same files, so the tree travels with the executable.
-        sidecars = _copy_beside(
+        layout = [(file.basename, file) for file in closure.native + closure.appsetting_files] + [
+            (entry.publish_path, entry.file)
+            for entry in binary_info.static_web_files
+        ]
+        sidecars = _copy_beside(ctx, executable, layout)
+
+        # The runtime is compiled into the executable, so that layer is empty.
+        # The sidecars are runfiles too, and the layers copy them from their
+        # sources rather than from beside the executable.
+        output_groups = _publish_layers(
             ctx,
-            executable,
-            closure.native + closure.appsetting_files,
-            binary_info.static_web_files,
+            dicts.add(
+                _publish_entries(layout),
+                {executable.basename: executable},
+                _runfiles_entries(ctx, executable, closure.data, beside = layout),
+            ),
+            _dependency_layers(transitive_runtime_deps, None),
         )
 
-        return [DefaultInfo(
-            executable = executable,
-            files = depset([executable] + sidecars),
-            runfiles = ctx.runfiles(files = sidecars + closure.data),
-        )]
+        return [
+            DefaultInfo(
+                executable = executable,
+                files = depset([executable] + sidecars),
+                runfiles = ctx.runfiles(files = sidecars + closure.data),
+            ),
+            OutputGroupInfo(**output_groups),
+        ]
 
     depsjson = ctx.actions.declare_file("{}/publish/{}/{}.deps.json".format(ctx.label.name, runtime_identifier, assembly_name))
     depsjson_struct = _generate_depsjson(
@@ -791,9 +992,21 @@ def _publish_binary_impl(ctx):
             runtime_identifier,
         )
 
-    (main_dll, outputs) = _copy_to_publish(ctx, runtime_identifier, layout, binary_info, ready_to_run)
+    entries = _publish_entries(layout, ready_to_run)
+
+    (main_dll, outputs) = _copy_to_publish(ctx, runtime_identifier, entries, binary_info)
 
     apphost_shim = _create_shim_exe(ctx, binary_info.apphost_pack_info, main_dll, runtime_identifier)
+
+    output_groups = _publish_layers(
+        ctx,
+        dicts.add(
+            entries,
+            {file.basename: file for file in [apphost_shim, runtimeconfig, depsjson]},
+            _runfiles_entries(ctx, apphost_shim, assembly_files.data),
+        ),
+        _dependency_layers(transitive_runtime_deps, runtime_pack_info, ready_to_run),
+    )
 
     return [
         DefaultInfo(
@@ -802,9 +1015,11 @@ def _publish_binary_impl(ctx):
             # Data files reach the publish as runfiles, not as files at a
             # relative path: end users have to resolve them with the runfiles
             # library, and package them with a rule that carries runfiles along
-            # (`include_runfiles` on rules_pkg's `pkg_tar`, for one).
+            # (`include_runfiles` on rules_pkg's `pkg_tar`, for one). The
+            # layers carry the runfiles tree themselves.
             runfiles = ctx.runfiles(files = assembly_files.data),
         ),
+        OutputGroupInfo(**output_groups),
     ]
 
 # The incoming transition on `binary` becomes an outgoing one here, which is
@@ -812,7 +1027,20 @@ def _publish_binary_impl(ctx):
 # here too: Bazel cannot forward an executable, so this rule has to create it.
 _publish_binary = rule(
     _publish_binary_impl,
-    doc = """Publish a .Net binary""",
+    doc = """Publish a .Net binary.
+
+The publish is also split into the layers of a container image, each a
+directory in its `<layer>_layer` output group. Stacked in this order they give
+the publish directory:
+
+* `runtime`: the runtime pack of a self-contained publish, empty otherwise.
+* `third_party`: what the application's NuGet packages contribute.
+* `first_party`: the libraries built in this repository.
+* `app`: the application's assembly, apphost, `deps.json`,
+  `runtimeconfig.json`, app settings and static web assets.
+
+Together they also hold the runfiles tree Bazel lays out beside the
+executable, each data file in the layer of the target it belongs to.""",
     # Read by the C/C++ toolchain a NativeAOT publish links with.
     fragments = ["cpp"],
     attrs = {
