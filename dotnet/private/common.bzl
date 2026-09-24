@@ -555,6 +555,39 @@ def nuget_framework_to_tfm(framework):
 
     return tfm if tfm in FRAMEWORK_COMPATIBILITY else None
 
+def tfm_to_nuget_framework(tfm):
+    """Spells a TFM the way a `.nuspec` dependency group names it.
+
+    The inverse of `nuget_framework_to_tfm`, and what `dotnet pack` writes:
+    `.NETStandard2.0`, `.NETFramework4.7.2`, `.NETCoreApp3.1`, and from .NET 5
+    on the moniker itself (`net8.0`). Every value round-trips through
+    `nuget_framework_to_tfm`.
+
+    Args:
+      tfm: A target framework moniker from `FRAMEWORK_COMPATIBILITY`.
+
+    Returns:
+      The framework name for package metadata.
+    """
+    if tfm not in FRAMEWORK_COMPATIBILITY:
+        fail("Target framework moniker is not supported/valid: {}".format(tfm))
+
+    # A bare family name (`netstandard`) has no version to spell out.
+    if tfm.isalpha():
+        return tfm
+
+    if tfm.startswith("netstandard"):
+        return ".NETStandard" + tfm[len("netstandard"):]
+
+    if tfm.startswith("netcoreapp"):
+        return ".NETCoreApp" + tfm[len("netcoreapp"):]
+
+    # `net5.0` and later carry their dot already; `net472` is `4.7.2`.
+    if "." in tfm:
+        return tfm
+
+    return ".NETFramework" + ".".join(tfm[len("net"):].elems())
+
 def get_nearest_compatible_target_framework(incoming_tfm, tfms):
     """Returns the entry of `tfms` that best matches `incoming_tfm`.
 

@@ -1,0 +1,10 @@
+load("//dotnet:defs.bzl", "csharp_binary")
+
+# A test helper: extracts named entries from a zip. See Program.cs.
+csharp_binary(
+    name = "unzip",
+    srcs = ["Program.cs"],
+    nullable = "enable",
+    target_frameworks = ["net9.0"],
+    visibility = ["//dotnet/private/tests:__subpackages__"],
+)

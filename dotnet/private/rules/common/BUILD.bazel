@@ -26,6 +26,13 @@ bzl_library(
 )
 
 bzl_library(
+    name = "publish_layout",
+    srcs = ["publish_layout.bzl"],
+    visibility = ["//dotnet:__subpackages__"],
+    deps = ["//dotnet/private:common"],
+)
+
+bzl_library(
     name = "library",
     srcs = ["library.bzl"],
     visibility = ["//dotnet:__subpackages__"],

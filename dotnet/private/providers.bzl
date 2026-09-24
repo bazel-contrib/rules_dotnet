@@ -5,6 +5,7 @@ DotnetAssemblyCompileInfo = provider(
         "name": "string: The name of the assembly",
         "version": "string: The version of the assembly",
         "project_sdk": "string: The SDK being targeted",
+        "target_framework": "string: The target framework moniker the assembly was compiled for. None for an imported assembly, whose files are chosen per framework and so name no single one.",
         "refs": "list[File]: Reference-only assemblies containing only public symbols. See docs/ReferenceAssemblies.md for more info.",
         "irefs": "list[File]: Reference-only assemblies containing public and internal symbols. See docs/ReferenceAssemblies.md for more info.",
         "analyzers": "list[File]: Common language analyzer dlls",
@@ -71,6 +72,21 @@ NuGetInfo = provider(
         "framework_list": "map[string, string]: Targeting packs like e.g. Microsoft.NETCore.App.Ref have a FrameworkList.xml that includes a list of the DLLs in the targeting pack. This is used for selecting the correct DLL versions during compilation and runtime.",
         "sha512": "string: the SHA512 SRI string for the package",
         "nupkg": "File: the underlying `.nupkg` file which provides this package",
+    },
+)
+
+NuGetPackInfo = provider(
+    doc = "A NuGet package built by `nuget_pack`.",
+    fields = {
+        "label": "Label: The `nuget_pack` target, for messages.",
+        "package_id": "string: The package id, in the casing it was given.",
+        "version": "string: The normalized package version, or None when it is read from `version_file` when the package is built.",
+        "version_file": "File: The file the version is read from, or None.",
+        "nupkg": "File: The package.",
+        "snupkg": "File: The symbol package, or None.",
+        "target_frameworks": "list[string]: The frameworks the package ships assets for.",
+        "bundled_assemblies": "list[string]: The names of the assemblies the package ships under lib/, runtimes/ or analyzers/, across every framework, its own included. Empty for a tool package. A package that depends on one of these depends on this package.",
+        "is_tool": "bool: Whether this is a .NET tool package, which nothing can depend on.",
     },
 )
 

@@ -1,0 +1,733 @@
+# Tests for `nuget_pack`, `nuget_push` and the `version` attribute they build on.
+
+load("@bazel_lib//lib:diff_test.bzl", "diff_test")
+load("@bazel_lib//lib:testing.bzl", "assert_contains")
+load("@bazel_skylib//:bzl_library.bzl", "bzl_library")
+load("@bazel_skylib//rules:select_file.bzl", "select_file")
+load(
+    "//dotnet:defs.bzl",
+    "csharp_binary",
+    "csharp_library",
+    "csharp_nunit_test",
+    "dotnet_tool",
+    "fsharp_binary",
+    "fsharp_library",
+    "fsharp_nunit_test",
+    "nuget_pack",
+)
+load(":analysis_tests.bzl", "fails_with_test", "nuget_pack_analysis_test_suite")
+load(":framework_test.bzl", "framework_test_suite")
+load(":layout_test.bzl", "layout_test_suite")
+load(":tool_roundtrip.bzl", "extract_nupkg", "tool_files")
+
+# --- The `version` attribute -------------------------------------------------
+
+csharp_library(
+    name = "lib",
+    srcs = ["Lib.cs"],
+    target_frameworks = [
+        "netstandard2.0",
+        "net9.0",
+    ],
+    version = "1.2.3-beta.1+abc",
+    deps = [
+        ":bundled",
+        ":mapped",
+        ":referenced",
+        "@paket.rules_dotnet_dev_nuget_packages//system.memory",
+    ],
+)
+
+# No version: reported as 1.0.0.
+csharp_library(
+    name = "bundled",
+    srcs = ["Bundled.cs"],
+    target_frameworks = [
+        "netstandard2.0",
+        "net9.0",
+    ],
+)
+
+csharp_library(
+    name = "mapped",
+    srcs = ["Mapped.cs"],
+    target_frameworks = [
+        "netstandard2.0",
+        "net9.0",
+    ],
+    version = "3.0.0",
+)
+
+csharp_library(
+    name = "referenced",
+    srcs = ["Referenced.cs"],
+    target_frameworks = [
+        "netstandard2.0",
+        "net9.0",
+    ],
+    version = "2.0.0",
+)
+
+csharp_nunit_test(
+    name = "version_test",
+    srcs = ["VersionTest.cs"],
+    target_frameworks = ["net9.0"],
+    deps = [
+        ":bundled",
+        ":lib",
+    ],
+)
+
+fsharp_library(
+    name = "fslib",
+    srcs = ["FsLib.fs"],
+    target_frameworks = [
+        "netstandard2.0",
+        "net9.0",
+    ],
+    version = "2.0.0.0",
+    deps = ["@paket.rules_dotnet_dev_nuget_packages//fsharp.core"],
+)
+
+fsharp_nunit_test(
+    name = "fs_version_test",
+    srcs = ["FsVersionTest.fs"],
+    target_frameworks = ["net9.0"],
+    deps = [
+        ":fslib",
+        "@paket.rules_dotnet_dev_nuget_packages//fsharp.core",
+    ],
+)
+
+# --- Library packages --------------------------------------------------------
+
+nuget_pack(
+    name = "mapped_pack",
+    authors = ["rules_dotnet"],
+    description = "Shipped by its own package and mapped through `deps`.",
+    library = ":mapped",
+    package_id = "RulesDotnet.Tests.Mapped",
+    target_frameworks = [
+        "netstandard2.0",
+        "net9.0",
+    ],
+)
+
+# `bundled` and `referenced` are copied in; `mapped` is a dependency on its package.
+nuget_pack(
+    name = "pack",
+    authors = [
+        "rules_dotnet",
+        "contributors",
+    ],
+    copyright = "Copyright rules_dotnet",
+    description = "A library packed by rules_dotnet's own tests.",
+    first_party_deps = "bundle",
+    library = ":lib",
+    license_expression = "Apache-2.0",
+    package_id = "RulesDotnet.Tests.Lib",
+    package_tags = [
+        "test",
+        "rules_dotnet",
+    ],
+    project_url = "https://github.com/bazel-contrib/rules_dotnet",
+    readme = "README.md",
+    release_notes = "First.",
+    repository_commit = "0123456789abcdef0123456789abcdef01234567",
+    repository_url = "https://github.com/bazel-contrib/rules_dotnet.git",
+    symbols = "snupkg",
+    target_frameworks = [
+        "netstandard2.0",
+        "net9.0",
+    ],
+    visibility = ["//dotnet/private/tests/nuget_pack:__subpackages__"],
+    deps = [":mapped_pack"],
+)
+
+# The default: `bundled` and `referenced` become dependencies on packages named after them.
+nuget_pack(
+    name = "pack_ref",
+    authors = ["rules_dotnet"],
+    description = "The same library, depending on its first-party dependencies as packages.",
+    library = ":lib",
+    package_id = "RulesDotnet.Tests.Lib",
+    target_frameworks = [
+        "netstandard2.0",
+        "net9.0",
+    ],
+    deps = [":mapped_pack"],
+)
+
+# --- An F# library package ---------------------------------------------------
+
+nuget_pack(
+    name = "fs_pack",
+    authors = ["rules_dotnet"],
+    description = "An F# library packed by rules_dotnet's own tests.",
+    library = ":fslib",
+    package_id = "RulesDotnet.Tests.FsLib",
+    target_frameworks = [
+        "netstandard2.0",
+        "net9.0",
+    ],
+)
+
+# --- An analyzer package -----------------------------------------------------
+
+csharp_library(
+    name = "generator_support",
+    srcs = ["GeneratorSupport.cs"],
+    target_frameworks = ["netstandard2.0"],
+    version = "1.0.0",
+)
+
+# A source generator. `is_language_specific_analyzer` is what puts it under
+# `analyzers/dotnet/cs`; the Roslyn packages it compiles against stay out of the
+# package, and the first-party assembly it loads travels with it.
+csharp_library(
+    name = "generator",
+    srcs = ["Generator.cs"],
+    analyzer_configs = [".analyzerconfig"],
+    is_analyzer = True,
+    is_language_specific_analyzer = True,
+    target_frameworks = ["netstandard2.0"],
+    version = "1.0.0",
+    deps = [
+        ":generator_support",
+        "@paket.rules_dotnet_dev_nuget_packages//microsoft.codeanalysis.analyzers",
+        "@paket.rules_dotnet_dev_nuget_packages//microsoft.codeanalysis.common",
+        "@paket.rules_dotnet_dev_nuget_packages//microsoft.codeanalysis.csharp",
+    ],
+)
+
+nuget_pack(
+    name = "generator_pack",
+    authors = ["rules_dotnet"],
+    description = "A source generator packed by rules_dotnet's own tests.",
+    development_dependency = True,
+    library = ":generator",
+    package_id = "RulesDotnet.Tests.Generator",
+    symbols = "embedded",
+    target_frameworks = ["netstandard2.0"],
+)
+
+# --- A Razor class library package -------------------------------------------
+
+# `out` names the assembly after the package: the library serves its files under
+# `_content/<assembly name>` in this build and under `_content/<package id>` out
+# of the package, so the two have to agree.
+csharp_library(
+    name = "components",
+    srcs = [
+        "Widget.razor",
+        "Widget.razor.css",
+        "_Imports.razor",
+    ],
+    out = "RulesDotnet.Tests.Components",
+    project_sdk = "razor",
+    root_namespace = "RulesDotnet.Tests.Components",
+    static_web_assets = glob(["wwwroot/**"]),
+    target_frameworks = ["net10.0"],
+    version = "1.0.0",
+)
+
+nuget_pack(
+    name = "components_pack",
+    authors = ["rules_dotnet"],
+    description = "A Razor class library packed by rules_dotnet's own tests.",
+    library = ":components",
+    package_id = "RulesDotnet.Tests.Components",
+    target_frameworks = ["net10.0"],
+)
+
+# --- Tool packages -----------------------------------------------------------
+
+csharp_binary(
+    name = "tool",
+    srcs = ["Tool.cs"],
+    target_frameworks = ["net9.0"],
+    version = "0.1.0",
+    deps = [":referenced"],
+)
+
+nuget_pack(
+    name = "tool_pack",
+    authors = ["rules_dotnet"],
+    binary = ":tool",
+    command_name = "rdtool",
+    description = "A .NET tool packed by rules_dotnet's own tests.",
+    package_id = "RulesDotnet.Tests.Tool",
+    target_frameworks = ["net9.0"],
+)
+
+# Round trip: the extracted package is what `dotnet_tool` runs.
+extract_nupkg(
+    name = "tool_extracted",
+    entries = [
+        "tools/net9.0/any/DotnetToolSettings.xml",
+        "tools/net9.0/any/tool.dll",
+        "tools/net9.0/any/tool.deps.json",
+        "tools/net9.0/any/tool.runtimeconfig.json",
+        "tools/net9.0/any/referenced.dll",
+    ],
+    nupkg = ":tool_pack",
+)
+
+tool_files(
+    name = "tool_files",
+    files = ":tool_extracted",
+    tfm = "net9.0",
+)
+
+dotnet_tool(
+    name = "rdtool",
+    entrypoint = {"net9.0": "tool.dll"},
+    runner = {"net9.0": "dotnet"},
+    target_frameworks = ["net9.0"],
+    deps = ":tool_files",
+)
+
+genrule(
+    name = "rdtool_output",
+    outs = ["rdtool_actual.txt"],
+    cmd = "$(location :rdtool) world > $@",
+    tools = [":rdtool"],
+)
+
+assert_contains(
+    name = "rdtool_runs",
+    actual = ":rdtool_output",
+    expected = "Hello world from 0.1.0",
+)
+
+fsharp_binary(
+    name = "fs_tool",
+    srcs = ["FsTool.fs"],
+    target_frameworks = ["net9.0"],
+    version = "0.2.0",
+    deps = ["@paket.rules_dotnet_dev_nuget_packages//fsharp.core"],
+)
+
+nuget_pack(
+    name = "fs_tool_pack",
+    authors = ["rules_dotnet"],
+    binary = ":fs_tool",
+    command_name = "rdfstool",
+    description = "An F# .NET tool packed by rules_dotnet's own tests.",
+    package_id = "RulesDotnet.Tests.FsTool",
+    target_frameworks = ["net9.0"],
+)
+
+extract_nupkg(
+    name = "fs_tool_extracted",
+    entries = [
+        "tools/net9.0/any/DotnetToolSettings.xml",
+        "tools/net9.0/any/fs_tool.dll",
+        "tools/net9.0/any/fs_tool.deps.json",
+        "tools/net9.0/any/fs_tool.runtimeconfig.json",
+        "tools/net9.0/any/FSharp.Core.dll",
+    ],
+    nupkg = ":fs_tool_pack",
+)
+
+tool_files(
+    name = "fs_tool_files",
+    files = ":fs_tool_extracted",
+    tfm = "net9.0",
+)
+
+dotnet_tool(
+    name = "rdfstool",
+    entrypoint = {"net9.0": "fs_tool.dll"},
+    runner = {"net9.0": "dotnet"},
+    target_frameworks = ["net9.0"],
+    deps = ":fs_tool_files",
+)
+
+genrule(
+    name = "rdfstool_output",
+    outs = ["rdfstool_actual.txt"],
+    cmd = "$(location :rdfstool) world > $@",
+    tools = [":rdfstool"],
+)
+
+assert_contains(
+    name = "rdfstool_runs",
+    actual = ":rdfstool_output",
+    expected = "Hello world from 0.2.0",
+)
+
+# --- A RID-specific package --------------------------------------------------
+
+csharp_library(
+    name = "ridlib",
+    srcs = ["RidLib.cs"] + select({
+        "//dotnet:rid_linux-x64": ["RidLinux.cs"],
+        "//dotnet:rid_win-x64": ["RidWindows.cs"],
+        "//conditions:default": ["RidOther.cs"],
+    }),
+    target_frameworks = ["net9.0"],
+    version = "1.0.0",
+)
+
+nuget_pack(
+    name = "rid_pack",
+    authors = ["rules_dotnet"],
+    description = "A RID-specific library packed by rules_dotnet's own tests.",
+    library = ":ridlib",
+    package_id = "RulesDotnet.Tests.RidLib",
+    runtime_identifiers = [
+        "linux-x64",
+        "win-x64",
+    ],
+    target_frameworks = ["net9.0"],
+)
+
+# --- Determinism -------------------------------------------------------------
+#
+# Two packages built from the same inputs in different output folders: identical
+# bytes mean no path, time or random name got in.
+
+nuget_pack(
+    name = "det_a",
+    authors = ["rules_dotnet"],
+    description = "Determinism check.",
+    first_party_deps = "bundle",
+    library = ":lib",
+    package_id = "RulesDotnet.Tests.Det",
+    readme = "README.md",
+    symbols = "snupkg",
+    target_frameworks = [
+        "netstandard2.0",
+        "net9.0",
+    ],
+    deps = [":mapped_pack"],
+)
+
+nuget_pack(
+    name = "det_b",
+    authors = ["rules_dotnet"],
+    description = "Determinism check.",
+    first_party_deps = "bundle",
+    library = ":lib",
+    package_id = "RulesDotnet.Tests.Det",
+    readme = "README.md",
+    symbols = "snupkg",
+    target_frameworks = [
+        "netstandard2.0",
+        "net9.0",
+    ],
+    deps = [":mapped_pack"],
+)
+
+[
+    select_file(
+        name = "det_{}_{}".format(side, extension),
+        srcs = ":det_{}".format(side),
+        subpath = "det_{}/RulesDotnet.Tests.Det.1.2.3-beta.1.{}".format(side, extension),
+    )
+    for side in [
+        "a",
+        "b",
+    ]
+    for extension in [
+        "nupkg",
+        "snupkg",
+    ]
+]
+
+[
+    diff_test(
+        name = "deterministic_{}".format(extension),
+        file1 = ":det_a_{}".format(extension),
+        file2 = ":det_b_{}".format(extension),
+    )
+    for extension in [
+        "nupkg",
+        "snupkg",
+    ]
+]
+
+# --- What is in the packages -------------------------------------------------
+
+csharp_nunit_test(
+    name = "pack_test",
+    srcs = ["PackTest.cs"],
+    data = [
+        ":components_pack",
+        ":fs_pack",
+        ":generator_pack",
+        ":pack",
+        ":pack_ref",
+        ":rid_pack",
+        ":tool_pack",
+    ],
+    target_frameworks = ["net9.0"],
+    deps = ["//tools/runfiles"],
+)
+
+# --- Analysis ----------------------------------------------------------------
+
+nuget_pack_analysis_test_suite(name = "analysis_tests")
+
+framework_test_suite(name = "framework_test")
+
+layout_test_suite(name = "layout_test")
+
+# --- Failures ----------------------------------------------------------------
+#
+# The targets under test are `manual`: they exist to fail, and only the tests
+# that expect the failure build them.
+
+csharp_library(
+    name = "bad_version",
+    srcs = ["Simple.cs"],
+    tags = ["manual"],
+    target_frameworks = ["net9.0"],
+    version = "1",
+)
+
+fails_with_test(
+    name = "bad_version_test",
+    size = "small",
+    expected_message_fragments = ["version \"1\" must have two to four numeric components"],
+    target_under_test = ":bad_version",
+)
+
+csharp_library(
+    name = "net9_only",
+    srcs = ["Simple.cs"],
+    target_frameworks = ["net9.0"],
+)
+
+# Asks for net10.0, which the library resolves to its net9.0 build.
+nuget_pack(
+    name = "wrong_framework",
+    authors = ["rules_dotnet"],
+    description = "d",
+    library = ":net9_only",
+    tags = ["manual"],
+    target_frameworks = [
+        "net9.0",
+        "net10.0",
+    ],
+)
+
+fails_with_test(
+    name = "wrong_framework_test",
+    size = "small",
+    expected_message_fragments = [
+        "for net10.0, but that target builds the same assembly for it as for another framework",
+        "Add net10.0 to its target_frameworks",
+    ],
+    target_under_test = ":wrong_framework",
+)
+
+# Asks for net10.0 alone, so the one branch there is builds net9.0 under a net10.0 key.
+nuget_pack(
+    name = "wrong_only_framework",
+    authors = ["rules_dotnet"],
+    description = "d",
+    library = ":net9_only",
+    tags = ["manual"],
+    target_frameworks = ["net10.0"],
+)
+
+fails_with_test(
+    name = "wrong_only_framework_test",
+    size = "small",
+    expected_message_fragments = [
+        "for net10.0, but that target builds net9.0 for it",
+        "Add net10.0 to its target_frameworks",
+    ],
+    target_under_test = ":wrong_only_framework",
+)
+
+nuget_pack(
+    name = "unmapped_dependency",
+    authors = ["rules_dotnet"],
+    description = "d",
+    first_party_deps = "error",
+    library = ":lib",
+    tags = ["manual"],
+    target_frameworks = ["net9.0"],
+    deps = [":mapped_pack"],
+)
+
+fails_with_test(
+    name = "unmapped_dependency_test",
+    size = "small",
+    expected_message_fragments = ["bundled (a dependency of lib) is not shipped by any package in `deps`"],
+    target_under_test = ":unmapped_dependency",
+)
+
+nuget_pack(
+    name = "tool_with_rids",
+    authors = ["rules_dotnet"],
+    binary = ":tool",
+    description = "d",
+    runtime_identifiers = ["linux-x64"],
+    tags = ["manual"],
+    target_frameworks = ["net9.0"],
+)
+
+fails_with_test(
+    name = "tool_with_rids_test",
+    size = "small",
+    expected_message_fragments = ["a tool package is not RID-specific"],
+    target_under_test = ":tool_with_rids",
+)
+
+nuget_pack(
+    name = "mapped_pack_again",
+    authors = ["rules_dotnet"],
+    description = "d",
+    library = ":mapped",
+    package_id = "RulesDotnet.Tests.MappedAgain",
+    target_frameworks = [
+        "netstandard2.0",
+        "net9.0",
+    ],
+)
+
+nuget_pack(
+    name = "two_packages_one_assembly",
+    authors = ["rules_dotnet"],
+    description = "d",
+    library = ":lib",
+    tags = ["manual"],
+    target_frameworks = ["net9.0"],
+    deps = [
+        ":mapped_pack",
+        ":mapped_pack_again",
+    ],
+)
+
+fails_with_test(
+    name = "two_packages_one_assembly_test",
+    size = "small",
+    expected_message_fragments = ["both ship the assembly mapped"],
+    target_under_test = ":two_packages_one_assembly",
+)
+
+nuget_pack(
+    name = "tool_depending_on_a_package",
+    authors = ["rules_dotnet"],
+    binary = ":tool",
+    description = "d",
+    tags = ["manual"],
+    target_frameworks = ["net9.0"],
+    deps = [":mapped_pack"],
+)
+
+fails_with_test(
+    name = "tool_depending_on_a_package_test",
+    size = "small",
+    expected_message_fragments = ["a tool package ships its whole closure"],
+    target_under_test = ":tool_depending_on_a_package",
+)
+
+csharp_library(
+    name = "generated",
+    srcs = ["Simple.cs"],
+    target_frameworks = ["netstandard2.0"],
+    deps = [":generator"],
+)
+
+nuget_pack(
+    name = "bundled_analyzer",
+    authors = ["rules_dotnet"],
+    description = "d",
+    first_party_deps = "bundle",
+    library = ":generated",
+    tags = ["manual"],
+    target_frameworks = ["netstandard2.0"],
+)
+
+fails_with_test(
+    name = "bundled_analyzer_test",
+    size = "small",
+    expected_message_fragments = [
+        "generator (a dependency of generated) ships no assembly to copy into this package",
+        "list its nuget_pack in `deps`",
+    ],
+    target_under_test = ":bundled_analyzer",
+)
+
+nuget_pack(
+    name = "analyzer_with_rids",
+    authors = ["rules_dotnet"],
+    description = "d",
+    library = ":generator",
+    runtime_identifiers = ["linux-x64"],
+    tags = ["manual"],
+    target_frameworks = ["netstandard2.0"],
+)
+
+fails_with_test(
+    name = "analyzer_with_rids_test",
+    size = "small",
+    expected_message_fragments = ["an analyzer runs inside the compiler, not on a runtime"],
+    target_under_test = ":analyzer_with_rids",
+)
+
+# The served files would move from `_content/RulesDotnet.Tests.Components` to
+# `_content/RulesDotnet.Tests.Renamed` the moment the package was installed.
+nuget_pack(
+    name = "renamed_components",
+    authors = ["rules_dotnet"],
+    description = "d",
+    library = ":components",
+    package_id = "RulesDotnet.Tests.Renamed",
+    tags = ["manual"],
+    target_frameworks = ["net10.0"],
+)
+
+fails_with_test(
+    name = "renamed_components_test",
+    size = "small",
+    expected_message_fragments = [
+        "serves files under `_content/RulesDotnet.Tests.Components`",
+        "under `_content/RulesDotnet.Tests.Renamed`, the package id",
+    ],
+    target_under_test = ":renamed_components",
+)
+
+# A copied-in assembly's files would be served under this package's id, not
+# under its own, so they cannot come along.
+csharp_library(
+    name = "uses_components",
+    srcs = ["Simple.cs"],
+    target_frameworks = ["net10.0"],
+    deps = [":components"],
+)
+
+nuget_pack(
+    name = "bundled_components",
+    authors = ["rules_dotnet"],
+    description = "d",
+    first_party_deps = "bundle",
+    library = ":uses_components",
+    tags = ["manual"],
+    target_frameworks = ["net10.0"],
+)
+
+fails_with_test(
+    name = "bundled_components_test",
+    size = "small",
+    expected_message_fragments = [
+        "RulesDotnet.Tests.Components is copied into this package and serves",
+        "List its nuget_pack in `deps` rather than copying it in",
+    ],
+    target_under_test = ":bundled_components",
+)
+
+bzl_library(
+    name = "tool_roundtrip",
+    srcs = ["tool_roundtrip.bzl"],
+    visibility = ["//dotnet:__subpackages__"],
+    deps = [
+        "//dotnet/private:providers",
+        "//dotnet/private/rules/nuget:dotnet_tool",
+    ],
+)

@@ -1,0 +1,32 @@
+load("@rules_shell//shell:sh_test.bzl", "sh_test")
+load("//dotnet:defs.bzl", "nuget_push")
+
+# Never pushed to anything remote: the test runs the launcher dry, and pushes
+# for real only into a folder feed under the test's temporary directory.
+nuget_push(
+    name = "push",
+    timeout = 42,
+    packages = ["//dotnet/private/tests/nuget_pack:pack"],
+    source = "https://example.invalid/never-used/v3/index.json",
+)
+
+nuget_push(
+    name = "push_no_source",
+    packages = ["//dotnet/private/tests/nuget_pack:pack"],
+    skip_duplicate = False,
+)
+
+sh_test(
+    name = "push_test",
+    size = "small",
+    srcs = ["push_test.sh"],
+    args = [
+        "$(rlocationpath :push)",
+        "$(rlocationpath :push_no_source)",
+    ],
+    data = [
+        ":push",
+        ":push_no_source",
+        "@bazel_tools//tools/bash/runfiles",
+    ],
+)

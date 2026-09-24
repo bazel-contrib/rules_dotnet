@@ -41,6 +41,7 @@ def _compile_action(ctx, tfm, toolchain):
         target = "library",
         target_name = ctx.attr.name,
         target_framework = tfm,
+        version = ctx.attr.version,
         toolchain = toolchain,
         strict_deps = toolchain.strict_deps[BuildSettingInfo].value,
         generate_documentation_file = ctx.attr.generate_documentation_file,
