@@ -623,17 +623,17 @@ def _compile(
 
     # outputs
     if out_dll != None:
-        args.add(out_dll, format = "/out:%s")
-        args.add(out_ref, format = "/refout:%s")
-        args.add(out_pdb, format = "/pdb:%s")
+        args.add(out_dll, format = "/out:\"%s\"")
+        args.add(out_ref, format = "/refout:\"%s\"")
+        args.add(out_pdb, format = "/pdb:\"%s\"")
         outputs = [out_dll, out_ref, out_pdb]
     else:
         args.add("/refonly")
-        args.add(out_ref, format = "/out:%s")
+        args.add(out_ref, format = "/out:\"%s\"")
         outputs = [out_ref]
 
     if out_xml != None:
-        args.add(out_xml, format = "/doc:%s")
+        args.add(out_xml, format = "/doc:\"%s\"")
         outputs.append(out_xml)
 
     # A `/refonly` pass does not record every reference the real compilation
@@ -647,25 +647,27 @@ def _compile(
     # assembly references
     # csc resolves a duplicate assembly identity by order, so refs must come
     # before the framework files.
-    format_ref_arg(args, depset(transitive = [refs, framework_files]))
+    # csc splits each response file line on whitespace, so every path it is
+    # handed is quoted.
+    format_ref_arg(args, depset(transitive = [refs, framework_files]), quote = True)
 
     # A source generator rather than an analyzer, so it runs even when analyzers
     # are switched off: without it every component would be undefined rather
     # than merely undiagnosed.
     if razor:
-        args.add_all(razor.analyzers, format_each = "/analyzer:%s")
-        args.add_all(razor.additionalfiles, format_each = "/additionalfile:%s")
-        args.add_all(razor.configs, format_each = "/analyzerconfig:%s")
+        args.add_all(razor.analyzers, format_each = "/analyzer:\"%s\"")
+        args.add_all(razor.additionalfiles, format_each = "/additionalfile:\"%s\"")
+        args.add_all(razor.configs, format_each = "/analyzerconfig:\"%s\"")
 
     # analyzers
     if run_analyzers:
-        args.add_all(analyzer_assemblies, format_each = "/analyzer:%s")
-        args.add_all(analyzer_assemblies_csharp, format_each = "/analyzer:%s")
-        args.add_all(additionalfiles, format_each = "/additionalfile:%s")
-        args.add_all(analyzer_configs, format_each = "/analyzerconfig:%s")
+        args.add_all(analyzer_assemblies, format_each = "/analyzer:\"%s\"")
+        args.add_all(analyzer_assemblies_csharp, format_each = "/analyzer:\"%s\"")
+        args.add_all(additionalfiles, format_each = "/additionalfile:\"%s\"")
+        args.add_all(analyzer_configs, format_each = "/analyzerconfig:\"%s\"")
 
     # .cs files
-    args.add_all(srcs)
+    args.add_all(srcs, format_each = "\"%s\"")
 
     # resources
     add_resource_args(args, resources, label, out_dll.basename if out_dll != None else None, "csharp")
@@ -675,7 +677,7 @@ def _compile(
 
     # keyfile
     if keyfile != None:
-        args.add(keyfile, format = "/keyfile:%s")
+        args.add(keyfile, format = "/keyfile:\"%s\"")
 
     # Additional compiler flags
     for option in compiler_options:

@@ -35,7 +35,7 @@ def _analyzer_paths(env):
         fail("No action with mnemonic: CSharpCompile")
 
     return [
-        arg[len(_ANALYZER_ARG_PREFIX):]
+        arg[len(_ANALYZER_ARG_PREFIX):].strip("\"")
         for arg in action_under_test.argv
         if arg.startswith(_ANALYZER_ARG_PREFIX)
     ]
