@@ -31,8 +31,10 @@ if [[ "$(ls -A "$stacked")" != "app" ]]; then
 fi
 
 # The same files, the runfiles tree included. Only the repository mappings
-# differ: the layers carry the binary's, which has to hold every row of the
-# publish's that rules_img carries.
+# differ: the layers carry the binary's, which has to resolve every name the
+# publish's does from the repositories the application's code comes from. The
+# publish's also has rows for repositories only it depends on, such as a
+# toolchain's, which no code of the application looks names up from.
 diff -r -x "_repo_mapping" -x "*.repo_mapping" "$stacked" "$single"
 
 for mapping in "app/$executable.repo_mapping" "app/$executable.runfiles/_repo_mapping"; do
@@ -41,7 +43,10 @@ for mapping in "app/$executable.repo_mapping" "app/$executable.runfiles/_repo_ma
         exit 1
     fi
 
-    missing=$(comm -13 <(sort "$stacked/$mapping") <(sort "$single/$mapping"))
+    # The rows of the publish's mapping whose source repository the binary's
+    # mapping has rows for too.
+    expected=$(awk -F, 'NR == FNR { sources[$1]; next } $1 in sources' "$stacked/$mapping" "$single/$mapping")
+    missing=$(comm -13 <(sort "$stacked/$mapping") <(sort <<<"$expected"))
 
     if [[ -n "$missing" ]]; then
         echo "The layers' $mapping lacks:"
