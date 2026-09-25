@@ -44,8 +44,8 @@ let private band tfm hasWeb rids =
 
 /// Releases before .NET 6 carry irregularities that are now frozen history:
 /// Apple silicon packs did not exist yet, ASP.NET Core 3.0 shipped a
-/// different RID set to .NET Core 3.0, and crossgen2 shipped as a package from
-/// .NET 5 onwards, for x64 hosts only. Everything from .NET 6 onward is
+/// different RID set to .NET Core 3.0, and crossgen2 first shipped as a
+/// package in .NET 5, for x64 hosts alone. Everything from .NET 6 onward is
 /// uniform, so those bands are derived from the discovered channels instead of
 /// being listed here, and a new .NET release needs no edit to this file.
 let private historicalBands =

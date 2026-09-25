@@ -153,7 +153,8 @@ def _apphost_table_test_impl(ctx):
 
 _apphost_table_test = unittest.make(_apphost_table_test_impl)
 
-# crossgen2 shipped as a package from .NET 5 onwards, for x64 hosts only.
+# crossgen2 first shipped as a package in .NET 5, for x64 hosts alone. Every
+# later band ships it for every runtime identifier.
 _CROSSGEN2_RIDS = {
     "net5.0": ["linux-musl-x64", "linux-x64", "win-x64"],
     "netcoreapp3.0": [],

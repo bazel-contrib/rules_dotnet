@@ -10,10 +10,10 @@ Feeds that do not serve registration metadata simply yield no hash. The
 packages are still pinned to an exact version by the lock file; they are just
 not verified against a recorded digest.
 
-A package without a hash is remembered too, as an empty hash, so that later
-evaluations do not ask again. Only an answer from the feed is remembered.
-Bazel does not say why a download failed, so a failed request can be an outage
-as well as a missing package, and it is asked again next time.
+A package the feeds have no hash for is remembered too, as an empty hash, so
+that later evaluations do not ask again. Only an answer counts: Bazel does not
+say why a download failed, so a failed request may be an outage rather than a
+missing package, and is asked again next time.
 """
 
 load(
@@ -127,15 +127,17 @@ def _download_all(module_ctx, requests, auth, directory):
     return results
 
 def _service_index(module_ctx, source, auth, indexes, required):
-    """Returns a V3 feed's resources by type, or {} for a feed without them.
+    """Returns a V3 feed's resources by type, {} for a feed without them, or None.
+
+    None means the feed could not be reached, which only an optional lookup
+    ever sees: a required one fails the build instead.
 
     Args:
       module_ctx: The module extension context.
       source: The feed to query.
       auth: The auth dict to use.
       indexes: A cache of source URL to resources, which this call adds to.
-      required: Whether an unreachable feed should fail the build, rather than
-        return None.
+      required: Whether an unreachable feed should fail the build.
     """
     if source in indexes:
         return indexes[source]
@@ -199,20 +201,27 @@ def _package_hash(catalog_entry, url):
 def _served_versions(module_ctx, resources, ids, netrc_entries):
     """Returns the versions a feed serves of each package, by lower case id.
 
-    An id is left out if its version list did not download.
+    An id is left out unless the feed answered with a version list. A list of
+    no versions is still an answer; a body carrying none at all is not, so a
+    feed that is not serving the list is never read as one serving nothing.
     """
     base = _base_url(resources, ["PackageBaseAddress/3.0.0"])
     if not base:
         return {}
 
+    lower_ids = {id.lower(): None for id in ids}
     lists = _download_all(
         module_ctx,
-        [(id, "{}{}/index.json".format(base, id)) for id in {id.lower(): None for id in ids}],
+        [(id, "{}{}/index.json".format(base, id)) for id in lower_ids],
         _auth(netrc_entries, [base]),
         "versions",
     )
 
-    return {id: index.get("versions", []) for (id, index) in lists.items()}
+    return {
+        id: index["versions"]
+        for (id, index) in lists.items()
+        if type(index.get("versions")) == "list"
+    }
 
 def resolve_integrity(module_ctx, source, packages, netrc_entries, indexes):
     """Looks up the subresource integrity of each package on a feed.
@@ -268,9 +277,9 @@ def resolve_integrity(module_ctx, source, packages, netrc_entries, indexes):
 
     # A leaf that did not download is a version the feed does not have, or a
     # failed request. The feed's version list tells the two apart.
-    unlisted = [package for package in packages if _package_key(package.id, package.version) not in leaves]
-    served = _served_versions(module_ctx, resources, [package.id for package in unlisted], netrc_entries)
-    for package in unlisted:
+    unresolved = [package for package in packages if _package_key(package.id, package.version) not in leaves]
+    served = _served_versions(module_ctx, resources, [package.id for package in unresolved], netrc_entries)
+    for package in unresolved:
         versions = served.get(package.id.lower())
         if versions != None and package.version.lower() not in versions:
             integrity[_package_key(package.id, package.version)] = ""
@@ -288,7 +297,7 @@ def package_versions(module_ctx, source, id, netrc_entries, indexes):
       indexes: A cache of service index lookups, which this call adds to.
 
     Returns:
-      A list of versions, or None if the feed could not be asked.
+      A list of versions, or None if the feed did not answer.
     """
     resources = _service_index(module_ctx, source, _auth(netrc_entries, [source]), indexes, required = False)
     if resources == None:
@@ -316,12 +325,12 @@ def resolve_integrity_cached(module_ctx, sources, packages, netrc_entries, resol
     pending = {}
 
     for package in packages:
-        key = integrity_fact_key(package.id, package.version)
-        if key in resolved:
+        fact_key = integrity_fact_key(package.id, package.version)
+        if fact_key in resolved:
             continue
 
-        if key in remembered:
-            resolved[key] = remembered[key]
+        if fact_key in remembered:
+            resolved[fact_key] = remembered[fact_key]
         else:
             pending[_package_key(package.id, package.version)] = package
 
@@ -331,13 +340,18 @@ def resolve_integrity_cached(module_ctx, sources, packages, netrc_entries, resol
             break
 
         answers = resolve_integrity(module_ctx, source, pending.values(), netrc_entries, indexes)
-        for key in pending.keys():
+
+        for key in pending:
             if key not in answers:
                 unanswered[key] = True
-            elif answers[key]:
-                package = pending.pop(key)
-                resolved[integrity_fact_key(package.id, package.version)] = answers[key]
 
+        for (key, integrity) in answers.items():
+            if integrity:
+                package = pending.pop(key)
+                resolved[integrity_fact_key(package.id, package.version)] = integrity
+
+    # What is left has no hash on any feed. Only a package every feed answered
+    # for is remembered as such; the rest may have hit an outage.
     for (key, package) in pending.items():
         if key not in unanswered:
             resolved[integrity_fact_key(package.id, package.version)] = ""

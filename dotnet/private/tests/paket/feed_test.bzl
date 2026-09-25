@@ -72,6 +72,8 @@ def _answers_test_impl(ctx):
         _versions(feed, "Missing"): {"versions": ["1.0.0"]},
         _versions(feed, "Served"): {"versions": ["1.0.0"]},
         _leaf(feed, "CatalogDown", "1.0.0"): {"catalogEntry": _catalog(feed, "CatalogDown", "1.0.0")},
+        _versions(feed, "Delisted"): {"versions": []},
+        _versions(feed, "BadIndex"): {"error": "not found"},
     })
 
     resolved = {}
@@ -86,6 +88,8 @@ def _answers_test_impl(ctx):
             _package("Served", "1.0.0"),
             _package("Unlisted", "1.0.0"),
             _package("CatalogDown", "1.0.0"),
+            _package("Delisted", "1.0.0"),
+            _package("BadIndex", "1.0.0"),
         ],
         {},
         resolved,
@@ -93,7 +97,8 @@ def _answers_test_impl(ctx):
     )
 
     # Served, Unlisted and CatalogDown each had a request fail, which may be an
-    # outage, so they are asked again next time.
+    # outage, so they are asked again next time. So is BadIndex, whose version
+    # list came back without one: that is no more an answer than a failure is.
     asserts.equals(
         env,
         {
@@ -101,6 +106,7 @@ def _answers_test_impl(ctx):
             integrity_fact_key("Unhashed", "1.0.0"): "",
             integrity_fact_key("Inlined", "1.0.0"): "",
             integrity_fact_key("Missing", "2.0.0"): "",
+            integrity_fact_key("Delisted", "1.0.0"): "",
         },
         resolved,
     )
@@ -181,10 +187,19 @@ def _package_versions_test_impl(ctx):
     env = unittest.begin(ctx)
 
     feed = "feed.test"
-    module_ctx = _fake_module_ctx(_service_index(feed) | {_versions(feed, "Listed"): {"versions": ["1.0.0"]}})
+    module_ctx = _fake_module_ctx(_service_index(feed) | {
+        _versions(feed, "Listed"): {"versions": ["1.0.0"]},
+        _versions(feed, "BadIndex"): {"error": "not found"},
+    })
 
     asserts.equals(env, ["1.0.0"], package_versions(module_ctx, _source(feed), "Listed", {}, {}))
     asserts.equals(env, None, package_versions(module_ctx, _source(feed), "Unlisted", {}, {}))
+    asserts.equals(
+        env,
+        None,
+        package_versions(module_ctx, _source(feed), "BadIndex", {}, {}),
+        "an index without a version list is not an answer",
+    )
 
     indexes = {}
     asserts.equals(env, None, package_versions(_fake_module_ctx({}), _source(feed), "Listed", {}, indexes))

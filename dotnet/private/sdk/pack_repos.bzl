@@ -314,7 +314,8 @@ def _band_versions(module_ctx, sdk_version, netrc_entries, indexes):
         # the whole band.
         versions = package_versions(module_ctx, NUGET_ORG, ref_id, netrc_entries, indexes)
         if versions == None:
-            # Not remembered, so that an outage does not pin the band.
+            # No fact, so that a feed that did not answer does not pin the
+            # band for every later evaluation.
             return struct(facts = {}, versions = {})
 
         published = runtime_version in versions
