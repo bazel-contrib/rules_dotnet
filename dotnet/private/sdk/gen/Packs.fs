@@ -12,6 +12,8 @@ type Band =
       rids: string list
       /// Set only where ASP.NET Core shipped a different set to .NET.
       webRids: string list option
+      /// Set only where crossgen2 shipped for fewer hosts than the runtime.
+      crossgen2Rids: string list option
       /// NativeAOT ships a runtime pack of its own from .NET 9 onwards.
       hasAot: bool
       /// Blazor WebAssembly. Set only where every piece of the toolchain ships
@@ -36,12 +38,14 @@ let private band tfm hasWeb rids =
       hasWeb = hasWeb
       rids = rids
       webRids = None
+      crossgen2Rids = None
       hasAot = false
       hasWasm = false }
 
 /// Releases before .NET 6 carry irregularities that are now frozen history:
-/// Apple silicon packs did not exist yet, and ASP.NET Core 3.0 shipped a
-/// different RID set to .NET Core 3.0. Everything from .NET 6 onward is
+/// Apple silicon packs did not exist yet, ASP.NET Core 3.0 shipped a
+/// different RID set to .NET Core 3.0, and crossgen2 shipped as a package from
+/// .NET 5 onwards, for x64 hosts only. Everything from .NET 6 onward is
 /// uniform, so those bands are derived from the discovered channels instead of
 /// being listed here, and a new .NET release needs no edit to this file.
 let private historicalBands =
@@ -52,9 +56,13 @@ let private historicalBands =
       band "netcoreapp2.2" true []
       { band "netcoreapp3.0" true preNet6Rids with
           // ASP.NET Core did not ship a win-arm64 runtime pack for 3.0.
-          webRids = Some(preNet6Rids |> List.filter (fun r -> r <> "win-arm64")) }
-      band "netcoreapp3.1" true preNet6Rids
-      band "net5.0" true preNet6Rids ]
+          webRids = Some(preNet6Rids |> List.filter (fun r -> r <> "win-arm64"))
+          crossgen2Rids = Some [] }
+      { band "netcoreapp3.1" true preNet6Rids with
+          crossgen2Rids = Some [] }
+      { band "net5.0" true preNet6Rids with
+          // The Crossgen2RuntimeIdentifiers the .NET SDK lists for net5.0.
+          crossgen2Rids = Some [ "linux-musl-x64"; "linux-x64"; "win-x64" ] } ]
 
 /// Bands for the given channels. Callers pass the GA channels only: a preview
 /// release has no stable packs to look up.
@@ -157,6 +165,10 @@ let generatePackBands (output: string) (channels: string list) =
 
             match band.webRids with
             | Some webRids -> fields.Add(sprintf "\"web_rids\": [%s]" (ridList webRids))
+            | None -> ()
+
+            match band.crossgen2Rids with
+            | Some crossgen2Rids -> fields.Add(sprintf "\"crossgen2_rids\": [%s]" (ridList crossgen2Rids))
             | None -> ()
 
             if band.hasAot then

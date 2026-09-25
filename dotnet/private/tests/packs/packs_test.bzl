@@ -11,6 +11,7 @@ load(
     "PROJECT_SDKS",
     "WEB_SDK",
     "apphost_pack",
+    "crossgen2_pack",
     "runtime_pack_rids",
     "runtime_pack_tfms",
     "runtime_packs",
@@ -152,6 +153,34 @@ def _apphost_table_test_impl(ctx):
 
 _apphost_table_test = unittest.make(_apphost_table_test_impl)
 
+# crossgen2 shipped as a package from .NET 5 onwards, for x64 hosts only.
+_CROSSGEN2_RIDS = {
+    "net5.0": ["linux-musl-x64", "linux-x64", "win-x64"],
+    "netcoreapp3.0": [],
+    "netcoreapp3.1": [],
+}
+
+def _crossgen2_table_test_impl(ctx):
+    env = unittest.begin(ctx)
+
+    for tfm in runtime_pack_tfms():
+        asserts.equals(
+            env,
+            _CROSSGEN2_RIDS.get(tfm, _RUNTIME_PACK_RIDS[tfm]),
+            [rid for rid in _ALL_RIDS if crossgen2_pack(tfm, rid) != None],
+            "crossgen2 pack RIDs for {}".format(tfm),
+        )
+
+    asserts.equals(
+        env,
+        ("Microsoft.NETCore.App.Crossgen2.linux-x64", "5.0.17"),
+        crossgen2_pack("net5.0", "linux-x64"),
+    )
+
+    return unittest.end(env)
+
+_crossgen2_table_test = unittest.make(_crossgen2_table_test_impl)
+
 # One case per package id shape.
 _TARGETING_PACKS = [
     (("netstandard2.0", DEFAULT_SDK), [("NETStandard.Library", "2.0.3")]),
@@ -240,6 +269,7 @@ def packs_test_suite(name):
     unittest.suite(
         name,
         _apphost_table_test,
+        _crossgen2_table_test,
         _pack_ids_test,
         _runtime_table_test,
         _targeting_table_test,

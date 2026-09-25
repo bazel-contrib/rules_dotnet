@@ -9,6 +9,11 @@ every later build to reuse and for reviewers to see.
 Feeds that do not serve registration metadata simply yield no hash. The
 packages are still pinned to an exact version by the lock file; they are just
 not verified against a recorded digest.
+
+A package without a hash is remembered too, as an empty hash, so that later
+evaluations do not ask again. Only an answer from the feed is remembered.
+Bazel does not say why a download failed, so a failed request can be an outage
+as well as a missing package, and it is asked again next time.
 """
 
 load(
@@ -98,8 +103,8 @@ def _download_all(module_ctx, requests, auth, directory):
       directory: Where to stage the downloaded files.
 
     Returns:
-      A dict of key to parsed JSON. A request the feed has nothing for is
-      omitted; one it answers with something other than JSON fails the build.
+      A dict of key to parsed JSON. A request that failed is omitted; one the
+      feed answers with something other than JSON fails the build.
     """
     pending = []
 
@@ -115,9 +120,7 @@ def _download_all(module_ctx, requests, auth, directory):
 
     results = {}
     for (key, path, url, token) in pending:
-        # A feed that serves a package but does not list it in its registration
-        # answers 404 here, which is what "this feed publishes no hash for it"
-        # looks like. The caller moves on to the next feed.
+        # Bazel reports a 404 and an outage the same way, as `success = False`.
         if token.wait().success:
             results[key] = _read_json(module_ctx, path, url)
 
@@ -132,7 +135,7 @@ def _service_index(module_ctx, source, auth, indexes, required):
       auth: The auth dict to use.
       indexes: A cache of source URL to resources, which this call adds to.
       required: Whether an unreachable feed should fail the build, rather than
-        be treated as one that offers nothing.
+        return None.
     """
     if source in indexes:
         return indexes[source]
@@ -149,8 +152,9 @@ def _service_index(module_ctx, source, auth, indexes, required):
         auth = auth,
     ).success:
         if not required:
-            indexes[source] = {}
-            return {}
+            # Not cached: a later caller that requires the feed must not take
+            # the outage for a feed that offers nothing.
+            return None
 
         fail(
             "Could not read the service index of {} to verify package hashes.".format(source) +
@@ -192,6 +196,24 @@ def _package_hash(catalog_entry, url):
 
     return "{}-{}".format(prefix, hash)
 
+def _served_versions(module_ctx, resources, ids, netrc_entries):
+    """Returns the versions a feed serves of each package, by lower case id.
+
+    An id is left out if its version list did not download.
+    """
+    base = _base_url(resources, ["PackageBaseAddress/3.0.0"])
+    if not base:
+        return {}
+
+    lists = _download_all(
+        module_ctx,
+        [(id, "{}{}/index.json".format(base, id)) for id in {id.lower(): None for id in ids}],
+        _auth(netrc_entries, [base]),
+        "versions",
+    )
+
+    return {id: index.get("versions", []) for (id, index) in lists.items()}
+
 def resolve_integrity(module_ctx, source, packages, netrc_entries, indexes):
     """Looks up the subresource integrity of each package on a feed.
 
@@ -203,18 +225,17 @@ def resolve_integrity(module_ctx, source, packages, netrc_entries, indexes):
       indexes: A cache of service index lookups, which this call adds to.
 
     Returns:
-      A dict of "<lower id>/<lower version>" to an integrity string, holding
-      only the packages the feed published a SHA512 for.
+      A dict of "<lower id>/<lower version>" to an integrity string. The
+      string is empty where the feed's answer shows it has no hash for the
+      package. A package the feed gave no answer for is left out.
     """
     if not packages:
         return {}
 
-    base = _base_url(
-        _service_index(module_ctx, source, _auth(netrc_entries, [source]), indexes, required = True),
-        _REGISTRATION_RESOURCES,
-    )
+    resources = _service_index(module_ctx, source, _auth(netrc_entries, [source]), indexes, required = True)
+    base = _base_url(resources, _REGISTRATION_RESOURCES)
     if not base:
-        return {}
+        return {_package_key(package.id, package.version): "" for package in packages}
 
     auth = _auth(netrc_entries, [base])
 
@@ -222,7 +243,7 @@ def resolve_integrity(module_ctx, source, packages, netrc_entries, indexes):
         module_ctx,
         [
             (
-                "{}/{}".format(package.id.lower(), package.version.lower()),
+                _package_key(package.id, package.version),
                 "{}{}/{}.json".format(base, package.id.lower(), package.version.lower()),
             )
             for package in packages
@@ -233,17 +254,26 @@ def resolve_integrity(module_ctx, source, packages, netrc_entries, indexes):
 
     # The hash lives on the catalog entry, which a registration leaf links to.
     # Feeds that inline the entry instead do not carry a hash in it.
-    catalog_requests = [
-        (key, leaf["catalogEntry"])
-        for (key, leaf) in leaves.items()
-        if type(leaf.get("catalogEntry")) == "string" and leaf["catalogEntry"]
-    ]
-
     integrity = {}
+    catalog_requests = []
+    for (key, leaf) in leaves.items():
+        entry = leaf.get("catalogEntry")
+        if type(entry) == "string" and entry:
+            catalog_requests.append((key, entry))
+        else:
+            integrity[key] = ""
+
     for (key, entry) in _download_all(module_ctx, catalog_requests, auth, "catalog").items():
-        hash = _package_hash(entry, source)
-        if hash:
-            integrity[key] = hash
+        integrity[key] = _package_hash(entry, source) or ""
+
+    # A leaf that did not download is a version the feed does not have, or a
+    # failed request. The feed's version list tells the two apart.
+    unlisted = [package for package in packages if _package_key(package.id, package.version) not in leaves]
+    served = _served_versions(module_ctx, resources, [package.id for package in unlisted], netrc_entries)
+    for package in unlisted:
+        versions = served.get(package.id.lower())
+        if versions != None and package.version.lower() not in versions:
+            integrity[_package_key(package.id, package.version)] = ""
 
     return integrity
 
@@ -258,26 +288,21 @@ def package_versions(module_ctx, source, id, netrc_entries, indexes):
       indexes: A cache of service index lookups, which this call adds to.
 
     Returns:
-      A list of versions, empty if the feed could not be asked.
+      A list of versions, or None if the feed could not be asked.
     """
     resources = _service_index(module_ctx, source, _auth(netrc_entries, [source]), indexes, required = False)
-    base = _base_url(resources, ["PackageBaseAddress/3.0.0"])
-    if not base:
-        return []
+    if resources == None:
+        return None
 
-    url = "{}{}/index.json".format(base, id.lower())
-    path = "versions/{}.json".format(id.lower())
-    if not module_ctx.download(url = url, output = path, allow_fail = True, auth = _auth(netrc_entries, [url])).success:
-        return []
-
-    return _read_json(module_ctx, path, url).get("versions", [])
+    return _served_versions(module_ctx, resources, [id], netrc_entries).get(id.lower())
 
 def resolve_integrity_cached(module_ctx, sources, packages, netrc_entries, resolved, indexes):
     """Fills `resolved` with each package's integrity, keyed for `facts`.
 
     A hash remembered by an earlier evaluation, or already resolved in this
     one, is reused. Feeds are tried in order, which is the order the package
-    itself is downloaded in.
+    itself is downloaded in. A package gets an empty hash only when every feed
+    answered that it has none.
 
     Args:
       module_ctx: The module extension context.
@@ -295,22 +320,24 @@ def resolve_integrity_cached(module_ctx, sources, packages, netrc_entries, resol
         if key in resolved:
             continue
 
-        integrity = remembered.get(key)
-        if integrity:
-            resolved[key] = integrity
+        if key in remembered:
+            resolved[key] = remembered[key]
         else:
             pending[_package_key(package.id, package.version)] = package
 
+    unanswered = {}
     for source in sources:
         if not pending:
             break
 
-        for (key, integrity) in resolve_integrity(
-            module_ctx,
-            source,
-            pending.values(),
-            netrc_entries,
-            indexes,
-        ).items():
-            package = pending.pop(key)
-            resolved[integrity_fact_key(package.id, package.version)] = integrity
+        answers = resolve_integrity(module_ctx, source, pending.values(), netrc_entries, indexes)
+        for key in pending.keys():
+            if key not in answers:
+                unanswered[key] = True
+            elif answers[key]:
+                package = pending.pop(key)
+                resolved[integrity_fact_key(package.id, package.version)] = answers[key]
+
+    for (key, package) in pending.items():
+        if key not in unanswered:
+            resolved[integrity_fact_key(package.id, package.version)] = ""

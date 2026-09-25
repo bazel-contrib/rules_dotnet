@@ -233,7 +233,8 @@ def crossgen2_pack(tfm, rid):
     Returns:
       A (package id, version) tuple, or None if there is no crossgen2 pack.
     """
-    if rid not in runtime_pack_rids(tfm):
+    rids = PACK_BANDS.get(tfm, {}).get("crossgen2_rids", runtime_pack_rids(tfm))
+    if rid not in rids:
         return None
 
     return (_app_pack_id(tfm, False, "Crossgen2." + rid), PACK_BANDS[tfm]["runtime"])
