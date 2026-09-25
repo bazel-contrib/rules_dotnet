@@ -312,13 +312,13 @@ def _band_versions(module_ctx, sdk_version, netrc_entries, indexes):
     if published == None:
         # The reference pack stops being serviced first, so it stands in for
         # the whole band.
-        published = runtime_version in package_versions(
-            module_ctx,
-            NUGET_ORG,
-            ref_id,
-            netrc_entries,
-            indexes,
-        )
+        versions = package_versions(module_ctx, NUGET_ORG, ref_id, netrc_entries, indexes)
+        if versions == None:
+            # No fact, so that a feed that did not answer does not pin the
+            # band for every later evaluation.
+            return struct(facts = {}, versions = {})
+
+        published = runtime_version in versions
 
     return struct(
         facts = {key: published},

@@ -1,5 +1,8 @@
+load(":feed_test.bzl", "feed_test_suite")
 load(":lock_test.bzl", "lock_test_suite")
 load(":package_metadata_test.bzl", "package_metadata_test_suite")
+
+feed_test_suite(name = "feed_test")
 
 lock_test_suite(name = "lock_test")
 

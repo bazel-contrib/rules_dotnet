@@ -220,6 +220,22 @@ def apphost_pack(tfm, rid):
 
     return (_app_pack_id(tfm, False, "Host." + rid), PACK_BANDS[tfm]["runtime"])
 
+def crossgen2_pack_rids(tfm):
+    """Returns the host runtime identifiers a target framework ships crossgen2 for.
+
+    A band lists them only where crossgen2 shipped for fewer hosts than the
+    runtime did; otherwise it shipped for all of them.
+
+    Args:
+      tfm: The target framework.
+
+    Returns:
+      A list of runtime identifiers, empty if the band predates crossgen2.
+    """
+    band = PACK_BANDS.get(tfm, {})
+
+    return band["crossgen2_rids"] if "crossgen2_rids" in band else runtime_pack_rids(tfm)
+
 def crossgen2_pack(tfm, rid):
     """Returns the crossgen2 pack that compiles ReadyToRun images.
 
@@ -233,7 +249,7 @@ def crossgen2_pack(tfm, rid):
     Returns:
       A (package id, version) tuple, or None if there is no crossgen2 pack.
     """
-    if rid not in runtime_pack_rids(tfm):
+    if rid not in crossgen2_pack_rids(tfm):
         return None
 
     return (_app_pack_id(tfm, False, "Crossgen2." + rid), PACK_BANDS[tfm]["runtime"])
