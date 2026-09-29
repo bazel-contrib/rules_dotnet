@@ -149,6 +149,21 @@ def fsharp_ref_assemblies_are_deterministic(sdk_version):
     return semver.to_comparable(sdk_version, relaxed = True) >= \
            semver.to_comparable(_DETERMINISTIC_FSHARP_REF_ASSEMBLY_SDK, relaxed = True)
 
+# The first major SDK version with F# 9, whose compiler checks nullness.
+# https://devblogs.microsoft.com/dotnet/nullable-reference-types-in-fsharp-9/
+_FSHARP_NULLNESS_CHECKING_SDK_MAJOR = 9
+
+def fsharp_checks_nullness(sdk_version):
+    """Whether this SDK's F# compiler can check nullness.
+
+    Args:
+        sdk_version: The version of the .Net SDK, as `DotnetInfo.sdk_version`.
+
+    Returns:
+        True if the F# compiler accepts `--checknulls`.
+    """
+    return int(sdk_version.split(".")[0]) >= _FSHARP_NULLNESS_CHECKING_SDK_MAJOR
+
 def get_toolchain(ctx):
     """The .Net toolchain a target compiles with.
 

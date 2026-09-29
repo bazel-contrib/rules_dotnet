@@ -10,6 +10,7 @@ load(
     "copy_files_to_dir",
     "format_ref_arg",
     "framework_preprocessor_symbols",
+    "fsharp_checks_nullness",
     "fsharp_ref_assemblies_are_deterministic",
     "generate_warning_args",
     "get_framework_version_info",
@@ -104,6 +105,9 @@ do ()
 def _should_output_ref_assembly(toolchain):
     return fsharp_ref_assemblies_are_deterministic(toolchain.dotnetinfo.sdk_version)
 
+def _checks_nullness(toolchain):
+    return fsharp_checks_nullness(toolchain.dotnetinfo.sdk_version)
+
 # buildifier: disable=unnamed-macro
 def AssemblyAction(
         actions,
@@ -137,6 +141,7 @@ def AssemblyAction(
         warnings_not_as_errors,
         warning_level,
         nowarn,
+        nullable,
         project_sdk,
         compiler_options,
         is_windows):
@@ -176,6 +181,7 @@ def AssemblyAction(
         warnings_not_as_errors: List of warnings to not treat errors.
         warning_level: The warning level to use.
         nowarn: List of warnings to suppress.
+        nullable: Whether nullness checking is enabled: "enable" or "disable".
         project_sdk: The project SDK being targeted
         compiler_options: Additional compiler options to pass to the compiler.
         is_windows: Whether or not the target is running on Windows.
@@ -206,6 +212,12 @@ def AssemblyAction(
     )
     defines = framework_preprocessor_symbols(target_framework) + defines
 
+    if nullable == "enable":
+        if not _checks_nullness(toolchain):
+            fail("%s: nullable = \"enable\" needs F# 9 or newer but the toolchain is .NET SDK %s." % (label, toolchain.dotnetinfo.sdk_version))
+
+        defines = defines + ["NULLABLE"]
+
     assembly_version_fs = _write_assembly_version_fsharp(actions, target_name, assembly_name, version)
     if assembly_version_fs:
         # First rather than last: a binary's entry point has to be in the last file.
@@ -232,6 +244,7 @@ def AssemblyAction(
             defines,
             keyfile,
             langversion,
+            nullable,
             irefs,
             framework_files,
             resources,
@@ -275,6 +288,7 @@ def AssemblyAction(
             defines,
             keyfile,
             langversion,
+            nullable,
             irefs,
             framework_files,
             resources,
@@ -309,6 +323,7 @@ def AssemblyAction(
                 defines,
                 keyfile,
                 langversion,
+                nullable,
                 irefs,
                 framework_files,
                 resources,
@@ -376,6 +391,7 @@ def _compile(
         defines,
         keyfile,
         langversion,
+        nullable,
         refs,
         framework_files,
         resources,
@@ -430,6 +446,11 @@ def _compile(
     # MSBuild passes no --langversion for F#, letting fsc default to latest.
     if langversion:
         args.add("--langversion:" + langversion)
+
+    # Off is fsc's default, and fsc before F# 9 rejects --checknulls-, so
+    # "disable" passes nothing, as MSBuild does when `Nullable` is unset.
+    if nullable == "enable":
+        args.add("--checknulls+")
 
     if debug:
         args.add("--debug+")

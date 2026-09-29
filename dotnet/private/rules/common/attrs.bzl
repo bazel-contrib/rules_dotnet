@@ -361,6 +361,12 @@ FSHARP_COMMON_ATTRS = dicts.add(
             mandatory = False,
             default = [],
         ),
+        "nullable": attr.string(
+            doc = """Enable nullness checking.""",
+            mandatory = False,
+            default = "disable",
+            values = ["disable", "enable"],
+        ),
     },
 )
 

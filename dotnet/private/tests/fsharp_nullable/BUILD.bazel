@@ -1,0 +1,60 @@
+load(
+    "//dotnet:defs.bzl",
+    "csharp_nunit_test",
+    "fsharp_library",
+)
+load("//dotnet/private/tests:utils.bzl", "action_args_test")
+
+fsharp_library(
+    name = "Nullable",
+    srcs = ["nullable.fs"],
+    nullable = "enable",
+    target_frameworks = ["net6.0"],
+    treat_warnings_as_errors = True,
+    deps = [
+        "@paket.rules_dotnet_dev_nuget_packages//fsharp.core",
+    ],
+)
+
+action_args_test(
+    name = "nullable_enable_args_test",
+    action_mnemonic = "FSharpCompile",
+    expected_partial_args = [
+        "--checknulls+",
+        "-d:NULLABLE",
+    ],
+    target_under_test = ":Nullable",
+)
+
+fsharp_library(
+    name = "NotNullable",
+    srcs = ["nullable.fs"],
+    tags = ["manual"],
+    target_frameworks = ["net6.0"],
+    deps = [
+        "@paket.rules_dotnet_dev_nuget_packages//fsharp.core",
+    ],
+)
+
+# Nothing rather than --checknulls-, which fsc before F# 9 rejects.
+action_args_test(
+    name = "nullable_disable_args_test",
+    action_mnemonic = "FSharpCompile",
+    expected_nonexistent_partial_args = [
+        "--checknulls+",
+        "--checknulls-",
+        "-d:NULLABLE",
+    ],
+    target_under_test = ":NotNullable",
+)
+
+csharp_nunit_test(
+    name = "NullableTest",
+    srcs = ["nullabletest.cs"],
+    nullable = "enable",
+    target_frameworks = ["net6.0"],
+    treat_warnings_as_errors = True,
+    deps = [
+        ":Nullable",
+    ],
+)
