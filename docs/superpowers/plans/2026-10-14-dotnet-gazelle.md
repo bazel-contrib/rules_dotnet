@@ -855,7 +855,7 @@ rules_dotnet currently has no Go code and uses gazelle only as a dev-dependency 
 - Modify: `BUILD.bazel` (root)
 - Create: `go.mod`
 
-- [ ] **Step 1: Make gazelle a non-dev dependency and add rules_go**
+- [x] **Step 1: Make gazelle a non-dev dependency and add rules_go**
 
 Edit `MODULE.bazel`. Old:
 
@@ -897,7 +897,7 @@ bazel_dep(name = "rules_pkg", version = "1.1.0", dev_dependency = True)
 bazel_dep(name = "bazel_skylib_gazelle_plugin", version = "1.9.0", dev_dependency = True)
 ```
 
-- [ ] **Step 2: Add the Go language to gazelle_bin and set the Go prefix**
+- [x] **Step 2: Add the Go language to gazelle_bin and set the Go prefix**
 
 Edit `BUILD.bazel` (root). Old:
 
@@ -921,7 +921,7 @@ gazelle_binary(
 )
 ```
 
-- [ ] **Step 3: Create go.mod**
+- [x] **Step 3: Create go.mod**
 
 Create `go.mod` at the repo root:
 
@@ -933,7 +933,7 @@ go 1.24.12
 
 Deliberately without a `require` on bazel-gazelle yet: no Go file imports it until Task 9, and `go mod tidy` would drop an unused require. Task 9 adds it.
 
-- [ ] **Step 4: Verify gazelle still runs and generates nothing new**
+- [x] **Step 4: Verify gazelle still runs and generates nothing new**
 
 Run (env exports assumed):
 
@@ -956,7 +956,7 @@ git status --porcelain
 
 Expected: only `M MODULE.bazel`, `M BUILD.bazel` and `?? go.mod` remain.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add MODULE.bazel BUILD.bazel go.mod
