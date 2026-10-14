@@ -4,9 +4,13 @@ package(default_visibility = ["//visibility:public"])
 
 exports_files(["AUTHORS"])
 
+# gazelle:prefix github.com/bazel-contrib/rules_dotnet
 gazelle_binary(
     name = "gazelle_bin",
-    languages = ["@bazel_skylib_gazelle_plugin//bzl"],
+    languages = [
+        "@bazel_gazelle//language/go",
+        "@bazel_skylib_gazelle_plugin//bzl",
+    ],
 )
 
 # gazelle:exclude examples
