@@ -358,6 +358,8 @@ git commit -m "Add csharp_xunit_test rule"
 
 Same pattern as Task 2, with a Microsoft.Testing.Platform-based shim. `AddMSTest` is an extension method in namespace `Microsoft.VisualStudio.TestTools.UnitTesting` (class `TestApplicationBuilderExtensions`, shipped in MSTest.TestAdapter).
 
+> **Implemented (commit `4b0c334`) with a temporary workaround, superseded by Task 3b:** compilation revealed that `mstest.testadapter` 3.11.1 (like MSTest 4.x) ships **no `lib/` folder at all** — every assembly lives under `buildTransitive/<tfm>/` — and the paket→bazel pipeline only surfaces `lib/` assemblies, so `@paket.rules_dotnet_nuget_packages//mstest.testadapter` has an empty `libs` filegroup and the shim's `AddMSTest` is unavailable. As a stopgap, `dotnet/private/rules/common/mstest/BUILD.bazel` gained `import_library` wrappers (`mstest_testadapter`, `mstest_testframework_extensions`) whose canonical labels are hardcoded to `@@+paket+nuget.mstest.testadapter.v3.11.1//...` and `@@+paket+nuget.mstest.testframework.v3.11.1//...`, and the macro in `mstest_test.bzl` depends on `//dotnet/private/rules/common/mstest:mstest_testadapter` in addition to the three package labels. That is tech debt: it breaks on every version bump and may break for consumers. **Task 3b fixes the shared NuGet pipeline properly and removes the wrappers** — after Task 3b, `common/mstest/BUILD.bazel` contains only the `exports_files` shown in Step 1 below (no version-pinned labels), and the macro depends on the three package labels only.
+
 **Files:**
 - Create: `dotnet/private/rules/common/mstest/BUILD.bazel`
 - Create: `dotnet/private/rules/common/mstest/shim.cs`
@@ -549,6 +551,299 @@ Expected: `//dotnet/private/tests/mstest_test:MSTestTest PASSED` and `Executed 1
 ```bash
 git add dotnet/private/rules/common/mstest dotnet/private/rules/csharp/mstest_test.bzl dotnet/private/rules/csharp/BUILD.bazel dotnet/defs.bzl dotnet/private/tests/mstest_test
 git commit -m "Add csharp_mstest_test rule"
+```
+
+### Task 3b: Fix `buildTransitive`-only NuGet packages and drop the mstest workaround
+
+Task 3's workaround exists because the shared NuGet pipeline (`dotnet/private/rules/nuget/nuget_archive.bzl` → generated archive targets → `nuget_package` in `dotnet/private/rules/nuget/package.bzl`) only surfaces assemblies under `lib/`, `ref/`, and `build/<tfm>/{lib,ref}/`. Packages such as `MSTest.TestAdapter` ship their assemblies under `buildTransitive/<tfm>/` only, so their package target gets an empty `libs` group. Both consumers of the pipeline — the paket extension (`dotnet/private/paket/extension.bzl`, generating `@paket.rules_dotnet_nuget_packages//...`) and the packages_lock extension (`dotnet/private/packages_lock/extension.bzl`) — go through the same `nuget_archive` spokes and `nuget_package`, so a single fix in `nuget_archive.bzl` covers both; neither extension needs changes.
+
+**Design decision (made, with justification):** `buildTransitive/<tfm>/<assembly>.dll` files are collected into a new `buildTransitive` group and **merged into the `libs` dict** in `_group_package_files` — the same way F# typeprovider assemblies are merged in — so they flow through the existing `tfm_filegroup`/`_tfm_alias` framework-compatibility machinery exactly like `lib/<tfm>` assemblies. The alternatives were rejected:
+
+- *File them into the existing `build` group (the `build/<tfm>/lib/` bucket)*: that bucket is unioned into the runtime `libs` group, but the compile `refs` group only falls back to the raw `lib/` dict (`ref_tfm_filegroup` → `_with_empty_entries(groups.libs, ...)`), so a `buildTransitive`-only package would still get **empty compile refs** — the shim's `AddMSTest` would not compile.
+- *Fallback only when `lib/<tfm>` is empty*: wrong for `MSTest.TestFramework`, which ships `lib/net8.0/TestFramework.dll` **and** `buildTransitive/net8.0/TestFramework.Extensions.dll` — both are required at runtime, so `buildTransitive` assemblies must *add to* the lib group, not replace it.
+- *A separate `build_transitive_libs` filegroup alongside `libs`*: forces every consumer (including `import_library` in `package.bzl`) to know about a second group, for no benefit — merging into `libs` makes the packages work through the unchanged `nuget_package`/`import_library` path.
+
+Because the merge happens before the `libs` struct field is computed, compile-time references need no extra work: when a package ships no `ref/` folder, the archive's `refs` group already falls back to the `libs` group per-TFM (`ref_tfm_filegroup` in `nuget_archive.bzl`), so `AddMSTest` in `Microsoft.VisualStudio.TestPlatform.MSTest.TestAdapter.dll` becomes a compile reference automatically. Only DLLs **directly** under `buildTransitive/<tfm>/` count (exactly 3 path segments): platform-specific subfolders such as `buildTransitive/net6.0/winui/` and `buildTransitive/net9.0/uwp/`, the `_localization` folder, `.resources.dll` satellites, and props/targets are all ignored. `_._` placeholders and non-rules_dotnet TFMs (`uap10.0`) fall out of the existing `_normalize_tfm`/`.dll` checks. Consequence (same as the Task 3 workaround, which set `refs = libs`): for a package that ships both `lib/` and `buildTransitive/` assemblies, the `buildTransitive` ones also become compile references.
+
+The repo has a purpose-built test suite for this pipeline: `dotnet/private/tests/nuget_resolution/` declares fixture packages as plain file lists (`tests.bzl`) and asserts what a build resolves out of them (`internal/`, driven by `nuget_resolution_tests()` in `BUILD.bazel`). New declarations are picked up automatically — no BUILD file changes needed.
+
+This task produces two commits: the pipeline fix (with TDD tests), then the mstest simplification.
+
+**Files:**
+- Modify: `dotnet/private/tests/nuget_resolution/tests.bzl` (append 4 test declarations to `TESTS`)
+- Modify: `dotnet/private/rules/nuget/nuget_archive.bzl` (`_process_build_transitive_file` + key routing + new `buildTransitive` group + merge into `libs`)
+- Modify: `dotnet/private/rules/common/mstest/BUILD.bazel` (drop the `import_library` wrappers)
+- Modify: `dotnet/private/rules/csharp/mstest_test.bzl` (drop the wrapper dep)
+
+- [ ] **Step 1: Write the failing resolution tests**
+
+Append to `dotnet/private/tests/nuget_resolution/tests.bzl`, inside the `TESTS = [...]` list. Edit — old (the end of the list):
+
+```python
+        default_configuration = True,
+        expected_libs = ["lib/netstandard2.0/A.dll"],
+    ),
+]
+```
+
+New:
+
+```python
+        default_configuration = True,
+        expected_libs = ["lib/netstandard2.0/A.dll"],
+    ),
+    nuget_resolution_test(
+        name = "build_transitive_assemblies_are_added_to_the_lib_group",
+        # What `MSTest.TestFramework` looks like at one framework: its own
+        # assembly under `lib/net8.0/` plus `TestFramework.Extensions.dll`
+        # under `buildTransitive/net8.0/`. Both end up next to the binary and
+        # the compile group falls back to both (same as the Task 3
+        # workaround's refs = libs).
+        files = [
+            "lib/net8.0/A.dll",
+            "buildTransitive/net8.0/T.dll",
+        ],
+        expected_libs = ["buildTransitive/net8.0/T.dll", "lib/net8.0/A.dll"],
+        expected_refs = ["buildTransitive/net8.0/T.dll", "lib/net8.0/A.dll"],
+    ),
+    nuget_resolution_test(
+        name = "a_package_of_only_build_transitive_assemblies_resolves",
+        # What `MSTest.TestAdapter` looks like: no `lib/` folder at all. The
+        # assemblies are the package's payload, so the compile group falls
+        # back to them the same way it falls back to `lib` assemblies.
+        files = [
+            "buildTransitive/netstandard2.0/A.dll",
+            "buildTransitive/net8.0/A.dll",
+        ],
+        expected_libs = ["buildTransitive/net8.0/A.dll"],
+        expected_refs = ["buildTransitive/net8.0/A.dll"],
+    ),
+    nuget_resolution_test(
+        name = "build_transitive_assemblies_resolve_by_framework_compatibility",
+        # A net6.0 build cannot use the net8.0 assemblies and lands on
+        # netstandard2.0, through the same nearest-compatible-framework walk
+        # as every other group.
+        files = [
+            "buildTransitive/netstandard2.0/A.dll",
+            "buildTransitive/net8.0/A.dll",
+        ],
+        target_framework = "net6.0",
+        expected_libs = ["buildTransitive/netstandard2.0/A.dll"],
+        expected_refs = ["buildTransitive/netstandard2.0/A.dll"],
+    ),
+    nuget_resolution_test(
+        name = "only_portable_build_transitive_assemblies_are_collected",
+        # `MSTest.TestAdapter` ships `winui`/`uwp` subfolders and a
+        # `_localization` folder under `buildTransitive/`; neither is a
+        # portable framework folder.
+        files = [
+            "buildTransitive/net8.0/A.dll",
+            "buildTransitive/net8.0/winui/W.dll",
+            "buildTransitive/_localization/de/A.resources.dll",
+        ],
+        expected_libs = ["buildTransitive/net8.0/A.dll"],
+        expected_refs = ["buildTransitive/net8.0/A.dll"],
+    ),
+]
+```
+
+- [ ] **Step 2: Run the new tests to verify they fail**
+
+Run (env exports from Environment notes assumed; the `@nuget_fixtures` repository refetches because `tests.bzl` changed — expected):
+
+```bash
+bazel test //dotnet/private/tests/nuget_resolution:build_transitive_assemblies_are_added_to_the_lib_group //dotnet/private/tests/nuget_resolution:a_package_of_only_build_transitive_assemblies_resolves //dotnet/private/tests/nuget_resolution:build_transitive_assemblies_resolve_by_framework_compatibility //dotnet/private/tests/nuget_resolution:only_portable_build_transitive_assemblies_are_collected
+```
+
+Expected: all 4 tests FAIL. Each test log contains an assertion failure of the form `Expected libs:` (or `Expected refs:`) listing the `buildTransitive/...` paths and an `Actual libs:` list without them (the groups resolve to nothing today).
+
+- [ ] **Step 3: Implement the pipeline fix in nuget_archive.bzl**
+
+Edit `dotnet/private/rules/nuget/nuget_archive.bzl` — old (the tail of `_process_build_file`, which is where the new function goes):
+
+```python
+    groups["build"].setdefault(tfm, {"lib": [], "ref": []})[file_type].append(file)
+
+def _process_typeprovider_file(groups, file):
+```
+
+New:
+
+```python
+    groups["build"].setdefault(tfm, {"lib": [], "ref": []})[file_type].append(file)
+
+# `buildTransitive/<tfm>/<assembly>.dll`.
+#
+# `buildTransitive` is the transitively flowing variant of `build`, and some
+# packages ship their assemblies there instead of under `lib` (`MSTest.
+# TestAdapter` has no `lib/` folder at all). They are merged into the lib
+# group in _group_package_files and resolve like `lib/<tfm>` assemblies.
+# Only a DLL sitting directly under the framework folder counts; platform
+# specific subfolders such as `buildTransitive/net6.0/winui` are not
+# portable, and props/targets are not assemblies.
+def _process_build_transitive_file(groups, file):
+    parts = file.split("/")
+
+    if len(parts) != 3:
+        return
+
+    tfm = _normalize_tfm(parts[1])
+
+    if tfm == None:
+        return
+
+    # See https://github.com/bazel-contrib/rules_dotnet/issues/405
+    if not file.endswith(".dll") or file.endswith(".resources.dll"):
+        return
+
+    groups["buildTransitive"].setdefault(tfm, []).append(file)
+
+def _process_typeprovider_file(groups, file):
+```
+
+Then route the new key in `_process_key_and_file`. Old:
+
+```python
+    elif key == "build":
+        _process_build_file(groups, file)
+    elif key == "tools":
+        _process_tools_file(groups, file)
+```
+
+New:
+
+```python
+    elif key == "build":
+        _process_build_file(groups, file)
+    elif key == "buildTransitive":
+        _process_build_transitive_file(groups, file)
+    elif key == "tools":
+        _process_tools_file(groups, file)
+```
+
+Then register the new group in the groups dict in `_group_package_files`. Old:
+
+```python
+        "build": {},
+        # See https://github.com/dotnet/sdk/blob/master/documentation/general/tool-nuget-package-format.md
+```
+
+New:
+
+```python
+        "build": {},
+        # Assemblies some packages ship under buildTransitive/<TFM>/ instead
+        # of lib/<TFM>/ (`MSTest.TestAdapter` has no lib/ folder at all).
+        # They are merged into the lib group below.
+        # Format: buildTransitive/<TFM>/<assembly>.dll
+        "buildTransitive": {},
+        # See https://github.com/dotnet/sdk/blob/master/documentation/general/tool-nuget-package-format.md
+```
+
+Then merge the group into `libs`, right after the typeproviders merge. Old:
+
+```python
+    for (tfm, files) in groups["typeproviders"].items():
+        if libs.get(tfm):
+            libs[tfm] = libs[tfm] + files
+        else:
+            libs[tfm] = files
+```
+
+New:
+
+```python
+    for (tfm, files) in groups["typeproviders"].items():
+        if libs.get(tfm):
+            libs[tfm] = libs[tfm] + files
+        else:
+            libs[tfm] = files
+
+    # Assemblies under `buildTransitive/<tfm>/` stand in for `lib/<tfm>` ones,
+    # so they join the lib group and resolve through it — the runtime ships
+    # them next to the binary and the compile group falls back to them when
+    # the package ships no `ref/` folder.
+    for (tfm, files) in groups["buildTransitive"].items():
+        libs[tfm] = libs.get(tfm, []) + files
+```
+
+Nothing else changes: the `libs` struct field feeds `_create_rid_tfm_select("libs_package", ...)`, `ref_tfm_filegroup` already falls back to `libs` when a package ships no `ref/`, and `package.bzl`/`import_library` consume the groups unchanged. No `build/` package behavior changes — the new group is separate.
+
+- [ ] **Step 4: Run the resolution tests to verify they pass**
+
+```bash
+bazel test //dotnet/private/tests/nuget_resolution/...
+```
+
+Expected: `Executed NNN tests: all pass.` — including the 4 new tests and every pre-existing one (this also proves packages with plain `lib/` layouts, e.g. the nunit-shaped fixtures, are unaffected).
+
+- [ ] **Step 5: Commit the pipeline fix**
+
+```bash
+git add dotnet/private/rules/nuget/nuget_archive.bzl dotnet/private/tests/nuget_resolution/tests.bzl
+git commit -m "Fix NuGet packages that ship assemblies under buildTransitive only"
+```
+
+- [ ] **Step 6: Remove the import_library workaround from the mstest rule**
+
+Rewrite `dotnet/private/rules/common/mstest/BUILD.bazel` in full — new content (this is exactly what the file contained before commit `4b0c334` added the wrappers):
+
+```python
+exports_files(
+    [
+        "shim.cs",
+    ],
+    visibility = ["//visibility:public"],
+)
+```
+
+Then simplify the macro. Edit `dotnet/private/rules/csharp/mstest_test.bzl` — old:
+
+```python
+    deps = kwargs.pop("deps", []) + [
+        Label("@paket.rules_dotnet_nuget_packages//microsoft.testing.platform"),
+        Label("@paket.rules_dotnet_nuget_packages//mstest.testadapter"),
+        Label("@paket.rules_dotnet_nuget_packages//mstest.testframework"),
+        # The adapter nupkg ships its assemblies under buildTransitive/ only,
+        # so the package target above has empty libs. Import the DLLs
+        # (Microsoft.VisualStudio.TestPlatform.MSTest.TestAdapter.dll provides
+        # AddMSTest) through a wrapper that selects them per target framework.
+        Label("//dotnet/private/rules/common/mstest:mstest_testadapter"),
+    ]
+```
+
+New:
+
+```python
+    deps = kwargs.pop("deps", []) + [
+        Label("@paket.rules_dotnet_nuget_packages//microsoft.testing.platform"),
+        Label("@paket.rules_dotnet_nuget_packages//mstest.testadapter"),
+        Label("@paket.rules_dotnet_nuget_packages//mstest.testframework"),
+    ]
+```
+
+- [ ] **Step 7: Verify the paket group end-to-end and that existing packages are unaffected**
+
+The `@paket.rules_dotnet_nuget_packages` archive repositories refetch on the first command after Step 3's `.bzl` change — lines about refetching `+paket+nuget.mstest.testadapter.v3.11.1` and friends in the output are expected. Run (env exports assumed):
+
+```bash
+bazel test --@rules_dotnet//dotnet/settings:strict_deps=true //dotnet/private/tests/mstest_test:MSTestTest
+bazel test --@rules_dotnet//dotnet/settings:strict_deps=false //dotnet/private/tests/mstest_test:MSTestTest
+```
+
+Expected: both end with `//dotnet/private/tests/mstest_test:MSTestTest PASSED` and `Executed 1 out of 1 test: 1 test passes.` — proving the version-independent `@paket.rules_dotnet_nuget_packages//mstest.testadapter` label now carries the `buildTransitive/` assemblies (compile ref for `AddMSTest` included, since strict_deps passes). Then the xunit smoke test (different packages, same pipeline) and representative pre-existing consumers — an nunit paket-group test and the packages_lock extension tests, which exercise the second consumer of the shared pipeline:
+
+```bash
+bazel test //dotnet/private/tests/xunit_test:XunitTest //dotnet/private/tests/framework_override_not_provided:ProgramTest //dotnet/private/tests/packages_lock/...
+```
+
+Expected: `//dotnet/private/tests/xunit_test:XunitTest PASSED`, `//dotnet/private/tests/framework_override_not_provided:ProgramTest PASSED`, and all `//dotnet/private/tests/packages_lock/...` targets PASSED.
+
+- [ ] **Step 8: Commit the simplification**
+
+```bash
+git add dotnet/private/rules/common/mstest/BUILD.bazel dotnet/private/rules/csharp/mstest_test.bzl
+git commit -m "Simplify csharp_mstest_test deps after the buildTransitive fix"
 ```
 
 ### Task 4: Go/Gazelle bootstrap in the root module
