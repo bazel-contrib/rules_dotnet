@@ -1,0 +1,10 @@
+load(
+    "//dotnet:defs.bzl",
+    "csharp_xunit_test",
+)
+
+csharp_xunit_test(
+    name = "XunitTest",
+    srcs = ["xunittest.cs"],
+    target_frameworks = ["net9.0"],
+)

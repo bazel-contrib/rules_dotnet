@@ -32,6 +32,10 @@ load(
     _csharp_test = "csharp_test",
 )
 load(
+    "//dotnet/private/rules/csharp:xunit_test.bzl",
+    _csharp_xunit_test = "csharp_xunit_test",
+)
+load(
     "//dotnet/private/rules/fsharp:binary.bzl",
     _fsharp_binary = "fsharp_binary",
 )
@@ -160,6 +164,7 @@ def fsharp_test(name, **kwargs):
     _fsharp_test(name = name, embed_sources = _embed_sources_or_flag(kwargs.pop("embed_sources", None)), **kwargs)
 
 csharp_nunit_test = _csharp_nunit_test
+csharp_xunit_test = _csharp_xunit_test
 fsharp_nunit_test = _fsharp_nunit_test
 publish_binary = _publish_binary
 blazor_devserver = _blazor_devserver
