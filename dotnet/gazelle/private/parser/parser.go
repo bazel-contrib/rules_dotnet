@@ -8,7 +8,13 @@
 // this can only cause false metadata in pathological sources.
 package parser
 
-import "fmt"
+import (
+	"fmt"
+	"os"
+	"path/filepath"
+	"regexp"
+	"strings"
+)
 
 // blankCommentsAndStrings returns src with comments and string/char literals
 // replaced by spaces, preserving newlines so line numbers stay stable. An
@@ -163,4 +169,133 @@ func blankCommentsAndStrings(src string) (string, error) {
 		}
 	}
 	return string(out), nil
+}
+
+// Framework identifies a detected test framework.
+type Framework string
+
+const (
+	FrameworkNone   Framework = ""
+	FrameworkNUnit  Framework = "nunit"
+	FrameworkXUnit  Framework = "xunit"
+	FrameworkMSTest Framework = "mstest"
+)
+
+// Using is a single using directive.
+type Using struct {
+	// Namespace is the imported namespace. For `using static X.Y.Z;` it is
+	// X.Y.Z; for `using A = X.Y;` it is X.Y.
+	Namespace string
+	// Static is true for `using static`.
+	Static bool
+	// Global is true for `global using`.
+	Global bool
+}
+
+// File is the parse result of one .cs file.
+type File struct {
+	// Name is the base name of the file.
+	Name string
+	// Namespace is the declared namespace, "" when the file declares none
+	// (e.g. top-level statements).
+	Namespace string
+	// Usings lists the using directives in source order.
+	Usings []Using
+	// Framework is the detected test framework, FrameworkNone when no test
+	// markers were found.
+	Framework Framework
+	// HasEntryPoint is true for a `static ... Main(` method or top-level
+	// statements.
+	HasEntryPoint bool
+}
+
+var (
+	namespaceRe  = regexp.MustCompile(`^namespace\s+([A-Za-z_][A-Za-z0-9_.]*)`)
+	usingRe      = regexp.MustCompile(`^using\s+(static\s+)?(?:[A-Za-z_][A-Za-z0-9_]*\s*=\s*)?([A-Za-z_][A-Za-z0-9_.]*)\s*;`)
+	entryPointRe = regexp.MustCompile(`\bstatic\s+(?:async\s+)?(?:void|int|Task|Task<int>|ValueTask|ValueTask<int>)\s+Main\s*\(`)
+	typeDeclRe   = regexp.MustCompile(`\b(?:class|struct|interface|record|enum|delegate)\s+[A-Za-z_]`)
+)
+
+// frameworkMarkers is ordered by detection precedence: a file is attributed
+// to the first framework whose using directive or attributes appear.
+var frameworkMarkers = []struct {
+	framework Framework
+	using     string
+	attrRe    *regexp.Regexp
+}{
+	{FrameworkNUnit, "NUnit.Framework", regexp.MustCompile(`\[(Test|TestFixture|TestCase|TestCaseSource|SetUp|TearDown)[\(\]]`)},
+	{FrameworkXUnit, "Xunit", regexp.MustCompile(`\[(Fact|Theory)[\(\]]`)},
+	{FrameworkMSTest, "Microsoft.VisualStudio.TestTools.UnitTesting", regexp.MustCompile(`\[(TestClass|TestMethod|DataTestMethod)[\(\]]`)},
+}
+
+// ParseFile reads and parses the .cs file at path.
+func ParseFile(path string) (*File, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	return Parse(filepath.Base(path), string(data))
+}
+
+// Parse parses C# source text. name is the file's base name, used in errors.
+func Parse(name, src string) (*File, error) {
+	blanked, err := blankCommentsAndStrings(src)
+	if err != nil {
+		return nil, fmt.Errorf("%s: %w", name, err)
+	}
+
+	f := &File{Name: name, Framework: FrameworkNone}
+
+	for _, line := range strings.Split(blanked, "\n") {
+		trimmed := strings.TrimSpace(line)
+		global := false
+		if strings.HasPrefix(trimmed, "global using ") {
+			global = true
+			trimmed = strings.TrimPrefix(trimmed, "global ")
+		}
+		if m := usingRe.FindStringSubmatch(trimmed); m != nil {
+			f.Usings = append(f.Usings, Using{
+				Namespace: m[2],
+				Static:    m[1] != "",
+				Global:    global,
+			})
+			continue
+		}
+		if f.Namespace == "" {
+			if m := namespaceRe.FindStringSubmatch(trimmed); m != nil {
+				f.Namespace = m[1]
+			}
+		}
+	}
+
+	usingSet := map[string]bool{}
+	for _, u := range f.Usings {
+		usingSet[u.Namespace] = true
+	}
+	for _, marker := range frameworkMarkers {
+		if usingSet[marker.using] || marker.attrRe.MatchString(blanked) {
+			f.Framework = marker.framework
+			break
+		}
+	}
+
+	switch {
+	case entryPointRe.MatchString(blanked):
+		f.HasEntryPoint = true
+	case f.Namespace == "" && !typeDeclRe.MatchString(blanked):
+		// Top-level statements: code outside any namespace or type
+		// declaration. Lines that are using directives or attributes (e.g.
+		// [assembly: ...]) do not count as statements.
+		for _, line := range strings.Split(blanked, "\n") {
+			trimmed := strings.TrimSpace(line)
+			if trimmed == "" || strings.HasPrefix(trimmed, "using ") ||
+				strings.HasPrefix(trimmed, "global using ") || strings.HasPrefix(trimmed, "[") {
+				continue
+			}
+			f.HasEntryPoint = true
+			break
+		}
+	}
+
+	return f, nil
 }
