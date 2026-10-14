@@ -265,6 +265,32 @@ def _process_build_file(groups, file):
 
     groups["build"].setdefault(tfm, {"lib": [], "ref": []})[file_type].append(file)
 
+# `buildTransitive/<tfm>/<assembly>.dll`.
+#
+# `buildTransitive` is the transitively flowing variant of `build`, and some
+# packages ship their assemblies there instead of under `lib` (`MSTest.
+# TestAdapter` has no `lib/` folder at all). They are merged into the lib
+# group in _group_package_files and resolve like `lib/<tfm>` assemblies.
+# Only a DLL sitting directly under the framework folder counts; platform
+# specific subfolders such as `buildTransitive/net6.0/winui` are not
+# portable, and props/targets are not assemblies.
+def _process_build_transitive_file(groups, file):
+    parts = file.split("/")
+
+    if len(parts) != 3:
+        return
+
+    tfm = _normalize_tfm(parts[1])
+
+    if tfm == None:
+        return
+
+    # See https://github.com/bazel-contrib/rules_dotnet/issues/405
+    if not file.endswith(".dll") or file.endswith(".resources.dll"):
+        return
+
+    groups["buildTransitive"].setdefault(tfm, []).append(file)
+
 def _process_typeprovider_file(groups, file):
     if not file.endswith(".dll"):
         return
@@ -428,6 +454,8 @@ def _process_key_and_file(groups, key, file):
         _process_runtimes_file(groups, file)
     elif key == "build":
         _process_build_file(groups, file)
+    elif key == "buildTransitive":
+        _process_build_transitive_file(groups, file)
     elif key == "tools":
         _process_tools_file(groups, file)
 
@@ -592,6 +620,11 @@ def _group_package_files(id, all_files):
         # NB: Only the assemblies are picked up; the MSBuild props and targets
         #     that packages ship here are not run.
         "build": {},
+        # Assemblies some packages ship under buildTransitive/<TFM>/ instead
+        # of lib/<TFM>/ (`MSTest.TestAdapter` has no lib/ folder at all).
+        # They are merged into the lib group below.
+        # Format: buildTransitive/<TFM>/<assembly>.dll
+        "buildTransitive": {},
         # See: https://github.com/dotnet/sdk/blob/master/documentation/general/tool-nuget-package-format.md
         # Format: tools/<TFM>/any/...
         # NB: Dotnet requires portable assemblies in the tools folder, so RID is always 'any'
@@ -630,6 +663,13 @@ def _group_package_files(id, all_files):
             libs[tfm] = libs[tfm] + files
         else:
             libs[tfm] = files
+
+    # Assemblies under `buildTransitive/<tfm>/` stand in for `lib/<tfm>` ones,
+    # so they join the lib group and resolve through it — the runtime ships
+    # them next to the binary and the compile group falls back to them when
+    # the package ships no `ref/` folder.
+    for (tfm, files) in groups["buildTransitive"].items():
+        libs[tfm] = libs.get(tfm, []) + files
 
     # RID bound assemblies stand in for the whole lib group when one applies,
     # so they are kept apart and resolved first.
