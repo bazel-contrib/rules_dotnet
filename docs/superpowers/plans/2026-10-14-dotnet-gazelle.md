@@ -1283,7 +1283,7 @@ Add `Parse`/`ParseFile` on top of the blanking from Task 5: namespace, usings (s
 - Modify: `dotnet/gazelle/private/parser/parser.go`
 - Modify: `dotnet/gazelle/private/parser/parser_test.go`
 
-- [ ] **Step 1: Append the failing tests**
+- [x] **Step 1: Append the failing tests**
 
 Append to the end of `dotnet/gazelle/private/parser/parser_test.go`:
 
@@ -1449,7 +1449,7 @@ import (
 )
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 ```bash
 go test ./dotnet/gazelle/private/parser/
@@ -1457,7 +1457,7 @@ go test ./dotnet/gazelle/private/parser/
 
 Expected: FAIL with `undefined: Parse`, `undefined: ParseFile`, `undefined: FrameworkNone` (build failure).
 
-- [ ] **Step 3: Implement Parse and ParseFile**
+- [x] **Step 3: Implement Parse and ParseFile**
 
 Edit `dotnet/gazelle/private/parser/parser.go`. Old:
 
@@ -1610,7 +1610,7 @@ func Parse(name, src string) (*File, error) {
 }
 ```
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 ```bash
 go test ./dotnet/gazelle/private/parser/
@@ -1618,7 +1618,7 @@ go test ./dotnet/gazelle/private/parser/
 
 Expected: `PASS` and `ok  	github.com/bazel-contrib/rules_dotnet/dotnet/gazelle/private/parser`.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add dotnet/gazelle/private/parser/parser.go dotnet/gazelle/private/parser/parser_test.go
