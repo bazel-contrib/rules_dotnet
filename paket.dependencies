@@ -56,7 +56,7 @@ group rules_dotnet_nuget_packages
     nuget xunit.v3.core ~> 3.0
     nuget MSTest.TestAdapter ~> 3.8
     nuget MSTest.TestFramework ~> 3.8
-    nuget Microsoft.Testing.Platform
+    nuget Microsoft.Testing.Platform 2.5.1
 
 group rules_dotnet_framework_override_not_provided_tests
     framework: net8.0
