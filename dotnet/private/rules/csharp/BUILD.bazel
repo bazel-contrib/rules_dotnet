@@ -62,3 +62,25 @@ bzl_library(
         ":test",
     ],
 )
+
+bzl_library(
+    name = "mstest_test",
+    srcs = ["mstest_test.bzl"],  # keep
+    visibility = [
+        "//dotnet:__subpackages__",
+    ],
+    deps = [
+        ":test",
+    ],
+)
+
+bzl_library(
+    name = "xunit_test",
+    srcs = ["xunit_test.bzl"],  # keep
+    visibility = [
+        "//dotnet:__subpackages__",
+    ],
+    deps = [
+        ":test",
+    ],
+)

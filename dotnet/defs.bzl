@@ -24,6 +24,10 @@ load(
     _csharp_library = "csharp_library",
 )
 load(
+    "//dotnet/private/rules/csharp:mstest_test.bzl",
+    _csharp_mstest_test = "csharp_mstest_test",
+)
+load(
     "//dotnet/private/rules/csharp:nunit_test.bzl",
     _csharp_nunit_test = "csharp_nunit_test",
 )
@@ -163,6 +167,7 @@ def fsharp_test(name, **kwargs):
     """
     _fsharp_test(name = name, embed_sources = _embed_sources_or_flag(kwargs.pop("embed_sources", None)), **kwargs)
 
+csharp_mstest_test = _csharp_mstest_test
 csharp_nunit_test = _csharp_nunit_test
 csharp_xunit_test = _csharp_xunit_test
 fsharp_nunit_test = _fsharp_nunit_test
