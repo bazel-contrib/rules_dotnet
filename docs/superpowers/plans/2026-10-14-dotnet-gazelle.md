@@ -129,7 +129,7 @@ The new test rules need xUnit v3 and MSTest packages from the repo's own paket g
 - Modify: `paket.dependencies` (group `rules_dotnet_nuget_packages`, lines 49–54)
 - Modify: `paket.lock` (regenerated)
 
-- [ ] **Step 1: Add the packages to paket.dependencies**
+- [x] **Step 1: Add the packages to paket.dependencies**
 
 Edit `paket.dependencies`. Old:
 
@@ -155,12 +155,12 @@ group rules_dotnet_nuget_packages
     nuget xunit.v3.core ~> 3.0
     nuget MSTest.TestAdapter ~> 3.8
     nuget MSTest.TestFramework ~> 3.8
-    nuget Microsoft.Testing.Platform
+    nuget Microsoft.Testing.Platform 2.5.1
 ```
 
-`Microsoft.Testing.Platform` is intentionally unpinned: it is a fast-moving dependency of `MSTest.TestAdapter` and the `~> 3.8` constraint on the adapter bounds it; paket.lock pins the resolved version.
+`Microsoft.Testing.Platform` is exact-pinned to 2.5.1 like every other direct dependency in this file. The original plan text left it unpinned on the assumption that the adapter's `~> 3.8` constraint bounds it; code review found that is wrong (xunit.v3's `mtp-v1` bounds MTP only `>= 1.9.1`, unbounded above), so it was pinned after user approval (commits `8c22e28` + `d20d46a`).
 
-- [ ] **Step 2: Regenerate paket.lock**
+- [x] **Step 2: Regenerate paket.lock**
 
 Run (env exports from Environment notes assumed):
 
@@ -176,7 +176,7 @@ git diff --stat paket.lock
 
 Expected: `paket.lock | NNN +++...` with additions.
 
-- [ ] **Step 3: Verify the new package labels exist**
+- [x] **Step 3: Verify the new package labels exist**
 
 ```bash
 bazel query '@paket.rules_dotnet_nuget_packages//xunit.v3.core:all' '@paket.rules_dotnet_nuget_packages//xunit.v3.assert:all' '@paket.rules_dotnet_nuget_packages//mstest.testadapter:all' '@paket.rules_dotnet_nuget_packages//mstest.testframework:all' '@paket.rules_dotnet_nuget_packages//microsoft.testing.platform:all'
@@ -184,7 +184,7 @@ bazel query '@paket.rules_dotnet_nuget_packages//xunit.v3.core:all' '@paket.rule
 
 Expected: exit code 0 and at least one target line printed per package (e.g. `@paket.rules_dotnet_nuget_packages//xunit.v3.core:xunit.v3.core`).
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add paket.dependencies paket.lock
