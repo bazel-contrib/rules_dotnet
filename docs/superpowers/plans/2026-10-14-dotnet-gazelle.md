@@ -1633,7 +1633,7 @@ The `nuget` package indexes every package ID in `packages.lock.json` (Direct and
 - Create: `dotnet/gazelle/private/nuget/nuget.go`
 - Test: `dotnet/gazelle/private/nuget/nuget_test.go`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Create `dotnet/gazelle/private/nuget/nuget_test.go`:
 
@@ -1725,7 +1725,7 @@ func TestLoadIndexInvalidJSON(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 ```bash
 go test ./dotnet/gazelle/private/nuget/
@@ -1733,7 +1733,7 @@ go test ./dotnet/gazelle/private/nuget/
 
 Expected: FAIL with `undefined: LoadIndex` and `undefined: Index` (build failure).
 
-- [ ] **Step 3: Implement the index**
+- [x] **Step 3: Implement the index**
 
 Create `dotnet/gazelle/private/nuget/nuget.go`:
 
@@ -1826,7 +1826,7 @@ func appendUnique(s []string, v string) []string {
 }
 ```
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 ```bash
 go test ./dotnet/gazelle/private/nuget/
@@ -1834,7 +1834,7 @@ go test ./dotnet/gazelle/private/nuget/
 
 Expected: `PASS` and `ok  	github.com/bazel-contrib/rules_dotnet/dotnet/gazelle/private/nuget`.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add dotnet/gazelle/private/nuget/nuget.go dotnet/gazelle/private/nuget/nuget_test.go
