@@ -368,7 +368,7 @@ Same pattern as Task 2, with a Microsoft.Testing.Platform-based shim. `AddMSTest
 - Modify: `dotnet/private/rules/csharp/BUILD.bazel`
 - Test: `dotnet/private/tests/mstest_test/BUILD.bazel`, `dotnet/private/tests/mstest_test/mstesttest.cs`
 
-- [ ] **Step 1: Create the shim**
+- [x] **Step 1: Create the shim**
 
 Create `dotnet/private/rules/common/mstest/BUILD.bazel`:
 
@@ -398,7 +398,7 @@ internal static class MSTestShim {
 }
 ```
 
-- [ ] **Step 2: Create the macro**
+- [x] **Step 2: Create the macro**
 
 Create `dotnet/private/rules/csharp/mstest_test.bzl`:
 
@@ -432,7 +432,7 @@ def csharp_mstest_test(**kwargs):
     )
 ```
 
-- [ ] **Step 3: Export from defs.bzl**
+- [x] **Step 3: Export from defs.bzl**
 
 Edit `dotnet/defs.bzl`. Old:
 
@@ -471,7 +471,7 @@ csharp_nunit_test = _csharp_nunit_test
 csharp_xunit_test = _csharp_xunit_test
 ```
 
-- [ ] **Step 4: Add bzl_library targets for both new .bzl files**
+- [x] **Step 4: Add bzl_library targets for both new .bzl files**
 
 Edit `dotnet/private/rules/csharp/BUILD.bazel`. Append after the existing `bzl_library(name = "nunit_test", ...)` block at the end of the file:
 
@@ -501,7 +501,7 @@ bzl_library(
 
 This mirrors the hand-maintained `nunit_test` bzl_library (same deps, same `# keep` on srcs).
 
-- [ ] **Step 5: Write the smoke test**
+- [x] **Step 5: Write the smoke test**
 
 Create `dotnet/private/tests/mstest_test/BUILD.bazel`:
 
@@ -536,7 +536,7 @@ public sealed class BasicTests
 }
 ```
 
-- [ ] **Step 6: Run the smoke test**
+- [x] **Step 6: Run the smoke test**
 
 Run (env exports assumed):
 
@@ -546,7 +546,7 @@ bazel test //dotnet/private/tests/mstest_test:MSTestTest
 
 Expected: `//dotnet/private/tests/mstest_test:MSTestTest PASSED` and `Executed 1 out of 1 test: 1 test passes.`
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add dotnet/private/rules/common/mstest dotnet/private/rules/csharp/mstest_test.bzl dotnet/private/rules/csharp/BUILD.bazel dotnet/defs.bzl dotnet/private/tests/mstest_test
@@ -575,7 +575,7 @@ This task produces two commits: the pipeline fix (with TDD tests), then the mste
 - Modify: `dotnet/private/rules/common/mstest/BUILD.bazel` (drop the `import_library` wrappers)
 - Modify: `dotnet/private/rules/csharp/mstest_test.bzl` (drop the wrapper dep)
 
-- [ ] **Step 1: Write the failing resolution tests**
+- [x] **Step 1: Write the failing resolution tests**
 
 Append to `dotnet/private/tests/nuget_resolution/tests.bzl`, inside the `TESTS = [...]` list. Edit — old (the end of the list):
 
@@ -647,7 +647,7 @@ New:
 ]
 ```
 
-- [ ] **Step 2: Run the new tests to verify they fail**
+- [x] **Step 2: Run the new tests to verify they fail**
 
 Run (env exports from Environment notes assumed; the `@nuget_fixtures` repository refetches because `tests.bzl` changed — expected):
 
@@ -657,7 +657,7 @@ bazel test //dotnet/private/tests/nuget_resolution:build_transitive_assemblies_a
 
 Expected: all 4 tests FAIL. Each test log contains an assertion failure of the form `Expected libs:` (or `Expected refs:`) listing the `buildTransitive/...` paths and an `Actual libs:` list without them (the groups resolve to nothing today).
 
-- [ ] **Step 3: Implement the pipeline fix in nuget_archive.bzl**
+- [x] **Step 3: Implement the pipeline fix in nuget_archive.bzl**
 
 Edit `dotnet/private/rules/nuget/nuget_archive.bzl` — old (the tail of `_process_build_file`, which is where the new function goes):
 
@@ -769,7 +769,7 @@ New:
 
 Nothing else changes: the `libs` struct field feeds `_create_rid_tfm_select("libs_package", ...)`, `ref_tfm_filegroup` already falls back to `libs` when a package ships no `ref/`, and `package.bzl`/`import_library` consume the groups unchanged. No `build/` package behavior changes — the new group is separate.
 
-- [ ] **Step 4: Run the resolution tests to verify they pass**
+- [x] **Step 4: Run the resolution tests to verify they pass**
 
 ```bash
 bazel test //dotnet/private/tests/nuget_resolution/...
@@ -777,14 +777,14 @@ bazel test //dotnet/private/tests/nuget_resolution/...
 
 Expected: `Executed NNN tests: all pass.` — including the 4 new tests and every pre-existing one (this also proves packages with plain `lib/` layouts, e.g. the nunit-shaped fixtures, are unaffected).
 
-- [ ] **Step 5: Commit the pipeline fix**
+- [x] **Step 5: Commit the pipeline fix**
 
 ```bash
 git add dotnet/private/rules/nuget/nuget_archive.bzl dotnet/private/tests/nuget_resolution/tests.bzl
 git commit -m "Fix NuGet packages that ship assemblies under buildTransitive only"
 ```
 
-- [ ] **Step 6: Remove the import_library workaround from the mstest rule**
+- [x] **Step 6: Remove the import_library workaround from the mstest rule**
 
 Rewrite `dotnet/private/rules/common/mstest/BUILD.bazel` in full — new content (this is exactly what the file contained before commit `4b0c334` added the wrappers):
 
@@ -822,7 +822,7 @@ New:
     ]
 ```
 
-- [ ] **Step 7: Verify the paket group end-to-end and that existing packages are unaffected**
+- [x] **Step 7: Verify the paket group end-to-end and that existing packages are unaffected**
 
 The `@paket.rules_dotnet_nuget_packages` archive repositories refetch on the first command after Step 3's `.bzl` change — lines about refetching `+paket+nuget.mstest.testadapter.v3.11.1` and friends in the output are expected. Run (env exports assumed):
 
@@ -839,7 +839,7 @@ bazel test //dotnet/private/tests/xunit_test:XunitTest //dotnet/private/tests/fr
 
 Expected: `//dotnet/private/tests/xunit_test:XunitTest PASSED`, `//dotnet/private/tests/framework_override_not_provided:ProgramTest PASSED`, and all `//dotnet/private/tests/packages_lock/...` targets PASSED.
 
-- [ ] **Step 8: Commit the simplification**
+- [x] **Step 8: Commit the simplification**
 
 ```bash
 git add dotnet/private/rules/common/mstest/BUILD.bazel dotnet/private/rules/csharp/mstest_test.bzl
