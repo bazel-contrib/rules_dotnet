@@ -92,6 +92,13 @@ bzl_library(
     deps = ["//dotnet/private/paket:extension"],
 )
 
+bzl_library(
+    name = "packages_lock",
+    srcs = ["packages_lock.bzl"],
+    visibility = ["//visibility:public"],
+    deps = ["//dotnet/private/packages_lock:extension"],
+)
+
 exports_files(["defs.bzl"])
 
 bzl_library(
