@@ -13,5 +13,6 @@ bzl_library(
     deps = [
         ":lock",
         "//dotnet/private/rules/nuget:nuget_repo",
+        "@bazel_tools//tools/build_defs/repo:utils.bzl",
     ],
 )

@@ -11,8 +11,7 @@ def parse_lock(content, path = "packages.lock.json"):
       A list of structs, one per target framework, each with:
         name: The target framework.
         sources: An empty list; package sources are not recorded in this file.
-        packages: A list of structs with `id`, resolved `version`, and
-          `content_hash` fields.
+        packages: A list of structs with `id` and resolved `version` fields.
     """
     lock = json.decode(content)
     groups = []
@@ -30,18 +29,7 @@ def parse_lock(content, path = "packages.lock.json"):
                     ),
                 )
 
-            content_hash = entry.get("contentHash")
-            if not content_hash:
-                fail(
-                    "{}: package '{}' in framework '{}' has no contentHash".format(
-                        path,
-                        id,
-                        framework,
-                    ),
-                )
-
             packages.append(struct(
-                content_hash = content_hash,
                 id = id,
                 version = version,
             ))

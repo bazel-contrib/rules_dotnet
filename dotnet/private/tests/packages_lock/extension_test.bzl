@@ -11,21 +11,18 @@ _LOCK = """\
       "Argu": {
         "type": "Direct",
         "requested": "[6.2.3, )",
-        "resolved": "6.2.3",
-        "contentHash": "hash-argu"
+        "resolved": "6.2.3"
       },
       "Newtonsoft.Json": {
         "type": "Transitive",
-        "resolved": "13.0.3",
-        "contentHash": "hash-json"
+        "resolved": "13.0.3"
       }
     },
     "net9.0": {
       "LibGit2Sharp": {
         "type": "Direct",
         "requested": "[0.27.0-preview-0182, )",
-        "resolved": "0.27.0-preview-0182",
-        "contentHash": "hash-libgit"
+        "resolved": "0.27.0-preview-0182"
       }
     }
   }
@@ -48,19 +45,17 @@ def _packages_from_lock_test_impl(ctx):
         [
             {
                 "id": "Argu",
-                "sha512": "sha512-hash-argu",
                 "sources": _SOURCES,
                 "version": "6.2.3",
             },
             {
                 "id": "Newtonsoft.Json",
-                "sha512": "sha512-hash-json",
                 "sources": _SOURCES,
                 "version": "13.0.3",
             },
         ],
         groups[0].packages,
-        "the lock's content hash pins the download, and the feeds come from the tag",
+        "package ids and versions are read from the lock; integrity is resolved separately",
     )
 
     return unittest.end(env)

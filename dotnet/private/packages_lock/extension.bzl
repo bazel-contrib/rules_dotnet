@@ -1,9 +1,9 @@
 """Implementation of the `packages_lock` module extension.
 
-A `packages.lock.json` written by `dotnet restore` pins an exact version and
-content hash for every package a project resolved, per target framework. The
-file does not record the feeds the packages came from, so they are passed
-with the `sources` attribute.
+A `packages.lock.json` written by `dotnet restore` pins an exact version for
+every package a project resolved, per target framework. The file does not
+record the feeds the packages came from, so they are passed with the `sources`
+attribute.
 """
 
 load("//dotnet/private/packages_lock:lock.bzl", "parse_lock")
@@ -12,10 +12,19 @@ load(
     "nuget_archives",
     "nuget_hub_repo",
 )
+load(
+    "@bazel_tools//tools/build_defs/repo:utils.bzl",
+    "read_netrc",
+    "read_user_netrc",
+    "use_netrc",
+)
 
 _DEFAULT_REPO_PREFIX = "nuget."
 
 _DEFAULT_SOURCES = ["https://api.nuget.org/v3/index.json"]
+
+# Bump this when the shape or meaning of a computed package integrity changes.
+_FACT_VERSION = "v1"
 
 _parse = tag_class(
     doc = "Makes the packages of a `packages.lock.json` file available to Bazel.",
@@ -60,8 +69,8 @@ def packages_from_lock(content, sources):
 
     Returns:
       A list of structs, one per target framework, each with `name` and
-      `packages` fields. Each package is a dict with `id`, `version`,
-      `sources` and `sha512` keys, the latter as subresource integrity.
+      `packages` fields. Each package is a dict with `id`, `version` and
+      `sources` keys.
     """
     return [
         struct(
@@ -69,7 +78,6 @@ def packages_from_lock(content, sources):
             packages = [
                 {
                     "id": package.id,
-                    "sha512": "sha512-" + package.content_hash,
                     "sources": sources,
                     "version": package.version,
                 }
@@ -78,6 +86,116 @@ def packages_from_lock(content, sources):
         )
         for group in parse_lock(content)
     ]
+
+def _auth(netrc_entries, urls):
+    return use_netrc(netrc_entries, urls, {
+        "type": "basic",
+        "login": "<login>",
+        "password": "<password>",
+    })
+
+def _integrity_fact_key(id, version):
+    return "package_integrity/{}:{}/{}".format(_FACT_VERSION, id.lower(), version.lower())
+
+def _package_urls(module_ctx, package, netrc_entries, base_addresses):
+    urls = []
+
+    for source in package["sources"]:
+        if source.endswith("index.json"):
+            base_address = base_addresses.get(source)
+            if base_address == None:
+                output = "packages_lock_feed_index_{}.json".format(len(base_addresses))
+                result = module_ctx.download(
+                    url = source,
+                    output = output,
+                    auth = _auth(netrc_entries, [source]),
+                    allow_fail = True,
+                )
+                if not result.success:
+                    fail("Could not read NuGet feed index {}: {}".format(source, result.error))
+
+                index = json.decode(module_ctx.read(output))
+                for resource in index.get("resources", []):
+                    if resource.get("@type") == "PackageBaseAddress/3.0.0":
+                        base_address = resource.get("@id", "")
+                        break
+
+                if not base_address:
+                    fail("{} has no PackageBaseAddress/3.0.0 resource.".format(source))
+
+                base_addresses[source] = base_address
+
+            if not base_address.endswith("/"):
+                base_address += "/"
+            id = package["id"].lower()
+            version = package["version"].lower()
+            urls.append(
+                "{base}{id}/{version}/{id}.{version}.nupkg".format(
+                    base = base_address,
+                    id = id,
+                    version = version,
+                ),
+            )
+        else:
+            urls.append("{}/package/{}/{}".format(
+                source.rstrip("/"),
+                package["id"].lower(),
+                package["version"].lower(),
+            ))
+
+    if not urls:
+        fail("No NuGet feeds are configured for package {} {}.".format(
+            package["id"],
+            package["version"],
+        ))
+
+    return urls
+
+def _add_download_integrities(module_ctx, requests):
+    integrities = {}
+    remembered = getattr(module_ctx, "facts", {})
+    netrc_entries_by_label = {}
+    base_addresses = {}
+
+    for request in requests:
+        for package in request.packages:
+            fact_key = _integrity_fact_key(package["id"], package["version"])
+            if fact_key not in integrities:
+                if fact_key in remembered:
+                    integrities[fact_key] = remembered[fact_key]
+                else:
+                    netrc = package.get("netrc")
+                    if netrc not in netrc_entries_by_label:
+                        netrc_entries_by_label[netrc] = (
+                            read_netrc(module_ctx, netrc)
+                            if netrc
+                            else read_user_netrc(module_ctx)
+                        )
+                    netrc_entries = netrc_entries_by_label[netrc]
+                    urls = _package_urls(module_ctx, package, netrc_entries, base_addresses)
+                    result = module_ctx.download(
+                        url = urls,
+                        output = "packages_lock_package_{}.nupkg".format(len(integrities)),
+                        auth = _auth(netrc_entries, urls),
+                        allow_fail = True,
+                    )
+                    if not result.success:
+                        fail("Could not download NuGet package {} {}: {}".format(
+                            package["id"],
+                            package["version"],
+                            result.error,
+                        ))
+                    if not result.integrity:
+                        fail("Bazel did not calculate an integrity hash for NuGet package {} {}.".format(
+                            package["id"],
+                            package["version"],
+                        ))
+
+                    integrities[fact_key] = result.integrity
+
+            package["sha512"] = integrities[fact_key]
+
+    return integrities
 
 def _select_frameworks(tag, groups):
     """Returns the frameworks the tag asked for, defaulting to all of them."""
@@ -142,6 +260,7 @@ def _collect(module_ctx):
 
 def _packages_lock_impl(module_ctx):
     requests = _collect(module_ctx)
+    facts = _add_download_integrities(module_ctx, requests)
 
     archives = {}
     direct_deps = []
@@ -157,10 +276,15 @@ def _packages_lock_impl(module_ctx):
             else:
                 direct_deps.append(request.repo)
 
+    metadata = {}
+    if hasattr(module_ctx, "facts"):
+        metadata["facts"] = facts
+
     return module_ctx.extension_metadata(
         root_module_direct_deps = direct_deps,
         root_module_direct_dev_deps = direct_dev_deps,
         reproducible = True,
+        **metadata
     )
 
 packages_lock = module_extension(
