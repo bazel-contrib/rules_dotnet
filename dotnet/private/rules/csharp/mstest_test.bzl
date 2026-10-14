@@ -13,11 +13,6 @@ def csharp_mstest_test(**kwargs):
         Label("@paket.rules_dotnet_nuget_packages//microsoft.testing.platform"),
         Label("@paket.rules_dotnet_nuget_packages//mstest.testadapter"),
         Label("@paket.rules_dotnet_nuget_packages//mstest.testframework"),
-        # The adapter nupkg ships its assemblies under buildTransitive/ only,
-        # so the package target above has empty libs. Import the DLLs
-        # (Microsoft.VisualStudio.TestPlatform.MSTest.TestAdapter.dll provides
-        # AddMSTest) through a wrapper that selects them per target framework.
-        Label("//dotnet/private/rules/common/mstest:mstest_testadapter"),
     ]
 
     srcs = kwargs.pop("srcs", []) + [
