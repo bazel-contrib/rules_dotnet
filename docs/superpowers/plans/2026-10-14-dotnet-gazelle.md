@@ -971,7 +971,7 @@ The parser is a lightweight lexer, not a C# grammar. First component: `blankComm
 - Create: `dotnet/gazelle/private/parser/parser.go`
 - Test: `dotnet/gazelle/private/parser/parser_test.go`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Create `dotnet/gazelle/private/parser/parser_test.go`:
 
@@ -993,37 +993,37 @@ func TestBlankCommentsAndStrings(t *testing.T) {
 		{
 			name: "line comment",
 			src:  "using X; // using Y;\nnamespace Z;",
-			want: "using X;             \nnamespace Z;",
+			want: "using X;            \nnamespace Z;",
 		},
 		{
 			name: "block comment with newlines",
 			src:  "a /* one\ntwo */ b",
-			want: "a        \n      b",
+			want: "a       \n       b",
 		},
 		{
 			name: "double quoted string",
 			src:  `var s = "namespace Fake;";` + "\nnamespace Real;",
-			want: "var s =                 ;" + "\nnamespace Real;",
+			want: "var s =                  ;" + "\nnamespace Real;",
 		},
 		{
 			name: "string with escaped quote",
 			src:  `var s = "a\"b"; namespace R;`,
-			want: `var s =        ; namespace R;`,
+			want: `var s =       ; namespace R;`,
 		},
 		{
 			name: "char literal",
 			src:  "var c = 'x'; namespace R;",
-			want: "var c =      ; namespace R;",
+			want: "var c =    ; namespace R;",
 		},
 		{
 			name: "verbatim string with doubled quote",
 			src:  `var s = @"a""b"; namespace R;`,
-			want: `var s =         ; namespace R;`,
+			want: `var s =        ; namespace R;`,
 		},
 		{
 			name: "verbatim multiline string keeps newlines",
 			src:  "var s = @\"one\ntwo\"; namespace R;",
-			want: "var s =      \n     ; namespace R;",
+			want: "var s =      \n    ; namespace R;",
 		},
 		{
 			name: "interpolated string",
@@ -1033,7 +1033,7 @@ func TestBlankCommentsAndStrings(t *testing.T) {
 		{
 			name: "raw string",
 			src:  "var s = \"\"\"namespace Fake;\"\"\"; namespace R;",
-			want: "var s =                        ; namespace R;",
+			want: "var s =                      ; namespace R;",
 		},
 		{
 			name: "verbatim identifier is not a string",
@@ -1077,7 +1077,7 @@ func TestBlankCommentsAndStrings(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [x] **Step 2: Run the test to verify it fails**
 
 Run (env exports assumed):
 
@@ -1087,7 +1087,7 @@ go test ./dotnet/gazelle/private/parser/
 
 Expected: FAIL with `undefined: blankCommentsAndStrings` (build failure).
 
-- [ ] **Step 3: Implement blankCommentsAndStrings**
+- [x] **Step 3: Implement blankCommentsAndStrings**
 
 Create `dotnet/gazelle/private/parser/parser.go`:
 
@@ -1260,7 +1260,7 @@ func blankCommentsAndStrings(src string) (string, error) {
 }
 ```
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 ```bash
 go test ./dotnet/gazelle/private/parser/
@@ -1268,7 +1268,7 @@ go test ./dotnet/gazelle/private/parser/
 
 Expected: `ok  	github.com/bazel-contrib/rules_dotnet/dotnet/gazelle/private/parser` and `PASS`.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add dotnet/gazelle/private/parser/parser.go dotnet/gazelle/private/parser/parser_test.go
