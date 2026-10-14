@@ -14,6 +14,7 @@ go_library(
     deps = [
         "//dotnet/gazelle/dotnetconfig",
         "//dotnet/gazelle/private/nuget",
+        "//dotnet/gazelle/private/parser",
         "@bazel_gazelle//config",
         "@bazel_gazelle//label",
         "@bazel_gazelle//language",
@@ -26,6 +27,7 @@ go_library(
 go_test(
     name = "gazelle_test",
     srcs = [
+        "generate_test.go",
         "lang_test.go",
         "resolve_test.go",
     ],
@@ -34,6 +36,7 @@ go_test(
         "//dotnet/gazelle/private/nuget",
         "@bazel_gazelle//config",
         "@bazel_gazelle//label",
+        "@bazel_gazelle//language",
         "@bazel_gazelle//resolve",
         "@bazel_gazelle//rule",
     ],
