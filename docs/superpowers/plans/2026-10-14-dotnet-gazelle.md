@@ -1849,7 +1849,7 @@ The `dotnetconfig` package holds the directive-driven configuration for one Baze
 - Create: `dotnet/gazelle/dotnetconfig/config.go`
 - Test: `dotnet/gazelle/dotnetconfig/config_test.go`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Create `dotnet/gazelle/dotnetconfig/config_test.go`:
 
@@ -2001,7 +2001,7 @@ func TestParentForPackage(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 ```bash
 go test ./dotnet/gazelle/dotnetconfig/
@@ -2009,7 +2009,7 @@ go test ./dotnet/gazelle/dotnetconfig/
 
 Expected: FAIL with `undefined: New`, `undefined: Configs` (build failure).
 
-- [ ] **Step 3: Implement dotnetconfig**
+- [x] **Step 3: Implement dotnetconfig**
 
 Create `dotnet/gazelle/dotnetconfig/config.go`:
 
@@ -2201,7 +2201,7 @@ func (c *Config) NugetLabel(packageID string) string {
 }
 ```
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 ```bash
 go test ./dotnet/gazelle/dotnetconfig/
@@ -2209,7 +2209,7 @@ go test ./dotnet/gazelle/dotnetconfig/
 
 Expected: `PASS` and `ok  	github.com/bazel-contrib/rules_dotnet/dotnet/gazelle/dotnetconfig`.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add dotnet/gazelle/dotnetconfig/config.go dotnet/gazelle/dotnetconfig/config_test.go
