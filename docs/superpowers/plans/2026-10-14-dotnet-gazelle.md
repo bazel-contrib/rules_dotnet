@@ -202,7 +202,7 @@ Mirrors `csharp_nunit_test` (`dotnet/private/rules/csharp/nunit_test.bzl`): a ma
 - Modify: `dotnet/defs.bzl`
 - Test: `dotnet/private/tests/xunit_test/BUILD.bazel`, `dotnet/private/tests/xunit_test/xunittest.cs`
 
-- [ ] **Step 1: Create the shim**
+- [x] **Step 1: Create the shim**
 
 Create `dotnet/private/rules/common/xunit/BUILD.bazel`:
 
@@ -225,7 +225,7 @@ internal static class XunitShim {
 
 `Xunit.Runner.InProc.SystemConsole.ConsoleRunner.Run` is the static entry point xunit.v3.core provides for self-executing test projects; it returns `ValueTask<int>`.
 
-- [ ] **Step 2: Create the macro**
+- [x] **Step 2: Create the macro**
 
 Create `dotnet/private/rules/csharp/xunit_test.bzl`:
 
@@ -260,7 +260,9 @@ def csharp_xunit_test(**kwargs):
 
 Both xunit packages are direct deps so the macro works with `--@rules_dotnet//dotnet/settings:strict_deps=true` (CI runs both settings).
 
-- [ ] **Step 3: Export from defs.bzl**
+> **Implemented (commit `44cafe0`):** two more direct deps were required — `xunit.v3.extensibility.core` (ships `xunit.v3.core.dll` incl. `FactAttribute`; `xunit.v3.core` 3.2.2 is a meta-package whose `lib/` contains only `_._`) and `xunit.v3.runner.inproc.console` (ships the shim's `ConsoleRunner`). Verified by spec review at the package/assembly level; smoke test passes under strict_deps.
+
+- [x] **Step 3: Export from defs.bzl**
 
 Edit `dotnet/defs.bzl`. Old:
 
@@ -299,7 +301,7 @@ csharp_xunit_test = _csharp_xunit_test
 fsharp_nunit_test = _fsharp_nunit_test
 ```
 
-- [ ] **Step 4: Write the smoke test**
+- [x] **Step 4: Write the smoke test**
 
 Create `dotnet/private/tests/xunit_test/BUILD.bazel`:
 
@@ -333,7 +335,7 @@ public sealed class BasicTests
 }
 ```
 
-- [ ] **Step 5: Run the smoke test**
+- [x] **Step 5: Run the smoke test**
 
 Run (env exports assumed):
 
@@ -345,7 +347,7 @@ Expected: `//dotnet/private/tests/xunit_test:XunitTest PASSED` and `Executed 1 o
 
 If compilation of `shim.cs` fails with a missing `ConsoleRunner.Run` member, check the exact xunit.v3.core API with `bazel query @paket.rules_dotnet_nuget_packages//xunit.v3.core:all --output=build | head -50` and adjust the shim to the available runner entry point; keep the rest of this task unchanged.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add dotnet/private/rules/common/xunit dotnet/private/rules/csharp/xunit_test.bzl dotnet/defs.bzl dotnet/private/tests/xunit_test
