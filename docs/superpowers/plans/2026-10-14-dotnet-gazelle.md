@@ -4186,7 +4186,132 @@ git add dotnet/gazelle/testdata
 git commit -m "Add resolution and directive fixtures to the Gazelle generation tests"
 ```
 
+### Task 13b: Fix duplicate same-package dep when the repo name is non-empty (TDD)
+
+Found while implementing Task 14 (Bazel failed with `Label '//gazelle_csharp/src/Calculator:calculator' is duplicated in the 'deps' attribute`). Root cause: `resolve.RuleIndex.AddRule` stamps every indexed label with the workspace's canonical repo name (`label.New(c.RepoName, f.Pkg, r.Name())`, gazelle v0.51.3 `resolve/index.go:164`), but gazelle's unit-test harness uses `config.New()`, which leaves `RepoName` empty — so every test written so far exercises only the empty-repo path.
+
+In a real workspace (non-empty `c.RepoName`), `resolveNamespace` in `dotnet/gazelle/resolve.go` (committed in `99ca0f3`) does this: the same-package branch (`case l.Repo == "" && l.Pkg == from.Pkg`) never matches because the indexed label carries the repo name; the second branch strips the repo but keeps the explicit form, so the function returns the string `//gazelle_csharp/src/Calculator:calculator`. `Resolve()` then unions that string with the `:calculator` dep that `generate.go` already set on the test rule — two spellings of the same label in a string-keyed set — producing `deps = [":calculator", "//gazelle_csharp/src/Calculator:calculator"]`.
+
+Fix: in `resolveNamespace`, clear the repo of a label that belongs to the workspace's own repo **before** the same-package check. Same-package labels then relativize to `:name` (string) and deduplicate against the generate-time sibling dep; other-package labels keep the canonical `//pkg` / `//pkg:pkg` string produced by `label.String()` after clearing `Repo`.
+
+**Files:**
+- Modify: `dotnet/gazelle/resolve.go` (`resolveNamespace`, the label-simplification switch)
+- Test: `dotnet/gazelle/resolve_test.go` (append one failing test)
+
+- [ ] **Step 1: Read the current code and test helpers**
+
+Read `dotnet/gazelle/resolve.go` — the target is `resolveNamespace` near the end of the file; note the `switch` that handles `m.Label` after `FindRulesByImportWithConfig`. Read `dotnet/gazelle/resolve_test.go` — `setupLang` (builds a `config.Config` with empty `RepoName`), `indexLibrary` (indexes a `csharp_library` into a `resolve.RuleIndex`), and `TestResolveKeepsExistingDepsAndSimplifiesSamePackage` (the empty-repo version of the scenario this task reproduces with a non-empty repo name) show the fixture pattern to mirror.
+
+- [ ] **Step 2: Write the failing test**
+
+Append to the end of `dotnet/gazelle/resolve_test.go`:
+
+```go
+func TestResolveSamePackageWithRepoName(t *testing.T) {
+	l, c, _ := setupLang(t, "# gazelle:dotnet_target_frameworks net10.0\n", "src", "src/calculator")
+	// Simulate a real workspace: RuleIndex.AddRule stamps every indexed
+	// label with c.RepoName, which gazelle's test harness leaves empty.
+	c.RepoName = "rules_dotnet_examples"
+
+	ix := resolve.NewRuleIndex(func(r *rule.Rule, pkgRel string) resolve.Resolver { return l.Resolver })
+	indexLibrary(t, l, c, ix, "src/calculator", "calculator", "Calculator")
+	ix.Finish()
+
+	r := rule.NewRule("csharp_nunit_test", "calculator_nunit_test")
+	r.SetAttr("deps", []string{":calculator"})
+	input := resolveInput{imports: []string{"Calculator"}, own: []string{"Calculator.Tests"}}
+	l.Resolver.Resolve(c, ix, nil, r, input, label.New("", "src/calculator", "calculator_nunit_test"))
+
+	got := r.AttrStrings("deps")
+	want := []string{":calculator"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("deps = %v, want %v", got, want)
+	}
+}
+```
+
+No new imports are needed — `reflect`, `resolve`, `label`, and `rule` are already imported in the file.
+
+- [ ] **Step 3: Run the test to verify it fails**
+
+Run (env exports from Environment notes assumed, plus `CGO_ENABLED=0`):
+
+```bash
+export GOPATH=/tmp/opencode/gopath GOCACHE=/tmp/opencode/gocache CGO_ENABLED=0
+go test ./dotnet/gazelle/ -run TestResolveSamePackageWithRepoName -v
+```
+
+Expected: FAIL with `deps = [//src/calculator :calculator], want [:calculator]` — both spellings of the same label appear in `deps` (`//` sorts before `:`), which is exactly the union that made Bazel fail in Task 14.
+
+- [ ] **Step 4: Fix `resolveNamespace`**
+
+Edit `dotnet/gazelle/resolve.go`. Old:
+
+```go
+		l := m.Label
+		switch {
+		case l.Repo == "" && l.Pkg == from.Pkg:
+			l = label.Label{Name: l.Name, Relative: true}
+		case l.Repo == c.RepoName:
+			l.Repo = ""
+		}
+		return l.String()
+```
+
+New:
+
+```go
+		l := m.Label
+		if l.Repo == c.RepoName {
+			// FindRulesByImportWithConfig stamps labels with the
+			// workspace's canonical repo name. Drop it before the
+			// same-package check so an in-workspace label relativizes
+			// to ":name" and deduplicates against the generate-time
+			// sibling dep instead of appearing twice in deps.
+			l.Repo = ""
+		}
+		if l.Repo == "" && l.Pkg == from.Pkg {
+			l = label.Label{Name: l.Name, Relative: true}
+		}
+		return l.String()
+```
+
+Behavior notes: when `c.RepoName` is `""` (unit harness, and the Task 12/13 fixtures) the first `if` is a no-op — the empty-repo path is byte-for-byte unchanged. When the label belongs to another repo (e.g. an external repo in the index), `l.Repo` stays set and neither branch relativizes it, same as before. When the label is in the workspace's own repo, `label.String()` on the repo-less label prints the canonical `//pkg` or `//pkg:pkg` form (it shortens `//pkg:pkg` to `//pkg` when the target name equals the package's last segment).
+
+- [ ] **Step 5: Run all Go tests**
+
+```bash
+go test ./dotnet/gazelle/...
+```
+
+Expected: all four packages report `ok` — the new `TestResolveSamePackageWithRepoName` passes, and every pre-existing test (`TestResolveNamespaces`, `TestResolveOverride`, `TestResolveKeepsExistingDepsAndSimplifiesSamePackage`, `TestResolveSkipsSelfImport`, and all Task 10 generate tests) stays green, proving the empty-repo behavior of Tasks 9/12/13 is unchanged.
+
+- [ ] **Step 6: Run the tests under Bazel, including the Task 12/13 fixtures**
+
+```bash
+export JAVA_HOME="$(bazel info java-home 2>/dev/null)"
+bazel test //dotnet/gazelle/...
+```
+
+Expected: all targets pass — the 4 Go unit-test targets and all 10 `gazelle_generation_test` fixtures from Tasks 11–13 (`binary`, `generate_binary_disabled`, `lib`, `mstest_tests`, `nuget_dep`, `nunit_tests`, `resolve_override`, `test_framework_forced`, `workspace_dep`, `xunit_tests`). The fixtures run gazelle with an empty repo name, so they re-verify the unchanged empty-repo path end to end.
+
+- [ ] **Step 7: Commit**
+
+```bash
+git add dotnet/gazelle/resolve.go dotnet/gazelle/resolve_test.go
+git commit -m "Fix duplicate same-package deps when the repo name is non-empty"
+```
+
 ### Task 14: Example — examples/gazelle_csharp
+
+> **Status: BLOCKED mid-implementation.** The corrections below were verified while implementing this task and exist only as uncommitted working-tree changes (`examples/BUILD.bazel`, `examples/MODULE.bazel`, `examples/gazelle_csharp/`). The step content below is unchanged — where a correction conflicts with a step, the correction wins.
+>
+> - **A (required) — the `dotnet_target_frameworks` directive must be at the *walk root*.** The examples repo root is `examples/`; `bazel run //gazelle_csharp:gazelle` walks from there, and gazelle configures the parent directories of the target too, so `configure.go` fatals at `rel == ""` when the root has no frameworks. `examples/BUILD.bazel` exists but is empty — add `# gazelle:dotnet_target_frameworks net10.0` to it. The directive inside `examples/gazelle_csharp/BUILD.bazel` (Step 2) may stay as documentation, but the root directive is the load-bearing one.
+> - **C (required) — `Program.cs` needs `using System;`.** rules_dotnet has no implicit usings; without it the binary fails to compile with CS0103 (`Console` does not exist). Prepend `using System;` to `examples/gazelle_csharp/src/CalculatorApp/Program.cs`.
+> - **D (environment, optional) — cgo fails under the nono sandbox** (`/usr/include` is denied). Workaround: add `bazel_dep(name = "rules_go", version = "0.59.0")` plus the `go_sdk.download(version = "1.24.12")` extension stanza (same as the root `MODULE.bazel`) to `examples/MODULE.bazel`, and pass `--@rules_go//go/config:pure` on the bazel command lines in Steps 5–6 (no `.bazelrc` change). The rules_go dep is required for the flag to resolve; the pure flag itself is likely only needed in this sandbox (CI/unsandboxed users can omit it).
+> - **Golden attribute order (verified against gazelle output):** generated BUILD files print `project_sdk = "default",` **before** `target_frameworks = [...]` (gazelle sorts by NamePriority, then alphabetically: `project_sdk` < `target_frameworks`). `src/Calculator/BUILD.bazel` additionally sorts `internals_visible_to` before `project_sdk` and always prints `deps` last. Order every committed BUILD file in Steps 4 accordingly.
+> - **Task 13b dependency:** after Task 13b lands, the generated `examples/gazelle_csharp/src/Calculator/BUILD.bazel` must contain `deps = [":calculator"]` **exactly once** in the `csharp_nunit_test` — the duplicate `//gazelle_csharp/src/Calculator:calculator` spelling is the bug Task 13b fixes, so run Task 13b before Step 5 and regenerate/verify the BUILD files with the fixed gazelle binary.
+> - Task 16 Step 5's expected commit count increases by one (17 new commits on `feature/packages-lock`, not 16) because Task 13b adds a commit.
 
 A small multi-directory C# "solution" (library + binary + NUnit and xUnit tests) with a `packages.lock.json`, a gazelle target, and the generated BUILD files committed. It demonstrates the consumer workflow: `bazel run //gazelle_csharp:gazelle`.
 
