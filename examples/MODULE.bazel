@@ -46,6 +46,21 @@ paket_example.parse(
 )
 use_repo(paket_example, "paket.main", "paket.othergroup")
 
+# Gazelle for //gazelle_csharp, demonstrating the C# Gazelle extension.
+# rules_go and the Go SDK come transitively from rules_dotnet.
+bazel_dep(name = "gazelle", version = "0.51.3", repo_name = "bazel_gazelle")
+
+# rules_go is needed as a direct dependency so that the Go SDK is registered
+# for the gazelle_binary target above.
+bazel_dep(name = "rules_go", version = "0.59.0")
+
+go_sdk = use_extension("@rules_go//go:extensions.bzl", "go_sdk")
+go_sdk.download(version = "1.24.12")
+
+packages_lock = use_extension("@rules_dotnet//dotnet:packages_lock.bzl", "packages_lock")
+packages_lock.parse(lock = "//gazelle_csharp:packages.lock.json")
+use_repo(packages_lock, "nuget.net10.0")
+
 # Builds the container images in //container_image.
 bazel_dep(name = "rules_img", version = "0.3.22")
 
