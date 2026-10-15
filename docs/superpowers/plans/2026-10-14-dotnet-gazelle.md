@@ -3543,7 +3543,12 @@ git commit -m "Add C# rule generation to the Gazelle extension"
 
 Gazelle's `gazelle_generation_test` runs the real gazelle binary in a fixture directory and compares every generated `BUILD.bazel` against a committed `BUILD.out`. This task adds the harness and the first two cases; Tasks 12–13 add the rest.
 
-Fixture conventions (same as rules_jvm): a directory is a test case when it contains a `MODULE.bazel` file (content irrelevant — keep it empty); `BUILD.in` is the pre-existing BUILD file (only directive comments in our cases); `BUILD.out` is the expected result. Warnings on stderr are ignored unless an `expectedStdErr.txt` exists, so cases without a `packages.lock.json` (which logs "NuGet resolution is disabled") and with unresolvable framework imports are fine.
+Fixture conventions (same as rules_jvm): a directory is a test case when it contains a `MODULE.bazel` file (content irrelevant — keep it empty); `BUILD.in` is the pre-existing BUILD file (only directive comments in our cases); `BUILD.out` is the expected result.
+
+> **Corrections applied in Task 11 (commit `6d30a35`) — standing rules for ALL fixtures in Tasks 11–13:**
+> 1. The stderr-capture file must be named `expectedStderr.txt` (all-lowercase "err" — verified in gazelle v2 `testtools/files.go:172`; the spelling `expectedStdErr.txt` used below is silently ignored and any stderr output then fails the test). Every fixture **without** a `packages.lock.json` needs this file with exactly one line:
+>    `gazelle: no packages.lock.json at %WORKSPACEPATH%/packages.lock.json; NuGet resolution is disabled`
+> 2. Golden `BUILD.out` files must list `project_sdk = "default",` **before** `target_frameworks = [...]` — gazelle v2 prints attributes by `NamePriority` then alphabetically, so no other order is printable. Where the goldens below show the opposite order, swap those two lines when creating the files.
 
 **Files:**
 - Create: `dotnet/gazelle/testdata/BUILD.bazel`
@@ -3552,7 +3557,7 @@ Fixture conventions (same as rules_jvm): a directory is a test case when it cont
 - Create: `dotnet/gazelle/testdata/binary/{MODULE.bazel,BUILD.in,BUILD.out}`
 - Create: `dotnet/gazelle/testdata/binary/src/Hello/{Program.cs,BUILD.out}`
 
-- [ ] **Step 1: Create the harness**
+- [x] **Step 1: Create the harness**
 
 Create `dotnet/gazelle/testdata/BUILD.bazel`:
 
@@ -3589,7 +3594,7 @@ TEST_CASE_DIRS = sorted({
 ]
 ```
 
-- [ ] **Step 2: Create the `lib` fixture (library only)**
+- [x] **Step 2: Create the `lib` fixture (library only)**
 
 Create an empty file `dotnet/gazelle/testdata/lib/MODULE.bazel` (0 bytes — it only marks the directory as a test case).
 
@@ -3630,7 +3635,7 @@ csharp_library(
 )
 ```
 
-- [ ] **Step 3: Create the `binary` fixture (entry point only)**
+- [x] **Step 3: Create the `binary` fixture (entry point only)**
 
 Create an empty file `dotnet/gazelle/testdata/binary/MODULE.bazel`.
 
@@ -3664,7 +3669,7 @@ csharp_binary(
 
 Note: `using System;` resolves to nothing (base class library) and top-level statements make this a binary; there is no library because the entry-point file is the only source.
 
-- [ ] **Step 4: Run the fixture tests**
+- [x] **Step 4: Run the fixture tests**
 
 Run (env exports assumed):
 
@@ -3676,7 +3681,7 @@ Expected: both targets `PASSED`.
 
 If a test fails, the failure output prints a diff between the actual generated BUILD.bazel and BUILD.out, plus a command line to update fixtures. Do not blindly regenerate: an unexpected diff means the generator deviates from this plan — fix the generator, not the fixture.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add dotnet/gazelle/testdata
