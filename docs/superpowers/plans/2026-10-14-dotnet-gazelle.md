@@ -4837,11 +4837,13 @@ git commit -m "Add gazelle_net10.0 e2e module for the C# Gazelle extension"
 
 ### Task 16: Final validation
 
+> **Outcome (all steps executed):** Steps 1–3 and 5 pass. Step 4 (`bazel build //...`) surfaced one plan gap, fixed post-review in commit `2bac84a` (the `defs` bzl_library in `dotnet/BUILD.bazel` lacked the two new rule deps — never listed in this plan's File structure). Two remaining `//...` failures are pre-existing environmental issues unrelated to this branch: `//dotnet/private/tests/dotnet_tool:csharpier_output` (sandbox HOME unreadable; its dependent `diff_test_main` must be excluded with it) and a flaky Roslyn generator load in `//dotnet/private/tools/nuget_pack:nuget_pack` (passes on retry). Commit-count reconciliation: 20 code commits + 18 plan-status/planning commits.
+
 Full-tree verification that everything works together and nothing regressed.
 
 **Files:** none (verification only).
 
-- [ ] **Step 1: Verify root gazelle run is idempotent**
+- [x] **Step 1: Verify root gazelle run is idempotent**
 
 Run (env exports assumed):
 
@@ -4853,7 +4855,7 @@ git status --porcelain
 
 Expected: after the drift revert, `git status --porcelain` is empty — all feature files are committed and gazelle regenerates them byte-identically.
 
-- [ ] **Step 2: Run all Go tests**
+- [x] **Step 2: Run all Go tests**
 
 ```bash
 go test ./dotnet/gazelle/...
@@ -4861,7 +4863,7 @@ go test ./dotnet/gazelle/...
 
 Expected: `ok` for all four packages (gazelle, dotnetconfig, nuget, parser).
 
-- [ ] **Step 3: Run all Bazel tests for the feature**
+- [x] **Step 3: Run all Bazel tests for the feature**
 
 ```bash
 bazel test //dotnet/gazelle/... //dotnet/private/tests/xunit_test/... //dotnet/private/tests/mstest_test/...
@@ -4869,7 +4871,7 @@ bazel test //dotnet/gazelle/... //dotnet/private/tests/xunit_test/... //dotnet/p
 
 Expected: all targets pass — 4 Go test targets, 10 `gazelle_generation_test` targets, and the 2 rule smoke tests.
 
-- [ ] **Step 4: Verify the whole repo still builds**
+- [x] **Step 4: Verify the whole repo still builds**
 
 ```bash
 bazel build //...
@@ -4877,7 +4879,7 @@ bazel build //...
 
 Expected: exit code 0. This compiles the Go extension via rules_go, builds every bzl_library (including the two new ones) and all existing rule tests.
 
-- [ ] **Step 5: Review the final diff**
+- [x] **Step 5: Review the final diff**
 
 ```bash
 git log --oneline -17
