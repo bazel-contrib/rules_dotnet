@@ -3911,7 +3911,7 @@ Five cases covering: NuGet resolution, workspace-cross-package resolution, `dotn
 - Create: `dotnet/gazelle/testdata/test_framework_forced/**`
 - Create: `dotnet/gazelle/testdata/generate_binary_disabled/**`
 
-- [ ] **Step 1: Create the `nuget_dep` fixture**
+- [x] **Step 1: Create the `nuget_dep` fixture**
 
 Create empty `dotnet/gazelle/testdata/nuget_dep/MODULE.bazel`. Create `BUILD.in` and `BUILD.out` there, both:
 
@@ -3965,7 +3965,7 @@ csharp_library(
 )
 ```
 
-- [ ] **Step 2: Create the `workspace_dep` fixture**
+- [x] **Step 2: Create the `workspace_dep` fixture**
 
 Create empty `dotnet/gazelle/testdata/workspace_dep/MODULE.bazel`. Create `BUILD.in` and `BUILD.out` there, both:
 
@@ -4031,7 +4031,7 @@ csharp_binary(
 
 The binary's `using Calculator;` resolves through the workspace index to the sibling library in another package; the label stays absolute because the packages differ.
 
-- [ ] **Step 3: Create the `resolve_override` fixture**
+- [x] **Step 3: Create the `resolve_override` fixture**
 
 Create empty `dotnet/gazelle/testdata/resolve_override/MODULE.bazel`. Create `BUILD.in` and `BUILD.out` there, both:
 
@@ -4068,7 +4068,7 @@ csharp_library(
 )
 ```
 
-- [ ] **Step 4: Create the `test_framework_forced` fixture**
+- [x] **Step 4: Create the `test_framework_forced` fixture**
 
 Create empty `dotnet/gazelle/testdata/test_framework_forced/MODULE.bazel`. Create `BUILD.in` and `BUILD.out` there, both:
 
@@ -4130,7 +4130,7 @@ csharp_nunit_test(
 )
 ```
 
-- [ ] **Step 5: Create the `generate_binary_disabled` fixture**
+- [x] **Step 5: Create the `generate_binary_disabled` fixture**
 
 Create empty `dotnet/gazelle/testdata/generate_binary_disabled/MODULE.bazel`. Create `BUILD.in` and `BUILD.out` there, both:
 
@@ -4171,7 +4171,7 @@ csharp_library(
 
 With binary generation disabled the entry-point file becomes a normal library source.
 
-- [ ] **Step 6: Run all fixture tests**
+- [x] **Step 6: Run all fixture tests**
 
 ```bash
 bazel test //dotnet/gazelle/testdata/...
@@ -4179,7 +4179,7 @@ bazel test //dotnet/gazelle/testdata/...
 
 Expected: all 10 test targets pass (`binary`, `generate_binary_disabled`, `lib`, `mstest_tests`, `nuget_dep`, `nunit_tests`, `resolve_override`, `test_framework_forced`, `workspace_dep`, `xunit_tests`).
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add dotnet/gazelle/testdata
