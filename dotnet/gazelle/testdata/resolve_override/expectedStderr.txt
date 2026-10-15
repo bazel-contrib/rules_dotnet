@@ -1,0 +1,1 @@
+gazelle: no packages.lock.json at %WORKSPACEPATH%/packages.lock.json; NuGet resolution is disabled

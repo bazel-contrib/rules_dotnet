@@ -1,0 +1,2 @@
+# gazelle:dotnet_target_frameworks net10.0
+# gazelle:dotnet_resolve Acme.Widget @acme//widget
