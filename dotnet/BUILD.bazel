@@ -44,8 +44,10 @@ bzl_library(
         "//dotnet/private/rules/common:embed_sources",
         "//dotnet/private/rules/csharp:binary",
         "//dotnet/private/rules/csharp:library",
+        "//dotnet/private/rules/csharp:mstest_test",
         "//dotnet/private/rules/csharp:nunit_test",
         "//dotnet/private/rules/csharp:test",
+        "//dotnet/private/rules/csharp:xunit_test",
         "//dotnet/private/rules/fsharp:binary",
         "//dotnet/private/rules/fsharp:library",
         "//dotnet/private/rules/fsharp:nunit_test",
@@ -100,6 +102,13 @@ bzl_library(
 )
 
 exports_files(["defs.bzl"])
+
+bzl_library(
+    name = "internal_dev_deps",
+    srcs = ["internal_dev_deps.bzl"],
+    visibility = ["//visibility:public"],
+    deps = ["@bazel_ci_rules//:rbe_repo"],
+)
 
 bzl_library(
     name = "toolchain",
