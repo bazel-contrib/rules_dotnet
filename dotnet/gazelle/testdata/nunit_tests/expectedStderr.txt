@@ -1,0 +1,2 @@
+gazelle: no packages.lock.json at %WORKSPACEPATH%/packages.lock.json; NuGet resolution is disabled
+gazelle: warning: unresolved C# import "NUnit.Framework" for //src/Calculator:calculator_nunit_test

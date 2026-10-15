@@ -1,0 +1,19 @@
+load("@rules_dotnet//dotnet:defs.bzl", "csharp_library", "csharp_xunit_test")
+
+csharp_library(
+    name = "calculator",
+    srcs = ["Calculator.cs"],
+    internals_visible_to = ["calculator_xunit_test"],
+    project_sdk = "default",
+    target_frameworks = ["net10.0"],
+    visibility = ["//visibility:public"],
+)
+
+csharp_xunit_test(
+    name = "calculator_xunit_test",
+    srcs = ["CalculatorTests.cs"],
+    project_sdk = "default",
+    target_frameworks = ["net10.0"],
+    visibility = ["//visibility:public"],
+    deps = [":calculator"],
+)
