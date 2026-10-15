@@ -3698,7 +3698,7 @@ One fixture per test framework: a library with a sibling test file. Each verifie
 - Create: `dotnet/gazelle/testdata/xunit_tests/...` (same layout)
 - Create: `dotnet/gazelle/testdata/mstest_tests/...` (same layout)
 
-- [ ] **Step 1: Create the `nunit_tests` fixture**
+- [x] **Step 1: Create the `nunit_tests` fixture**
 
 Create empty `dotnet/gazelle/testdata/nunit_tests/MODULE.bazel`. Create `BUILD.in` and `BUILD.out` in the same directory, both:
 
@@ -3762,7 +3762,7 @@ csharp_nunit_test(
 
 The `using NUnit.Framework;` import does not resolve (no packages.lock.json in this fixture) — it produces a warning, not a dep; the `csharp_nunit_test` macro injects the real NUnit deps.
 
-- [ ] **Step 2: Create the `xunit_tests` fixture**
+- [x] **Step 2: Create the `xunit_tests` fixture**
 
 Create empty `dotnet/gazelle/testdata/xunit_tests/MODULE.bazel`. Create `BUILD.in` and `BUILD.out` there, both:
 
@@ -3823,7 +3823,7 @@ csharp_xunit_test(
 )
 ```
 
-- [ ] **Step 3: Create the `mstest_tests` fixture**
+- [x] **Step 3: Create the `mstest_tests` fixture**
 
 Create empty `dotnet/gazelle/testdata/mstest_tests/MODULE.bazel`. Create `BUILD.in` and `BUILD.out` there, both:
 
@@ -3885,7 +3885,7 @@ csharp_mstest_test(
 )
 ```
 
-- [ ] **Step 4: Run the fixture tests**
+- [x] **Step 4: Run the fixture tests**
 
 ```bash
 bazel test //dotnet/gazelle/testdata:nunit_tests //dotnet/gazelle/testdata:xunit_tests //dotnet/gazelle/testdata:mstest_tests
@@ -3893,7 +3893,7 @@ bazel test //dotnet/gazelle/testdata:nunit_tests //dotnet/gazelle/testdata:xunit
 
 Expected: all three `PASSED`.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add dotnet/gazelle/testdata
