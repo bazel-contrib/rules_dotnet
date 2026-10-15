@@ -4568,7 +4568,7 @@ A standalone Bazel module (same shape as `e2e/net10.0_packages_lock`) with `loca
 - Create: `e2e/gazelle_net10.0/tests/CalculatorXunitTests/{BUILD.bazel,CalculatorTests.cs}`
 - Modify: `.bazelci/presubmit.yml`
 
-- [ ] **Step 1: Create the module scaffolding**
+- [x] **Step 1: Create the module scaffolding**
 
 Copy `.bazelrc`, `.bazelversion` and `internal_dev_deps.bzl` from `e2e/net10.0_packages_lock` verbatim:
 
@@ -4674,7 +4674,7 @@ gazelle(
 )
 ```
 
-- [ ] **Step 2: Create the sources**
+- [x] **Step 2: Create the sources**
 
 Create `e2e/gazelle_net10.0/src/Calculator/Calculator.cs`:
 
@@ -4736,7 +4736,7 @@ public sealed class ArithmeticXunitTests
 }
 ```
 
-- [ ] **Step 3: Create the (generated) BUILD files**
+- [x] **Step 3: Create the (generated) BUILD files**
 
 Create `e2e/gazelle_net10.0/src/Calculator/BUILD.bazel`:
 
@@ -4793,7 +4793,7 @@ csharp_xunit_test(
 )
 ```
 
-- [ ] **Step 4: Run gazelle and verify idempotency**
+- [x] **Step 4: Run gazelle and verify idempotency**
 
 Run from `e2e/gazelle_net10.0` (env exports assumed; run `export JAVA_HOME="$(bazel info java-home 2>/dev/null)"` again in this directory):
 
@@ -4805,7 +4805,7 @@ git status --porcelain .
 
 Expected: exit code 0 for the run, and **empty** `git status` output — no modifications to the files created in Steps 1–3, proving the committed BUILD files match the generator output exactly. The same Go-toolchain troubleshooting note as Task 14 Step 5 applies here.
 
-- [ ] **Step 5: Build and test the module**
+- [x] **Step 5: Build and test the module**
 
 ```bash
 bazel build //...
@@ -4814,7 +4814,7 @@ bazel test //...
 
 Expected: build succeeds; both test targets pass (`//src/Calculator:calculator_nunit_test` and `//tests/CalculatorXunitTests:calculatorxunittests_xunit_test`).
 
-- [ ] **Step 6: Add the module to CI**
+- [x] **Step 6: Add the module to CI**
 
 Edit `.bazelci/presubmit.yml`. Old:
 
@@ -4828,7 +4828,7 @@ New:
   e2e_working_directory: ["e2e/net8.0", "e2e/net9.0", "e2e/net10.0", "e2e/web_sdk", "e2e/gazelle_net10.0"]
 ```
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add e2e/gazelle_net10.0 .bazelci/presubmit.yml
