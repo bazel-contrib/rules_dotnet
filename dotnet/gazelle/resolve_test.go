@@ -132,3 +132,25 @@ func TestResolveSkipsSelfImport(t *testing.T) {
 		t.Errorf("deps = %v, want empty", got)
 	}
 }
+
+func TestResolveSamePackageWithRepoName(t *testing.T) {
+	l, c, _ := setupLang(t, "# gazelle:dotnet_target_frameworks net10.0\n", "src", "src/calculator")
+	// Simulate a real workspace: RuleIndex.AddRule stamps every indexed
+	// label with c.RepoName, which gazelle's test harness leaves empty.
+	c.RepoName = "rules_dotnet_examples"
+
+	ix := resolve.NewRuleIndex(func(r *rule.Rule, pkgRel string) resolve.Resolver { return l.Resolver })
+	indexLibrary(t, l, c, ix, "src/calculator", "calculator", "Calculator")
+	ix.Finish()
+
+	r := rule.NewRule("csharp_nunit_test", "calculator_nunit_test")
+	r.SetAttr("deps", []string{":calculator"})
+	input := resolveInput{imports: []string{"Calculator"}, own: []string{"Calculator.Tests"}}
+	l.Resolver.Resolve(c, ix, nil, r, input, label.New("", "src/calculator", "calculator_nunit_test"))
+
+	got := r.AttrStrings("deps")
+	want := []string{":calculator"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("deps = %v, want %v", got, want)
+	}
+}

@@ -131,11 +131,16 @@ func (r *Resolver) resolveNamespace(c *config.Config, ix *resolve.RuleIndex, cfg
 			continue
 		}
 		l := m.Label
-		switch {
-		case l.Repo == "" && l.Pkg == from.Pkg:
-			l = label.Label{Name: l.Name, Relative: true}
-		case l.Repo == c.RepoName:
+		if l.Repo == c.RepoName {
+			// FindRulesByImportWithConfig stamps labels with the
+			// workspace's canonical repo name. Drop it before the
+			// same-package check so an in-workspace label relativizes
+			// to ":name" and deduplicates against the generate-time
+			// sibling dep instead of appearing twice in deps.
 			l.Repo = ""
+		}
+		if l.Repo == "" && l.Pkg == from.Pkg {
+			l = label.Label{Name: l.Name, Relative: true}
 		}
 		return l.String()
 	}
