@@ -3003,13 +3003,15 @@ git commit -m "Add Gazelle language wiring for C# (configure and resolve)"
 
 ### Task 10: Rule generation (TDD)
 
+> **Known limitation (user-approved, after review of commit `7dea2e6`):** a directory whose basename equals an entry-point file's basename (e.g. `hello/hello.cs` with other production files) generates a `csharp_library` and a `csharp_binary` with the same name; Bazel fails loudly at load time. Multi-framework-per-directory grouping also lacks a dedicated unit test (covered indirectly by integration fixtures). Both are accepted for v1.
+
 Replace the `GenerateRules` stub with the real generator: one `csharp_library` per directory, framework-specific test rules with sibling deps and `internals_visible_to`, and `csharp_binary` for entry-point files.
 
 **Files:**
 - Modify: `dotnet/gazelle/generate.go`
 - Test: `dotnet/gazelle/generate_test.go`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Create `dotnet/gazelle/generate_test.go`:
 
@@ -3270,7 +3272,7 @@ func TestGenerateEmptyDirDeletesRules(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 ```bash
 go test ./dotnet/gazelle/ -run TestGenerate
@@ -3278,7 +3280,7 @@ go test ./dotnet/gazelle/ -run TestGenerate
 
 Expected: FAIL, e.g. `TestGenerateLibrary: GenerateRules() = 0 rules, 0 imports; want 1, 1` (the stub generates nothing).
 
-- [ ] **Step 3: Implement GenerateRules**
+- [x] **Step 3: Implement GenerateRules**
 
 Replace the entire contents of `dotnet/gazelle/generate.go` with:
 
@@ -3507,7 +3509,7 @@ func namesOf(files []*parser.File) []string {
 }
 ```
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 ```bash
 go test ./dotnet/gazelle/...
@@ -3515,7 +3517,7 @@ go test ./dotnet/gazelle/...
 
 Expected: all packages `ok`, `PASS`.
 
-- [ ] **Step 5: Regenerate BUILD files and test under Bazel**
+- [x] **Step 5: Regenerate BUILD files and test under Bazel**
 
 Run (env exports assumed):
 
@@ -3530,7 +3532,7 @@ Expected: gazelle updates `dotnet/gazelle/BUILD.bazel` (generate_test.go joins t
 git diff --name-only -- dotnet/BUILD.bazel dotnet/private | xargs -r git checkout --
 ```
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add dotnet/gazelle
