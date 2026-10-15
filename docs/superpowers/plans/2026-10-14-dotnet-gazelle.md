@@ -4198,11 +4198,11 @@ Fix: in `resolveNamespace`, clear the repo of a label that belongs to the worksp
 - Modify: `dotnet/gazelle/resolve.go` (`resolveNamespace`, the label-simplification switch)
 - Test: `dotnet/gazelle/resolve_test.go` (append one failing test)
 
-- [ ] **Step 1: Read the current code and test helpers**
+- [x] **Step 1: Read the current code and test helpers**
 
 Read `dotnet/gazelle/resolve.go` — the target is `resolveNamespace` near the end of the file; note the `switch` that handles `m.Label` after `FindRulesByImportWithConfig`. Read `dotnet/gazelle/resolve_test.go` — `setupLang` (builds a `config.Config` with empty `RepoName`), `indexLibrary` (indexes a `csharp_library` into a `resolve.RuleIndex`), and `TestResolveKeepsExistingDepsAndSimplifiesSamePackage` (the empty-repo version of the scenario this task reproduces with a non-empty repo name) show the fixture pattern to mirror.
 
-- [ ] **Step 2: Write the failing test**
+- [x] **Step 2: Write the failing test**
 
 Append to the end of `dotnet/gazelle/resolve_test.go`:
 
@@ -4232,7 +4232,7 @@ func TestResolveSamePackageWithRepoName(t *testing.T) {
 
 No new imports are needed — `reflect`, `resolve`, `label`, and `rule` are already imported in the file.
 
-- [ ] **Step 3: Run the test to verify it fails**
+- [x] **Step 3: Run the test to verify it fails**
 
 Run (env exports from Environment notes assumed, plus `CGO_ENABLED=0`):
 
@@ -4243,7 +4243,7 @@ go test ./dotnet/gazelle/ -run TestResolveSamePackageWithRepoName -v
 
 Expected: FAIL with `deps = [//src/calculator :calculator], want [:calculator]` — both spellings of the same label appear in `deps` (`//` sorts before `:`), which is exactly the union that made Bazel fail in Task 14.
 
-- [ ] **Step 4: Fix `resolveNamespace`**
+- [x] **Step 4: Fix `resolveNamespace`**
 
 Edit `dotnet/gazelle/resolve.go`. Old:
 
@@ -4278,7 +4278,7 @@ New:
 
 Behavior notes: when `c.RepoName` is `""` (unit harness, and the Task 12/13 fixtures) the first `if` is a no-op — the empty-repo path is byte-for-byte unchanged. When the label belongs to another repo (e.g. an external repo in the index), `l.Repo` stays set and neither branch relativizes it, same as before. When the label is in the workspace's own repo, `label.String()` on the repo-less label prints the canonical `//pkg` or `//pkg:pkg` form (it shortens `//pkg:pkg` to `//pkg` when the target name equals the package's last segment).
 
-- [ ] **Step 5: Run all Go tests**
+- [x] **Step 5: Run all Go tests**
 
 ```bash
 go test ./dotnet/gazelle/...
@@ -4286,7 +4286,7 @@ go test ./dotnet/gazelle/...
 
 Expected: all four packages report `ok` — the new `TestResolveSamePackageWithRepoName` passes, and every pre-existing test (`TestResolveNamespaces`, `TestResolveOverride`, `TestResolveKeepsExistingDepsAndSimplifiesSamePackage`, `TestResolveSkipsSelfImport`, and all Task 10 generate tests) stays green, proving the empty-repo behavior of Tasks 9/12/13 is unchanged.
 
-- [ ] **Step 6: Run the tests under Bazel, including the Task 12/13 fixtures**
+- [x] **Step 6: Run the tests under Bazel, including the Task 12/13 fixtures**
 
 ```bash
 export JAVA_HOME="$(bazel info java-home 2>/dev/null)"
@@ -4295,7 +4295,7 @@ bazel test //dotnet/gazelle/...
 
 Expected: all targets pass — the 4 Go unit-test targets and all 10 `gazelle_generation_test` fixtures from Tasks 11–13 (`binary`, `generate_binary_disabled`, `lib`, `mstest_tests`, `nuget_dep`, `nunit_tests`, `resolve_override`, `test_framework_forced`, `workspace_dep`, `xunit_tests`). The fixtures run gazelle with an empty repo name, so they re-verify the unchanged empty-repo path end to end.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add dotnet/gazelle/resolve.go dotnet/gazelle/resolve_test.go
@@ -4324,7 +4324,7 @@ The BUILD files are written by hand below; the idempotency check in Step 5 prove
 - Create: `examples/gazelle_csharp/src/CalculatorApp/{BUILD.bazel,Program.cs}`
 - Create: `examples/gazelle_csharp/tests/CalculatorXunitTests/{BUILD.bazel,CalculatorTests.cs}`
 
-- [ ] **Step 1: Wire gazelle and packages_lock into examples/MODULE.bazel**
+- [x] **Step 1: Wire gazelle and packages_lock into examples/MODULE.bazel**
 
 Edit `examples/MODULE.bazel`. Old:
 
@@ -4358,7 +4358,7 @@ packages_lock.parse(lock = "//gazelle_csharp:packages.lock.json")
 use_repo(packages_lock, "nuget.net10.0")
 ```
 
-- [ ] **Step 2: Create the example root files**
+- [x] **Step 2: Create the example root files**
 
 Create `examples/gazelle_csharp/BUILD.bazel`:
 
@@ -4406,7 +4406,7 @@ Create `examples/gazelle_csharp/packages.lock.json`:
 }
 ```
 
-- [ ] **Step 3: Create the sources**
+- [x] **Step 3: Create the sources**
 
 Create `examples/gazelle_csharp/src/Calculator/Calculator.cs`:
 
@@ -4468,7 +4468,7 @@ public sealed class ArithmeticXunitTests
 }
 ```
 
-- [ ] **Step 4: Create the (generated) BUILD files**
+- [x] **Step 4: Create the (generated) BUILD files**
 
 Create `examples/gazelle_csharp/src/Calculator/BUILD.bazel`:
 
@@ -4527,7 +4527,7 @@ csharp_xunit_test(
 
 Note: the `using Xunit;`/`using NUnit.Framework;` imports intentionally do not resolve via NuGet (the frameworks come from the rule macros), so gazelle logs warnings for them during a run but generates no deps.
 
-- [ ] **Step 5: Run gazelle and verify idempotency**
+- [x] **Step 5: Run gazelle and verify idempotency**
 
 Run from the `examples/` directory (env exports assumed):
 
@@ -4541,7 +4541,7 @@ Expected: exit code 0 for the run, and **empty** `git status` output — the com
 
 Troubleshooting: if the build of `//gazelle_csharp:gazelle_bin` fails with a missing Go SDK/toolchain, add `bazel_dep(name = "rules_go", version = "0.59.0")` plus the `go_sdk` extension stanza (as in the root MODULE.bazel) to `examples/MODULE.bazel` — transitive toolchain registration from rules_dotnet is expected to make this unnecessary, so treat needing it as a defect to note in the commit message.
 
-- [ ] **Step 6: Build and test the example**
+- [x] **Step 6: Build and test the example**
 
 ```bash
 bazel build //gazelle_csharp/...
@@ -4550,7 +4550,7 @@ bazel test //gazelle_csharp/...
 
 Expected: build succeeds; both test targets pass (`//gazelle_csharp/src/Calculator:calculator_nunit_test` and `//gazelle_csharp/tests/CalculatorXunitTests:calculatorxunittests_xunit_test`).
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add examples/MODULE.bazel examples/gazelle_csharp
