@@ -76,6 +76,38 @@ public static class Program
 }
 `
 
+const programWithMethodSrc = `using System;
+using Calculator;
+
+namespace App;
+
+public static class Program
+{
+    public static int Run() => Arithmetic.Add(2, 2);
+
+    public static void Main(string[] args)
+    {
+        Console.WriteLine(Run());
+    }
+}
+`
+
+const appTestSrc = `using App;
+using NUnit.Framework;
+
+namespace App.Tests;
+
+[TestFixture]
+public sealed class ProgramTests
+{
+    [Test]
+    public void RunWorks()
+    {
+        Assert.AreEqual(4, Program.Run());
+    }
+}
+`
+
 func TestGenerateLibrary(t *testing.T) {
 	l, c, dir := setupLang(t, net10Directive, "src", "src/calculator")
 	writeFile(t, filepath.Join(dir, "src", "calculator"), "Calculator.cs", calculatorSrc)
@@ -250,5 +282,37 @@ func TestGenerateEmptyDirDeletesRules(t *testing.T) {
 	}
 	if res.Empty[0].Kind() != "csharp_library" || res.Empty[0].Name() != "gone" {
 		t.Errorf("Empty[0] = %s %s, want csharp_library gone", res.Empty[0].Kind(), res.Empty[0].Name())
+	}
+}
+
+func TestGenerateTestInBinaryOnlyDirectory(t *testing.T) {
+	l, c, dir := setupLang(t, net10Directive, "src", "src/app")
+	writeFile(t, filepath.Join(dir, "src", "app"), "Program.cs", programWithMethodSrc)
+	writeFile(t, filepath.Join(dir, "src", "app"), "ProgramTests.cs", appTestSrc)
+
+	res := generate(t, l, c, dir, "src/app", "Program.cs", "ProgramTests.cs")
+	if len(res.Gen) != 2 || len(res.Imports) != 2 {
+		t.Fatalf("GenerateRules() = %d rules, %d imports; want 2, 2", len(res.Gen), len(res.Imports))
+	}
+	// Gen order: test rules before binaries (see GenerateRules).
+	test, bin := res.Gen[0], res.Gen[1]
+	if test.Kind() != "csharp_nunit_test" || test.Name() != "app_nunit_test" {
+		t.Errorf("Gen[0] = %s %s, want csharp_nunit_test app_nunit_test", test.Kind(), test.Name())
+	}
+	if got := test.AttrStrings("deps"); !reflect.DeepEqual(got, []string{":program"}) {
+		t.Errorf("test deps = %v, want [:program] (sibling dep on the entry-point binary)", got)
+	}
+	if bin.Kind() != "csharp_binary" || bin.Name() != "program" {
+		t.Errorf("Gen[1] = %s %s, want csharp_binary program", bin.Kind(), bin.Name())
+	}
+	if got, _ := bin.PrivateAttr(namespacesKey).([]string); !reflect.DeepEqual(got, []string{"App"}) {
+		t.Errorf("binary private namespaces = %v, want [App]", got)
+	}
+	if bin.Attr("internals_visible_to") != nil {
+		t.Error("binary internals_visible_to is set, want unset (the tested method is public)")
+	}
+	input := res.Imports[0].(resolveInput)
+	if !reflect.DeepEqual(input.imports, []string{"App", "NUnit.Framework"}) {
+		t.Errorf("test imports = %v, want [App NUnit.Framework]", input.imports)
 	}
 }

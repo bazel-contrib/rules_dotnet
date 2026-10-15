@@ -154,3 +154,49 @@ func TestResolveSamePackageWithRepoName(t *testing.T) {
 		t.Errorf("deps = %v, want %v", got, want)
 	}
 }
+
+func TestImportsIndexesBinaryNamespaces(t *testing.T) {
+	l := NewLanguage().(*csharpLang)
+	res := l.Resolver
+	f := rule.EmptyFile("src/app/BUILD.bazel", "src/app")
+
+	bin := rule.NewRule("csharp_binary", "program")
+	bin.SetPrivateAttr(namespacesKey, []string{"App"})
+	specs := res.Imports(config.New(), bin, f)
+	if len(specs) != 1 || specs[0].Lang != "csharp" || specs[0].Imp != "App" {
+		t.Errorf("Imports(csharp_binary) = %v, want [{csharp App}]", specs)
+	}
+
+	// A binary without the private attr (e.g. hand-written) is not indexed.
+	if got := res.Imports(config.New(), rule.NewRule("csharp_binary", "tool"), f); got != nil {
+		t.Errorf("Imports(csharp_binary without namespaces) = %v, want nil", got)
+	}
+
+	// Test rules are never indexed.
+	test := rule.NewRule("csharp_nunit_test", "app_nunit_test")
+	test.SetPrivateAttr(namespacesKey, []string{"App.Tests"})
+	if got := res.Imports(config.New(), test, f); got != nil {
+		t.Errorf("Imports(csharp_nunit_test) = %v, want nil", got)
+	}
+}
+
+func TestResolveTestAgainstSiblingBinary(t *testing.T) {
+	l, c, _ := setupLang(t, net10Directive, "src", "src/app")
+
+	ix := resolve.NewRuleIndex(func(r *rule.Rule, pkgRel string) resolve.Resolver { return l.Resolver })
+	f := rule.EmptyFile("src/app/BUILD.bazel", "src/app")
+	bin := rule.NewRule("csharp_binary", "program")
+	bin.SetPrivateAttr(namespacesKey, []string{"App"})
+	ix.AddRule(c, bin, f)
+	ix.Finish()
+
+	r := rule.NewRule("csharp_nunit_test", "app_nunit_test")
+	input := resolveInput{imports: []string{"App"}, own: []string{"App.Tests"}}
+	l.Resolver.Resolve(c, ix, nil, r, input, label.New("", "src/app", "app_nunit_test"))
+
+	got := r.AttrStrings("deps")
+	want := []string{":program"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("deps = %v, want %v (same-package binary label, relativized)", got, want)
+	}
+}

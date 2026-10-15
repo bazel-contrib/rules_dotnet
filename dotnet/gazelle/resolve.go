@@ -36,14 +36,18 @@ func NewResolver(lang *csharpLang) *Resolver {
 // Name implements resolve.Resolver.
 func (*Resolver) Name() string { return languageName }
 
-// Imports implements resolve.Resolver. Every generated csharp_library is
-// indexed by the namespaces its sources declare; other rules are not
-// indexed.
+// Imports implements resolve.Resolver. Every generated csharp_library and
+// csharp_binary is indexed by the namespaces its sources declare; other
+// rules — and binaries without the private attr, e.g. hand-written ones —
+// are not indexed.
 func (r *Resolver) Imports(c *config.Config, ru *rule.Rule, f *rule.File) []resolve.ImportSpec {
-	if ru.Kind() != "csharp_library" {
+	if ru.Kind() != "csharp_library" && ru.Kind() != "csharp_binary" {
 		return nil
 	}
 	namespaces, _ := ru.PrivateAttr(namespacesKey).([]string)
+	if len(namespaces) == 0 {
+		return nil
+	}
 	specs := make([]resolve.ImportSpec, 0, len(namespaces))
 	for _, ns := range namespaces {
 		specs = append(specs, resolve.ImportSpec{Lang: languageName, Imp: ns})

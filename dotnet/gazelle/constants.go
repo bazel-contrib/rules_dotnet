@@ -5,6 +5,6 @@ package gazelle
 const languageName = "csharp"
 
 // namespacesKey is the private attribute under which generated csharp_library
-// rules carry the namespaces their sources declare, so that Imports can
-// index them.
+// and csharp_binary rules carry the namespaces their sources declare, so that
+// Imports can index them.
 const namespacesKey = "csharp_namespaces"

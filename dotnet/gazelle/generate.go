@@ -135,8 +135,16 @@ func (l *csharpLang) GenerateRules(args language.GenerateArgs) language.Generate
 		r.SetAttr("target_frameworks", cfg.TargetFrameworks())
 		r.SetAttr("project_sdk", cfg.ProjectSdk())
 		r.SetAttr("visibility", cfg.Visibility())
-		if len(prodFiles) > 0 {
+		switch {
+		case len(prodFiles) > 0:
 			r.SetAttr("deps", []string{":" + libName})
+		case len(entryFiles) == 1:
+			// No library in this directory: the test targets the
+			// entry-point binary instead. With several entry-point files
+			// the sibling is ambiguous; resolution via using directives
+			// covers the dep then.
+			name := sanitizeName(strings.TrimSuffix(entryFiles[0].Name, ".cs"))
+			r.SetAttr("deps", []string{":" + name})
 		}
 		res.Gen = append(res.Gen, r)
 		res.Imports = append(res.Imports, resolveInput{
@@ -152,6 +160,10 @@ func (l *csharpLang) GenerateRules(args language.GenerateArgs) language.Generate
 		r.SetAttr("target_frameworks", cfg.TargetFrameworks())
 		r.SetAttr("project_sdk", cfg.ProjectSdk())
 		r.SetAttr("visibility", cfg.Visibility())
+		// Binaries advertise their namespaces like libraries do, so a
+		// test (or another package) can resolve a using directive to the
+		// binary target.
+		r.SetPrivateAttr(namespacesKey, namespacesOf([]*parser.File{f}))
 		res.Gen = append(res.Gen, r)
 		res.Imports = append(res.Imports, resolveInput{
 			imports: usingNamespaces([]*parser.File{f}),
