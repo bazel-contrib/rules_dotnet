@@ -5,3 +5,9 @@ bzl_library(
     srcs = ["input_hash.bzl"],
     visibility = ["//dotnet:__subpackages__"],
 )
+
+bzl_library(
+    name = "lock",
+    srcs = ["lock.bzl"],
+    visibility = ["//dotnet:__subpackages__"],
+)
