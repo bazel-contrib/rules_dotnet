@@ -1,6 +1,0 @@
-load(":extension_test.bzl", "extension_test_suite")
-load(":lock_test.bzl", "lock_test_suite")
-
-extension_test_suite(name = "extension_test")
-
-lock_test_suite(name = "lock_test")

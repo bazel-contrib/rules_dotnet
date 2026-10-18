@@ -101,21 +101,7 @@ bzl_library(
     deps = ["//dotnet/private/nuget_resolve:extension"],
 )
 
-bzl_library(
-    name = "packages_lock",
-    srcs = ["packages_lock.bzl"],
-    visibility = ["//visibility:public"],
-    deps = ["//dotnet/private/packages_lock:extension"],
-)
-
 exports_files(["defs.bzl"])
-
-bzl_library(
-    name = "internal_dev_deps",
-    srcs = ["internal_dev_deps.bzl"],
-    visibility = ["//visibility:public"],
-    deps = ["@bazel_ci_rules//:rbe_repo"],
-)
 
 bzl_library(
     name = "toolchain",
