@@ -540,7 +540,7 @@ De kern: graafresolutie met `RemoteDependencyWalker` uit `NuGet.DependencyResolv
 - Test: `tools/nuget_resolver/tests/FeedFixture.cs`
 - Test: `tools/nuget_resolver/tests/ResolverTests.cs`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Create `tools/nuget_resolver/tests/FeedFixture.cs`:
 
@@ -753,12 +753,12 @@ public sealed class ResolverTests
 }
 ```
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [x] **Step 2: Run the test to verify it fails**
 
 Run: `bazel test //tools/nuget_resolver/tests:nuget_resolver_test`
 Expected: FAIL — compile error: `The type or namespace name 'Resolver' could not be found`.
 
-- [ ] **Step 3: Write the implementation**
+- [x] **Step 3: Write the implementation**
 
 Create `tools/nuget_resolver/FeedDependencyProvider.cs`:
 
@@ -1205,14 +1205,14 @@ public static class Resolver
 }
 ```
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: `bazel test //tools/nuget_resolver/tests:nuget_resolver_test`
 Expected: PASS — alle negen ResolverTests plus de eerdere tests slagen; `//tools/nuget_resolver/tests:nuget_resolver_test PASSED`.
 
 Als de tests falen met `Unable to resolve` óók voor bestaande packages, levert de folder-feed geen `DependencyInfoResource`; de stack trace wijst dan naar `FeedDependencyProvider`. Los dat niet op door de tests af te zwakken — `Repository.Factory.GetCoreV3` op een folder levert wel degelijk dependency-info (dat is hoe restore met folder-sources werkt).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add tools/nuget_resolver/FeedDependencyProvider.cs tools/nuget_resolver/Resolver.cs tools/nuget_resolver/Netrc.cs tools/nuget_resolver/tests/FeedFixture.cs tools/nuget_resolver/tests/ResolverTests.cs
