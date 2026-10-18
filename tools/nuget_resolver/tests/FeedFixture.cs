@@ -24,6 +24,22 @@ public static class FeedFixture
         return dir;
     }
 
+    /// <summary>
+    /// Like <see cref="Create"/>, but writes each nupkg under a lowercased
+    /// file name, mimicking nuget.org's flat download layout.
+    /// </summary>
+    public static string CreateLowercase(params (string Id, string Version, (string Id, string Range)[] Dependencies)[] packages)
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "nuget-resolver-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        foreach (var (id, version, dependencies) in packages)
+        {
+            WriteNupkg(dir, id, version, dependencies, lowerFileName: true);
+        }
+
+        return dir;
+    }
+
     /// <summary>The SRI hash of the fixture nupkg's bytes, as the resolver must record it.</summary>
     public static string ExpectedSha512(string feedDir, string id, string version)
     {
@@ -31,7 +47,12 @@ public static class FeedFixture
         return "sha512-" + Convert.ToBase64String(SHA512.HashData(bytes));
     }
 
-    private static void WriteNupkg(string dir, string id, string version, (string Id, string Range)[] dependencies)
+    private static void WriteNupkg(
+        string dir,
+        string id,
+        string version,
+        (string Id, string Range)[] dependencies,
+        bool lowerFileName = false)
     {
         var nuspec = new StringBuilder();
         nuspec.Append("""
@@ -53,7 +74,8 @@ public static class FeedFixture
 
         nuspec.Append("\n  </metadata>\n</package>\n");
 
-        var path = Path.Combine(dir, $"{id}.{version}.nupkg");
+        var fileName = $"{id}.{version}.nupkg";
+        var path = Path.Combine(dir, lowerFileName ? fileName.ToLowerInvariant() : fileName);
         using var archive = ZipFile.Open(path, ZipArchiveMode.Create);
         WriteEntry(archive, "[Content_Types].xml", """
             <?xml version="1.0" encoding="utf-8"?>

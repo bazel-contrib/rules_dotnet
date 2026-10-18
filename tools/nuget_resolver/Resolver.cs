@@ -61,7 +61,7 @@ public static class Resolver
         List<FeedDependencyProvider> providers,
         CancellationToken cancellationToken)
     {
-        var cacheContext = new SourceCacheContext();
+        using var cacheContext = new SourceCacheContext();
         var walkContext = new RemoteWalkContext(
             cacheContext,
             PackageSourceMapping.GetPackageSourceMapping(NullSettings.Instance),
@@ -201,7 +201,7 @@ public static class Resolver
             {
                 var baseAddress = registrationBases[0].AbsoluteUri.TrimEnd('/') + "/";
                 var leafUrl = $"{baseAddress}{identity.Name.ToLowerInvariant()}/{version.ToLowerInvariant()}.json";
-                var leaf = await GetJsonAsync(leafUrl, cancellationToken);
+                using var leaf = await GetJsonAsync(leafUrl, cancellationToken);
                 if (leaf != null)
                 {
                     urls.Add(leaf.RootElement.GetProperty("packageContent").GetString()!);
@@ -224,11 +224,20 @@ public static class Resolver
         else
         {
             // A local folder feed. Flat (V2) layout: <dir>/<id>.<version>.nupkg.
+            // nuget.org's flat downloads are lowercased, so probe the original
+            // case first, then the lowercased flat name, then the hierarchical
+            // (V3) layout: <dir>/<id>/<version>/<id>.<version>.nupkg.
             var localPath = Path.GetFullPath(
                 Path.Combine(provider.Source.Source, $"{identity.Name}.{version}.nupkg"));
             if (!File.Exists(localPath))
             {
-                // Hierarchical (V3) layout: <dir>/<id>/<version>/<id>.<version>.nupkg.
+                localPath = Path.GetFullPath(Path.Combine(
+                    provider.Source.Source,
+                    $"{identity.Name.ToLowerInvariant()}.{version.ToLowerInvariant()}.nupkg"));
+            }
+
+            if (!File.Exists(localPath))
+            {
                 localPath = Path.GetFullPath(Path.Combine(
                     provider.Source.Source,
                     identity.Name.ToLowerInvariant(),
@@ -275,7 +284,8 @@ public static class Resolver
             using var http = new HttpClient(handler);
             return JsonDocument.Parse(await http.GetStringAsync(url, cancellationToken));
         }
-        catch (Exception e) when (e is HttpRequestException or JsonException or TaskCanceledException)
+        catch (Exception e) when (e is HttpRequestException || e is JsonException ||
+                                  (e is TaskCanceledException && !cancellationToken.IsCancellationRequested))
         {
             // Feeds without registration metadata (or a hiccup reading it)
             // fall back to the constructed URL and the bytes-only hash.
