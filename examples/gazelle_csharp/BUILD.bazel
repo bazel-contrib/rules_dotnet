@@ -14,7 +14,7 @@ gazelle_binary(
 gazelle(
     name = "gazelle",
     extra_args = [
-        "-dotnet_nuget_lock_file=gazelle_csharp/packages.lock.json",
+        "-dotnet_nuget_lock_file=gazelle_csharp/nuget_resolve.json",
         "gazelle_csharp",
     ],
     gazelle = "gazelle_bin",
