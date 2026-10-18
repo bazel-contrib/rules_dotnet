@@ -1957,7 +1957,7 @@ Twee hergebruik-ingrepen, beide gedekt door bestaande tests (gedrag mag niet ver
 - Modify: `dotnet/private/rules/nuget/nuget_archive.bzl`
 - Modify: `dotnet/private/rules/nuget/nuget_repo.bzl`
 
-- [ ] **Step 1: Modify nuget_archive.bzl**
+- [x] **Step 1: Modify nuget_archive.bzl**
 
 In `dotnet/private/rules/nuget/nuget_archive.bzl`, vervang `_nuget_archive_impl`. Old:
 
@@ -2073,7 +2073,7 @@ nuget_archive = repository_rule(
 )
 ```
 
-- [ ] **Step 2: Modify nuget_repo.bzl**
+- [x] **Step 2: Modify nuget_repo.bzl**
 
 In `dotnet/private/rules/nuget/nuget_repo.bzl`, parametiseer de templates. Old (`_PACKAGE_TEMPLATE`, `_ALIAS_TEMPLATE` en `_TOOLS_TEMPLATE`):
 
@@ -2384,12 +2384,12 @@ New:
         shared between them is only declared once.
 ```
 
-- [ ] **Step 3: Verify no behavior changed**
+- [x] **Step 3: Verify no behavior changed**
 
 Run: `bazel test //dotnet/private/tests/nuget_resolution/... //dotnet/private/tests/packages_lock/... //dotnet/private/tests/paket/...`
 Expected: PASS — alle bestaande tests groen.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add dotnet/private/rules/nuget/nuget_archive.bzl dotnet/private/rules/nuget/nuget_repo.bzl
