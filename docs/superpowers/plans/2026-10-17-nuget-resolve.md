@@ -4931,7 +4931,7 @@ Zelfde migratie als Task 18, maar deze module gebruikt de default lockbestandsna
 - Create: `e2e/gazelle_net10.0/nuget_resolve.json` (gegenereerd via de pin-flow)
 - Delete: `e2e/gazelle_net10.0/packages.lock.json`
 
-- [ ] **Step 1: Replace the packages_lock block (nog zonder lock_file)**
+- [x] **Step 1: Replace the packages_lock block (nog zonder lock_file)**
 
 In `e2e/gazelle_net10.0/MODULE.bazel`. Old:
 
@@ -4955,7 +4955,7 @@ nuget.resolve(
 use_repo(nuget, "nuget.net10.0")
 ```
 
-- [ ] **Step 2: Generate the lock file via the pin flow**
+- [x] **Step 2: Generate the lock file via the pin flow**
 
 Run (vanuit `e2e/gazelle_net10.0/`): `bazel run @nuget.net10.0//:pin`
 Expected: `Wrote nuget_resolve.json. ...` — het bestand staat direct op de juiste plek (de module-root is de default-bestemming). Controleer:
@@ -4972,7 +4972,7 @@ EOF
 
 Expected: `lock file OK`.
 
-- [ ] **Step 3: Pin the tag en verwijder packages.lock.json**
+- [x] **Step 3: Pin the tag en verwijder packages.lock.json**
 
 In `e2e/gazelle_net10.0/MODULE.bazel`. Old:
 
@@ -4997,7 +4997,7 @@ Verwijder het oude lockbestand:
 git rm e2e/gazelle_net10.0/packages.lock.json
 ```
 
-- [ ] **Step 4: Verify gazelle produces no diff and everything builds**
+- [x] **Step 4: Verify gazelle produces no diff and everything builds**
 
 Run (vanuit `e2e/gazelle_net10.0/`):
 
@@ -5007,7 +5007,7 @@ bazel run //:gazelle && git status --short . && bazel build //... && bazel test 
 
 Expected: gazelle draait zonder wijzigingen aan BUILD-bestanden; `git status` toont alleen de wijzigingen van deze task (`MODULE.bazel`, `MODULE.bazel.lock`, het nieuwe `nuget_resolve.json`, het verwijderde `packages.lock.json`); build en test slagen.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add e2e/gazelle_net10.0
