@@ -747,7 +747,12 @@ def fetch_package_into(ctx, id, version, urls, integrity, prefix):
     # (see the docstring above).
     all_files = [_sanitize_path(f) for f in all_files]
     if prefix:
-        all_files = [f[len(prefix):] for f in all_files if f.startswith(prefix)]
+        relative = []
+        for f in all_files:
+            if not f.startswith(prefix):
+                fail("extracted file %s is not under the expected prefix %s" % (f, prefix))
+            relative.append(f[len(prefix):])
+        all_files = relative
 
     return struct(nupkg = nupkg_name, files = all_files)
 
