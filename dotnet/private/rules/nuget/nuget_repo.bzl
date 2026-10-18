@@ -23,7 +23,7 @@ _PACKAGE_TEMPLATE = """\
 
 load("@rules_dotnet//dotnet/private/rules/nuget:package.bzl", "nuget_package")
 load(
-    "@{archive}//:package_info.bzl",
+    "{package_info}",
     "DEPENDENCY_GROUPS",
     "FRAMEWORK_LIST",
     "TARGETING_PACK_OVERRIDES",
@@ -36,7 +36,7 @@ package(default_visibility = ["//visibility:public"])
 nuget_package(
     version = "{version}",
     library_name = "{library_name}",
-    archive = "@{archive}//",
+    archive = "{archive}",
     packages = PACKAGES,
     sha512 = "{sha512}",
     dependency_groups = DEPENDENCY_GROUPS,
@@ -53,16 +53,16 @@ package(default_visibility = ["//visibility:public"])
 
 alias(name = "{name}", actual = "{package}")
 
-alias(name = "content_files", actual = "@{archive}//:content_files")
+alias(name = "content_files", actual = "{archive}:content_files")
 
-alias(name = "files", actual = "@{archive}//:files")
+alias(name = "files", actual = "{archive}:files")
 """
 
 _TOOLS_TEMPLATE = """\
 "GENERATED"
 
 load("@rules_dotnet//dotnet/private/rules/nuget:package.bzl", "nuget_package_tools")
-load("@{archive}//:package_info.bzl", "TOOLS")
+load("{package_info}", "TOOLS")
 
 package(default_visibility = ["//visibility:public"])
 
@@ -99,17 +99,41 @@ def nuget_archive_name(id, version):
     """
     return "{}.{}.v{}".format(_GLOBAL_NUGET_PREFIX, id.lower(), version.lower())
 
-def _nuget_repo_impl(ctx):
-    packages = [json.decode(package) for package in ctx.attr.packages]
+def _spoke_archive(id, version):
+    """The archive of a package version as its own `nuget_archive` repository."""
+    archive = "@{}//".format(nuget_archive_name(id, version))
+    return struct(archive = archive, package_info = archive + ":package_info.bzl")
 
-    for (path, content) in ctx.attr.extra_build_files.items():
+def write_hub_files(ctx, packages, archive_and_info, extra_build_files = {}, extra_root_build = ""):
+    """Writes the hub repository files for one dependency group.
+
+    Used by every hub-shaped repository rule: the classic `_nuget_repo` and
+    the pinned hub (archives as cross-repository `@<spoke>//` labels) and the
+    unpinned monolithic hub (archives extracted into the hub repository
+    itself, addressed as `//<id>/<version>`).
+
+    Args:
+      ctx: The repository context.
+      packages: Dicts with `id`, `version` and optionally `name` and `sha512`
+        keys. `name` is the label the package is addressed by and defaults to
+        its id.
+      archive_and_info: A function `(id, version) -> struct(archive,
+        package_info)`, where `archive` is the label prefix of the package's
+        archive (`"@<spoke>//"` or `"//<id>/<version>"`) and `package_info`
+        the label the generated package BUILD loads `package_info.bzl` from.
+      extra_build_files: Additional BUILD files to write into the repository,
+        keyed by path.
+      extra_root_build: Extra content appended to the root BUILD.bazel (the
+        `:pin` alias).
+    """
+    for (path, content) in extra_build_files.items():
         ctx.file(path, content)
 
     ctx.file("BUILD.bazel", """\
 "GENERATED"
 
 package(default_visibility = ["//visibility:public"])
-""")
+""" + extra_root_build)
 
     # A dependency group resolves one version per id, so `name` is just the id.
     # The SDK's pack repositories hold several versions of an id and tell them
@@ -118,7 +142,7 @@ package(default_visibility = ["//visibility:public"])
     names = {}
     for package in packages:
         id = package["id"].lower()
-        names[id] = None if id in names else package["name"].lower()
+        names[id] = None if id in names else package.get("name", package["id"]).lower()
 
     ctx.file("packages.bzl", _PACKAGES_TEMPLATE.format(
         packages = json.encode({id: name for (id, name) in names.items() if name}),
@@ -126,27 +150,38 @@ package(default_visibility = ["//visibility:public"])
 
     for package in packages:
         id = package["id"].lower()
-        name = package["name"].lower()
+        name = package.get("name", package["id"]).lower()
         version = package["version"]
-        archive = nuget_archive_name(package["id"], version)
+        archive = archive_and_info(package["id"], version)
 
         ctx.file("{}/{}/BUILD.bazel".format(id, version), _PACKAGE_TEMPLATE.format(
-            archive = archive,
+            archive = archive.archive,
+            package_info = archive.package_info,
             library_name = package["id"],
             sha512 = package.get("sha512", ""),
             version = version,
         ))
 
         ctx.file("{}/BUILD.bazel".format(name), _ALIAS_TEMPLATE.format(
-            archive = archive,
+            archive = archive.archive,
             name = name,
             package = nuget_package_label(id, version),
         ))
 
         ctx.file("{}/tools/BUILD.bazel".format(name), _TOOLS_TEMPLATE.format(
-            archive = archive,
+            package_info = archive.package_info,
             package = nuget_package_label(id, version),
         ))
+
+def _nuget_repo_impl(ctx):
+    packages = [json.decode(package) for package in ctx.attr.packages]
+
+    write_hub_files(
+        ctx,
+        packages,
+        _spoke_archive,
+        extra_build_files = ctx.attr.extra_build_files,
+    )
 
 _nuget_repo = repository_rule(
     _nuget_repo_impl,
@@ -168,7 +203,8 @@ def nuget_archives(packages, declared):
 
     Args:
       packages: Dicts with `id`, `version` and `sources` keys, and optionally
-        `sha512` and `netrc`.
+        `sha512`, `netrc` and `urls`. When `urls` is given the archive
+        downloads those directly and never reads a feed index.
       declared: The names of the archives declared so far, which this call
         adds to. Pass the same dict across groups so that a package version
         shared between them is only declared once.
@@ -185,6 +221,7 @@ def nuget_archives(packages, declared):
             netrc = package.get("netrc", None),
             sha512 = package.get("sha512", ""),
             sources = package["sources"],
+            urls = package.get("urls", []),
             version = package["version"].lower(),
         )
 

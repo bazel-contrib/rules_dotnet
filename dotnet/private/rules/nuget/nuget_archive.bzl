@@ -709,26 +709,55 @@ def _group_package_files(id, all_files):
         unsupported_tfms = groups["unsupported_tfms"].keys(),
     )
 
-def _nuget_archive_impl(ctx):
-    # First get the auth dict for the package sources since the sources can be different than the
-    # package base url when using NuGet V3 feeds.
-    auth = _get_auth_dict(ctx, ctx.attr.sources)
-    urls = _get_package_urls(ctx, ctx.attr.sources, auth, ctx.attr.id, ctx.attr.version)
+def fetch_package_into(ctx, id, version, urls, integrity, prefix):
+    """Downloads a .nupkg and extracts it under `prefix` in the repository.
 
-    # Then get the auth dict for the package base urls
+    Args:
+      ctx: The repository context. When it has a `netrc` attribute it is used
+        for authentication, otherwise the user's netrc.
+      id: The package id.
+      version: The normalized package version.
+      urls: The download URLs of the `.nupkg`, tried in order.
+      integrity: The expected sha512 as an SRI string, or "" to skip the check.
+      prefix: The directory to extract into, relative to the repository root,
+        with a trailing slash; "" for the root itself.
+
+    Returns:
+      A struct with `nupkg` (the name of the `.nupkg` inside `prefix`) and
+      `files` (every extracted path, relative to `prefix`, sorted).
+    """
     auth = _get_auth_dict(ctx, urls)
 
     # We download it as .zip because ctx.extract reads the file extension to determine the archive type
-    file_name = "%s.zip" % ctx.name
-    nupkg_name = "%s.%s.nupkg" % (ctx.attr.id, ctx.attr.version)
+    file_name = "%s.%s.zip" % (id, version)
+    # The nupkg name must be the lowercased id: the hub's nuget_package targets
+    # address it as `<library_name.lower()>.<version>.nupkg` (package.bzl), and
+    # the unpinned hub calls this with the lock file's original-casing id.
+    nupkg_name = "%s.%s.nupkg" % (id.lower(), version)
 
-    ctx.download(urls, output = file_name, integrity = ctx.attr.sha512, auth = auth)
-    ctx.extract(archive = file_name)
-    ctx.symlink(file_name, nupkg_name)
+    ctx.download(urls, output = prefix + file_name, integrity = integrity, auth = auth)
+    ctx.extract(archive = prefix + file_name, output = prefix)
+    ctx.symlink(prefix + file_name, prefix + nupkg_name)
 
-    all_files = sorted(_read_dir(ctx, ".").replace(str(ctx.path(".")) + "/", "").splitlines())
+    base = str(ctx.path(prefix if prefix else ".")) + "/"
+    all_files = sorted(_read_dir(ctx, prefix if prefix else ".").replace(base, "").splitlines())
 
-    _write_repository(ctx, ctx.attr.id, nupkg_name, all_files)
+    return struct(nupkg = nupkg_name, files = all_files)
+
+def _nuget_archive_impl(ctx):
+    if ctx.attr.urls:
+        # The urls are recorded in the lock file; no feed index download is
+        # needed to derive them. `sources` still feeds auth resolution.
+        urls = ctx.attr.urls
+    else:
+        # First get the auth dict for the package sources since the sources can be different than the
+        # package base url when using NuGet V3 feeds.
+        auth = _get_auth_dict(ctx, ctx.attr.sources)
+        urls = _get_package_urls(ctx, ctx.attr.sources, auth, ctx.attr.id, ctx.attr.version)
+
+    package = fetch_package_into(ctx, ctx.attr.id, ctx.attr.version, urls, ctx.attr.sha512, "")
+
+    _write_repository(ctx, ctx.attr.id, package.nupkg, package.files)
 
 def _write_repository(ctx, id, nupkg_name, all_files, prefix = ""):
     """Turns an extracted package into the metadata and targets it is consumed through.
@@ -792,6 +821,9 @@ nuget_archive = repository_rule(
         "id": attr.string(),
         "version": attr.string(),
         "sha512": attr.string(),
+        "urls": attr.string_list(
+            doc = "The download URLs of the .nupkg, e.g. recorded in a lock file. When set, no feed index is downloaded to derive URLs; `sources` then only feeds authentication.",
+        ),
     },
 )
 
