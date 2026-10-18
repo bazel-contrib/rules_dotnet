@@ -1669,7 +1669,7 @@ git commit -m "Add the nuget.resolve input hash"
 - Test: `dotnet/private/tests/nuget_resolve/lock_test.bzl`
 - Modify: `dotnet/private/tests/nuget_resolve/BUILD.bazel`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `dotnet/private/tests/nuget_resolve/lock_test.bzl`:
 
@@ -1795,12 +1795,12 @@ input_hash_test_suite(name = "input_hash_test")
 lock_test_suite(name = "lock_test")
 ```
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [x] **Step 2: Run the test to verify it fails**
 
 Run: `bazel test //dotnet/private/tests/nuget_resolve:lock_test`
 Expected: FAIL — `cannot load '//dotnet/private/nuget_resolve:lock.bzl'`.
 
-- [ ] **Step 3: Write the implementation**
+- [x] **Step 3: Write the implementation**
 
 Create `dotnet/private/nuget_resolve/lock.bzl`:
 
@@ -1932,12 +1932,12 @@ bzl_library(
 )
 ```
 
-- [ ] **Step 4: Run the test to verify it passes**
+- [x] **Step 4: Run the test to verify it passes**
 
 Run: `bazel test //dotnet/private/tests/nuget_resolve/...`
 Expected: PASS — `input_hash_test` en `lock_test` slagen.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add dotnet/private/nuget_resolve/lock.bzl dotnet/private/nuget_resolve/BUILD.bazel dotnet/private/tests/nuget_resolve/lock_test.bzl dotnet/private/tests/nuget_resolve/BUILD.bazel
