@@ -119,7 +119,7 @@ De Bazel-build van de tool en zijn tests halen hun NuGet-afhankelijkheden uit de
 - Modify: `paket.dependencies` (group `rules_dotnet_nuget_packages`)
 - Modify: `paket.lock` (regenerated)
 
-- [ ] **Step 1: Add the packages to paket.dependencies**
+- [x] **Step 1: Add the packages to paket.dependencies**
 
 In `paket.dependencies`, group `rules_dotnet_nuget_packages`. Old:
 
@@ -145,17 +145,17 @@ group rules_dotnet_nuget_packages
     nuget NUnitLite 3.14.0
 ```
 
-- [ ] **Step 2: Regenerate paket.lock**
+- [x] **Step 2: Regenerate paket.lock**
 
 Run: `bazel run //tools/paket -- install`
 Expected: exit 0; `git status` toont een gewijzigde `paket.lock` waarin `NuGet.Protocol` en `NuGet.DependencyResolver.Core` (plus hun transitieve sluiting) in group `rules_dotnet_nuget_packages` staan.
 
-- [ ] **Step 3: Verify the new packages resolve in Bazel**
+- [x] **Step 3: Verify the new packages resolve in Bazel**
 
 Run: `bazel build @paket.rules_dotnet_nuget_packages//nuget.protocol @paket.rules_dotnet_nuget_packages//nuget.dependencyresolver.core`
 Expected: `INFO: Build completed successfully`, beide targets gebouwd.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add paket.dependencies paket.lock
