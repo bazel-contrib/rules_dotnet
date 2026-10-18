@@ -2971,7 +2971,7 @@ git commit -m "Add the unpinned nuget resolve repository rule"
 - Create: `dotnet/private/nuget_resolve/unpinned_hub.bzl`
 - Modify: `dotnet/private/nuget_resolve/BUILD.bazel`
 
-- [ ] **Step 1: Write pinned_hub.bzl**
+- [x] **Step 1: Write pinned_hub.bzl**
 
 Create `dotnet/private/nuget_resolve/pinned_hub.bzl`:
 
@@ -3073,7 +3073,7 @@ pinned_hub = repository_rule(
 )
 ```
 
-- [ ] **Step 2: Write unpinned_hub.bzl**
+- [x] **Step 2: Write unpinned_hub.bzl**
 
 Create `dotnet/private/nuget_resolve/unpinned_hub.bzl`:
 
@@ -3157,7 +3157,7 @@ unpinned_hub = repository_rule(
 )
 ```
 
-- [ ] **Step 3: Register the bzl_library targets**
+- [x] **Step 3: Register the bzl_library targets**
 
 Modify `dotnet/private/nuget_resolve/BUILD.bazel` — voeg onderaan toe:
 
@@ -3185,12 +3185,12 @@ bzl_library(
 )
 ```
 
-- [ ] **Step 4: Verify the layer loads**
+- [x] **Step 4: Verify the layer loads**
 
 Run: `bazel build //dotnet/private/nuget_resolve:all`
 Expected: `INFO: Build completed successfully` — alle bzl_library-targets laden zonder fouten.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add dotnet/private/nuget_resolve/pinned_hub.bzl dotnet/private/nuget_resolve/unpinned_hub.bzl dotnet/private/nuget_resolve/BUILD.bazel
