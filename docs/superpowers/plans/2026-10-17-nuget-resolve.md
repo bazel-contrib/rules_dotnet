@@ -5138,17 +5138,17 @@ git commit -m "Run the nuget_resolve e2e modules in CI"
 
 Volledige verificatie van alle oppervlakken die dit plan raakt. Geen nieuwe bestanden; er is niets te committen.
 
-- [ ] **Step 1: Root repository**
+- [x] **Step 1: Root repository**
 
 Run (vanuit de repo-root): `bazel test //...`
 Expected: alles PASS, inclusief `//dotnet/private/tests/nuget_resolve/...`, `//dotnet/private/nuget_resolve:tool_version_test`, `//tools/nuget_resolver/tests:nuget_resolver_test` en `//dotnet/gazelle/...`.
 
-- [ ] **Step 2: Examples**
+- [x] **Step 2: Examples**
 
 Run (vanuit `examples/`): `bazel build //... && bazel test //...`
 Expected: alles slaagt, inclusief `//nuget_resolve` en `//gazelle_csharp/...`.
 
-- [ ] **Step 3: e2e-modules**
+- [x] **Step 3: e2e-modules**
 
 Run, vanuit elke map:
 
@@ -5160,12 +5160,12 @@ done
 
 Expected: elke module bouwt en test groen.
 
-- [ ] **Step 4: De repin-flow**
+- [x] **Step 4: De repin-flow**
 
 Run: `e2e/nuget_resolve_pinning/test.sh`
 Expected: eindigt met `PASS`; `git status --short` toont daarna geen gewijzigde bestanden.
 
-- [ ] **Step 5: Schone-fetch-controle van de tool-build (risicomitigatie 2)**
+- [x] **Step 5: Schone-fetch-controle van de tool-build (risicomitigatie 2)**
 
 Run (vanuit `e2e/nuget_resolve_transitive/`):
 
