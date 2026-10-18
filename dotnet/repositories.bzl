@@ -175,6 +175,8 @@ dotnet_toolchain(
     # Base BUILD file for this repository
     repository_ctx.file("BUILD.bazel", build_content)
 
+    return repository_ctx.repo_metadata(reproducible = True)
+
 dotnet_repositories = repository_rule(
     _dotnet_repo_impl,
     doc = _DOC,
