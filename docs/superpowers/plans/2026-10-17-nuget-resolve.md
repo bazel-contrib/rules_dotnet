@@ -2409,7 +2409,7 @@ De interne repository `nuget_resolver_tool` bouwt de tool offline: gepinde `.nup
 - Modify: `dotnet/repositories.bzl` (exports van het dotnet-binaire)
 - Modify: `MODULE.bazel` (use_repo van de per-platform bootstrap-SDK-repo's)
 
-- [ ] **Step 1: Export the dotnet binary from the SDK repositories**
+- [x] **Step 1: Export the dotnet binary from the SDK repositories**
 
 In `dotnet/repositories.bzl`, in `_dotnet_repo_impl`, voeg aan de `build_content`-template (vlak vóór `dotnet_toolchain(`) de export toe. Old:
 
@@ -2451,7 +2451,7 @@ New:
         sdk_version = repository_ctx.attr.dotnet_version,
 ```
 
-- [ ] **Step 2: Write tool.bzl**
+- [x] **Step 2: Write tool.bzl**
 
 Create `dotnet/private/nuget_resolve/tool.bzl`:
 
@@ -2640,7 +2640,7 @@ nuget_resolver_tool = repository_rule(
 )
 ```
 
-- [ ] **Step 3: Write the version guard test**
+- [x] **Step 3: Write the version guard test**
 
 Create `dotnet/private/nuget_resolve/tool_version_test.sh`:
 
@@ -2715,12 +2715,12 @@ sh_test(
 )
 ```
 
-- [ ] **Step 4: Run the guard test**
+- [x] **Step 4: Run the guard test**
 
 Run: `bazel test //dotnet/private/nuget_resolve:tool_version_test`
 Expected: PASS (beide pinnen nu 10.0.401).
 
-- [ ] **Step 5: Add the bootstrap SDK repositories to MODULE.bazel's use_repo**
+- [x] **Step 5: Add the bootstrap SDK repositories to MODULE.bazel's use_repo**
 
 In `MODULE.bazel`. Old:
 
@@ -2753,7 +2753,7 @@ use_repo(
 )
 ```
 
-- [ ] **Step 6: Verify the SDK repo label exists**
+- [x] **Step 6: Verify the SDK repo label exists**
 
 Run (op Linux x86_64; op een ander host-platform de bijbehorende repo — zie `PLATFORMS` in `dotnet/private/toolchains_repo.bzl`):
 
@@ -2761,7 +2761,7 @@ Run (op Linux x86_64; op een ander host-platform de bijbehorende repo — zie `P
 
 Expected: `INFO: Build completed successfully` en het target resolveert naar het geëxporteerde `dotnet`-bestand.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add dotnet/private/nuget_resolve/tool.bzl dotnet/private/nuget_resolve/tool_version_test.sh dotnet/private/nuget_resolve/BUILD.bazel dotnet/repositories.bzl MODULE.bazel
