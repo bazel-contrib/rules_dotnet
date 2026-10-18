@@ -3791,7 +3791,7 @@ Geverifieerde echte grafen op nuget.org:
 - Create: `e2e/nuget_resolve_transitive/src/app/Program.cs`
 - Create: `e2e/nuget_resolve_transitive/nuget_resolve.json` (gegenereerd via de pin-flow)
 
-- [ ] **Step 1: Create the module scaffolding**
+- [x] **Step 1: Create the module scaffolding**
 
 De bestanden `.bazelrc`, `.bazelversion`, `internal_dev_deps.bzl` en `BUILD.bazel` zijn identiek aan die van Task 12 — kopieer ze:
 
@@ -3799,7 +3799,7 @@ De bestanden `.bazelrc`, `.bazelversion`, `internal_dev_deps.bzl` en `BUILD.baze
 cp e2e/nuget_resolve_basic/.bazelrc e2e/nuget_resolve_basic/.bazelversion e2e/nuget_resolve_basic/internal_dev_deps.bzl e2e/nuget_resolve_basic/BUILD.bazel e2e/nuget_resolve_transitive/
 ```
 
-- [ ] **Step 2: Create the module (nog zonder lock_file) en de app**
+- [x] **Step 2: Create the module (nog zonder lock_file) en de app**
 
 Create `e2e/nuget_resolve_transitive/MODULE.bazel`:
 
@@ -3884,7 +3884,7 @@ public static class Program
 }
 ```
 
-- [ ] **Step 3: Generate the lock file via the pin flow**
+- [x] **Step 3: Generate the lock file via the pin flow**
 
 Run (vanuit `e2e/nuget_resolve_transitive`): `bazel run @nuget.net10.0//:pin`
 Expected: `Wrote nuget_resolve.json. Check it in and point the resolve tag at it with lock_file = "//:nuget_resolve.json".`
@@ -3914,7 +3914,7 @@ EOF
 
 Expected: `lock file OK: N packages` (N is de volledige transitieve sluiting, groter dan 7 — de Microsoft.Extensions-keten trekt o.a. `Microsoft.Bcl.AsyncInterfaces` en `Microsoft.Extensions.Options` mee).
 
-- [ ] **Step 4: Pin the module**
+- [x] **Step 4: Pin the module**
 
 In `e2e/nuget_resolve_transitive/MODULE.bazel`, voeg `lock_file` toe aan de tag. Old:
 
@@ -3947,12 +3947,12 @@ New:
 )
 ```
 
-- [ ] **Step 5: Build and run pinned**
+- [x] **Step 5: Build and run pinned**
 
 Run: `bazel run //src/app && bazel build //...`
 Expected: `INFO: Build completed successfully`; het programma print `deep chain type: System.String` (met Serilog-consolevrije logger-output op stderr/stdout — het exacte formaat maakt niet uit, de exitcode is 0).
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add e2e/nuget_resolve_transitive
