@@ -4130,7 +4130,7 @@ Een gepinde module plus een testscript dat bewijst: (1) een verouderd lockbestan
 - Create: `e2e/nuget_resolve_pinning/nuget_resolve.json` (gegenereerd via de pin-flow)
 - Create: `e2e/nuget_resolve_pinning/test.sh`
 
-- [ ] **Step 1: Create the module scaffolding**
+- [x] **Step 1: Create the module scaffolding**
 
 ```bash
 cp e2e/nuget_resolve_basic/.bazelrc e2e/nuget_resolve_basic/.bazelversion e2e/nuget_resolve_basic/internal_dev_deps.bzl e2e/nuget_resolve_basic/BUILD.bazel e2e/nuget_resolve_pinning/
@@ -4138,7 +4138,7 @@ mkdir -p e2e/nuget_resolve_pinning/src
 cp -r e2e/nuget_resolve_basic/src/hello e2e/nuget_resolve_pinning/src/hello
 ```
 
-- [ ] **Step 2: Create the module (nog zonder lock_file)**
+- [x] **Step 2: Create the module (nog zonder lock_file)**
 
 Create `e2e/nuget_resolve_pinning/MODULE.bazel`:
 
@@ -4181,7 +4181,7 @@ internal_dev_deps = use_extension("//:internal_dev_deps.bzl", "internal_dev_deps
 use_repo(internal_dev_deps, "buildkite_config")
 ```
 
-- [ ] **Step 3: Generate the lock file and pin the module**
+- [x] **Step 3: Generate the lock file and pin the module**
 
 Run (vanuit `e2e/nuget_resolve_pinning`):
 
@@ -4208,7 +4208,7 @@ New:
 
 Verify: `bazel build //...` → `INFO: Build completed successfully`.
 
-- [ ] **Step 4: Write the repin test script**
+- [x] **Step 4: Write the repin test script**
 
 Create `e2e/nuget_resolve_pinning/test.sh`:
 
@@ -4259,12 +4259,12 @@ echo "PASS"
 
 Maak het uitvoerbaar: `chmod +x e2e/nuget_resolve_pinning/test.sh`.
 
-- [ ] **Step 5: Run the script**
+- [x] **Step 5: Run the script**
 
 Run: `e2e/nuget_resolve_pinning/test.sh`
 Expected: eindigt met `PASS`; daarna is de working tree schoon (`git status --short e2e/nuget_resolve_pinning` toont alleen de nieuwe, nog te committen bestanden).
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add e2e/nuget_resolve_pinning
