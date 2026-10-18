@@ -3211,7 +3211,7 @@ De extensie zelf, met de puur-functionele helpers (`resolve_repositories`, `clai
 - Test: `dotnet/private/tests/nuget_resolve/extension_test.bzl`
 - Modify: `dotnet/private/tests/nuget_resolve/BUILD.bazel`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `dotnet/private/tests/nuget_resolve/extension_test.bzl`:
 
@@ -3291,12 +3291,12 @@ input_hash_test_suite(name = "input_hash_test")
 lock_test_suite(name = "lock_test")
 ```
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [x] **Step 2: Run the test to verify it fails**
 
 Run: `bazel test //dotnet/private/tests/nuget_resolve:extension_test`
 Expected: FAIL — `cannot load '//dotnet/private/nuget_resolve:extension.bzl'`.
 
-- [ ] **Step 3: Write the extension**
+- [x] **Step 3: Write the extension**
 
 Create `dotnet/private/nuget_resolve/extension.bzl`:
 
@@ -3600,12 +3600,12 @@ bzl_library(
 )
 ```
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: `bazel test //dotnet/private/tests/nuget_resolve/... && bazel build //dotnet:nuget`
 Expected: alle drie de test-suites PASS; de publieke `bzl_library` bouwt.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add dotnet/private/nuget_resolve/extension.bzl dotnet/nuget.bzl dotnet/BUILD.bazel dotnet/private/nuget_resolve/BUILD.bazel dotnet/private/tests/nuget_resolve/extension_test.bzl dotnet/private/tests/nuget_resolve/BUILD.bazel
