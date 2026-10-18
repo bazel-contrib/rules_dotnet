@@ -2778,7 +2778,7 @@ De repository-rule `nuget_resolve` voert de tool uit en schrijft `nuget_resolve.
 - Create: `dotnet/private/nuget_resolve/resolve.bzl`
 - Modify: `dotnet/private/nuget_resolve/BUILD.bazel`
 
-- [ ] **Step 1: Write resolve.bzl**
+- [x] **Step 1: Write resolve.bzl**
 
 Create `dotnet/private/nuget_resolve/resolve.bzl`:
 
@@ -2938,7 +2938,7 @@ nuget_resolve = repository_rule(
 )
 ```
 
-- [ ] **Step 2: Register the bzl_library**
+- [x] **Step 2: Register the bzl_library**
 
 Modify `dotnet/private/nuget_resolve/BUILD.bazel` — voeg onderaan toe:
 
@@ -2950,12 +2950,12 @@ bzl_library(
 )
 ```
 
-- [ ] **Step 3: Verify the layer loads**
+- [x] **Step 3: Verify the layer loads**
 
 Run: `bazel build //dotnet/private/nuget_resolve:all && bazel test //dotnet/private/tests/nuget_resolve/... //dotnet/private/nuget_resolve:tool_version_test`
 Expected: build slaagt; alle tests PASS.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add dotnet/private/nuget_resolve/resolve.bzl dotnet/private/nuget_resolve/BUILD.bazel
