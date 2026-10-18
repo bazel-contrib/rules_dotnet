@@ -4432,7 +4432,7 @@ git commit -m "Add the nuget_resolve example"
 - Modify: `dotnet/gazelle/testdata/nuget_dep/packages.lock.json` → `dotnet/gazelle/testdata/nuget_dep/nuget_resolve.json`
 - Modify: `dotnet/gazelle/testdata/*/expectedStderr.txt` (10 fixtures)
 
-- [ ] **Step 1: Update the failing Go tests first**
+- [x] **Step 1: Update the failing Go tests first**
 
 In `dotnet/gazelle/private/nuget/nuget_test.go`. Old:
 
@@ -4543,12 +4543,12 @@ New:
 	}
 ```
 
-- [ ] **Step 2: Run the Go tests to verify they fail**
+- [x] **Step 2: Run the Go tests to verify they fail**
 
 Run: `bazel test //dotnet/gazelle/...`
 Expected: FAIL — `//dotnet/gazelle/private/nuget:nuget_test` faalt (de parser leest nog `dependencies`), en `//dotnet/gazelle:gazelle_test` en `//dotnet/gazelle/dotnetconfig:dotnetconfig_test` falen op de gewijzigde verwachtingen.
 
-- [ ] **Step 3: Migrate the index and the defaults**
+- [x] **Step 3: Migrate the index and the defaults**
 
 In `dotnet/gazelle/private/nuget/nuget.go`. Old:
 
@@ -4720,12 +4720,12 @@ New:
 	// nil when the file does not exist.
 ```
 
-- [ ] **Step 4: Run the Go tests to verify they pass**
+- [x] **Step 4: Run the Go tests to verify they pass**
 
 Run: `bazel test //dotnet/gazelle/private/nuget:nuget_test //dotnet/gazelle:gazelle_test //dotnet/gazelle/dotnetconfig:dotnetconfig_test`
 Expected: PASS.
 
-- [ ] **Step 5: Migrate the gazelle_generation_test fixtures**
+- [x] **Step 5: Migrate the gazelle_generation_test fixtures**
 
 Hernoem de lockfile-fixture van `nuget_dep` en herschrijf hem naar het nieuwe formaat:
 
@@ -4770,12 +4770,12 @@ grep -rln "packages.lock.json" dotnet/gazelle
 
 Expected: geen output — niets in `dotnet/gazelle` verwijst meer naar het oude formaat.
 
-- [ ] **Step 6: Run the full gazelle test suite**
+- [x] **Step 6: Run the full gazelle test suite**
 
 Run: `bazel test //dotnet/gazelle/...`
 Expected: PASS — inclusief alle `gazelle_generation_test`s onder `//dotnet/gazelle/testdata`.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add dotnet/gazelle
