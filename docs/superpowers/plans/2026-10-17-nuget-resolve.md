@@ -3627,7 +3627,7 @@ De eerste end-to-end-verificatie van de hele keten: tool-build bij fetch-tijd, r
 - Create: `e2e/nuget_resolve_basic/src/hello/BUILD.bazel`
 - Create: `e2e/nuget_resolve_basic/src/hello/hello.cs`
 
-- [ ] **Step 1: Create the module scaffolding**
+- [x] **Step 1: Create the module scaffolding**
 
 Create `e2e/nuget_resolve_basic/.bazelversion`:
 
@@ -3680,7 +3680,7 @@ Create `e2e/nuget_resolve_basic/BUILD.bazel` (leeg package zodat `//...` de root
 package(default_visibility = ["//visibility:public"])
 ```
 
-- [ ] **Step 2: Create the module and the app**
+- [x] **Step 2: Create the module and the app**
 
 Create `e2e/nuget_resolve_basic/MODULE.bazel`:
 
@@ -3751,7 +3751,7 @@ public static class Program
 }
 ```
 
-- [ ] **Step 3: Build and run (eerste integratieverificatie van de hele keten)**
+- [x] **Step 3: Build and run (eerste integratieverificatie van de hele keten)**
 
 Run (vanuit `e2e/nuget_resolve_basic`): `bazel run //src/hello`
 Expected: de tool-repository bouwt offline (éénmalig traag: SDK-download + `dotnet publish`), de resolutie draait tegen nuget.org, en het programma print `{"hello":"world"}`.
@@ -3761,12 +3761,12 @@ Debug-aanknopingspunten als dit faalt:
 - `bazel build @unpinned_nuget//...` isoleert de resolutie.
 - `bazel build @nuget.net10.0//newtonsoft.json` isoleert de ongepinde hub.
 
-- [ ] **Step 4: Verify the full module build**
+- [x] **Step 4: Verify the full module build**
 
 Run: `bazel build //...`
 Expected: `INFO: Build completed successfully`.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add e2e/nuget_resolve_basic
