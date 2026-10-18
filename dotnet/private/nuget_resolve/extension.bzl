@@ -149,16 +149,34 @@ def _nuget_impl(module_ctx):
 
         if tag.lock_file:
             lock = parse_lock(module_ctx.read(tag.lock_file), str(tag.lock_file))
+            missing = [tfm for tfm in tag.frameworks if lock.frameworks.get(tfm) == None]
+            if missing:
+                # buildifier: disable=print
+                print("{} has no framework(s) {}. It has: {}. Falling back to resolving them fresh; regenerate the lock file with `REPIN=1 bazel run @{}.{}//:pin`.".format(
+                    tag.lock_file,
+                    ", ".join(missing),
+                    ", ".join(lock.frameworks.keys()),
+                    tag.name,
+                    tag.frameworks[0],
+                ))
+
             for tfm in tag.frameworks:
                 group = lock.frameworks.get(tfm)
                 if group == None:
-                    fail("{} has no framework '{}'. It has: {}. Regenerate it with `REPIN=1 bazel run @{}.{}//:pin`.".format(
-                        tag.lock_file,
-                        tfm,
-                        ", ".join(lock.frameworks.keys()),
-                        tag.name,
-                        tfm,
-                    ))
+                    all_pinned = False
+
+                    # The unpinned hub reads the freshly resolved lock from
+                    # @unpinned_<name>, so this repo exists, its `:pin` alias
+                    # works, and the refetch after repin flips it to the
+                    # pinned hub.
+                    unpinned_hub(
+                        name = "{}.{}".format(tag.name, tfm),
+                        lock = "@unpinned_{}//:nuget_resolve.json".format(tag.name),
+                        framework = tfm,
+                        resolve_name = tag.name,
+                        netrc = tag.netrc,
+                    )
+                    continue
 
                 packages = [
                     {
@@ -171,6 +189,10 @@ def _nuget_impl(module_ctx):
                     }
                     for package in group
                 ]
+
+                # Spokes are shared across tags first-wins: the same id+version
+                # from a later tag reuses the first tag's archive (integrity is
+                # still bounded by the lock file's sha512).
                 nuget_archives(packages, archives)
                 pinned_hub(
                     name = "{}.{}".format(tag.name, tfm),
