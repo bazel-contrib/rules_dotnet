@@ -31,7 +31,7 @@ export GOCACHE=/tmp/opencode/gocache
 Other environment facts:
 
 - Work from the repo root: `/home/jhobert/Projects/Gazelle/rules_dotnet` (branch `feature/gazelle`).
-- `bazel` is bazelisk; `.bazelversion` pins Bazel 9.1.1. Local `go` is 1.27 (only used for `go test`; Bazel builds use the rules_go 1.24.12 SDK). A local `dotnet` exists but is used in this plan only as a sanity check in Task 4 — the build itself never uses it.
+- `bazel` is bazelisk; `.bazelversion` pins Bazel 9.1.1. Local `go` is 1.27 (only used for `go test`; Bazel builds use the rules_go 1.24.12 SDK). A local `dotnet` exists but is used in this plan only as a sanity check in Task 4 — the build itself never uses it. NOTE: as of Task 4 the sandbox does NOT grant `$HOME/.dotnet`; the opencode-with-nuget nono profile must be re-promoted (v1.1.0 adds `$HOME/.dotnet` and `$HOME/.local/share/Nuget`) and the session restarted before running any `dotnet` CLI command (Task 4 Step 5, Task 8).
 - **Pre-existing gazelle drift:** running `bazel run //:gazelle` on the unmodified repo adds `bzl_library` targets in `dotnet/BUILD.bazel` and various `dotnet/private/tests/**/BUILD.bazel` files. That drift is unrelated to this feature. After every root gazelle run, revert it:
 
 ```bash
@@ -1230,7 +1230,7 @@ Het entrypoint: argumentenparsen, de resolver aanroepen, het lockbestand schrijv
 - Test: `tools/nuget_resolver/tests/ProgramTests.cs`
 - Test: `tools/nuget_resolver/tests/NetrcTests.cs`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Create `tools/nuget_resolver/tests/ProgramTests.cs`:
 
@@ -1343,12 +1343,12 @@ public sealed class NetrcTests
 }
 ```
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [x] **Step 2: Run the test to verify it fails**
 
 Run: `bazel test //tools/nuget_resolver/tests:nuget_resolver_test`
 Expected: FAIL — compile error: `The type or namespace name 'Program' does not exist in the namespace 'NuGetResolver'`.
 
-- [ ] **Step 3: Write the implementation**
+- [x] **Step 3: Write the implementation**
 
 Create `tools/nuget_resolver/Program.cs`:
 
@@ -1417,19 +1417,19 @@ public static class Program
 }
 ```
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: `bazel test //tools/nuget_resolver/tests:nuget_resolver_test`
 Expected: PASS — `//tools/nuget_resolver/tests:nuget_resolver_test PASSED`.
 
-- [ ] **Step 5: Sanity-check the csproj (de offline-publish volgt in Task 12)**
+- [x] **Step 5: Sanity-check the csproj (de offline-publish volgt in Task 12)**
 
 De csproj wordt pas in Task 12 echt offline gepubliceerd; controleer hier alvast dat hij met netwerk herstelt en compileert (de pins voor de offline variant volgen in Task 8):
 
 Run: `cd tools/nuget_resolver && dotnet restore NuGetResolver.csproj && dotnet build NuGetResolver.csproj -c Release --no-restore -v:minimal`
 Expected: `Build succeeded.` en `0 Error(s)`. Verwijder daarna de gegenereerde artefacten: `rm -rf obj bin`.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add tools/nuget_resolver/Program.cs tools/nuget_resolver/tests/ProgramTests.cs tools/nuget_resolver/tests/NetrcTests.cs
