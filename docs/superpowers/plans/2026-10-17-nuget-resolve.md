@@ -5028,14 +5028,14 @@ Alle gebruikers zijn gemigreerd (Tasks 18–19) of verdwijnen mee (`examples/pac
 - Delete: `examples/packages_json/`
 - Modify: `dotnet/BUILD.bazel`
 
-- [ ] **Step 1: Delete the files**
+- [x] **Step 1: Delete the files**
 
 ```bash
 git rm dotnet/packages_lock.bzl
 git rm -r dotnet/private/packages_lock dotnet/private/tests/packages_lock e2e/net10.0_packages_lock examples/packages_json
 ```
 
-- [ ] **Step 2: Remove the bzl_library from dotnet/BUILD.bazel**
+- [x] **Step 2: Remove the bzl_library from dotnet/BUILD.bazel**
 
 Old:
 
@@ -5056,7 +5056,7 @@ New:
 exports_files(["defs.bzl"])
 ```
 
-- [ ] **Step 3: Verify no references remain**
+- [x] **Step 3: Verify no references remain**
 
 ```bash
 grep -rn "packages_lock" dotnet examples e2e MODULE.bazel BUILD.bazel 2>/dev/null | grep -v bazel-out
@@ -5064,7 +5064,7 @@ grep -rn "packages_lock" dotnet examples e2e MODULE.bazel BUILD.bazel 2>/dev/nul
 
 Expected: geen output. (De docs onder `docs/superpowers/` noemen `packages_lock` historisch; die blijven.)
 
-- [ ] **Step 4: Verify the repo, the examples and the migrated e2e module still build**
+- [x] **Step 4: Verify the repo, the examples and the migrated e2e module still build**
 
 Run (vanuit de repo-root):
 
@@ -5080,7 +5080,7 @@ Expected: `INFO: Build completed successfully` (`examples/packages_json` was een
 Run (vanuit `e2e/gazelle_net10.0/`): `bazel build //... && bazel test //...`
 Expected: alles slaagt.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add -A dotnet/packages_lock.bzl dotnet/private/packages_lock dotnet/private/tests/packages_lock e2e/net10.0_packages_lock examples/packages_json dotnet/BUILD.bazel
