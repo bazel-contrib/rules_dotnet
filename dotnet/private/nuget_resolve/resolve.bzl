@@ -5,6 +5,8 @@ read the checked-in lock file, so repinning always goes through this
 repository, which resolves fresh.
 """
 
+load("@bazel_tools//tools/build_defs/repo:utils.bzl", "read_user_netrc")
+
 # A bash script after the rules_jvm_external pin.sh pattern: locate the
 # generated lock file through the runfiles library and copy it into the
 # workspace. {dest} is the workspace-relative destination, {message} the
@@ -65,6 +67,30 @@ sh_binary(
 def _is_windows(repository_ctx):
     return repository_ctx.os.name.lower().find("windows") != -1
 
+def _netrc_path(ctx):
+    """Resolves the netrc file to hand the resolver tool, or None.
+
+    Returns the `netrc` attr's path when set. Otherwise falls back to the
+    user's netrc ($HOME/.netrc) via `read_user_netrc`, the same fallback the
+    downloads use; since the tool consumes a netrc path rather than parsed
+    entries (and the sandboxed fetch redirects HOME, so a $HOME/.netrc probe
+    from C# would miss the real file), the parsed entries are serialized to
+    a `user.netrc` file in the repository. Returns None when no netrc exists.
+    """
+    if ctx.attr.netrc:
+        return str(ctx.path(ctx.attr.netrc))
+    netrc = read_user_netrc(ctx)
+    if not netrc:
+        return None
+    lines = []
+    for machine, entry in sorted(netrc.items()):
+        lines.append("machine " + machine if machine else "default")
+        for key in ("login", "password", "account"):
+            if key in entry:
+                lines.append("{} {}".format(key, entry[key]))
+    ctx.file("user.netrc", "\n".join(lines) + "\n")
+    return str(ctx.path("user.netrc"))
+
 def _nuget_resolve_impl(ctx):
     spec = {
         "frameworks": ctx.attr.frameworks,
@@ -104,8 +130,9 @@ def _nuget_resolve_impl(ctx):
         "--output",
         "nuget_resolve.json",
     ]
-    if ctx.attr.netrc:
-        args += ["--netrc", str(ctx.path(ctx.attr.netrc))]
+    netrc_path = _netrc_path(ctx)
+    if netrc_path:
+        args += ["--netrc", netrc_path]
 
     result = ctx.execute(args, environment = env, timeout = 1200)
     if result.return_code != 0:
