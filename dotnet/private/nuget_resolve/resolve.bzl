@@ -55,7 +55,10 @@ sh_binary(
     name = "pin",
     srcs = ["pin.sh"],
     args = ["$(rlocationpath :nuget_resolve.json)"],
-    data = [":nuget_resolve.json"],
+    data = [
+        ":nuget_resolve.json",
+        "@bazel_tools//tools/bash/runfiles",
+    ],
 )
 """
 
