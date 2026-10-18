@@ -1,0 +1,18 @@
+{
+  "version": 1,
+  "inputHash": "362857541",
+  "frameworks": {
+    "net10.0": {
+      "packages": [
+        {
+          "id": "Newtonsoft.Json",
+          "version": "13.0.3",
+          "sha512": "sha512-mbJSvHfRxfX3tR/U6n1WU\u002BmWHXswYc\u002BSB/hkOpx8yZZe68hNZGfymJu0cjsaJEkVzCMqePiU6LdIyogqfIn7kg==",
+          "urls": [
+            "https://api.nuget.org/v3-flatcontainer/newtonsoft.json/13.0.3/newtonsoft.json.13.0.3.nupkg"
+          ]
+        }
+      ]
+    }
+  }
+}
