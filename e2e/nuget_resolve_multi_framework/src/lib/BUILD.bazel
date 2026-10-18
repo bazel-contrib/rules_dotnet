@@ -1,0 +1,14 @@
+load("@rules_dotnet//dotnet:defs.bzl", "csharp_library")
+
+csharp_library(
+    name = "lib",
+    srcs = ["Json.cs"],
+    target_frameworks = [
+        "net8.0",
+        "net10.0",
+    ],
+    deps = select({
+        "@rules_dotnet//dotnet:tfm_net8.0": ["@nuget.net8.0//newtonsoft.json"],
+        "@rules_dotnet//dotnet:tfm_net10.0": ["@nuget.net10.0//newtonsoft.json"],
+    }),
+)
