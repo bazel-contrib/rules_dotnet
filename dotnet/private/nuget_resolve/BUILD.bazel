@@ -1,4 +1,5 @@
 load("@bazel_lib//:bzl_library.bzl", "bzl_library")
+load("@rules_shell//shell:sh_test.bzl", "sh_test")
 
 bzl_library(
     name = "input_hash",
@@ -10,4 +11,20 @@ bzl_library(
     name = "lock",
     srcs = ["lock.bzl"],
     visibility = ["//dotnet:__subpackages__"],
+)
+
+bzl_library(
+    name = "tool",
+    srcs = ["tool.bzl"],
+    visibility = ["//dotnet:__subpackages__"],
+    deps = ["//dotnet/private:toolchains_repo"],
+)
+
+sh_test(
+    name = "tool_version_test",
+    srcs = ["tool_version_test.sh"],
+    data = [
+        ":tool.bzl",
+        "//:MODULE.bazel",
+    ],
 )
