@@ -28,3 +28,9 @@ sh_test(
         "//:MODULE.bazel",
     ],
 )
+
+bzl_library(
+    name = "resolve",
+    srcs = ["resolve.bzl"],
+    visibility = ["//dotnet:__subpackages__"],
+)
