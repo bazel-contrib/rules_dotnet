@@ -1446,7 +1446,7 @@ git commit -m "Add the resolver tool entrypoint"
 - Test: `dotnet/private/tests/nuget_resolve/input_hash_test.bzl`
 - Test: `dotnet/private/tests/nuget_resolve/BUILD.bazel`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `dotnet/private/tests/nuget_resolve/input_hash_test.bzl`:
 
@@ -1571,12 +1571,12 @@ load(":input_hash_test.bzl", "input_hash_test_suite")
 input_hash_test_suite(name = "input_hash_test")
 ```
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [x] **Step 2: Run the test to verify it fails**
 
 Run: `bazel test //dotnet/private/tests/nuget_resolve:input_hash_test`
 Expected: FAIL — `no such package 'dotnet/private/nuget_resolve'`.
 
-- [ ] **Step 3: Write the implementation**
+- [x] **Step 3: Write the implementation**
 
 Create `dotnet/private/nuget_resolve/input_hash.bzl`:
 
@@ -1647,12 +1647,12 @@ bzl_library(
 )
 ```
 
-- [ ] **Step 4: Run the test to verify it passes**
+- [x] **Step 4: Run the test to verify it passes**
 
 Run: `bazel test //dotnet/private/tests/nuget_resolve:input_hash_test`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add dotnet/private/nuget_resolve/input_hash.bzl dotnet/private/nuget_resolve/BUILD.bazel dotnet/private/tests/nuget_resolve/input_hash_test.bzl dotnet/private/tests/nuget_resolve/BUILD.bazel
