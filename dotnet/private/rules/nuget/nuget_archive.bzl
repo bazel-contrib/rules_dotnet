@@ -742,6 +742,13 @@ def fetch_package_into(ctx, id, version, urls, integrity, prefix):
     base = str(ctx.path(prefix if prefix else ".")) + "/"
     all_files = sorted(_read_dir(ctx, prefix if prefix else ".").replace(base, "").splitlines())
 
+    # `find <prefix>` prints paths relative to the repository root, so they
+    # still carry the prefix; consumers expect them relative to the prefix
+    # (see the docstring above).
+    all_files = [_sanitize_path(f) for f in all_files]
+    if prefix:
+        all_files = [f[len(prefix):] for f in all_files if f.startswith(prefix)]
+
     return struct(nupkg = nupkg_name, files = all_files)
 
 def _nuget_archive_impl(ctx):
