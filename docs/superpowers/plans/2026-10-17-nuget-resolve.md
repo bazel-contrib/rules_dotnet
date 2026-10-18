@@ -3975,13 +3975,13 @@ Eén tag, twee frameworks, per-framework-hubs geadresseerd via een `select` op d
 - Create: `e2e/nuget_resolve_multi_framework/src/lib/Json.cs`
 - Create: `e2e/nuget_resolve_multi_framework/nuget_resolve.json` (gegenereerd via de pin-flow)
 
-- [ ] **Step 1: Create the module scaffolding**
+- [x] **Step 1: Create the module scaffolding**
 
 ```bash
 cp e2e/nuget_resolve_basic/.bazelrc e2e/nuget_resolve_basic/.bazelversion e2e/nuget_resolve_basic/internal_dev_deps.bzl e2e/nuget_resolve_basic/BUILD.bazel e2e/nuget_resolve_multi_framework/
 ```
 
-- [ ] **Step 2: Create the module (nog zonder lock_file) en de library**
+- [x] **Step 2: Create the module (nog zonder lock_file) en de library**
 
 Create `e2e/nuget_resolve_multi_framework/MODULE.bazel`:
 
@@ -4056,7 +4056,7 @@ public static class Json
 }
 ```
 
-- [ ] **Step 3: Generate the lock file via the pin flow**
+- [x] **Step 3: Generate the lock file via the pin flow**
 
 Run (vanuit `e2e/nuget_resolve_multi_framework`): `bazel run @nuget.net10.0//:pin`
 Expected: `Wrote nuget_resolve.json. ...`
@@ -4078,7 +4078,7 @@ EOF
 
 Expected: `lock file OK`. (Let op: `sorted(["net8.0", "net10.0"])` is `["net10.0", "net8.0"]` — ordinaal sorteert "1" voor "8".)
 
-- [ ] **Step 4: Pin the module**
+- [x] **Step 4: Pin the module**
 
 In `e2e/nuget_resolve_multi_framework/MODULE.bazel`, voeg `lock_file` toe. Old:
 
@@ -4095,7 +4095,7 @@ New:
 )
 ```
 
-- [ ] **Step 5: Build for both frameworks**
+- [x] **Step 5: Build for both frameworks**
 
 rules_dotnet bouwt één TFM-variant per invocation: de `tfm_transition` kiest uit `target_frameworks` de hoogste die compatibel is met de flag `@rules_dotnet//dotnet:target_framework` (default de hoogste). Bouw daarom beide varianten expliciet:
 
@@ -4106,7 +4106,7 @@ bazel build //... --@rules_dotnet//dotnet:target_framework=net10.0
 
 Expected: beide runs `INFO: Build completed successfully`. De `select()` in `//src/lib` adresseert per variant de bijbehorende hub (`@nuget.net8.0`/`@nuget.net10.0`), dus een ontbrekende of kapotte hub faalt de bijbehorende run.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add e2e/nuget_resolve_multi_framework
