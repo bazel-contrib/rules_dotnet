@@ -50,6 +50,8 @@ group rules_dotnet_nuget_packages
     framework: net9.0
     source https://api.nuget.org/v3/index.json
 
+    nuget NuGet.DependencyResolver.Core 7.0.1
+    nuget NuGet.Protocol 7.0.1
     nuget NUnit 3.14.0
     nuget NUnitLite 3.14.0
     nuget xunit.v3.assert ~> 3.0
