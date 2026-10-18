@@ -277,9 +277,10 @@ public static class Resolver
         {
             var handler = new HttpClientHandler
             {
-                // nuget.org's gz registration hives always serve gzip even
-                // without an Accept-Encoding request header.
-                AutomaticDecompression = DecompressionMethods.GZip,
+                // nuget.org's registration hives always serve gzip or deflate
+                // even without an Accept-Encoding request header; match
+                // NuGet.Protocol's HttpSourceResource decompression set.
+                AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate,
             };
             var credentials = Netrc.CredentialsFor(new Uri(url));
             if (credentials != null)
