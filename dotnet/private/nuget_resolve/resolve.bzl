@@ -24,6 +24,10 @@ source "${{RUNFILES_DIR:-/dev/null}}/$f" 2>/dev/null || \
 # --- end runfiles.bash initialization v3 ---
 
 set -euo pipefail
+if [[ -z "${{BUILD_WORKSPACE_DIRECTORY:-}}" ]]; then
+  echo >&2 "ERROR: BUILD_WORKSPACE_DIRECTORY is not set; run this target with 'bazel run @<repo>//:pin'."
+  exit 1
+fi
 resolved_file=$(rlocation "${{1#external\\/}}")
 if [[ ! -e $resolved_file ]]; then
   # for --experimental_sibling_repository_layout
@@ -50,7 +54,7 @@ exports_files(["nuget_resolve.json"])
 sh_binary(
     name = "pin",
     srcs = ["pin.sh"],
-    args = ["$(rootpath :nuget_resolve.json)"],
+    args = ["$(rlocationpath :nuget_resolve.json)"],
     data = [":nuget_resolve.json"],
 )
 """
@@ -77,6 +81,9 @@ def _nuget_resolve_impl(ctx):
         "DOTNET_SKIP_FIRST_TIME_EXPERIENCE": "1",
         "NUGET_PACKAGES": str(ctx.path("nuget_packages")),
         "NUGET_HTTP_CACHE_PATH": str(ctx.path("nuget_http_cache")),
+        # Offline revocation checks: signed-package verification can hang on
+        # online CRL fetches in restricted-network repos (matches tool.bzl).
+        "NUGET_CERT_REVOCATION_MODE": "offline",
     }
     if _is_windows(ctx):
         env["USERPROFILE"] = home
