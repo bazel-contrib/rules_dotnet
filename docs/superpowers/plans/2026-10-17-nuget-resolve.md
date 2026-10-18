@@ -4281,7 +4281,7 @@ Een kleine C#-app die Serilog met de console-sink gebruikt, met ingecheckt `nuge
 - Create: `examples/nuget_resolve/nuget_resolve.json` (gegenereerd via de pin-flow)
 - Modify: `examples/MODULE.bazel`
 
-- [ ] **Step 1: Add the resolve tag (nog zonder lock_file)**
+- [x] **Step 1: Add the resolve tag (nog zonder lock_file)**
 
 In `examples/MODULE.bazel`. Old:
 
@@ -4309,7 +4309,7 @@ nuget.resolve(
 use_repo(nuget, "nuget_resolve.net10.0")
 ```
 
-- [ ] **Step 2: Create the example app**
+- [x] **Step 2: Create the example app**
 
 Create `examples/nuget_resolve/BUILD.bazel`:
 
@@ -4346,7 +4346,7 @@ public static class Program
 }
 ```
 
-- [ ] **Step 3: Generate the lock file via the pin flow**
+- [x] **Step 3: Generate the lock file via the pin flow**
 
 Run (vanuit `examples/`): `bazel run @nuget_resolve.net10.0//:pin`
 Expected: `Wrote nuget_resolve.json. Check it in and point the resolve tag at it with lock_file = "//:nuget_resolve.json".`
@@ -4369,7 +4369,7 @@ EOF
 
 Expected: `lock file OK: N packages` (N ≥ 2; de sink trekt transitief alleen Serilog mee, dus N == 2 is de verwachte uitkomst).
 
-- [ ] **Step 4: Pin the tag**
+- [x] **Step 4: Pin the tag**
 
 In `examples/MODULE.bazel`, voeg `lock_file` toe aan de `nuget_resolve`-tag. Old:
 
@@ -4398,7 +4398,7 @@ nuget.resolve(
 )
 ```
 
-- [ ] **Step 5: Build, run, and verify the pin is stable**
+- [x] **Step 5: Build, run, and verify the pin is stable**
 
 Run (vanuit `examples/`):
 
@@ -4408,7 +4408,7 @@ bazel run //nuget_resolve && bazel run @nuget_resolve.net10.0//:pin && git statu
 
 Expected: de app print een Serilog-logregel met `Hello from "nuget_resolve"`; het tweede commando schrijft hetzelfde bestand opnieuw — `git status` toont geen wijziging aan `nuget_resolve/nuget_resolve.json` (stabiel, deterministisch).
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add examples/nuget_resolve examples/MODULE.bazel examples/MODULE.bazel.lock
