@@ -8,9 +8,13 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 
+backup_dir="$(mktemp -d)"
+cp MODULE.bazel nuget_resolve.json "$backup_dir"/
+
 cleanup() {
-  git checkout -- MODULE.bazel nuget_resolve.json
-  rm -f MODULE.bazel.bak build.log
+  cp "$backup_dir/MODULE.bazel" MODULE.bazel
+  cp "$backup_dir/nuget_resolve.json" nuget_resolve.json
+  rm -rf "$backup_dir" build.log
 }
 trap cleanup EXIT
 
@@ -18,8 +22,11 @@ echo "--- baseline: the pinned build succeeds"
 bazel build //...
 
 echo "--- make the lock stale: add Serilog to the packages"
-sed -i.bak 's|"Newtonsoft.Json": "13.0.3"|"Newtonsoft.Json": "13.0.3",\n        "Serilog": "4.0.0"|' MODULE.bazel
-rm -f MODULE.bazel.bak
+sed -i 's|"Newtonsoft.Json": "13.0.3"|"Newtonsoft.Json": "13.0.3",\n        "Serilog": "4.0.0"|' MODULE.bazel
+grep -q '"Serilog": "4.0.0"' MODULE.bazel || {
+  echo "FAIL: the stale-ization edit did not apply" >&2
+  exit 1
+}
 
 echo "--- the build must now fail with the repin instructions"
 if bazel build //... 2> build.log; then
