@@ -20,7 +20,7 @@ fi
 module_bazel="$root/MODULE.bazel"
 tool_bzl="$root/dotnet/private/nuget_resolve/tool.bzl"
 
-module_version=$(sed -n 's/.*bootstrap_toolchain(dotnet_version = "\([^"]*\)").*/\1/p' "$module_bazel")
+module_version=$(sed -n 's/^[[:space:]]*dotnet\.bootstrap_toolchain(dotnet_version = "\([^"]*\)").*/\1/p' "$module_bazel")
 tool_version=$(sed -n 's/^BOOTSTRAP_SDK_VERSION = "\([^"]*\)".*/\1/p' "$tool_bzl")
 
 if [[ -z "$module_version" ]]; then

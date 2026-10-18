@@ -3,7 +3,9 @@
 The tool's full transitive .nupkg closure is pinned below with sha512
 integrity, downloaded into a local folder feed, and restored against a
 NuGet.config that names only that feed — no network access beyond the pinned
-downloads, so Bazel's repository cache makes the tool repo hermetic.
+downloads. The pinned downloads are integrity-checked and deduplicated by
+Bazel's repository cache; the build itself re-runs on every refetch, always
+from the same pinned inputs.
 """
 
 load("//dotnet/private:toolchains_repo.bzl", "PLATFORMS")
@@ -78,16 +80,21 @@ def host_platform(os_name, os_arch):
       The PLATFORMS key for the host, e.g. "x86_64-unknown-linux-gnu".
     """
     want_os = _host_os(os_name)
+
+    # aarch64-family entries in PLATFORMS declare either @platforms//cpu:aarch64
+    # or @platforms//cpu:arm64, so accept both.
     if os_arch in ("aarch64", "arm64"):
-        want_cpu = "@platforms//cpu:aarch64"
+        want_cpus = ["@platforms//cpu:aarch64", "@platforms//cpu:arm64"]
     elif os_arch in ("x86_64", "amd64"):
-        want_cpu = "@platforms//cpu:x86_64"
+        want_cpus = ["@platforms//cpu:x86_64"]
     else:
         fail("unsupported host architecture: " + os_arch)
 
     for (key, meta) in PLATFORMS.items():
-        if meta.os == want_os and want_cpu in meta.compatible_with:
-            return key
+        if meta.os == want_os:
+            for want_cpu in want_cpus:
+                if want_cpu in meta.compatible_with:
+                    return key
     fail("no .NET SDK platform for %s/%s" % (os_name, os_arch))
 
 def bootstrap_sdk_dotnet_label(os_name, os_arch):
@@ -126,6 +133,10 @@ def _nuget_resolver_tool_impl(ctx):
         "DOTNET_SKIP_FIRST_TIME_EXPERIENCE": "1",
         "NUGET_PACKAGES": str(ctx.path("nuget_packages")),
         "NUGET_HTTP_CACHE_PATH": str(ctx.path("nuget_http_cache")),
+        # Signed-package verification on Linux can otherwise attempt online
+        # certificate-revocation checks, which hang in offline/sandboxed
+        # fetch contexts.
+        "NUGET_CERT_REVOCATION_MODE": "offline",
     }
     if _host_os(ctx.os.name) == "windows":
         env["USERPROFILE"] = home
@@ -148,6 +159,14 @@ def _nuget_resolver_tool_impl(ctx):
             # which the offline folder feed cannot serve. The tool only compiles
             # against Microsoft.NETCore.App, which every SDK bundles.
             "/p:EnableTargetingPackDownload=false",
+            # NuGet then uses ONLY this config file instead of merging
+            # user/machine-level configs (on Windows the user config derives
+            # from %APPDATA%, which the env redirect does not cover; a stray
+            # config could re-add nuget.org).
+            "/p:RestoreConfigFile=NuGet.config",
+            # NuGetAudit defaults to on and would reach the network during
+            # restore.
+            "/p:NuGetAudit=false",
         ],
         environment = env,
         timeout = 1200,
