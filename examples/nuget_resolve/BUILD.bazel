@@ -1,0 +1,11 @@
+load("@rules_dotnet//dotnet:defs.bzl", "csharp_binary")
+
+csharp_binary(
+    name = "nuget_resolve",
+    srcs = ["Program.cs"],
+    target_frameworks = ["net10.0"],
+    deps = [
+        "@nuget_resolve.net10.0//serilog",
+        "@nuget_resolve.net10.0//serilog.sinks.console",
+    ],
+)

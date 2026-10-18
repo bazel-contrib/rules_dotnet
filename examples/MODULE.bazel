@@ -46,6 +46,21 @@ paket_example.parse(
 )
 use_repo(paket_example, "paket.main", "paket.othergroup")
 
+# nuget.resolve for //nuget_resolve: transitive resolution with a checked-in
+# nuget_resolve.json. The tag is named after the example; the gazelle_csharp
+# example below uses its own tag named "nuget".
+nuget = use_extension("@rules_dotnet//dotnet:nuget.bzl", "nuget")
+nuget.resolve(
+    name = "nuget_resolve",
+    packages = {
+        "Serilog": "4.0.0",
+        "Serilog.Sinks.Console": "6.0.0",
+    },
+    frameworks = ["net10.0"],
+    lock_file = "//nuget_resolve:nuget_resolve.json",
+)
+use_repo(nuget, "nuget_resolve.net10.0")
+
 # Gazelle for //gazelle_csharp, demonstrating the C# Gazelle extension.
 # rules_go and the Go SDK come transitively from rules_dotnet.
 bazel_dep(name = "gazelle", version = "0.51.3", repo_name = "bazel_gazelle")
