@@ -22,7 +22,7 @@ public static class LockFile
     public static string Render(string inputHash, IReadOnlyDictionary<string, List<ResolvedPackage>> frameworks)
     {
         using var stream = new MemoryStream();
-        using (var writer = new Utf8JsonWriter(stream, new JsonWriterOptions { Indented = true, IndentSize = 2 }))
+        using (var writer = new Utf8JsonWriter(stream, new JsonWriterOptions { Indented = true, IndentSize = 2, NewLine = "\n" }))
         {
             writer.WriteStartObject();
             writer.WriteNumber("version", FormatVersion);
@@ -32,7 +32,7 @@ public static class LockFile
             {
                 writer.WriteStartObject(tfm);
                 writer.WriteStartArray("packages");
-                foreach (var package in packages.OrderBy(p => p.Id, StringComparer.OrdinalIgnoreCase))
+                foreach (var package in packages.OrderBy(p => p.Id, StringComparer.OrdinalIgnoreCase).ThenBy(p => p.Id, StringComparer.Ordinal))
                 {
                     writer.WriteStartObject();
                     writer.WriteString("id", package.Id);

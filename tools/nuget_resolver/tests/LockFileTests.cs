@@ -71,7 +71,7 @@ public sealed class LockFileTests
 
         var rendered = LockFile.Render("737269301", Frameworks);
 
-        Assert.That(rendered, Is.EqualTo(expected.Replace("\r\n", "\n")));
+        Assert.That(rendered, Is.EqualTo(expected));
         Assert.That(LockFile.Render("737269301", Frameworks), Is.EqualTo(rendered), "second render must be identical");
     }
 }
