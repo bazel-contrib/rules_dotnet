@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Net;
 using System.Net.Http;
 using System.Security.Cryptography;
 using System.Text.Json;
@@ -274,7 +275,12 @@ public static class Resolver
     {
         try
         {
-            var handler = new HttpClientHandler();
+            var handler = new HttpClientHandler
+            {
+                // nuget.org's gz registration hives always serve gzip even
+                // without an Accept-Encoding request header.
+                AutomaticDecompression = DecompressionMethods.GZip,
+            };
             var credentials = Netrc.CredentialsFor(new Uri(url));
             if (credentials != null)
             {
