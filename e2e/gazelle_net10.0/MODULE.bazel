@@ -20,9 +20,16 @@ use_repo(dotnet, "dotnet_toolchains")
 
 register_toolchains("@dotnet_toolchains//:all")
 
-packages_lock = use_extension("@rules_dotnet//dotnet:packages_lock.bzl", "packages_lock")
-packages_lock.parse(lock = "//:packages.lock.json")
-use_repo(packages_lock, "nuget.net10.0")
+nuget = use_extension("@rules_dotnet//dotnet:nuget.bzl", "nuget")
+nuget.resolve(
+    name = "nuget",
+    packages = {
+        "Newtonsoft.Json": "13.0.3",
+    },
+    frameworks = ["net10.0"],
+    lock_file = "//:nuget_resolve.json",
+)
+use_repo(nuget, "nuget.net10.0")
 
 # rules_go is needed as a direct dependency so that the Go SDK is registered
 # for the gazelle_binary target above (and so that the
