@@ -34,3 +34,25 @@ bzl_library(
     srcs = ["resolve.bzl"],
     visibility = ["//dotnet:__subpackages__"],
 )
+
+bzl_library(
+    name = "pinned_hub",
+    srcs = ["pinned_hub.bzl"],
+    visibility = ["//dotnet:__subpackages__"],
+    deps = [
+        ":input_hash",
+        ":lock",
+        "//dotnet/private/rules/nuget:nuget_repo",
+    ],
+)
+
+bzl_library(
+    name = "unpinned_hub",
+    srcs = ["unpinned_hub.bzl"],
+    visibility = ["//dotnet:__subpackages__"],
+    deps = [
+        ":lock",
+        "//dotnet/private/rules/nuget:nuget_archive",
+        "//dotnet/private/rules/nuget:nuget_repo",
+    ],
+)
