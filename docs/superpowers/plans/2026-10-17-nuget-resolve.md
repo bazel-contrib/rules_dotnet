@@ -4794,7 +4794,7 @@ Vervangt de `packages_lock`-tag door `nuget.resolve` met een via de pin-flow geg
 - Create: `examples/gazelle_csharp/nuget_resolve.json` (gegenereerd via de pin-flow)
 - Delete: `examples/gazelle_csharp/packages.lock.json`
 
-- [ ] **Step 1: Replace the packages_lock block (nog zonder lock_file)**
+- [x] **Step 1: Replace the packages_lock block (nog zonder lock_file)**
 
 In `examples/MODULE.bazel`. Old:
 
@@ -4819,7 +4819,7 @@ nuget.resolve(
 use_repo(nuget, "nuget.net10.0")
 ```
 
-- [ ] **Step 2: Generate the lock file via the pin flow**
+- [x] **Step 2: Generate the lock file via the pin flow**
 
 Run (vanuit `examples/`):
 
@@ -4842,7 +4842,7 @@ EOF
 
 Expected: `lock file OK`.
 
-- [ ] **Step 3: Pin the tag en verwijder packages.lock.json**
+- [x] **Step 3: Pin the tag en verwijder packages.lock.json**
 
 In `examples/MODULE.bazel`, voeg `lock_file` toe aan de tag met `name = "nuget"`. Old:
 
@@ -4875,7 +4875,7 @@ Verwijder het oude lockbestand:
 git rm examples/gazelle_csharp/packages.lock.json
 ```
 
-- [ ] **Step 4: Point the gazelle target at the new lock file**
+- [x] **Step 4: Point the gazelle target at the new lock file**
 
 In `examples/gazelle_csharp/BUILD.bazel`. Old:
 
@@ -4903,7 +4903,7 @@ gazelle(
 )
 ```
 
-- [ ] **Step 5: Verify gazelle produces no diff and everything builds**
+- [x] **Step 5: Verify gazelle produces no diff and everything builds**
 
 Run (vanuit `examples/`):
 
@@ -4913,7 +4913,7 @@ bazel run //gazelle_csharp:gazelle && git status --short gazelle_csharp/ && baze
 
 Expected: gazelle draait zonder wijzigingen (`git status` toont geen gewijzigde BUILD-bestanden onder `gazelle_csharp/`); build en test slagen.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add examples/MODULE.bazel examples/MODULE.bazel.lock examples/gazelle_csharp
