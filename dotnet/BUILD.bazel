@@ -95,6 +95,13 @@ bzl_library(
 )
 
 bzl_library(
+    name = "nuget",
+    srcs = ["nuget.bzl"],
+    visibility = ["//visibility:public"],
+    deps = ["//dotnet/private/nuget_resolve:extension"],
+)
+
+bzl_library(
     name = "packages_lock",
     srcs = ["packages_lock.bzl"],
     visibility = ["//visibility:public"],
