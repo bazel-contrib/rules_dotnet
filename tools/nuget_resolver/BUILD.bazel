@@ -12,7 +12,13 @@ csharp_library(
     target_frameworks = ["net10.0"],
     visibility = ["//tools:__subpackages__"],
     deps = [
+        "@paket.rules_dotnet_nuget_packages//nuget.common",
+        "@paket.rules_dotnet_nuget_packages//nuget.configuration",
         "@paket.rules_dotnet_nuget_packages//nuget.dependencyresolver.core",
+        "@paket.rules_dotnet_nuget_packages//nuget.frameworks",
+        "@paket.rules_dotnet_nuget_packages//nuget.librarymodel",
+        "@paket.rules_dotnet_nuget_packages//nuget.packaging",
         "@paket.rules_dotnet_nuget_packages//nuget.protocol",
+        "@paket.rules_dotnet_nuget_packages//nuget.versioning",
     ],
 )
