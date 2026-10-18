@@ -57,8 +57,8 @@ func indexLibrary(t *testing.T, l *csharpLang, c *config.Config, ix *resolve.Rul
 
 func TestResolveNamespaces(t *testing.T) {
 	l, c, dir := setupLang(t, "# gazelle:dotnet_target_frameworks net10.0\n", "src", "src/app")
-	writeFile(t, dir, "packages.lock.json", `{"version": 1, "dependencies": {"net10.0": {"Newtonsoft.Json": {"type": "Direct", "resolved": "13.0.3"}}}}`)
-	idx, err := nuget.LoadIndex(filepath.Join(dir, "packages.lock.json"))
+	writeFile(t, dir, "nuget_resolve.json", `{"version": 1, "inputHash": "1", "frameworks": {"net10.0": {"packages": [{"id": "Newtonsoft.Json", "version": "13.0.3", "sha512": "sha512-AAAA", "urls": ["https://feed/newtonsoft.json.13.0.3.nupkg"]}]}}}`)
+	idx, err := nuget.LoadIndex(filepath.Join(dir, "nuget_resolve.json"))
 	if err != nil {
 		t.Fatal(err)
 	}

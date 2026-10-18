@@ -27,8 +27,8 @@ func NewConfigurer(lang *csharpLang) *Configurer {
 
 // RegisterFlags implements config.Configurer.
 func (cr *Configurer) RegisterFlags(fs *flag.FlagSet, cmd string, c *config.Config) {
-	fs.StringVar(&cr.nugetLockFile, "dotnet_nuget_lock_file", "packages.lock.json",
-		"Path of the packages.lock.json file, relative to the repository root.")
+	fs.StringVar(&cr.nugetLockFile, "dotnet_nuget_lock_file", "nuget_resolve.json",
+		"Path of the nuget_resolve.json file, relative to the repository root.")
 }
 
 // CheckFlags implements config.Configurer.
@@ -122,7 +122,7 @@ func (cr *Configurer) Configure(c *config.Config, rel string, f *rule.File) {
 		case err == nil:
 			cr.lang.nugetIndex = index
 		case os.IsNotExist(err):
-			log.Printf("no packages.lock.json at %s; NuGet resolution is disabled", lockPath)
+			log.Printf("no nuget_resolve.json at %s; NuGet resolution is disabled", lockPath)
 		default:
 			log.Fatalf("error loading %s: %v", lockPath, err)
 		}

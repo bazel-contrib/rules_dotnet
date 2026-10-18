@@ -72,7 +72,7 @@ func New(repoRoot string) *Config {
 		generateBinary:    true,
 		projectSdk:        "default",
 		unresolvedImports: "warn",
-		nugetLockFile:     "packages.lock.json",
+		nugetLockFile:     "nuget_resolve.json",
 	}
 }
 
@@ -171,10 +171,10 @@ func (c *Config) SetUnresolvedImports(value string) error {
 	return fmt.Errorf("possible values are warn/error, got %q", value)
 }
 
-// NugetLockFile returns the packages.lock.json path relative to the repo root.
+// NugetLockFile returns the nuget_resolve.json path relative to the repo root.
 func (c *Config) NugetLockFile() string { return c.nugetLockFile }
 
-// SetNugetLockFile sets the packages.lock.json path relative to the repo root.
+// SetNugetLockFile sets the nuget_resolve.json path relative to the repo root.
 func (c *Config) SetNugetLockFile(v string) { c.nugetLockFile = v }
 
 // NugetLabel returns the label of a NuGet package:

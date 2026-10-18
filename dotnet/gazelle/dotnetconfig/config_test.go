@@ -19,8 +19,8 @@ func TestDefaults(t *testing.T) {
 	if got := c.UnresolvedImports(); got != "warn" {
 		t.Errorf("UnresolvedImports() = %q, want %q", got, "warn")
 	}
-	if got := c.NugetLockFile(); got != "packages.lock.json" {
-		t.Errorf("NugetLockFile() = %q, want %q", got, "packages.lock.json")
+	if got := c.NugetLockFile(); got != "nuget_resolve.json" {
+		t.Errorf("NugetLockFile() = %q, want %q", got, "nuget_resolve.json")
 	}
 	if got := c.Visibility(); !reflect.DeepEqual(got, []string{"//visibility:public"}) {
 		t.Errorf("Visibility() = %v, want [//visibility:public]", got)

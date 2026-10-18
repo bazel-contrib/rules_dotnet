@@ -8,25 +8,30 @@ import (
 
 const testLock = `{
   "version": 1,
-  "dependencies": {
+  "inputHash": "737269301",
+  "frameworks": {
     "net10.0": {
-      "Newtonsoft.Json": {
-        "type": "Direct",
-        "requested": "[13.0.3, )",
-        "resolved": "13.0.3",
-        "contentHash": "HrC5BXdl00IP9zeV+0Z848QWPAoCr9P3bDEZguI+gkLcBKAOxix/tLEAAHC+UvDNPv4a2d18lOReHMOagPa+zQ=="
-      },
-      "Microsoft.Testing.Platform": {
-        "type": "Transitive",
-        "resolved": "1.4.3"
-      }
+      "packages": [
+        {
+          "id": "Newtonsoft.Json",
+          "version": "13.0.3",
+          "sha512": "sha512-HrC5BXdl00IP9zeV+0Z848QWPAoCr9P3bDEZguI+gkLcBKAOxix/tLEAAHC+UvDNPv4a2d18lOReHMOagPa+zQ==",
+          "urls": ["https://api.nuget.org/v3-flatcontainer/newtonsoft.json/13.0.3/newtonsoft.json.13.0.3.nupkg"]
+        },
+        {
+          "id": "Microsoft.Testing.Platform",
+          "version": "1.4.3",
+          "sha512": "sha512-AAAA",
+          "urls": ["https://feed/microsoft.testing.platform.1.4.3.nupkg"]
+        }
+      ]
     }
   }
 }`
 
 func writeLock(t *testing.T, content string) string {
 	t.Helper()
-	path := filepath.Join(t.TempDir(), "packages.lock.json")
+	path := filepath.Join(t.TempDir(), "nuget_resolve.json")
 	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -60,7 +65,7 @@ func TestLoadIndexAndResolve(t *testing.T) {
 }
 
 func TestResolveAmbiguousCaseVariants(t *testing.T) {
-	lock := `{"version": 1, "dependencies": {"net10.0": {"Contoso.Widget": {"type": "Direct"}, "contoso.widget": {"type": "Direct"}}}}`
+	lock := `{"version": 1, "inputHash": "1", "frameworks": {"net10.0": {"packages": [{"id": "Contoso.Widget"}, {"id": "contoso.widget"}]}}}`
 	idx, err := LoadIndex(writeLock(t, lock))
 	if err != nil {
 		t.Fatal(err)

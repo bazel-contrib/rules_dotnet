@@ -18,7 +18,7 @@ type csharpLang struct {
 	resolve.Resolver
 
 	// nugetIndex resolves namespaces to NuGet package IDs. It is loaded once
-	// from packages.lock.json during Configure of the repository root and is
+	// from nuget_resolve.json during Configure of the repository root and is
 	// nil when the file does not exist.
 	nugetIndex *nuget.Index
 }

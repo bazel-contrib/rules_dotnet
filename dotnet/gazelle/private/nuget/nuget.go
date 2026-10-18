@@ -1,4 +1,4 @@
-// Package nuget indexes the package IDs of a packages.lock.json file and
+// Package nuget indexes the package IDs of a nuget_resolve.json file and
 // resolves C# namespaces to package IDs by longest prefix match.
 package nuget
 
@@ -9,15 +9,19 @@ import (
 	"strings"
 )
 
-// lockFile mirrors the relevant structure of packages.lock.json:
-// dependencies -> target framework -> package ID -> dependency entry.
-// Only the package IDs (the map keys) are used.
+// lockFile mirrors the relevant structure of nuget_resolve.json:
+// frameworks -> target framework -> packages -> package entries.
+// Only the package IDs are used.
 type lockFile struct {
-	Dependencies map[string]map[string]json.RawMessage `json:"dependencies"`
+	Frameworks map[string]struct {
+		Packages []struct {
+			ID string `json:"id"`
+		} `json:"packages"`
+	} `json:"frameworks"`
 }
 
 // Index resolves namespaces to NuGet package IDs. A nil *Index is valid and
-// resolves nothing (used when no packages.lock.json exists).
+// resolves nothing (used when no nuget_resolve.json exists).
 type Index struct {
 	// ids maps lowercased package IDs to their original forms. More than
 	// one original form means the lock file lists case variants of the same
@@ -25,7 +29,7 @@ type Index struct {
 	ids map[string][]string
 }
 
-// LoadIndex reads packages.lock.json from path.
+// LoadIndex reads nuget_resolve.json from path.
 func LoadIndex(path string) (*Index, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -36,10 +40,10 @@ func LoadIndex(path string) (*Index, error) {
 		return nil, fmt.Errorf("parsing %s: %w", path, err)
 	}
 	idx := &Index{ids: map[string][]string{}}
-	for _, deps := range lf.Dependencies {
-		for id := range deps {
-			lower := strings.ToLower(id)
-			idx.ids[lower] = appendUnique(idx.ids[lower], id)
+	for _, group := range lf.Frameworks {
+		for _, pkg := range group.Packages {
+			lower := strings.ToLower(pkg.ID)
+			idx.ids[lower] = appendUnique(idx.ids[lower], pkg.ID)
 		}
 	}
 	return idx, nil
