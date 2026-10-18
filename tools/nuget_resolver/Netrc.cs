@@ -22,8 +22,16 @@ public static class Netrc
             return packageSource;
         }
 
+        // Local folder feeds have no host to authenticate against; only
+        // absolute HTTP(S) sources can carry netrc credentials.
+        if (!Uri.TryCreate(source, UriKind.Absolute, out var uri) ||
+            (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
+        {
+            return packageSource;
+        }
+
         _netrcPath = netrcPath;
-        var credential = CredentialsFor(new Uri(source));
+        var credential = CredentialsFor(uri);
         if (credential != null)
         {
             packageSource.Credentials = new PackageSourceCredential(
@@ -54,7 +62,15 @@ public static class Netrc
                 switch (parts[i])
                 {
                     case "machine":
+                        // A new machine ends the previous stanza, so only now
+                        // are its login/password guaranteed fully read.
+                        if (Matches(machine, login, url))
+                        {
+                            return new NetworkCredential(login, password ?? string.Empty);
+                        }
                         machine = parts[i + 1];
+                        login = null;
+                        password = null;
                         break;
                     case "login":
                         login = parts[i + 1];
@@ -64,15 +80,18 @@ public static class Netrc
                         break;
                 }
             }
+        }
 
-            if (machine != null &&
-                string.Equals(machine, url.Host, StringComparison.OrdinalIgnoreCase) &&
-                login != null)
-            {
-                return new NetworkCredential(login, password ?? string.Empty);
-            }
+        if (Matches(machine, login, url))
+        {
+            return new NetworkCredential(login, password ?? string.Empty);
         }
 
         return null;
     }
+
+    private static bool Matches(string? machine, string? login, Uri url)
+        => machine != null &&
+           string.Equals(machine, url.Host, StringComparison.OrdinalIgnoreCase) &&
+           login != null;
 }
