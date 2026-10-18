@@ -5096,7 +5096,7 @@ Elke e2e-map is een eigen bazel-module en wordt door de `e2e`-taskmatrix gebouwd
 **Files:**
 - Modify: `.bazelci/presubmit.yml`
 
-- [ ] **Step 1: Add the four modules to the e2e matrix**
+- [x] **Step 1: Add the four modules to the e2e matrix**
 
 In `.bazelci/presubmit.yml`. Old:
 
@@ -5110,7 +5110,7 @@ New:
   e2e_working_directory: ["e2e/net8.0", "e2e/net9.0", "e2e/net10.0", "e2e/web_sdk", "e2e/gazelle_net10.0", "e2e/nuget_resolve_basic", "e2e/nuget_resolve_transitive", "e2e/nuget_resolve_multi_framework", "e2e/nuget_resolve_pinning"]
 ```
 
-- [ ] **Step 2: Verify the YAML parses and lists the new modules**
+- [x] **Step 2: Verify the YAML parses and lists the new modules**
 
 ```bash
 python3 -c "
@@ -5125,7 +5125,7 @@ print('presubmit.yml OK:', len(dirs), 'e2e modules')
 
 Expected: `presubmit.yml OK: 9 e2e modules`.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add .bazelci/presubmit.yml
