@@ -178,7 +178,7 @@ Pure logica zonder NuGet-API's: de spec-invoer lezen en het lockbestand determin
 - Test: `tools/nuget_resolver/tests/SpecTests.cs`
 - Test: `tools/nuget_resolver/tests/LockFileTests.cs`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Create `tools/nuget_resolver/tests/SpecTests.cs`:
 
@@ -331,12 +331,12 @@ csharp_nunit_test(
 )
 ```
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [x] **Step 2: Run the test to verify it fails**
 
 Run: `bazel test //tools/nuget_resolver/tests:nuget_resolver_test`
 Expected: FAIL — `no such package 'tools/nuget_resolver'` (de library bestaat nog niet).
 
-- [ ] **Step 3: Write the implementation**
+- [x] **Step 3: Write the implementation**
 
 Create `tools/nuget_resolver/NuGetResolver.csproj`:
 
@@ -515,12 +515,12 @@ csharp_library(
 )
 ```
 
-- [ ] **Step 4: Run the test to verify it passes**
+- [x] **Step 4: Run the test to verify it passes**
 
 Run: `bazel test //tools/nuget_resolver/tests:nuget_resolver_test`
 Expected: PASS — `//tools/nuget_resolver/tests:nuget_resolver_test PASSED`.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add tools/nuget_resolver/NuGetResolver.csproj tools/nuget_resolver/ResolveSpec.cs tools/nuget_resolver/ResolveException.cs tools/nuget_resolver/LockFile.cs tools/nuget_resolver/BUILD.bazel tools/nuget_resolver/tests/BUILD.bazel tools/nuget_resolver/tests/SpecTests.cs tools/nuget_resolver/tests/LockFileTests.cs
