@@ -19,7 +19,7 @@ matrix:
       ["--@rules_dotnet//dotnet/settings:strict_deps=true"],
       ["--@rules_dotnet//dotnet/settings:strict_deps=false"],
     ]
-  e2e_working_directory: ["e2e/net8.0", "e2e/net9.0", "e2e/net10.0", "e2e/web_sdk"]
+  e2e_working_directory: ["e2e/net8.0", "e2e/net9.0", "e2e/net10.0", "e2e/web_sdk", "e2e/gazelle_net10.0", "e2e/nuget_resolve_basic", "e2e/nuget_resolve_transitive", "e2e/nuget_resolve_multi_framework", "e2e/nuget_resolve_pinning"]
 
 tasks:
   test_all:

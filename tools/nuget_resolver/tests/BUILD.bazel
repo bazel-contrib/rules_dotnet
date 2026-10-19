@@ -1,0 +1,16 @@
+load(
+    "//dotnet:defs.bzl",
+    "csharp_nunit_test",
+)
+
+csharp_nunit_test(
+    name = "nuget_resolver_test",
+    srcs = glob(["*.cs"]),
+    target_frameworks = ["net10.0"],
+    deps = [
+        "//tools/nuget_resolver",
+        "@paket.rules_dotnet_nuget_packages//nuget.configuration",
+        "@paket.rules_dotnet_nuget_packages//nuget.dependencyresolver.core",
+        "@paket.rules_dotnet_nuget_packages//nuget.protocol",
+    ],
+)

@@ -1,0 +1,73 @@
+load("@bazel_lib//:bzl_library.bzl", "bzl_library")
+load("@rules_shell//shell:sh_test.bzl", "sh_test")
+
+bzl_library(
+    name = "input_hash",
+    srcs = ["input_hash.bzl"],
+    visibility = ["//dotnet:__subpackages__"],
+)
+
+bzl_library(
+    name = "lock",
+    srcs = ["lock.bzl"],
+    visibility = ["//dotnet:__subpackages__"],
+)
+
+bzl_library(
+    name = "tool",
+    srcs = ["tool.bzl"],
+    visibility = ["//dotnet:__subpackages__"],
+    deps = ["//dotnet/private:toolchains_repo"],
+)
+
+sh_test(
+    name = "tool_version_test",
+    srcs = ["tool_version_test.sh"],
+    data = [
+        ":tool.bzl",
+        "//:MODULE.bazel",
+    ],
+)
+
+bzl_library(
+    name = "resolve",
+    srcs = ["resolve.bzl"],
+    visibility = ["//dotnet:__subpackages__"],
+)
+
+bzl_library(
+    name = "pinned_hub",
+    srcs = ["pinned_hub.bzl"],
+    visibility = ["//dotnet:__subpackages__"],
+    deps = [
+        ":input_hash",
+        ":lock",
+        "//dotnet/private/rules/nuget:nuget_repo",
+    ],
+)
+
+bzl_library(
+    name = "unpinned_hub",
+    srcs = ["unpinned_hub.bzl"],
+    visibility = ["//dotnet:__subpackages__"],
+    deps = [
+        ":lock",
+        "//dotnet/private/rules/nuget:nuget_archive",
+        "//dotnet/private/rules/nuget:nuget_repo",
+    ],
+)
+
+bzl_library(
+    name = "extension",
+    srcs = ["extension.bzl"],
+    visibility = ["//dotnet:__subpackages__"],
+    deps = [
+        ":input_hash",
+        ":lock",
+        ":pinned_hub",
+        ":resolve",
+        ":tool",
+        ":unpinned_hub",
+        "//dotnet/private/rules/nuget:nuget_repo",
+    ],
+)

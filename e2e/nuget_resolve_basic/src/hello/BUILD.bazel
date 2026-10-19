@@ -1,0 +1,8 @@
+load("@rules_dotnet//dotnet:defs.bzl", "csharp_binary")
+
+csharp_binary(
+    name = "hello",
+    srcs = ["hello.cs"],
+    target_frameworks = ["net10.0"],
+    deps = ["@nuget.net10.0//newtonsoft.json"],
+)

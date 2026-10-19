@@ -1,0 +1,43 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "gazelle",
+    srcs = [
+        "configure.go",
+        "constants.go",
+        "generate.go",
+        "lang.go",
+        "resolve.go",
+    ],
+    importpath = "github.com/bazel-contrib/rules_dotnet/dotnet/gazelle",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//dotnet/gazelle/dotnetconfig",
+        "//dotnet/gazelle/private/nuget",
+        "//dotnet/gazelle/private/parser",
+        "@bazel_gazelle//config",
+        "@bazel_gazelle//label",
+        "@bazel_gazelle//language",
+        "@bazel_gazelle//repo",
+        "@bazel_gazelle//resolve",
+        "@bazel_gazelle//rule",
+    ],
+)
+
+go_test(
+    name = "gazelle_test",
+    srcs = [
+        "generate_test.go",
+        "lang_test.go",
+        "resolve_test.go",
+    ],
+    embed = [":gazelle"],
+    deps = [
+        "//dotnet/gazelle/private/nuget",
+        "@bazel_gazelle//config",
+        "@bazel_gazelle//label",
+        "@bazel_gazelle//language",
+        "@bazel_gazelle//resolve",
+        "@bazel_gazelle//rule",
+    ],
+)

@@ -1,0 +1,1 @@
+gazelle: no nuget_resolve.json at %WORKSPACEPATH%/nuget_resolve.json; NuGet resolution is disabled

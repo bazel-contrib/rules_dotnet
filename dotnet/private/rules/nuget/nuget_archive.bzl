@@ -265,6 +265,32 @@ def _process_build_file(groups, file):
 
     groups["build"].setdefault(tfm, {"lib": [], "ref": []})[file_type].append(file)
 
+# `buildTransitive/<tfm>/<assembly>.dll`.
+#
+# `buildTransitive` is the transitively flowing variant of `build`, and some
+# packages ship their assemblies there instead of under `lib` (`MSTest.
+# TestAdapter` has no `lib/` folder at all). They are merged into the lib
+# group in _group_package_files and resolve like `lib/<tfm>` assemblies.
+# Only a DLL sitting directly under the framework folder counts; platform
+# specific subfolders such as `buildTransitive/net6.0/winui` are not
+# portable, and props/targets are not assemblies.
+def _process_build_transitive_file(groups, file):
+    parts = file.split("/")
+
+    if len(parts) != 3:
+        return
+
+    tfm = _normalize_tfm(parts[1])
+
+    if tfm == None:
+        return
+
+    # See https://github.com/bazel-contrib/rules_dotnet/issues/405
+    if not file.endswith(".dll") or file.endswith(".resources.dll"):
+        return
+
+    groups["buildTransitive"].setdefault(tfm, []).append(file)
+
 def _process_typeprovider_file(groups, file):
     if not file.endswith(".dll"):
         return
@@ -428,6 +454,8 @@ def _process_key_and_file(groups, key, file):
         _process_runtimes_file(groups, file)
     elif key == "build":
         _process_build_file(groups, file)
+    elif key == "buildTransitive":
+        _process_build_transitive_file(groups, file)
     elif key == "tools":
         _process_tools_file(groups, file)
 
@@ -592,6 +620,11 @@ def _group_package_files(id, all_files):
         # NB: Only the assemblies are picked up; the MSBuild props and targets
         #     that packages ship here are not run.
         "build": {},
+        # Assemblies some packages ship under buildTransitive/<TFM>/ instead
+        # of lib/<TFM>/ (`MSTest.TestAdapter` has no lib/ folder at all).
+        # They are merged into the lib group below.
+        # Format: buildTransitive/<TFM>/<assembly>.dll
+        "buildTransitive": {},
         # See: https://github.com/dotnet/sdk/blob/master/documentation/general/tool-nuget-package-format.md
         # Format: tools/<TFM>/any/...
         # NB: Dotnet requires portable assemblies in the tools folder, so RID is always 'any'
@@ -631,6 +664,13 @@ def _group_package_files(id, all_files):
         else:
             libs[tfm] = files
 
+    # Assemblies under `buildTransitive/<tfm>/` stand in for `lib/<tfm>` ones,
+    # so they join the lib group and resolve through it — the runtime ships
+    # them next to the binary and the compile group falls back to them when
+    # the package ships no `ref/` folder.
+    for (tfm, files) in groups["buildTransitive"].items():
+        libs[tfm] = libs.get(tfm, []) + files
+
     # RID bound assemblies stand in for the whole lib group when one applies,
     # so they are kept apart and resolved first.
     rid_libs = {}
@@ -669,26 +709,67 @@ def _group_package_files(id, all_files):
         unsupported_tfms = groups["unsupported_tfms"].keys(),
     )
 
-def _nuget_archive_impl(ctx):
-    # First get the auth dict for the package sources since the sources can be different than the
-    # package base url when using NuGet V3 feeds.
-    auth = _get_auth_dict(ctx, ctx.attr.sources)
-    urls = _get_package_urls(ctx, ctx.attr.sources, auth, ctx.attr.id, ctx.attr.version)
+def fetch_package_into(ctx, id, version, urls, integrity, prefix):
+    """Downloads a .nupkg and extracts it under `prefix` in the repository.
 
-    # Then get the auth dict for the package base urls
+    Args:
+      ctx: The repository context. When it has a `netrc` attribute it is used
+        for authentication, otherwise the user's netrc.
+      id: The package id.
+      version: The normalized package version.
+      urls: The download URLs of the `.nupkg`, tried in order.
+      integrity: The expected sha512 as an SRI string, or "" to skip the check.
+      prefix: The directory to extract into, relative to the repository root,
+        with a trailing slash; "" for the root itself.
+
+    Returns:
+      A struct with `nupkg` (the name of the `.nupkg` inside `prefix`) and
+      `files` (every extracted path, relative to `prefix`, sorted).
+    """
     auth = _get_auth_dict(ctx, urls)
 
     # We download it as .zip because ctx.extract reads the file extension to determine the archive type
-    file_name = "%s.zip" % ctx.name
-    nupkg_name = "%s.%s.nupkg" % (ctx.attr.id, ctx.attr.version)
+    file_name = "%s.%s.zip" % (id, version)
+    # The nupkg name must be the lowercased id: the hub's nuget_package targets
+    # address it as `<library_name.lower()>.<version>.nupkg` (package.bzl), and
+    # the unpinned hub calls this with the lock file's original-casing id.
+    nupkg_name = "%s.%s.nupkg" % (id.lower(), version)
 
-    ctx.download(urls, output = file_name, integrity = ctx.attr.sha512, auth = auth)
-    ctx.extract(archive = file_name)
-    ctx.symlink(file_name, nupkg_name)
+    ctx.download(urls, output = prefix + file_name, integrity = integrity, auth = auth)
+    ctx.extract(archive = prefix + file_name, output = prefix)
+    ctx.symlink(prefix + file_name, prefix + nupkg_name)
 
-    all_files = sorted(_read_dir(ctx, ".").replace(str(ctx.path(".")) + "/", "").splitlines())
+    base = str(ctx.path(prefix if prefix else ".")) + "/"
+    all_files = sorted(_read_dir(ctx, prefix if prefix else ".").replace(base, "").splitlines())
 
-    _write_repository(ctx, ctx.attr.id, nupkg_name, all_files)
+    # `find <prefix>` prints paths relative to the repository root, so they
+    # still carry the prefix; consumers expect them relative to the prefix
+    # (see the docstring above).
+    all_files = [_sanitize_path(f) for f in all_files]
+    if prefix:
+        relative = []
+        for f in all_files:
+            if not f.startswith(prefix):
+                fail("extracted file %s is not under the expected prefix %s" % (f, prefix))
+            relative.append(f[len(prefix):])
+        all_files = relative
+
+    return struct(nupkg = nupkg_name, files = all_files)
+
+def _nuget_archive_impl(ctx):
+    if ctx.attr.urls:
+        # The urls are recorded in the lock file; no feed index download is
+        # needed to derive them. `sources` still feeds auth resolution.
+        urls = ctx.attr.urls
+    else:
+        # First get the auth dict for the package sources since the sources can be different than the
+        # package base url when using NuGet V3 feeds.
+        auth = _get_auth_dict(ctx, ctx.attr.sources)
+        urls = _get_package_urls(ctx, ctx.attr.sources, auth, ctx.attr.id, ctx.attr.version)
+
+    package = fetch_package_into(ctx, ctx.attr.id, ctx.attr.version, urls, ctx.attr.sha512, "")
+
+    _write_repository(ctx, ctx.attr.id, package.nupkg, package.files)
 
 def _write_repository(ctx, id, nupkg_name, all_files, prefix = ""):
     """Turns an extracted package into the metadata and targets it is consumed through.
@@ -752,6 +833,9 @@ nuget_archive = repository_rule(
         "id": attr.string(),
         "version": attr.string(),
         "sha512": attr.string(),
+        "urls": attr.string_list(
+            doc = "The download URLs of the .nupkg, e.g. recorded in a lock file. When set, no feed index is downloaded to derive URLs; `sources` then only feeds authentication.",
+        ),
     },
 )
 

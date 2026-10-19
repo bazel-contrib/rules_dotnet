@@ -144,6 +144,13 @@ filegroup(
     visibility = ["//visibility:public"],
 )
 
+# The SDK's own dotnet host, exported so repository rules (the nuget.resolve
+# tool build) can execute the SDK without going through a toolchain.
+exports_files(
+    ["{dotnet_binary}"],
+    visibility = ["//visibility:public"],
+)
+
 dotnet_toolchain(
     name = "dotnet_toolchain", 
     runtime = ":runtime",
@@ -165,6 +172,7 @@ dotnet_toolchain(
 )
 """.format(
         os = PLATFORMS[repository_ctx.attr.platform].os,
+        dotnet_binary = "dotnet.exe" if PLATFORMS[repository_ctx.attr.platform].os == "windows" else "dotnet",
         sdk_version = repository_ctx.attr.dotnet_version,
         runtime_version = TOOL_VERSIONS[repository_ctx.attr.dotnet_version]["runtimeVersion"],
         runtime_tfm = TOOL_VERSIONS[repository_ctx.attr.dotnet_version]["runtimeTfm"],

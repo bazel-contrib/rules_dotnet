@@ -1,0 +1,13 @@
+load("@rules_dotnet//dotnet:defs.bzl", "csharp_binary")
+
+csharp_binary(
+    name = "app",
+    srcs = ["Program.cs"],
+    target_frameworks = ["net10.0"],
+    deps = [
+        # A type from the deepest package of the chain (D).
+        "@nuget.net10.0//microsoft.extensions.dependencyinjection.abstractions",
+        # The package the diamond unifies on.
+        "@nuget.net10.0//serilog",
+    ],
+)

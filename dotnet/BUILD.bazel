@@ -44,8 +44,10 @@ bzl_library(
         "//dotnet/private/rules/common:embed_sources",
         "//dotnet/private/rules/csharp:binary",
         "//dotnet/private/rules/csharp:library",
+        "//dotnet/private/rules/csharp:mstest_test",
         "//dotnet/private/rules/csharp:nunit_test",
         "//dotnet/private/rules/csharp:test",
+        "//dotnet/private/rules/csharp:xunit_test",
         "//dotnet/private/rules/fsharp:binary",
         "//dotnet/private/rules/fsharp:library",
         "//dotnet/private/rules/fsharp:nunit_test",
@@ -90,6 +92,13 @@ bzl_library(
     srcs = ["paket.bzl"],
     visibility = ["//visibility:public"],
     deps = ["//dotnet/private/paket:extension"],
+)
+
+bzl_library(
+    name = "nuget",
+    srcs = ["nuget.bzl"],
+    visibility = ["//visibility:public"],
+    deps = ["//dotnet/private/nuget_resolve:extension"],
 )
 
 exports_files(["defs.bzl"])

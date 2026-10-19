@@ -1,0 +1,47 @@
+"rules_dotnet C# Gazelle extension e2e"
+
+module(
+    name = "e2e_gazelle_net10_0",
+    version = "0.0.0",
+    compatibility_level = 1,
+)
+
+bazel_dep(name = "rules_dotnet", version = "0.0.0")
+local_path_override(
+    module_name = "rules_dotnet",
+    path = "../..",
+)
+
+bazel_dep(name = "gazelle", version = "0.51.3", repo_name = "bazel_gazelle")
+
+dotnet = use_extension("@rules_dotnet//dotnet:extensions.bzl", "dotnet")
+dotnet.toolchain(dotnet_version = "10.0.401")
+use_repo(dotnet, "dotnet_toolchains")
+
+register_toolchains("@dotnet_toolchains//:all")
+
+nuget = use_extension("@rules_dotnet//dotnet:nuget.bzl", "nuget")
+nuget.resolve(
+    name = "nuget",
+    packages = {
+        "Newtonsoft.Json": "13.0.3",
+    },
+    frameworks = ["net10.0"],
+    lock_file = "//:nuget_resolve.json",
+)
+use_repo(nuget, "nuget.net10.0")
+
+# rules_go is needed as a direct dependency so that the Go SDK is registered
+# for the gazelle_binary target above (and so that the
+# --@rules_go//go/config:pure flag resolves).
+bazel_dep(name = "rules_go", version = "0.59.0")
+
+go_sdk = use_extension("@rules_go//go:extensions.bzl", "go_sdk")
+go_sdk.download(version = "1.24.12")
+
+# Only needed to make the Bazel CI RBE config work. Not needed for using rules_dotnet.
+bazel_dep(name = "bazel_ci_rules", version = "1.0.0", dev_dependency = True)
+bazel_dep(name = "platforms", version = "0.0.10", dev_dependency = True)
+
+internal_dev_deps = use_extension("//:internal_dev_deps.bzl", "internal_dev_deps", dev_dependency = True)
+use_repo(internal_dev_deps, "buildkite_config")

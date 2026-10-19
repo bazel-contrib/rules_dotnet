@@ -1,0 +1,6 @@
+exports_files(
+    [
+        "shim.cs",
+    ],
+    visibility = ["//visibility:public"],
+)
