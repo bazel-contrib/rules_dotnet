@@ -1,0 +1,56 @@
+"Tests for `bazel coverage`."
+
+load("//dotnet:defs.bzl", "csharp_library", "csharp_test")
+load(
+    ":tests.bzl",
+    "coverage_assemblies_test",
+    "coverage_run_test",
+    "no_coverage_test",
+)
+
+csharp_library(
+    name = "lib",
+    srcs = ["Lib.cs"],
+    target_frameworks = ["net10.0"],
+)
+
+csharp_library(
+    name = "excluded",
+    srcs = ["Excluded.cs"],
+    target_frameworks = ["net10.0"],
+)
+
+# Passes only with its argument, so the coverage run shows that the test's
+# arguments reach it.
+csharp_test(
+    name = "test",
+    srcs = ["Program.cs"],
+    args = ["'an argument'"],
+    target_frameworks = ["net10.0"],
+    deps = [
+        ":excluded",
+        ":lib",
+    ],
+)
+
+coverage_assemblies_test(
+    name = "coverage_assemblies_test",
+    expected = ["lib.dll"],
+    target_under_test = ":test",
+)
+
+no_coverage_test(
+    name = "no_coverage_test",
+    target_under_test = ":test",
+)
+
+coverage_run_test(
+    name = "coverage_run_test",
+    binary = ":test",
+    expected_source = "dotnet/private/tests/coverage/Lib.cs",
+    target_compatible_with = select({
+        "@platforms//os:windows": ["@platforms//:incompatible"],
+        "//conditions:default": [],
+    }),
+    unexpected_source = "dotnet/private/tests/coverage/Excluded.cs",
+)

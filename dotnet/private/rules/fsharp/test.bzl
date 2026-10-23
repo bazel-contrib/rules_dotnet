@@ -5,6 +5,7 @@ This rule can be used to compile and run any F# binary and run it as
 a Bazel test.
 """
 
+load("@bazel_skylib//lib:dicts.bzl", "dicts")
 load("@bazel_skylib//rules:common_settings.bzl", "BuildSettingInfo")
 load(
     "//dotnet/private:common.bzl",
@@ -16,6 +17,7 @@ load(
 )
 load("//dotnet/private/rules/common:attrs.bzl", "FSHARP_BINARY_COMMON_ATTRS")
 load("//dotnet/private/rules/common:binary.bzl", "build_binary")
+load("//dotnet/private/rules/common:coverage.bzl", "TEST_COVERAGE_ATTRS")
 load("//dotnet/private/rules/fsharp/actions:fsharp_assembly.bzl", "AssemblyAction")
 load("//dotnet/private/transitions:tfm_transition.bzl", "tfm_transition")
 
@@ -65,7 +67,7 @@ def _fsharp_test_impl(ctx):
 fsharp_test = rule(
     _fsharp_test_impl,
     doc = """Compile a F# executable and runs it as a test""",
-    attrs = FSHARP_BINARY_COMMON_ATTRS,
+    attrs = dicts.add(FSHARP_BINARY_COMMON_ATTRS, TEST_COVERAGE_ATTRS),
     test = True,
     toolchains = [
         "//dotnet:toolchain_type",

@@ -88,6 +88,7 @@ GROUP rules_dotnet_nuget_packages
 RESTRICTION: == net9.0
 NUGET
   remote: https://api.nuget.org/v3/index.json
+    coverlet.console (10.1)
     Microsoft.NETCore.Platforms (6.0.5)
     NETStandard.Library (2.0.3)
       Microsoft.NETCore.Platforms (>= 1.1)
