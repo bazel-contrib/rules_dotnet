@@ -20,7 +20,7 @@ publish only builds the images it ships.
 load("@bazel_skylib//lib:dicts.bzl", "dicts")
 load("//dotnet/private:common.bzl", "FRAMEWORK_COMPATIBILITY")
 load("//dotnet/private:providers.bzl", "DotnetAssemblyRuntimeInfo", "DotnetRuntimePackInfo", "DotnetToolPackInfo")
-load("//dotnet/private/sdk:packs.bzl", "DEFAULT_SDK", "PROJECT_SDKS", "WEB_SDK")
+load("//dotnet/private/sdk:packs.bzl", "DEFAULT_SDK", "PROJECT_SDKS", "WEB_SDK", "crossgen2_pack_rids", "runtime_pack_tfms")
 load("//dotnet/private/sdk/runtime_packs:runtime_pack_transition.bzl", "runtime_pack_transition")
 load("//dotnet/private/transitions:common.bzl", "FRAMEWORK_COMPATABILITY_TRANSITION_OUTPUTS")
 
@@ -297,21 +297,37 @@ def _ready_to_run_aspect(target_framework):
         provides = [DotnetReadyToRunInfo],
     )
 
-# One aspect per framework crossgen2 shipped for. Each has to be assigned a name
-# of its own before Bazel accepts it.
-ready_to_run_aspect_net5_0 = _ready_to_run_aspect("net5.0")
-ready_to_run_aspect_net6_0 = _ready_to_run_aspect("net6.0")
-ready_to_run_aspect_net7_0 = _ready_to_run_aspect("net7.0")
-ready_to_run_aspect_net8_0 = _ready_to_run_aspect("net8.0")
-ready_to_run_aspect_net9_0 = _ready_to_run_aspect("net9.0")
-ready_to_run_aspect_net10_0 = _ready_to_run_aspect("net10.0")
+# The frameworks crossgen2 shipped for, in band order. A publish of any other
+# compiles its images itself.
+_FRAMEWORKS = [tfm for tfm in runtime_pack_tfms() if crossgen2_pack_rids(tfm)]
 
-# A publish of a framework missing here compiles its images itself.
-READY_TO_RUN_ASPECTS = {
-    "net5.0": ready_to_run_aspect_net5_0,
-    "net6.0": ready_to_run_aspect_net6_0,
-    "net7.0": ready_to_run_aspect_net7_0,
-    "net8.0": ready_to_run_aspect_net8_0,
-    "net9.0": ready_to_run_aspect_net9_0,
-    "net10.0": ready_to_run_aspect_net10_0,
-}
+# Bazel only accepts an aspect bound to a top-level name of its own, so the
+# aspects cannot be kept in a collection alone. Each name takes the next
+# framework, which lets a new band through without a change here, and the
+# names left over stay None.
+_SLOTS = 12
+
+def _ready_to_run_aspects():
+    if len(_FRAMEWORKS) > _SLOTS:
+        fail("ReadyToRun has {} frameworks to compile for, but only {} aspects: raise _SLOTS and bind as many names.".format(len(_FRAMEWORKS), _SLOTS))
+
+    return [_ready_to_run_aspect(tfm) for tfm in _FRAMEWORKS] + [None] * (_SLOTS - len(_FRAMEWORKS))
+
+_ASPECTS = _ready_to_run_aspects()
+
+(
+    ready_to_run_aspect_0,
+    ready_to_run_aspect_1,
+    ready_to_run_aspect_2,
+    ready_to_run_aspect_3,
+    ready_to_run_aspect_4,
+    ready_to_run_aspect_5,
+    ready_to_run_aspect_6,
+    ready_to_run_aspect_7,
+    ready_to_run_aspect_8,
+    ready_to_run_aspect_9,
+    ready_to_run_aspect_10,
+    ready_to_run_aspect_11,
+) = _ASPECTS
+
+READY_TO_RUN_ASPECTS = dict(zip(_FRAMEWORKS, _ASPECTS))

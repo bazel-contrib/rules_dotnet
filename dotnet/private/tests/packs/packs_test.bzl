@@ -5,7 +5,6 @@ frameworks and runtime identifiers they resolve must not change.
 """
 
 load("@bazel_skylib//lib:unittest.bzl", "asserts", "unittest")
-load("//dotnet/private/rules/publish_binary:ready_to_run.bzl", "READY_TO_RUN_ASPECTS")
 load(
     "//dotnet/private/sdk:packs.bzl",
     "DEFAULT_SDK",
@@ -183,22 +182,6 @@ def _crossgen2_table_test_impl(ctx):
 
 _crossgen2_table_test = unittest.make(_crossgen2_table_test_impl)
 
-def _ready_to_run_aspects_test_impl(ctx):
-    env = unittest.begin(ctx)
-
-    # A band added without its aspect still publishes, but compiles every
-    # image in the publish instead of sharing them.
-    asserts.equals(
-        env,
-        [tfm for tfm in runtime_pack_tfms() if [rid for rid in _ALL_RIDS if crossgen2_pack(tfm, rid) != None]],
-        READY_TO_RUN_ASPECTS.keys(),
-        "target frameworks with a ReadyToRun aspect",
-    )
-
-    return unittest.end(env)
-
-_ready_to_run_aspects_test = unittest.make(_ready_to_run_aspects_test_impl)
-
 # One case per package id shape.
 _TARGETING_PACKS = [
     (("netstandard2.0", DEFAULT_SDK), [("NETStandard.Library", "2.0.3")]),
@@ -289,7 +272,6 @@ def packs_test_suite(name):
         _apphost_table_test,
         _crossgen2_table_test,
         _pack_ids_test,
-        _ready_to_run_aspects_test,
         _runtime_table_test,
         _targeting_table_test,
         _wasm_test,
