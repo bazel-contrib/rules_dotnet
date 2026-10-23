@@ -3,6 +3,7 @@
 load("@rules_testing//lib:analysis_test.bzl", "analysis_test", "test_suite")
 load("@rules_testing//lib:util.bzl", "TestingAspectInfo")
 load("//dotnet:defs.bzl", "publish_binary")
+load("//dotnet/private/rules/publish_binary:ready_to_run.bzl", "DotnetReadyToRunInfo")
 
 LAYERS = ["runtime", "third_party", "first_party", "app"]
 
@@ -154,6 +155,7 @@ def _self_contained_test(name):
 
 def _self_contained_test_impl(env, target):
     _expect_layers_cover_the_publish(env, target)
+    _expect_no_ready_to_run_aspect(env, target)
     _expect_layers_independent_of_the_publish_copy(env, target)
     _expect_dependencies_layered(env, target, runtime = True)
 
@@ -172,32 +174,126 @@ def _framework_dependent_test(name):
 
 def _framework_dependent_test_impl(env, target):
     _expect_layers_cover_the_publish(env, target)
+    _expect_no_ready_to_run_aspect(env, target)
     _expect_layers_independent_of_the_publish_copy(env, target)
     _expect_dependencies_layered(env, target, runtime = False)
 
 def _ready_to_run_test(name):
     _publish_test(name, _ready_to_run_test_impl, ready_to_run = True, self_contained = True)
 
-def _ready_to_run_test_impl(env, target):
-    _expect_layers_cover_the_publish(env, target)
-    _expect_layers_independent_of_the_publish_copy(env, target)
+def _ready_to_run_images(target):
+    """The ReadyToRun images a publish ships, keyed by basename."""
+    return {
+        file.basename: file
+        for files in _layers(target).values()
+        for file in files
+        if "/r2r/" in file.short_path
+    }
 
-    # Each image is compiled against what its assembly can reference, so that
-    # changing the application recompiles none of its dependencies, and
-    # changing a library of ours leaves the packages alone.
-    inputs = {
+def _aspect_images(target):
+    """What the aspect says of the images a publish ships, keyed by basename."""
+    shipped = {file.path: None for file in _ready_to_run_images(target).values()}
+
+    return {
+        entry.image.basename: entry
+        for entry in target[TestingAspectInfo].attrs.binary[0][DotnetReadyToRunInfo].images.to_list()
+        if entry.image.path in shipped
+    }
+
+def _compile_inputs(target):
+    """What each image the publish compiles itself is compiled from, keyed by basename."""
+    return {
         image.basename: _basenames(action.inputs.to_list())
         for action in _actions(target, ["Crossgen2"])
         for image in action.outputs.to_list()
     }
 
-    for image in ["LibGit2Sharp.dll", "runfiles.dll", "app_to_publish.dll"]:
-        env.expect.that_collection(inputs[image]).contains("System.Private.CoreLib.dll")
+def _expect_no_ready_to_run_aspect(env, target):
+    """Only a ReadyToRun publish compiling image by image applies the aspect.
 
-    env.expect.that_collection(inputs["LibGit2Sharp.dll"]).contains_none_of(["runfiles.dll", "app_to_publish.dll"])
-    env.expect.that_collection(inputs["runfiles.dll"]).contains("LibGit2Sharp.dll")
-    env.expect.that_collection(inputs["runfiles.dll"]).not_contains("app_to_publish.dll")
-    env.expect.that_collection(inputs["app_to_publish.dll"]).contains_at_least(["LibGit2Sharp.dll", "runfiles.dll"])
+    Any other leaves out the aspect and the packs it would fetch.
+    """
+    env.expect.that_bool(DotnetReadyToRunInfo in target[TestingAspectInfo].attrs.binary[0]).equals(False)
+
+def _ready_to_run_test_impl(env, target):
+    _expect_layers_cover_the_publish(env, target)
+    _expect_layers_independent_of_the_publish_copy(env, target)
+
+    # Each image is compiled in the package that defines its assembly, so that
+    # other publishes can share it, and the publish compiles none itself.
+    images = _ready_to_run_images(target)
+    env.expect.that_str(str(images["app_to_publish.dll"].owner)).equals(str(Label(_APP)))
+    env.expect.that_str(str(images["runfiles.dll"].owner)).equals(str(Label("//tools/runfiles")))
+    env.expect.that_str(images["LibGit2Sharp.dll"].owner.package.split("/")[0]).equals("libgit2sharp")
+    env.expect.that_collection(_compile_inputs(target).keys()).has_size(0)
+
+    # The application is not a web one, so it ships the images compiled
+    # against the default runtime pack. The runfiles library is built for
+    # netstandard2.0, but runs on what the publish ships, so it is compiled
+    # against the same framework as the application.
+    shared = _aspect_images(target)
+    env.expect.that_str(images["app_to_publish.dll"].short_path).contains("/r2r/net10.0/default/")
+    env.expect.that_str(shared["runfiles.dll"].framework).equals(shared["app_to_publish.dll"].framework)
+
+    # Each image is compiled against what its assembly can reference, so that
+    # changing the application recompiles none of its dependencies, and
+    # changing a library of ours leaves the packages alone.
+    references = {name: _basenames(entry.references) for (name, entry) in shared.items()}
+    env.expect.that_collection(references["LibGit2Sharp.dll"]).contains_none_of(["runfiles.dll", "app_to_publish.dll"])
+    env.expect.that_collection(references["runfiles.dll"]).contains_none_of(["LibGit2Sharp.dll", "app_to_publish.dll"])
+    env.expect.that_collection(references["app_to_publish.dll"]).contains_at_least(["LibGit2Sharp.dll", "runfiles.dll"])
+
+def _ready_to_run_other_framework_test(name):
+    _publish_test(
+        name,
+        _ready_to_run_other_framework_test_impl,
+        binary = ":net9_app",
+        ready_to_run = True,
+        self_contained = True,
+    )
+
+def _ready_to_run_other_framework_test_impl(env, target):
+    # The binary is built for net9.0, so it runs on that runtime pack rather
+    # than the net10.0 one the aspect compiled against. The publish compiles
+    # its images itself, against the same references the aspect would use.
+    images = _ready_to_run_images(target)
+    for name in ["net9_app.dll", "runfiles.dll"]:
+        env.expect.that_str(str(images[name].owner)).equals(str(target.label))
+
+    inputs = _compile_inputs(target)
+    env.expect.that_collection(inputs["runfiles.dll"]).contains("System.Private.CoreLib.dll")
+    env.expect.that_collection(inputs["runfiles.dll"]).not_contains("net9_app.dll")
+    env.expect.that_collection(inputs["net9_app.dll"]).contains_at_least(["System.Private.CoreLib.dll", "runfiles.dll"])
+
+def _shared_ready_to_run_test(name):
+    for (suffix, binary, self_contained) in [("_a", _APP, True), ("_b", _APP, False), ("_c", ":data_app", True)]:
+        publish_binary(
+            name = name + suffix,
+            binary = binary,
+            ready_to_run = True,
+            self_contained = self_contained,
+            tags = ["manual"],
+            target_framework = "net10.0",
+        )
+
+    analysis_test(
+        name = name,
+        impl = _shared_ready_to_run_test_impl,
+        targets = {"a": name + "_a", "b": name + "_b", "c": name + "_c"},
+    )
+
+def _shared_ready_to_run_test_impl(env, targets):
+    # Publishes of the same assemblies ship the very same images rather than
+    # compiling them once each, whether or not they publish the same
+    # application.
+    a = _ready_to_run_images(targets.a)
+    b = _ready_to_run_images(targets.b)
+    c = _ready_to_run_images(targets.c)
+
+    for name in ["LibGit2Sharp.dll", "runfiles.dll", "app_to_publish.dll"]:
+        env.expect.that_str(b[name].path).equals(a[name].path)
+
+    env.expect.that_str(c["runfiles.dll"].path).equals(a["runfiles.dll"].path)
 
 def _ready_to_run_composite_test(name):
     _publish_test(
@@ -210,6 +306,7 @@ def _ready_to_run_composite_test(name):
 
 def _ready_to_run_composite_test_impl(env, target):
     _expect_layers_cover_the_publish(env, target)
+    _expect_no_ready_to_run_aspect(env, target)
     _expect_layers_independent_of_the_publish_copy(env, target)
 
     # Each image stays in the layer of the assembly it replaces, while the
@@ -230,6 +327,7 @@ def _native_aot_test(name):
 
 def _native_aot_test_impl(env, target):
     _expect_layers_cover_the_publish(env, target)
+    _expect_no_ready_to_run_aspect(env, target)
     _expect_layers_independent_of_the_publish_copy(env, target)
 
     # The runtime and every assembly are compiled into the executable; only
@@ -264,6 +362,8 @@ def container_layers_test_suite(name):
             _self_contained_test,
             _framework_dependent_test,
             _ready_to_run_test,
+            _shared_ready_to_run_test,
+            _ready_to_run_other_framework_test,
             _ready_to_run_composite_test,
             _native_aot_test,
             _data_test,

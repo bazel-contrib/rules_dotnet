@@ -36,6 +36,16 @@ load(
 load("//dotnet/private/sdk:packs.bzl", "WASM_RID")
 load("//dotnet/private/sdk/nativeaot_packs:nativeaot_pack_transition.bzl", "nativeaot_pack_transition")
 load("//dotnet/private/transitions:tfm_transition.bzl", "tfm_transition")
+load(
+    ":ready_to_run.bzl",
+    "DotnetReadyToRunInfo",
+    "READY_TO_RUN_ASPECTS",
+    "compile_ready_to_run",
+    "crossgen2_args",
+    "native_target",
+    "ready_to_run_framework",
+    "ready_to_run_references",
+)
 
 # How many sources one `cp` invocation takes. A self-contained publish copies
 # several hundred files into one directory, and the point of batching is lost if
@@ -106,19 +116,6 @@ def _render_copy_script(copies, is_windows, directories = []):
     return script_body
 
 _NO_READY_TO_RUN = struct(replace = {}, extra = [])
-
-def _native_target(runtime_identifier):
-    """Splits a runtime identifier into --targetos/--targetarch.
-
-    Both crossgen2 and ilc take the target this way, which is what lets either
-    of them cross-compile.
-    """
-    parts = runtime_identifier.split("-")
-
-    if len(parts) < 2 or parts[0] not in ("linux", "osx", "win"):
-        fail("Cannot compile native code for {}".format(runtime_identifier))
-
-    return ("windows" if parts[0] == "win" else parts[0], parts[-1])
 
 # The framework assemblies ilc has to initialise explicitly, because nothing
 # in the managed closure references them.
@@ -415,7 +412,7 @@ def _native_aot_executable(ctx, dll, closure, runtime_identifier, target_framewo
     if not pack.libs:
         fail("NativeAOT is not available for {} on {}".format(target_framework, runtime_identifier))
 
-    (target_os, target_arch) = _native_target(runtime_identifier)
+    (target_os, target_arch) = native_target(runtime_identifier)
 
     if target_os not in _AOT_SYSTEM_LIBS:
         fail("NativeAOT cannot target {} yet: only Linux and macOS are supported".format(target_os))
@@ -582,53 +579,39 @@ def _publish_layers(ctx, entries, dependency_layers):
 
     return output_groups
 
-def _ready_to_run_references(binary_info, assembly_files):
-    """What crossgen2 resolves each published assembly against, besides the framework.
+def _shared_images(binary, framework, published):
+    """The images the aspect compiled for the published assemblies.
 
-    Handing every compilation the whole publish would make each image depend
-    on every assembly, so that changing the application recompiled all of its
-    dependencies. An assembly sees what it can reference instead:
+    An assembly reached in more than one configuration is compiled once in
+    each, possibly against different files. The image compiled against
+    published files is the one to ship, and otherwise the first by path, so
+    that the order of the dependency graph cannot decide.
 
-    * an assembly from a NuGet package, every package's assemblies, since a
-      package can reference one its metadata never declares. That set changes
-      only with the lock file;
-    * a library built here, those and its own dependencies' assemblies;
-    * the application, everything.
-
-    Each list is sorted, so that the order of the dependency graph cannot
-    change a command line.
+    Args:
+        binary: The published binary, which carries what the aspect compiled.
+        framework: The publish's framework, from `ready_to_run_framework`.
+        published: The paths of the published assemblies, as dict keys.
 
     Returns:
-        The references of each published assembly, keyed by its path.
+        The image of each assembly the aspect compiled, keyed by its path.
     """
-    published = {lib.path: lib for lib in [binary_info.dll] + assembly_files.libs}
+    if DotnetReadyToRunInfo not in binary:
+        return {}
 
-    def published_libs(deps):
-        return [lib for dep in deps for lib in dep.libs if lib.path in published]
+    candidates = {}
+    for entry in binary[DotnetReadyToRunInfo].images.to_list():
+        if entry.framework == framework.key and entry.assembly.path in published:
+            candidates.setdefault(entry.assembly.path, []).append(entry)
 
-    def sorted_unique(files):
-        by_path = {file.path: file for file in files}
-        return [by_path[path] for path in sorted(by_path)]
+    shared = {}
+    for (path, entries) in candidates.items():
+        if len(entries) > 1:
+            entries = sorted(entries, key = lambda entry: entry.image.path)
+            entries = [entry for entry in entries if all([file.path in published for file in entry.references])] or entries
 
-    everything = sorted_unique(published.values())
-    references = {path: everything for path in published}
-    packages = published_libs([dep for dep in binary_info.transitive_runtime_deps if is_from_nuget_package(dep)])
+        shared[path] = entries[0].image
 
-    for dep in binary_info.transitive_runtime_deps:
-        libs = published_libs([dep])
-
-        if not libs:
-            continue
-
-        visible = libs + packages
-        if not is_from_nuget_package(dep):
-            visible += published_libs(dep.deps.to_list())
-
-        visible = sorted_unique(visible)
-        for lib in libs:
-            references[lib.path] = visible
-
-    return references
+    return shared
 
 def _ready_to_run_images(ctx, binary_info, assembly_files, runtime_pack_files, runtime_identifier):
     """Compiles the published assemblies to ReadyToRun.
@@ -637,15 +620,7 @@ def _ready_to_run_images(ctx, binary_info, assembly_files, runtime_pack_files, r
     platform while the target platform and the references come from the target.
     """
     crossgen2 = ctx.attr._crossgen2_pack[DotnetToolPackInfo]
-    (target_os, target_arch) = _native_target(runtime_identifier)
-
-    framework = [
-        lib
-        for runtime_pack in binary_info.runtime_pack_info.assembly_runtime_infos
-        for lib in runtime_pack.libs
-    ]
-    framework_paths = {lib.path: None for lib in framework}
-    framework_depset = depset(framework)
+    framework = ready_to_run_framework(binary_info.runtime_pack_info)
 
     # Runtime pack assemblies already ship as ReadyToRun images, so only a
     # composite image, which has to cover the framework, recompiles them.
@@ -657,32 +632,6 @@ def _ready_to_run_images(ctx, binary_info, assembly_files, runtime_pack_files, r
 
     assemblies = {assembly.path: assembly for assembly in compiled}.values()
     root = "{}/r2r/{}".format(ctx.label.name, runtime_identifier)
-
-    def common_args(references):
-        """The arguments every crossgen2 action here starts with.
-
-        The framework comes first, so that it takes precedence over a package
-        shipping an assembly of the same name.
-
-        The references alone run past any OS command line limit, so they always
-        go into a parameter file. Each action builds its own rather than sharing
-        one written ahead of time, because Bazel rewrites the paths inside a
-        parameter file it writes for a path-mapped action and cannot rewrite
-        those in a file that already exists.
-        """
-        args = ctx.actions.args()
-        args.add("--targetos:" + target_os)
-        args.add("--targetarch:" + target_arch)
-        args.add("-O")
-        args.add_all(framework, format_each = "-r:%s")
-        args.add_all([file for file in references if file.path not in framework_paths], format_each = "-r:%s")
-        args.set_param_file_format("multiline")
-        args.use_param_file("@%s", use_always = True)
-
-        return args
-
-    def inputs(references):
-        return depset(references, transitive = [framework_depset, crossgen2.files])
 
     if ctx.attr.ready_to_run_composite:
         image = ctx.actions.declare_file("{}/composite/{}.r2r.dll".format(
@@ -699,7 +648,8 @@ def _ready_to_run_images(ctx, binary_info, assembly_files, runtime_pack_files, r
             outputs.append(component)
 
         # One image covers every assembly, so it depends on all of them anyway.
-        args = common_args(assemblies)
+        framework_paths = {lib.path: None for lib in framework.libs}
+        args = crossgen2_args(ctx.actions, framework, [assembly for assembly in assemblies if assembly.path not in framework_paths])
         args.add("--composite")
         args.add(image, format = "--out:%s")
         args.add_all(assemblies)
@@ -707,7 +657,7 @@ def _ready_to_run_images(ctx, binary_info, assembly_files, runtime_pack_files, r
         ctx.actions.run(
             executable = crossgen2.tool,
             arguments = [args],
-            inputs = inputs(assemblies),
+            inputs = depset(assemblies, transitive = [framework.files, crossgen2.files]),
             outputs = outputs,
             mnemonic = "Crossgen2Composite",
             progress_message = "Compiling composite ReadyToRun image for %{label}",
@@ -716,27 +666,27 @@ def _ready_to_run_images(ctx, binary_info, assembly_files, runtime_pack_files, r
 
         return struct(replace = components, extra = [image])
 
-    references = _ready_to_run_references(binary_info, assembly_files)
-    images = {}
+    # The aspect compiled each assembly where it is defined, so that every
+    # publish shipping one shares its image.
+    images = _shared_images(ctx.attr.binary[0], framework, {assembly.path: None for assembly in assemblies})
 
-    for assembly in assemblies:
-        image = ctx.actions.declare_file("{}/{}".format(root, assembly.basename))
-        visible = references[assembly.path]
-        args = common_args(visible)
-        args.add(image, format = "--out:%s")
-        args.add(assembly)
+    # Not every framework has an aspect, and a binary built for another
+    # framework than it is published for runs on another runtime pack than
+    # the aspect compiled against. The publish compiles those images itself,
+    # in the same way.
+    remaining = [assembly for assembly in assemblies if assembly.path not in images]
+    if remaining:
+        runtime_infos = {
+            lib.path: info
+            for info in [ctx.attr.binary[0][DotnetAssemblyRuntimeInfo]] + binary_info.transitive_runtime_deps
+            for lib in info.libs
+        }
 
-        ctx.actions.run(
-            executable = crossgen2.tool,
-            arguments = [args],
-            inputs = inputs(visible),
-            outputs = [image],
-            mnemonic = "Crossgen2",
-            progress_message = "Compiling %{input} to ReadyToRun",
-            execution_requirements = {"supports-path-mapping": "1"},
-        )
-
-        images[assembly.path] = image
+        for assembly in remaining:
+            image = ctx.actions.declare_file("{}/{}".format(root, assembly.basename))
+            references = ready_to_run_references(runtime_infos[assembly.path])
+            compile_ready_to_run(ctx.actions, crossgen2, framework, references, assembly, image)
+            images[assembly.path] = image
 
     return struct(replace = images, extra = [])
 
@@ -1022,6 +972,24 @@ def _publish_binary_impl(ctx):
         OutputGroupInfo(**output_groups),
     ]
 
+_TARGET_FRAMEWORK_DOC = "The target framework that should be published"
+
+_READY_TO_RUN_DOC = """Compile the published assemblies to ReadyToRun.
+
+ReadyToRun embeds native code alongside the IL so the JIT has less to do at
+startup. The published file set is unchanged: each assembly is replaced by its
+compiled image.
+
+Each image is compiled in the package that defines its assembly, so publishes
+of the same framework share the images of the libraries and packages they have
+in common."""
+
+_READY_TO_RUN_COMPOSITE_DOC = """Compile a single composite ReadyToRun image.
+
+One image covers every assembly, which lets crossgen2 inline across assembly
+boundaries. Requires `ready_to_run` and `self_contained`, because the framework
+has to be part of the image."""
+
 # The incoming transition on `binary` becomes an outgoing one here, which is
 # what lets the rule select on `runtime_identifier`. The file copying lives
 # here too: Bazel cannot forward an executable, so this rule has to create it.
@@ -1048,6 +1016,7 @@ executable, each data file in the layer of the target it belongs to.""",
             doc = "The .Net binary that is being published",
             providers = [DotnetBinaryInfo],
             cfg = tfm_transition,
+            aspects = READY_TO_RUN_ASPECTS.values(),
             mandatory = True,
         ),
         "self_contained": attr.bool(
@@ -1064,7 +1033,7 @@ executable, each data file in the layer of the target it belongs to.""",
             default = False,
         ),
         "target_framework": attr.string(
-            doc = "The target framework that should be published",
+            doc = _TARGET_FRAMEWORK_DOC,
             mandatory = True,
         ),
         "runtime_identifier": attr.string(
@@ -1078,19 +1047,11 @@ executable, each data file in the layer of the target it belongs to.""",
             values = ["Minor", "Major", "LatestPatch", "LatestMinor", "LatestMajor", "Disable"],
         ),
         "ready_to_run": attr.bool(
-            doc = """Compile the published assemblies to ReadyToRun.
-
-ReadyToRun embeds native code alongside the IL so the JIT has less to do at
-startup. The published file set is unchanged: each assembly is replaced by its
-compiled image.""",
+            doc = _READY_TO_RUN_DOC,
             default = False,
         ),
         "ready_to_run_composite": attr.bool(
-            doc = """Compile a single composite ReadyToRun image.
-
-One image covers every assembly, which lets crossgen2 inline across assembly
-boundaries. Requires `ready_to_run` and `self_contained`, because the framework
-has to be part of the image.""",
+            doc = _READY_TO_RUN_COMPOSITE_DOC,
             default = False,
         ),
         "native_aot": attr.bool(
@@ -1169,6 +1130,24 @@ _WASM_ONLY_ATTRS = {
     ),
 }
 
+# The ReadyToRun aspects take these as parameters, which Bazel only accepts
+# from attributes that are not selected on.
+_ASPECT_PARAMETERS = {
+    "target_framework": attr.string(
+        doc = _TARGET_FRAMEWORK_DOC,
+        mandatory = True,
+        configurable = False,
+    ),
+    "ready_to_run": attr.bool(
+        doc = _READY_TO_RUN_DOC,
+        configurable = False,
+    ),
+    "ready_to_run_composite": attr.bool(
+        doc = _READY_TO_RUN_COMPOSITE_DOC,
+        configurable = False,
+    ),
+}
+
 # The runtime identifier of the platform being built for. Resolved here because
 # the TFM/RID transition cannot see the target platform.
 _TARGET_RID = select({
@@ -1215,9 +1194,13 @@ def _publish_binary_macro_impl(name, **kwargs):
 def _publish_wasm(name, kwargs):
     """Hands a browser publish to the rule that builds a static site."""
     for attribute in _NOT_FOR_WASM:
+        value = kwargs.pop(attribute, None)
+
         # Against None rather than by truthiness: an inherited attribute the
         # user did not set arrives as None, and False is a value they did set.
-        if kwargs.pop(attribute, None) != None:
+        # The macro declares the ReadyToRun ones itself, so those arrive as
+        # False when unset, and only True was asked for.
+        if value or (value != None and attribute not in _ASPECT_PARAMETERS):
             fail(
                 "{}: `{}` does not apply to a WebAssembly publish.\n".format(name, attribute) +
                 "A browser has no .NET host to be self-contained from, nothing to compile " +
@@ -1236,7 +1219,7 @@ def _publish_wasm(name, kwargs):
 
 publish_binary = macro(
     inherit_attrs = _publish_binary,
-    attrs = dicts.add(_WASM_ONLY_ATTRS, {
+    attrs = dicts.add(_WASM_ONLY_ATTRS, _ASPECT_PARAMETERS, {
         "wasm": attr.bool(
             doc = """Publish a Blazor WebAssembly application as a static site.
 

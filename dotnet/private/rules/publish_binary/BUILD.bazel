@@ -1,4 +1,25 @@
 load("@bazel_lib//:bzl_library.bzl", "bzl_library")
+load(":ready_to_run.bzl", "ready_to_run_tools")
+
+# What the ReadyToRun aspects compile with. An assembly cannot know which
+# application it ends up in, so it is compiled for both project SDKs, and each
+# publish builds the images it ships.
+#
+# Marked manual because they only resolve once an aspect has configured them
+# for a publish's target framework and runtime identifier.
+ready_to_run_tools(
+    name = "ready_to_run_tools_default",
+    project_sdk = "default",
+    tags = ["manual"],
+    visibility = ["//visibility:public"],
+)
+
+ready_to_run_tools(
+    name = "ready_to_run_tools_web",
+    project_sdk = "web",
+    tags = ["manual"],
+    visibility = ["//visibility:public"],
+)
 
 bzl_library(
     name = "publish_binary",
@@ -7,16 +28,34 @@ bzl_library(
         "//dotnet:__subpackages__",
     ],
     deps = [
+        ":ready_to_run",
+        "//dotnet/private:common",
         "//dotnet/private:providers",
         "//dotnet/private/rules/blazor:blazor_wasm_publish",
         "//dotnet/private/rules/common:publish_layout",
+        "//dotnet/private/sdk:packs",
         "//dotnet/private/sdk/nativeaot_packs:nativeaot_pack_transition",
         "//dotnet/private/sdk/runtime_packs:runtime_pack_transition",
         "//dotnet/private/transitions:default_transition",
         "//dotnet/private/transitions:tfm_transition",
+        "@bazel_skylib//lib:dicts",
         "@bazel_skylib//lib:paths",
         "@bazel_skylib//lib:shell",
         "@rules_cc//cc:action_names_bzl",
         "@rules_cc//cc/common",
+    ],
+)
+
+bzl_library(
+    name = "ready_to_run",
+    srcs = ["ready_to_run.bzl"],
+    visibility = ["//dotnet:__subpackages__"],
+    deps = [
+        "//dotnet/private:common",
+        "//dotnet/private:providers",
+        "//dotnet/private/sdk:packs",
+        "//dotnet/private/sdk/runtime_packs:runtime_pack_transition",
+        "//dotnet/private/transitions:common",
+        "@bazel_skylib//lib:dicts",
     ],
 )
