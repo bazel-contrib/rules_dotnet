@@ -5,6 +5,7 @@ bzl_library(
     srcs = ["binary.bzl"],
     visibility = ["//dotnet:__subpackages__"],
     deps = [
+        ":coverage",
         ":static_web_assets",
         "//dotnet/private:common",
         "//dotnet/private:providers",
@@ -38,6 +39,7 @@ bzl_library(
     srcs = ["library.bzl"],
     visibility = ["//dotnet:__subpackages__"],
     deps = [
+        ":coverage",
         ":static_web_assets",
         "//dotnet/private:common",
         "@bazel_skylib//rules:common_settings",
@@ -58,5 +60,15 @@ bzl_library(
         "//dotnet/private/transitions:default_transition",
         "@bazel_lib//lib:expand_make_vars",
         "@bazel_skylib//lib:dicts",
+    ],
+)
+
+bzl_library(
+    name = "coverage",
+    srcs = ["coverage.bzl"],
+    visibility = ["//dotnet:__subpackages__"],
+    deps = [
+        "//dotnet/private:common",
+        "//dotnet/private:providers",
     ],
 )

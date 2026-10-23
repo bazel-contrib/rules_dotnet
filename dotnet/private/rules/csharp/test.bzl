@@ -5,6 +5,7 @@ This rule can be used to compile and run any C# binary and run it as
 a Bazel test.
 """
 
+load("@bazel_skylib//lib:dicts.bzl", "dicts")
 load("@bazel_skylib//rules:common_settings.bzl", "BuildSettingInfo")
 load(
     "//dotnet/private:common.bzl",
@@ -17,6 +18,7 @@ load(
 )
 load("//dotnet/private/rules/common:attrs.bzl", "CSHARP_BINARY_COMMON_ATTRS")
 load("//dotnet/private/rules/common:binary.bzl", "build_binary")
+load("//dotnet/private/rules/common:coverage.bzl", "TEST_COVERAGE_ATTRS")
 load("//dotnet/private/rules/csharp/actions:csharp_assembly.bzl", "AssemblyAction")
 load("//dotnet/private/transitions:tfm_transition.bzl", "tfm_transition")
 
@@ -76,7 +78,7 @@ def _csharp_test_impl(ctx):
 csharp_test = rule(
     _csharp_test_impl,
     doc = """Compiles a C# executable and runs it as a test""",
-    attrs = CSHARP_BINARY_COMMON_ATTRS,
+    attrs = dicts.add(CSHARP_BINARY_COMMON_ATTRS, TEST_COVERAGE_ATTRS),
     test = True,
     toolchains = [
         "//dotnet:toolchain_type",
