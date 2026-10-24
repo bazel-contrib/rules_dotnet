@@ -2775,7 +2775,7 @@ git commit -m "Mark Task 9 complete in plan"
 ---
 
 ### Task 10: Eindverificatie volgens de goedgekeurde spec
-**Status:** pending
+**Status:** completed — Alle gerichte Go-, golden-, Starlark-, analyse-, compileer- en e2e-verificaties slagen; nieuwe en bestaande e2e-modules zijn zonder drift.
 
 **Files:**
 - Test: `dotnet/gazelle/...`
