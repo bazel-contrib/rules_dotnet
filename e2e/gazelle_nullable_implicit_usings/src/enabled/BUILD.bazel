@@ -1,0 +1,37 @@
+# gazelle:dotnet_nullable enable
+# gazelle:dotnet_implicit_usings enable
+
+load("@rules_dotnet//dotnet:defs.bzl", "csharp_binary", "csharp_library", "csharp_nunit_test")
+
+csharp_library(
+    name = "enabled",
+    srcs = ["Enabled.cs"],
+    implicit_usings = True,
+    internals_visible_to = ["enabled_nunit_test"],
+    nullable = "enable",
+    project_sdk = "default",
+    target_frameworks = ["net10.0"],
+    visibility = ["//visibility:public"],
+)
+
+csharp_nunit_test(
+    name = "enabled_nunit_test",
+    srcs = ["EnabledTests.cs"],
+    implicit_usings = True,
+    nullable = "enable",
+    project_sdk = "default",
+    target_frameworks = ["net10.0"],
+    visibility = ["//visibility:public"],
+    deps = [":enabled"],
+)
+
+csharp_binary(
+    name = "program",
+    srcs = ["Program.cs"],
+    implicit_usings = True,
+    nullable = "enable",
+    project_sdk = "default",
+    target_frameworks = ["net10.0"],
+    visibility = ["//visibility:public"],
+    deps = [":enabled"],
+)
