@@ -2235,7 +2235,7 @@ git commit -m "Mark Task 6 complete in plan"
 ---
 
 ### Task 7: Nieuwe zelfstandige e2e-module en vier scenario's
-**Status:** pending
+**Status:** completed — De zelfstandige e2e-module bevat werkende unset-, enabled-, inherited- en disabled-scenario's met idempotente gegenereerde BUILD-files.
 
 **Files:**
 - Create: `e2e/gazelle_nullable_implicit_usings/{MODULE.bazel,.bazelrc,.bazelversion,BUILD.bazel,internal_dev_deps.bzl}`
