@@ -2610,7 +2610,7 @@ git commit -m "Mark Task 7 complete in plan"
 ---
 
 ### Task 8: Genereer en verifieer het e2e-module-lockbestand
-**Status:** pending
+**Status:** completed — Bazel 9.1.1 heeft de nieuwe module-lock gegenereerd en lockfile_mode=error, build, test en Gazelle-idempotentie slagen.
 
 **Files:**
 - Create: `e2e/gazelle_nullable_implicit_usings/MODULE.bazel.lock` (door Bazel gegenereerd)
