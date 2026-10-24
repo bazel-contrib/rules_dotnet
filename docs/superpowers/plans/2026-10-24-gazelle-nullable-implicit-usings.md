@@ -1060,7 +1060,7 @@ git commit -m "Mark Task 3 complete in plan"
 ---
 
 ### Task 4: Golden voor serialisatie, overerving en merge-behoud
-**Status:** pending
+**Status:** completed — De golden bewijst unset, expliciete defaults, enable, overerving, child-disable inclusief vervanging van een bestaande enable, en behoud van handmatige attributen bij unset.
 
 **Files:**
 - Create: `dotnet/gazelle/testdata/nullable_implicit_usings/MODULE.bazel`
