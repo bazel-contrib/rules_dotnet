@@ -23,6 +23,10 @@ load(
 )
 load("//dotnet/private/icu:settings.bzl", "globalization_env", "icu_wrapper_arguments")
 load(
+    "//dotnet/private/rules/csharp/actions:implicit_usings.bzl",
+    "write_implicit_usings",
+)
+load(
     "//dotnet/private/rules/csharp/actions:razor.bzl",
     "partition_srcs",
     "razor_compile_inputs",
@@ -151,6 +155,7 @@ def AssemblyAction(
         root_namespace,
         scoped_css_tool,
         allow_unsafe_blocks,
+        implicit_usings,
         nullable,
         run_analyzers,
         is_analyzer,
@@ -202,6 +207,7 @@ def AssemblyAction(
         root_namespace: The root namespace Razor derives component namespaces from.
         scoped_css_tool: The tool that rewrites `.razor.css`.
         allow_unsafe_blocks: Compiles the target with /unsafe
+        implicit_usings: Whether to generate and compile the SDK-specific global-usings source.
         nullable: Enable nullable context, or nullable warnings.
         run_analyzers: Enable analyzers.
         is_analyzer: Whether or not the target is an analyzer.
@@ -331,6 +337,16 @@ def AssemblyAction(
     assembly_version_cs = _write_assembly_version_csharp(actions, target_name, assembly_name, version)
     if assembly_version_cs:
         srcs = srcs + [assembly_version_cs]
+
+    if implicit_usings:
+        implicit_usings_cs = write_implicit_usings(
+            actions,
+            out_dir = out_dir,
+            target_name = target_name,
+            project_sdk = project_sdk,
+            target_framework = target_framework,
+        )
+        srcs = srcs + [implicit_usings_cs]
 
     out_dll = actions.declare_file("%s/%s.%s" % (out_dir, assembly_name, out_ext))
     out_iref = None

@@ -258,6 +258,13 @@ CSHARP_COMMON_ATTRS = dicts.add(
             mandatory = False,
             default = False,
         ),
+        "implicit_usings": attr.bool(
+            doc = """Generate and compile one deterministic global-usings source per target framework for the selected project SDK.
+
+            Global using directives require C# 10 or higher. For older target frameworks, set `langversion` explicitly; this attribute does not change the language version.""",
+            mandatory = False,
+            default = False,
+        ),
         "nullable": attr.string(
             doc = "Enable nullable context, or nullable warnings.",
             mandatory = False,

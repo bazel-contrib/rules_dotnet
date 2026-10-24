@@ -5,6 +5,7 @@ bzl_library(
     srcs = ["csharp_assembly.bzl"],
     visibility = ["//dotnet:__subpackages__"],
     deps = [
+        ":implicit_usings",
         ":razor",
         ":scoped_css",
         "//dotnet/private:common",
