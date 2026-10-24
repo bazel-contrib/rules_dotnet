@@ -1345,7 +1345,7 @@ git commit -m "Mark Task 4 complete in plan"
 ---
 
 ### Task 5: Pure Starlark-namespaceselectie en write-helper
-**Status:** pending
+**Status:** completed — De pure helper bevat de exacte .NET 10-sets, NET_FRAMEWORKS-uitzondering en een deterministische actions.write-helper.
 
 **Files:**
 - Create: `dotnet/private/rules/csharp/actions/implicit_usings.bzl`
