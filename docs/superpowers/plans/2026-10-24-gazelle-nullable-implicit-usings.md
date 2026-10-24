@@ -2688,7 +2688,7 @@ git commit -m "Mark Task 8 complete in plan"
 ---
 
 ### Task 9: Registreer alleen de nieuwe e2e-module in CI
-**Status:** pending
+**Status:** completed — CI bevat één extra zelfstandige working directory met de bestaande build- en testmatrix; alle oude entries zijn behouden.
 
 **Files:**
 - Modify: `.bazelci/presubmit.yml`
