@@ -1615,7 +1615,7 @@ git commit -m "Mark Task 5 complete in plan"
 ---
 
 ### Task 6: Publiek attribuut, AssemblyAction en analyse-/compileertests
-**Status:** pending
+**Status:** completed — Alle publieke C#-varianten ondersteunen implicit_usings; analyse dekt write-bytes, paden, unset/disable en alle compileervertakkingen.
 
 **Files:**
 - Modify: `dotnet/private/rules/common/attrs.bzl`
