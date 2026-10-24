@@ -1,6 +1,7 @@
 package gazelle
 
 import (
+	"path/filepath"
 	"reflect"
 	"testing"
 
@@ -79,4 +80,66 @@ func TestConfigureInheritance(t *testing.T) {
 	if got := cfg.TargetFrameworks(); !reflect.DeepEqual(got, []string{"net10.0"}) {
 		t.Errorf("TargetFrameworks() = %v, want [net10.0]", got)
 	}
+}
+
+func TestKnownDirectivesIncludeNullableAndImplicitUsings(t *testing.T) {
+	l := NewLanguage().(*csharpLang)
+	directives := l.KnownDirectives()
+	for _, want := range []string{"dotnet_nullable", "dotnet_implicit_usings"} {
+		found := false
+		for _, got := range directives {
+			if got == want {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("KnownDirectives() = %v, missing %q", directives, want)
+		}
+	}
+}
+
+func TestConfigureNullableAndImplicitUsings(t *testing.T) {
+	l, c, dir := setupLang(t, net10Directive, "src")
+	parentFile, err := rule.LoadData(
+		filepath.Join(dir, "src", "BUILD.bazel"),
+		"src",
+		[]byte("# gazelle:dotnet_nullable annotations\n# gazelle:dotnet_implicit_usings enable\n"),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	l.Configure(c, "src", parentFile)
+	l.Configure(c, "src/child", nil)
+	l.Configure(c, "src/sibling", nil)
+
+	assertConfig := func(rel, wantNullable string, wantImplicit bool) {
+		t.Helper()
+		cfg := getConfig(c, rel)
+		if cfg == nil {
+			t.Fatalf("no config for %s", rel)
+		}
+		if got, configured := cfg.Nullable(); !configured || got != wantNullable {
+			t.Errorf("%s Nullable() = %q, %v; want %q, true", rel, got, configured, wantNullable)
+		}
+		if got, configured := cfg.ImplicitUsings(); !configured || got != wantImplicit {
+			t.Errorf("%s ImplicitUsings() = %v, %v; want %v, true", rel, got, configured, wantImplicit)
+		}
+	}
+	assertConfig("src", "annotations", true)
+	assertConfig("src/child", "annotations", true)
+	assertConfig("src/sibling", "annotations", true)
+
+	childFile, err := rule.LoadData(
+		filepath.Join(dir, "src", "child", "BUILD.bazel"),
+		"src/child",
+		[]byte("# gazelle:dotnet_nullable disable\n# gazelle:dotnet_implicit_usings disable\n"),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	l.Configure(c, "src/child", childFile)
+	assertConfig("src/child", "disable", false)
+	assertConfig("src", "annotations", true)
+	assertConfig("src/sibling", "annotations", true)
 }

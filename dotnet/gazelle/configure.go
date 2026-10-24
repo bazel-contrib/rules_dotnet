@@ -47,6 +47,8 @@ func (cr *Configurer) KnownDirectives() []string {
 		dotnetconfig.DotnetTestFramework,
 		dotnetconfig.DotnetGenerateBinary,
 		dotnetconfig.DotnetProjectSdk,
+		dotnetconfig.DotnetNullable,
+		dotnetconfig.DotnetImplicitUsings,
 		dotnetconfig.DotnetVisibility,
 		dotnetconfig.DotnetUnresolvedImports,
 	}
@@ -100,6 +102,14 @@ func (cr *Configurer) Configure(c *config.Config, rel string, f *rule.File) {
 				}
 			case dotnetconfig.DotnetProjectSdk:
 				cfg.SetProjectSdk(d.Value)
+			case dotnetconfig.DotnetNullable:
+				if err := cfg.SetNullable(d.Value); err != nil {
+					log.Fatalf("invalid value for directive %q: %v", dotnetconfig.DotnetNullable, err)
+				}
+			case dotnetconfig.DotnetImplicitUsings:
+				if err := cfg.SetImplicitUsings(d.Value); err != nil {
+					log.Fatalf("invalid value for directive %q: %v", dotnetconfig.DotnetImplicitUsings, err)
+				}
 			case dotnetconfig.DotnetVisibility:
 				cfg.AddVisibility(d.Value)
 			case dotnetconfig.DotnetUnresolvedImports:
