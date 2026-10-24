@@ -2,6 +2,7 @@ package dotnetconfig
 
 import (
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -30,6 +31,119 @@ func TestDefaults(t *testing.T) {
 	}
 	if got := c.TestFramework(); got != "" {
 		t.Errorf("TestFramework() = %q, want empty", got)
+	}
+}
+
+func TestNullableAndImplicitUsingsDefaults(t *testing.T) {
+	c := New("/repo")
+	if got, configured := c.Nullable(); configured || got != "" {
+		t.Errorf("Nullable() = %q, %v; want empty, false", got, configured)
+	}
+	if got, configured := c.ImplicitUsings(); configured || got {
+		t.Errorf("ImplicitUsings() = %v, %v; want false, false", got, configured)
+	}
+}
+
+func assertDirectiveValueError(t *testing.T, err error, value, allowed string) {
+	t.Helper()
+	if err == nil {
+		t.Fatalf("value %q returned nil error, want error", value)
+	}
+	if !strings.Contains(err.Error(), "possible values are "+allowed) {
+		t.Errorf("error %q does not contain allowed values %q", err, allowed)
+	}
+	if !strings.Contains(err.Error(), "\""+value+"\"") {
+		t.Errorf("error %q does not contain received value %q", err, value)
+	}
+}
+
+func TestSetNullableValidation(t *testing.T) {
+	c := New("/repo")
+	for _, value := range []string{"disable", "enable", "warnings", "annotations"} {
+		if err := c.SetNullable(value); err != nil {
+			t.Fatalf("SetNullable(%q) = %v, want nil", value, err)
+		}
+		if got, configured := c.Nullable(); !configured || got != value {
+			t.Errorf("Nullable() after %q = %q, %v", value, got, configured)
+		}
+	}
+	for _, value := range []string{"true", "Enable", "annotations "} {
+		assertDirectiveValueError(t, c.SetNullable(value), value, "disable/enable/warnings/annotations")
+	}
+	if got, configured := c.Nullable(); !configured || got != "annotations" {
+		t.Errorf("invalid setter mutated Nullable() to %q, %v", got, configured)
+	}
+}
+
+func TestSetImplicitUsingsValidation(t *testing.T) {
+	c := New("/repo")
+	for _, tc := range []struct {
+		value string
+		want  bool
+	}{{"disable", false}, {"enable", true}} {
+		if err := c.SetImplicitUsings(tc.value); err != nil {
+			t.Fatalf("SetImplicitUsings(%q) = %v, want nil", tc.value, err)
+		}
+		if got, configured := c.ImplicitUsings(); !configured || got != tc.want {
+			t.Errorf("ImplicitUsings() after %q = %v, %v; want %v, true", tc.value, got, configured, tc.want)
+		}
+	}
+	for _, value := range []string{"true", "false", "warnings", "annotations", "Enable"} {
+		assertDirectiveValueError(t, c.SetImplicitUsings(value), value, "disable/enable")
+	}
+	if got, configured := c.ImplicitUsings(); !configured || !got {
+		t.Errorf("invalid setter mutated ImplicitUsings() to %v, %v; want true, true", got, configured)
+	}
+}
+
+func TestNullableAndImplicitUsingsInheritanceAndIsolation(t *testing.T) {
+	root := New("/repo")
+	if err := root.SetNullable("enable"); err != nil {
+		t.Fatal(err)
+	}
+	if err := root.SetImplicitUsings("enable"); err != nil {
+		t.Fatal(err)
+	}
+
+	child := root.NewChild()
+	sibling := root.NewChild()
+	if got, configured := child.Nullable(); !configured || got != "enable" {
+		t.Errorf("child Nullable() = %q, %v; want enable, true", got, configured)
+	}
+	if got, configured := child.ImplicitUsings(); !configured || !got {
+		t.Errorf("child ImplicitUsings() = %v, %v; want true, true", got, configured)
+	}
+
+	if err := child.SetNullable("disable"); err != nil {
+		t.Fatal(err)
+	}
+	if got, configured := child.ImplicitUsings(); !configured || !got {
+		t.Errorf("nullable override changed child ImplicitUsings() to %v, %v", got, configured)
+	}
+	if err := child.SetImplicitUsings("disable"); err != nil {
+		t.Fatal(err)
+	}
+	if got, configured := child.Nullable(); !configured || got != "disable" {
+		t.Errorf("child Nullable() after overrides = %q, %v; want disable, true", got, configured)
+	}
+	if got, configured := child.ImplicitUsings(); !configured || got {
+		t.Errorf("child ImplicitUsings() after overrides = %v, %v; want false, true", got, configured)
+	}
+
+	grandchild := child.NewChild()
+	if got, configured := grandchild.Nullable(); !configured || got != "disable" {
+		t.Errorf("grandchild Nullable() = %q, %v; want disable, true", got, configured)
+	}
+	if got, configured := grandchild.ImplicitUsings(); !configured || got {
+		t.Errorf("grandchild ImplicitUsings() = %v, %v; want false, true", got, configured)
+	}
+	for name, cfg := range map[string]*Config{"root": root, "sibling": sibling} {
+		if got, configured := cfg.Nullable(); !configured || got != "enable" {
+			t.Errorf("%s Nullable() = %q, %v after child mutation; want enable, true", name, got, configured)
+		}
+		if got, configured := cfg.ImplicitUsings(); !configured || !got {
+			t.Errorf("%s ImplicitUsings() = %v, %v after child mutation; want true, true", name, got, configured)
+		}
 	}
 }
 

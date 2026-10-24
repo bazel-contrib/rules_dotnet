@@ -29,6 +29,12 @@ const (
 	// DotnetProjectSdk sets the project_sdk attr of generated targets.
 	// Defaults to "default".
 	DotnetProjectSdk = "dotnet_project_sdk"
+	// DotnetNullable sets the nullable attr of generated C# targets.
+	// Valid values are "disable", "enable", "warnings" and "annotations".
+	DotnetNullable = "dotnet_nullable"
+	// DotnetImplicitUsings sets the implicit_usings attr of generated C# targets.
+	// Valid values are "disable" and "enable".
+	DotnetImplicitUsings = "dotnet_implicit_usings"
 	// DotnetVisibility adds a visibility entry to generated targets.
 	// Repeatable. Defaults to "//visibility:public".
 	DotnetVisibility = "dotnet_visibility"
@@ -51,28 +57,36 @@ func (c *Configs) ParentForPackage(pkg string) *Config {
 
 // Config is the extension configuration for one Bazel package.
 type Config struct {
-	repoRoot          string
-	targetFrameworks  []string
-	nugetRepoPrefix   string
-	resolves          map[string]string
-	testFramework     string
-	generateBinary    bool
-	projectSdk        string
-	visibility        []string
-	unresolvedImports string
-	nugetLockFile     string
+	repoRoot                 string
+	targetFrameworks         []string
+	nugetRepoPrefix          string
+	resolves                 map[string]string
+	testFramework            string
+	generateBinary           bool
+	projectSdk               string
+	nullable                 string
+	nullableConfigured       bool
+	implicitUsings           bool
+	implicitUsingsConfigured bool
+	visibility               []string
+	unresolvedImports        string
+	nugetLockFile            string
 }
 
 // New returns the root Config with default values.
 func New(repoRoot string) *Config {
 	return &Config{
-		repoRoot:          repoRoot,
-		nugetRepoPrefix:   "nuget.",
-		resolves:          map[string]string{},
-		generateBinary:    true,
-		projectSdk:        "default",
-		unresolvedImports: "warn",
-		nugetLockFile:     "nuget_resolve.json",
+		repoRoot:                 repoRoot,
+		nugetRepoPrefix:          "nuget.",
+		resolves:                 map[string]string{},
+		generateBinary:           true,
+		projectSdk:               "default",
+		nullable:                 "",
+		nullableConfigured:       false,
+		implicitUsings:           false,
+		implicitUsingsConfigured: false,
+		unresolvedImports:        "warn",
+		nugetLockFile:            "nuget_resolve.json",
 	}
 }
 
@@ -146,6 +160,41 @@ func (c *Config) ProjectSdk() string { return c.projectSdk }
 
 // SetProjectSdk sets the project_sdk attr value for generated targets.
 func (c *Config) SetProjectSdk(v string) { c.projectSdk = v }
+
+// Nullable returns the nullable value and whether a directive configured it.
+// The empty, unconfigured state is distinct from the rule default "disable".
+func (c *Config) Nullable() (string, bool) { return c.nullable, c.nullableConfigured }
+
+// SetNullable validates and sets the nullable directive value.
+func (c *Config) SetNullable(value string) error {
+	switch value {
+	case "disable", "enable", "warnings", "annotations":
+		c.nullable = value
+		c.nullableConfigured = true
+		return nil
+	}
+	return fmt.Errorf("possible values are disable/enable/warnings/annotations, got %q", value)
+}
+
+// ImplicitUsings returns the boolean value and whether a directive configured it.
+// False, false means unset; false, true means explicitly disabled.
+func (c *Config) ImplicitUsings() (bool, bool) {
+	return c.implicitUsings, c.implicitUsingsConfigured
+}
+
+// SetImplicitUsings validates and sets the implicit-usings directive value.
+func (c *Config) SetImplicitUsings(value string) error {
+	switch value {
+	case "disable":
+		c.implicitUsings = false
+	case "enable":
+		c.implicitUsings = true
+	default:
+		return fmt.Errorf("possible values are disable/enable, got %q", value)
+	}
+	c.implicitUsingsConfigured = true
+	return nil
+}
 
 // AddVisibility appends a visibility entry.
 func (c *Config) AddVisibility(v string) { c.visibility = append(c.visibility, v) }
