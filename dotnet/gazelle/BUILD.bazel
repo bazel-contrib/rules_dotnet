@@ -37,6 +37,7 @@ go_test(
         "@bazel_gazelle//config",
         "@bazel_gazelle//label",
         "@bazel_gazelle//language",
+        "@bazel_gazelle//merger",
         "@bazel_gazelle//resolve",
         "@bazel_gazelle//rule",
     ],
