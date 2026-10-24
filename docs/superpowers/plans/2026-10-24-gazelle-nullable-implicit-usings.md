@@ -78,7 +78,7 @@ Iedere task heeft een eigen, afgebakende implementatiecommit en daarna een apart
 ---
 
 ### Task 1: Dotnetconfig-waarden, geconfigureerd-status en validatie
-**Status:** pending
+**Status:** completed — Dotnetconfig bewaart en valideert beide waarden met expliciete geconfigureerd-status, overerving en isolatie.
 
 **Files:**
 - Modify: `dotnet/gazelle/dotnetconfig/config.go`
