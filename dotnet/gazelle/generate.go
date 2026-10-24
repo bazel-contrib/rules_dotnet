@@ -54,7 +54,7 @@ func setNullableAndImplicitUsingsAttrs(r *rule.Rule, cfg *dotnetconfig.Config) m
 // existing rule matched by kind and name. Gazelle otherwise preserves existing
 // non-mergeable scalars. A stub containing only configured attributes keeps
 // unset attributes untouched and delegates # keep handling to MergeRules.
-func mergeNullableAndImplicitUsingsAttrs(generated *rule.Rule, file *rule.File, cfg *dotnetconfig.Config) {
+func mergeNullableAndImplicitUsingsAttrs(generated *rule.Rule, file *rule.File, cfg *dotnetconfig.Config, aliasedKinds map[string]string) {
 	if file == nil {
 		return
 	}
@@ -69,7 +69,8 @@ func mergeNullableAndImplicitUsingsAttrs(generated *rule.Rule, file *rule.File, 
 		if candidate.Name() != generated.Name() {
 			continue
 		}
-		if candidate.Kind() != generated.Kind() || existing != nil {
+		kindMatches := candidate.Kind() == generated.Kind() || aliasedKinds[candidate.Kind()] == generated.Kind()
+		if !kindMatches || existing != nil {
 			// Match the normal merger's ambiguous-name behavior: do not update
 			// any candidate when there is no unique kind-and-name match.
 			return
@@ -222,7 +223,7 @@ func (l *csharpLang) GenerateRules(args language.GenerateArgs) language.Generate
 	}
 
 	for _, generated := range res.Gen {
-		mergeNullableAndImplicitUsingsAttrs(generated, args.File, cfg)
+		mergeNullableAndImplicitUsingsAttrs(generated, args.File, cfg, args.Config.AliasMap)
 	}
 	return res
 }

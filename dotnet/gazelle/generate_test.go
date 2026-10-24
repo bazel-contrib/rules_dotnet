@@ -7,6 +7,7 @@ import (
 
 	"github.com/bazelbuild/bazel-gazelle/config"
 	"github.com/bazelbuild/bazel-gazelle/language"
+	"github.com/bazelbuild/bazel-gazelle/merger"
 	"github.com/bazelbuild/bazel-gazelle/rule"
 )
 
@@ -487,6 +488,64 @@ csharp_library(
 	// even though these scalar attributes are not globally mergeable.
 	rule.MergeRules(res.Gen[0], existing.Rules[0], csharpKindInfo.MergeableAttrs, existing.Path)
 	got := existing.Rules[0]
+	if value := got.AttrString("nullable"); value != "disable" {
+		t.Errorf("merged nullable = %q, want disable", value)
+	}
+	if got.Attr("implicit_usings") == nil {
+		t.Error("merged implicit_usings is absent, want explicit False")
+	} else if value := got.AttrBool("implicit_usings"); value {
+		t.Error("merged implicit_usings = True, want explicit False")
+	}
+}
+
+func TestGenerateExplicitDirectivesOverrideAliasedExistingAttrs(t *testing.T) {
+	l, c, dir := setupLang(t, net10Directive, "src", "src/aliased")
+	existing, err := rule.LoadData(
+		filepath.Join(dir, "src", "aliased", "BUILD.bazel"),
+		"src/aliased",
+		[]byte(`# gazelle:alias_kind custom_csharp_library csharp_library
+# gazelle:dotnet_nullable disable
+# gazelle:dotnet_implicit_usings disable
+
+custom_csharp_library(
+    name = "aliased",
+    srcs = ["Calculator.cs"],
+    implicit_usings = True,
+    nullable = "enable",
+)
+`),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	commonConfigurer := config.CommonConfigurer{}
+	commonConfigurer.Configure(c, "src/aliased", existing)
+	l.Configure(c, "src/aliased", existing)
+	if got := c.AliasMap["custom_csharp_library"]; got != "csharp_library" {
+		t.Fatalf("AliasMap[custom_csharp_library] = %q, want csharp_library", got)
+	}
+	writeFile(t, filepath.Join(dir, "src", "aliased"), "Calculator.cs", calculatorSrc)
+
+	res := l.GenerateRules(language.GenerateArgs{
+		Config:       c,
+		Dir:          filepath.Join(dir, "src", "aliased"),
+		Rel:          "src/aliased",
+		RegularFiles: []string{"Calculator.cs"},
+		File:         existing,
+	})
+	if len(res.Gen) != 1 {
+		t.Fatalf("GenerateRules() returned %d rules, want 1", len(res.Gen))
+	}
+
+	// Exercise Gazelle's alias-aware pre-resolve match and normal second merge.
+	merger.MergeFile(existing, nil, res.Gen, merger.PreResolve, l.Kinds(), c.AliasMap)
+	if len(existing.Rules) != 1 {
+		t.Fatalf("normal merge left %d rules, want one aliased match", len(existing.Rules))
+	}
+	got := existing.Rules[0]
+	if got.Kind() != "custom_csharp_library" {
+		t.Fatalf("merged rule kind = %q, want custom_csharp_library", got.Kind())
+	}
 	if value := got.AttrString("nullable"); value != "disable" {
 		t.Errorf("merged nullable = %q, want disable", value)
 	}
