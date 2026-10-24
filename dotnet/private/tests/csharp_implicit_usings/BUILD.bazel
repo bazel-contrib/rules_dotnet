@@ -1,0 +1,3 @@
+load(":implicit_usings_test.bzl", "implicit_usings_test_suite")
+
+implicit_usings_test_suite(name = "implicit_usings_namespaces_test")
