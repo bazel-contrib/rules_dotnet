@@ -443,7 +443,7 @@ git commit -m "Mark Task 1 complete in plan"
 ---
 
 ### Task 2: Directive-registratie en Configure-doorvoer
-**Status:** pending
+**Status:** completed — Beide directives zijn geregistreerd en Configure verwerkt enable, disable en overerving via het bestaande fatale foutpad.
 
 **Files:**
 - Modify: `dotnet/gazelle/configure.go`
