@@ -657,7 +657,7 @@ git commit -m "Mark Task 2 complete in plan"
 ---
 
 ### Task 3: Gedeelde attribuutgeneratie voor alle vijf generated kinds
-**Status:** pending
+**Status:** completed — Eén Go-helper schrijft alleen geconfigureerde attributen op library, binary en alle drie gegenereerde testframeworkkinds; de beperkte bestaande-rule-merge bewaart unset en `# keep` en past expliciete overrides toe.
 
 **Files:**
 - Modify: `dotnet/gazelle/generate.go`
