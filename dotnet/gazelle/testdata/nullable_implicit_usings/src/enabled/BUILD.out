@@ -1,0 +1,24 @@
+load("@rules_dotnet//dotnet:defs.bzl", "csharp_binary", "csharp_library")
+
+# gazelle:dotnet_nullable enable
+# gazelle:dotnet_implicit_usings enable
+
+csharp_library(
+    name = "enabled",
+    srcs = ["Enabled.cs"],
+    implicit_usings = True,
+    nullable = "enable",
+    project_sdk = "default",
+    target_frameworks = ["net10.0"],
+    visibility = ["//visibility:public"],
+)
+
+csharp_binary(
+    name = "program",
+    srcs = ["Program.cs"],
+    implicit_usings = True,
+    nullable = "enable",
+    project_sdk = "default",
+    target_frameworks = ["net10.0"],
+    visibility = ["//visibility:public"],
+)
