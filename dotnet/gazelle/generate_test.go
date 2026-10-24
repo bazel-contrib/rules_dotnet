@@ -316,3 +316,183 @@ func TestGenerateTestInBinaryOnlyDirectory(t *testing.T) {
 		t.Errorf("test imports = %v, want [App NUnit.Framework]", input.imports)
 	}
 }
+
+const mstestTestSrc = `using Calculator;
+using Microsoft.VisualStudio.TestTools.UnitTesting;
+
+namespace Calculator.Tests;
+
+[TestClass]
+public sealed class ArithmeticTests
+{
+    [TestMethod]
+    public void AddWorks()
+    {
+        Assert.AreEqual(4, Arithmetic.Add(2, 2));
+    }
+}
+`
+
+func TestGenerateNullableAndImplicitUsingsMatrix(t *testing.T) {
+	tests := []struct {
+		name        string
+		directives  string
+		nullable    string
+		nullableSet bool
+		implicit    bool
+		implicitSet bool
+	}{
+		{name: "unset"},
+		{
+			name:        "explicit disable",
+			directives:  "# gazelle:dotnet_nullable disable\n# gazelle:dotnet_implicit_usings disable\n",
+			nullable:    "disable",
+			nullableSet: true,
+			implicit:    false,
+			implicitSet: true,
+		},
+		{
+			name:        "enable",
+			directives:  "# gazelle:dotnet_nullable enable\n# gazelle:dotnet_implicit_usings enable\n",
+			nullable:    "enable",
+			nullableSet: true,
+			implicit:    true,
+			implicitSet: true,
+		},
+		{
+			name:        "warnings does not configure implicit usings",
+			directives:  "# gazelle:dotnet_nullable warnings\n",
+			nullable:    "warnings",
+			nullableSet: true,
+		},
+		{
+			name:        "annotations does not configure implicit usings",
+			directives:  "# gazelle:dotnet_nullable annotations\n",
+			nullable:    "annotations",
+			nullableSet: true,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			l, c, dir := setupLang(t, net10Directive+tc.directives, "src", "src/matrix")
+			sources := map[string]string{
+				"Calculator.cs":  calculatorSrc,
+				"NUnitTests.cs":  nunitTestSrc,
+				"XUnitTests.cs":  xunitTestSrc,
+				"MSTestTests.cs": mstestTestSrc,
+				"Program.cs":     programSrc,
+			}
+			for name, src := range sources {
+				writeFile(t, filepath.Join(dir, "src", "matrix"), name, src)
+			}
+
+			res := generate(
+				t,
+				l,
+				c,
+				dir,
+				"src/matrix",
+				"Calculator.cs",
+				"MSTestTests.cs",
+				"NUnitTests.cs",
+				"Program.cs",
+				"XUnitTests.cs",
+			)
+			if len(res.Gen) != 5 {
+				t.Fatalf("GenerateRules() returned %d rules, want 5", len(res.Gen))
+			}
+			rules := map[string]*rule.Rule{}
+			for _, r := range res.Gen {
+				if _, exists := rules[r.Kind()]; exists {
+					t.Fatalf("duplicate generated kind %s", r.Kind())
+				}
+				rules[r.Kind()] = r
+			}
+
+			for _, kind := range []string{
+				"csharp_library",
+				"csharp_binary",
+				"csharp_nunit_test",
+				"csharp_xunit_test",
+				"csharp_mstest_test",
+			} {
+				r := rules[kind]
+				if r == nil {
+					t.Errorf("missing generated kind %s", kind)
+					continue
+				}
+				nullableAttr := r.Attr("nullable")
+				if !tc.nullableSet && nullableAttr != nil {
+					t.Errorf("%s nullable is set to %v, want absent", kind, nullableAttr)
+				}
+				if tc.nullableSet {
+					if nullableAttr == nil {
+						t.Errorf("%s nullable is absent, want %q", kind, tc.nullable)
+					} else if got := r.AttrString("nullable"); got != tc.nullable {
+						t.Errorf("%s nullable = %q, want %q", kind, got, tc.nullable)
+					}
+				}
+
+				implicitAttr := r.Attr("implicit_usings")
+				if !tc.implicitSet && implicitAttr != nil {
+					t.Errorf("%s implicit_usings is set to %v, want absent", kind, implicitAttr)
+				}
+				if tc.implicitSet {
+					if implicitAttr == nil {
+						t.Errorf("%s implicit_usings is absent, want configured boolean", kind)
+					} else if got := r.AttrBool("implicit_usings"); got != tc.implicit {
+						t.Errorf("%s implicit_usings = %v, want %v", kind, got, tc.implicit)
+					}
+				}
+			}
+		})
+	}
+}
+
+func TestGenerateExplicitDirectivesOverrideExistingAttrs(t *testing.T) {
+	l, c, dir := setupLang(t, net10Directive, "src", "src/existing")
+	existing, err := rule.LoadData(
+		filepath.Join(dir, "src", "existing", "BUILD.bazel"),
+		"src/existing",
+		[]byte(`# gazelle:dotnet_nullable disable
+# gazelle:dotnet_implicit_usings disable
+
+csharp_library(
+    name = "existing",
+    srcs = ["Calculator.cs"],
+    implicit_usings = True,
+    nullable = "enable",
+)
+`),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	l.Configure(c, "src/existing", existing)
+	writeFile(t, filepath.Join(dir, "src", "existing"), "Calculator.cs", calculatorSrc)
+
+	res := l.GenerateRules(language.GenerateArgs{
+		Config:       c,
+		Dir:          filepath.Join(dir, "src", "existing"),
+		Rel:          "src/existing",
+		RegularFiles: []string{"Calculator.cs"},
+		File:         existing,
+	})
+	if len(res.Gen) != 1 {
+		t.Fatalf("GenerateRules() returned %d rules, want 1", len(res.Gen))
+	}
+
+	// Run the same pre-resolve merge as Gazelle. Explicit directives must win
+	// even though these scalar attributes are not globally mergeable.
+	rule.MergeRules(res.Gen[0], existing.Rules[0], csharpKindInfo.MergeableAttrs, existing.Path)
+	got := existing.Rules[0]
+	if value := got.AttrString("nullable"); value != "disable" {
+		t.Errorf("merged nullable = %q, want disable", value)
+	}
+	if got.Attr("implicit_usings") == nil {
+		t.Error("merged implicit_usings is absent, want explicit False")
+	} else if value := got.AttrBool("implicit_usings"); value {
+		t.Error("merged implicit_usings = True, want explicit False")
+	}
+}

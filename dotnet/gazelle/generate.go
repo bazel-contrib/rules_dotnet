@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/bazel-contrib/rules_dotnet/dotnet/gazelle/dotnetconfig"
 	"github.com/bazel-contrib/rules_dotnet/dotnet/gazelle/private/parser"
 	"github.com/bazelbuild/bazel-gazelle/language"
 	"github.com/bazelbuild/bazel-gazelle/rule"
@@ -32,6 +33,52 @@ var frameworkOrder = []parser.Framework{
 	parser.FrameworkNUnit,
 	parser.FrameworkXUnit,
 	parser.FrameworkMSTest,
+}
+
+// setNullableAndImplicitUsingsAttrs writes only explicitly configured values
+// and returns exactly those attribute names for the existing-rule merge below.
+func setNullableAndImplicitUsingsAttrs(r *rule.Rule, cfg *dotnetconfig.Config) map[string]bool {
+	configured := map[string]bool{}
+	if value, isConfigured := cfg.Nullable(); isConfigured {
+		r.SetAttr("nullable", value)
+		configured["nullable"] = true
+	}
+	if value, isConfigured := cfg.ImplicitUsings(); isConfigured {
+		r.SetAttr("implicit_usings", value)
+		configured["implicit_usings"] = true
+	}
+	return configured
+}
+
+// mergeNullableAndImplicitUsingsAttrs applies explicit directives to the one
+// existing rule matched by kind and name. Gazelle otherwise preserves existing
+// non-mergeable scalars. A stub containing only configured attributes keeps
+// unset attributes untouched and delegates # keep handling to MergeRules.
+func mergeNullableAndImplicitUsingsAttrs(generated *rule.Rule, file *rule.File, cfg *dotnetconfig.Config) {
+	if file == nil {
+		return
+	}
+	override := rule.NewRule(generated.Kind(), generated.Name())
+	mergeable := setNullableAndImplicitUsingsAttrs(override, cfg)
+	if len(mergeable) == 0 {
+		return
+	}
+
+	var existing *rule.Rule
+	for _, candidate := range file.Rules {
+		if candidate.Name() != generated.Name() {
+			continue
+		}
+		if candidate.Kind() != generated.Kind() || existing != nil {
+			// Match the normal merger's ambiguous-name behavior: do not update
+			// any candidate when there is no unique kind-and-name match.
+			return
+		}
+		existing = candidate
+	}
+	if existing != nil {
+		rule.MergeRules(override, existing, mergeable, file.Path)
+	}
 }
 
 // GenerateRules implements language.Language.
@@ -108,6 +155,7 @@ func (l *csharpLang) GenerateRules(args language.GenerateArgs) language.Generate
 		lib.SetAttr("target_frameworks", cfg.TargetFrameworks())
 		lib.SetAttr("project_sdk", cfg.ProjectSdk())
 		lib.SetAttr("visibility", cfg.Visibility())
+		setNullableAndImplicitUsingsAttrs(lib, cfg)
 		if len(testTargetNames) > 0 {
 			var ivt []string
 			for _, fw := range frameworkOrder {
@@ -135,6 +183,7 @@ func (l *csharpLang) GenerateRules(args language.GenerateArgs) language.Generate
 		r.SetAttr("target_frameworks", cfg.TargetFrameworks())
 		r.SetAttr("project_sdk", cfg.ProjectSdk())
 		r.SetAttr("visibility", cfg.Visibility())
+		setNullableAndImplicitUsingsAttrs(r, cfg)
 		switch {
 		case len(prodFiles) > 0:
 			r.SetAttr("deps", []string{":" + libName})
@@ -160,6 +209,7 @@ func (l *csharpLang) GenerateRules(args language.GenerateArgs) language.Generate
 		r.SetAttr("target_frameworks", cfg.TargetFrameworks())
 		r.SetAttr("project_sdk", cfg.ProjectSdk())
 		r.SetAttr("visibility", cfg.Visibility())
+		setNullableAndImplicitUsingsAttrs(r, cfg)
 		// Binaries advertise their namespaces like libraries do, so a
 		// test (or another package) can resolve a using directive to the
 		// binary target.
@@ -171,6 +221,9 @@ func (l *csharpLang) GenerateRules(args language.GenerateArgs) language.Generate
 		})
 	}
 
+	for _, generated := range res.Gen {
+		mergeNullableAndImplicitUsingsAttrs(generated, args.File, cfg)
+	}
 	return res
 }
 
