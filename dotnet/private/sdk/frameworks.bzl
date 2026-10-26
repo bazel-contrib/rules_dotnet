@@ -17,7 +17,7 @@ published as stable versions, so every table here stops at the same
 release and they cannot drift apart.
 """
 
-# Read from .NET SDK 11.0.100-rc.1.26425.128.
+# Read from .NET SDK 11.0.100-rc.3.26522.148.
 
 DEFAULT_TARGET_FRAMEWORK = "net10.0"
 

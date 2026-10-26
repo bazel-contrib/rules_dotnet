@@ -144,6 +144,10 @@ def _wasm(versions):
     because a browser is the only target. The runtime pack reuses the
     `runtime_pack` rule, since it carries the same mix of managed assemblies and
     native files as any other; the tools are just their archives' file lists.
+
+    The tools move with the band too, as the SDK bundles them at its own
+    version: `illink` will not start on a runtime older than the one it was
+    built for, so a table newer than the SDK in use cannot trim.
     """
     packages = []
     build_files = {}
@@ -167,7 +171,8 @@ def _wasm(versions):
             }),
         ]
 
-        for (name, (tool_id, tool_version)) in wasm_tool_packs(tfm):
+        for (name, tool) in wasm_tool_packs(tfm):
+            (tool_id, tool_version) = _retarget([tool], versions.get(tfm))[0]
             packages.append((tool_id, tool_version))
             lines += [
                 "",
