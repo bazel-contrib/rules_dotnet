@@ -188,7 +188,7 @@ _TARGETING_PACKS = [
     (("netstandard2.1", DEFAULT_SDK), [("NETStandard.Library.Ref", "2.1.0")]),
     (("net48", DEFAULT_SDK), [("Microsoft.NETFramework.ReferenceAssemblies.net48", "1.0.3")]),
     (("netcoreapp2.1", DEFAULT_SDK), [("Microsoft.NETCore.App", "2.1.30")]),
-    (("net10.0", DEFAULT_SDK), [("Microsoft.NETCore.App.Ref", "10.0.12")]),
+    (("net10.0", DEFAULT_SDK), [("Microsoft.NETCore.App.Ref", "10.0.14")]),
     (("netcoreapp2.1", WEB_SDK), [
         ("Microsoft.AspNetCore.App", "2.1.34"),
         ("Microsoft.NETCore.App", "2.1.30"),
@@ -203,8 +203,8 @@ _TARGETING_PACKS = [
 _RUNTIME_PACKS = [
     (("net5.0", "linux-x64", DEFAULT_SDK), [("Microsoft.NETCore.App.Runtime.linux-x64", "5.0.17")]),
     (("net10.0", "win-arm64", WEB_SDK), [
-        ("Microsoft.AspNetCore.App.Runtime.win-arm64", "10.0.12"),
-        ("Microsoft.NETCore.App.Runtime.win-arm64", "10.0.12"),
+        ("Microsoft.AspNetCore.App.Runtime.win-arm64", "10.0.14"),
+        ("Microsoft.NETCore.App.Runtime.win-arm64", "10.0.14"),
     ]),
 ]
 
@@ -224,7 +224,7 @@ def _pack_ids_test_impl(ctx):
 
     asserts.equals(
         env,
-        ("Microsoft.NETCore.App.Host.osx-arm64", "10.0.12"),
+        ("Microsoft.NETCore.App.Host.osx-arm64", "10.0.14"),
         apphost_pack("net10.0", "osx-arm64"),
     )
     asserts.equals(
@@ -243,7 +243,7 @@ def _wasm_test_impl(ctx):
     # A browser runs Mono, so this is the one runtime pack id with an infix.
     asserts.equals(
         env,
-        ("Microsoft.NETCore.App.Runtime.Mono.browser-wasm", "10.0.12"),
+        ("Microsoft.NETCore.App.Runtime.Mono.browser-wasm", "10.0.14"),
         wasm_runtime_pack("net10.0"),
     )
 

@@ -23,6 +23,9 @@ internal sealed class Request
     public string Illink { get; set; } = "";
     public string IllinkTasks { get; set; } = "";
 
+    /// The registered SDK's dotnet muxer, which `illink` runs on.
+    public string IllinkHost { get; set; } = "";
+
     /// `Microsoft.NET.WebAssembly.Webcil.dll`, from the WebAssembly SDK pack.
     public string WebcilConverter { get; set; } = "";
 

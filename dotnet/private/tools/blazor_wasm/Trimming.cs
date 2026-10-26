@@ -19,12 +19,10 @@ internal static class Trimming
     public static List<string> Run(Request request, StubBuildEngine engine)
     {
         // The task shells out to `illink` through the dotnet muxer and finds it
-        // by environment variable, which only MSBuild would normally set. This
-        // tool is itself running on that muxer, so it can say where it is.
-        if (string.IsNullOrEmpty(Environment.GetEnvironmentVariable("DOTNET_HOST_PATH")))
-        {
-            Environment.SetEnvironmentVariable("DOTNET_HOST_PATH", Environment.ProcessPath);
-        }
+        // by environment variable, which only MSBuild would normally set. Not
+        // the muxer this tool runs on: `illink` is the registered SDK's, and it
+        // will not start on a runtime older than that SDK's.
+        Environment.SetEnvironmentVariable("DOTNET_HOST_PATH", Path.GetFullPath(request.IllinkHost));
 
         var tasks = Tasks.Load(request.IllinkTasks);
         var task = Tasks.Create(tasks, engine, TaskType);

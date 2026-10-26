@@ -5,6 +5,7 @@ bzl_library(
     srcs = ["common.bzl"],
     visibility = ["//dotnet:__subpackages__"],
     deps = [
+        "//dotnet/private:common",
         "//dotnet/private:providers",
         "//dotnet/private/rules/common:static_web_assets",
         "//dotnet/private/sdk:packs",

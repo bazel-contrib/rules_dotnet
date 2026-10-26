@@ -7,6 +7,7 @@ configuration goes - is the same, and lives here.
 """
 
 load("@bazel_skylib//lib:dicts.bzl", "dicts")
+load("//dotnet/private:common.bzl", "get_toolchain")
 load(
     "//dotnet/private:providers.bzl",
     "BlazorWasmSiteInfo",
@@ -195,6 +196,11 @@ def _assemble_action(ctx, binary, tfm, output, trimmed = None, trim_mode = "full
 
     illink = _tool_file(ctx.files._illink, "illink.dll", tfm) if trimmed else None
     illink_tasks = _tool_file(ctx.files._illink, "ILLink.Tasks.dll", tfm) if trimmed else None
+
+    # The registered SDK moves `illink` to its own version, so it runs on that
+    # SDK's runtime, as under MSBuild, rather than on the one this tool runs on.
+    illink_host = get_toolchain(ctx).compiler_host if trimmed else None
+
     symbols = _application_symbols(runtime_info) if debug else []
 
     # Beside the directory it describes, so that the two rules that assemble an
@@ -207,6 +213,7 @@ def _assemble_action(ctx, binary, tfm, output, trimmed = None, trim_mode = "full
             symbols = [symbol.path for symbol in symbols],
             illink = illink.path if illink else "",
             illinkTasks = illink_tasks.path if illink_tasks else "",
+            illinkHost = illink_host.files_to_run.executable.path if illink_host else "",
             trimmedDirectory = trimmed.path if trimmed else "",
             trimMode = trim_mode,
             webcilConverter = webcil.path,
@@ -233,6 +240,10 @@ def _assemble_action(ctx, binary, tfm, output, trimmed = None, trim_mode = "full
     ]
     if trimmed:
         transitive.append(ctx.attr._illink.files)
+        transitive.append(depset(
+            [illink_host.files_to_run.executable],
+            transitive = [illink_host.default_runfiles.files],
+        ))
 
     ctx.actions.run(
         mnemonic = "BlazorWasmAssemble",
