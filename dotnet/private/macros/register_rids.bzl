@@ -12,6 +12,7 @@ def register_rids():
         name = "rid",
         values = RUNTIME_GRAPH.keys(),
         build_setting_default = DEFAULT_RID,
+        scope = "target",
         visibility = ["//visibility:public"],
     )
 
@@ -23,6 +24,7 @@ def register_rids():
         bool_setting(
             name = "rid_compatible_%s" % rid,
             build_setting_default = rid in default_compatible_rids,
+            scope = "target",
             visibility = ["//visibility:public"],
         )
 

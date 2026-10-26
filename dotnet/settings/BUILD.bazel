@@ -4,6 +4,7 @@ load("@bazel_skylib//rules:common_settings.bzl", "bool_flag")
 bool_flag(
     name = "strict_deps",
     build_setting_default = True,
+    scope = "universal",
     visibility = ["//visibility:public"],
 )
 
@@ -12,6 +13,7 @@ bool_flag(
 bool_flag(
     name = "use_compiler_worker",
     build_setting_default = False,
+    scope = "universal",
     visibility = ["//visibility:public"],
 )
 
@@ -53,6 +55,7 @@ filegroup(
 bool_flag(
     name = "prune_unused_references",
     build_setting_default = False,
+    scope = "universal",
     visibility = ["//visibility:public"],
 )
 
@@ -61,6 +64,7 @@ bool_flag(
 bool_flag(
     name = "embed_all_sources",
     build_setting_default = False,
+    scope = "universal",
     visibility = ["//visibility:public"],
 )
 
@@ -74,12 +78,14 @@ config_setting(
 bool_flag(
     name = "invariant_globalization",
     build_setting_default = False,
+    scope = "universal",
     visibility = ["//visibility:public"],
 )
 
 label_flag(
     name = "icu",
     build_setting_default = ":system_icu",
+    scope = "universal",
     visibility = ["//visibility:public"],
 )
 

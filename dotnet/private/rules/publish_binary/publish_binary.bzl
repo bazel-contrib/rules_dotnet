@@ -1105,9 +1105,8 @@ C/C++ toolchain to link with.""",
         "_ilcompiler_pack": attr.label(
             doc = """The ILCompiler pack to compile native code with.
 
-Selected by the execution platform rather than the target: ilc
-cross-compiles, so what matters is the machine it runs on.""",
-            cfg = "exec",
+Its band follows the target framework, and its pack the execution platform:
+ilc cross-compiles, so what matters is the machine it runs on.""",
             default = Label("//dotnet/private:ilcompiler_pack"),
         ),
         "_nativeaot_pack": attr.label(
@@ -1118,9 +1117,8 @@ cross-compiles, so what matters is the machine it runs on.""",
         "_crossgen2_pack": attr.label(
             doc = """The crossgen2 pack to compile ReadyToRun images with.
 
-Selected by the execution platform rather than the target: crossgen2
-cross-compiles, so what matters is the machine it runs on.""",
-            cfg = "exec",
+Its band follows the target framework, and its pack the execution platform:
+crossgen2 cross-compiles, so what matters is the machine it runs on.""",
             default = Label("//dotnet/private:crossgen2_pack"),
         ),
         "_apphost_shimmer": attr.label(

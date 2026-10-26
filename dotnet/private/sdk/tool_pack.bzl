@@ -46,3 +46,45 @@ def tool_pack_rule(tool_name):
             "_windows_constraint": attr.label(default = "@platforms//os:windows"),
         },
     )
+
+def _host_tool_pack_impl(ctx):
+    return [ctx.attr.pack[DotnetToolPackInfo]]
+
+host_tool_pack = rule(
+    _host_tool_pack_impl,
+    doc = """A native tool for the machine the build runs on, from the band of the target framework.
+
+The band is selected on `pack` in the target configuration, where the target
+framework is, and the pack for the host is selected past the exec transition,
+so that no exec configuration has to carry the target framework.""",
+    attrs = {
+        "pack": attr.label(
+            doc = "The band's `host` alias, selected by target framework.",
+            cfg = "exec",
+            mandatory = True,
+            providers = [DotnetToolPackInfo],
+        ),
+    },
+    # Picks the execution platform the way the rules running the tool do, so
+    # that the pack is the one for the machine their actions run on.
+    toolchains = ["//dotnet:toolchain_type"],
+    provides = [DotnetToolPackInfo],
+)
+
+def host_tool_pack_band(repo, tfms):
+    """Selects a tool pack's band by the target framework of the configuration.
+
+    Args:
+      repo: The repository holding a package per band.
+      tfms: The bands the tool shipped for, oldest first.
+
+    Returns:
+      A select of each band's `host` alias.
+    """
+    bands = {"//dotnet:tfm_" + tfm: "@{}//{}:host".format(repo, tfm) for tfm in tfms}
+
+    # Nothing sets a target framework outside a tfm transition, so the tool
+    # still has to resolve without one: to the newest band.
+    bands["//conditions:default"] = "@{}//{}:host".format(repo, tfms[-1])
+
+    return select(bands)

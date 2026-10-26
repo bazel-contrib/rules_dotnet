@@ -4,6 +4,7 @@ load(":runtime_pack.bzl", "runtime_pack")
 label_setting(
     name = "runtime_pack",
     build_setting_default = ":empty_pack",
+    scope = "target",
     visibility = ["//visibility:public"],
 )
 

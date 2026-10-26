@@ -4,6 +4,7 @@ load(":targeting_pack.bzl", "targeting_pack")
 label_setting(
     name = "targeting_pack",
     build_setting_default = ":empty_pack",
+    scope = "target",
     visibility = ["//visibility:public"],
 )
 
