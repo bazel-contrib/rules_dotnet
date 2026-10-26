@@ -20,5 +20,9 @@ bzl_library(
     name = "targeting_pack_transition",
     srcs = ["targeting_pack_transition.bzl"],
     visibility = ["//dotnet:__subpackages__"],
-    deps = ["//dotnet/private/sdk:packs"],
+    deps = [
+        "//dotnet/private/sdk:packs",
+        "//dotnet/private/transitions:common",
+        "@bazel_skylib//lib:dicts",
+    ],
 )

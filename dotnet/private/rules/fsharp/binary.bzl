@@ -14,6 +14,7 @@ load(
 load("//dotnet/private/rules/common:attrs.bzl", "FSHARP_BINARY_COMMON_ATTRS")
 load("//dotnet/private/rules/common:binary.bzl", "build_binary")
 load("//dotnet/private/rules/fsharp/actions:fsharp_assembly.bzl", "AssemblyAction")
+load("//dotnet/private/rules/ready_to_run:ready_to_run.bzl", "get_ready_to_run_tools")
 load("//dotnet/private/transitions:tfm_transition.bzl", "tfm_transition")
 
 def _compile_action(ctx, tfm, toolchain):
@@ -54,6 +55,7 @@ def _compile_action(ctx, tfm, toolchain):
         project_sdk = ctx.attr.project_sdk,
         compiler_options = ctx.attr.compiler_options,
         is_windows = targets_windows(ctx),
+        ready_to_run_tools = get_ready_to_run_tools(ctx),
     )
 
 def _binary_private_impl(ctx):

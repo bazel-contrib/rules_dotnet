@@ -10,6 +10,7 @@ load("@bazel_skylib//lib:dicts.bzl", "dicts")
 load(
     "//dotnet/private/transitions:common.bzl",
     "FRAMEWORK_COMPATABILITY_TRANSITION_OUTPUTS",
+    "NO_READY_TO_RUN",
     "TFM_RID_TRANSITION_OUTPUTS",
     "rid_compatability_transition_outputs",
 )
@@ -65,6 +66,7 @@ def _impl(settings, attr):
                 FRAMEWORK_COMPATABILITY_TRANSITION_OUTPUTS[tfm],
                 # Fails on an unknown runtime identifier, as tfm_transition does.
                 rid_compatability_transition_outputs(resolved),
+                NO_READY_TO_RUN,
             )
 
     return splits

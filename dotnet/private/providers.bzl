@@ -39,6 +39,12 @@ DotnetAssemblyRuntimeInfo = provider(
         "nuget_info": "NugetInfo",
         "deps": "depset[DotnetAssemblyRuntimeInfo]: The direct and transitive runtime dependencies of the assembly",
         "direct_deps_depsjson_fragment": "struct: A struct containing the direct deps of the target. This is used during deps.json generation and is generated in the provider to avoid making the provider too bloated and thus making analysis slower.",
+        "ready_to_run": """list[struct]: The ReadyToRun images of `libs`, when a publish asked for them, or None. Each carries
+
+  * `assembly`: the File that was compiled.
+  * `image`: its ReadyToRun image.
+  * `framework`: the `key` of the framework it was compiled against.
+  * `references`: the tuple of Files it was compiled against besides that.""",
     },
 )
 

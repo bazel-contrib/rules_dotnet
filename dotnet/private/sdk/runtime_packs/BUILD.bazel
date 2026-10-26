@@ -23,5 +23,7 @@ bzl_library(
     deps = [
         "//dotnet/private:providers",
         "//dotnet/private/sdk:packs",
+        "//dotnet/private/transitions:common",
+        "@bazel_skylib//lib:dicts",
     ],
 )

@@ -33,6 +33,7 @@ bzl_library(
         ":common",
         "//dotnet/private:common",
         "//dotnet/private:portable_rids",
+        "//dotnet/private/sdk:packs",
         "@bazel_skylib//lib:dicts",
     ],
 )

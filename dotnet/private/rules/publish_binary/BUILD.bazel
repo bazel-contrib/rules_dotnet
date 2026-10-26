@@ -10,6 +10,7 @@ bzl_library(
         "//dotnet/private:providers",
         "//dotnet/private/rules/blazor:blazor_wasm_publish",
         "//dotnet/private/rules/common:publish_layout",
+        "//dotnet/private/rules/ready_to_run",
         "//dotnet/private/sdk/nativeaot_packs:nativeaot_pack_transition",
         "//dotnet/private/sdk/runtime_packs:runtime_pack_transition",
         "//dotnet/private/transitions:default_transition",

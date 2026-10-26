@@ -2,6 +2,7 @@
 Rules for importing assemblies for .NET frameworks.
 """
 
+load("@bazel_skylib//lib:dicts.bzl", "dicts")
 load("@bazel_skylib//rules:common_settings.bzl", "BuildSettingInfo")
 load(
     "//dotnet/private:common.bzl",
@@ -14,6 +15,12 @@ load(
     "//dotnet/private/rules/common:static_web_assets.bzl",
     "PACKAGE_CONTENT_ROOT",
     "collect_static_web_assets",
+)
+load(
+    "//dotnet/private/rules/ready_to_run:ready_to_run.bzl",
+    "READY_TO_RUN_ATTRS",
+    "compile_ready_to_run_images",
+    "get_ready_to_run_tools",
 )
 
 def _import_library(ctx):
@@ -64,6 +71,8 @@ def _import_library(ctx):
         internals_visible_to = [],
     )
 
+    runtime_deps = depset([dep[DotnetAssemblyRuntimeInfo] for dep in ctx.attr.deps], transitive = [dep[DotnetAssemblyRuntimeInfo].deps for dep in ctx.attr.deps])
+
     dotnet_assembly_runtime_info = DotnetAssemblyRuntimeInfo(
         name = ctx.attr.library_name,
         version = ctx.attr.version,
@@ -75,8 +84,9 @@ def _import_library(ctx):
         native = ctx.files.native,
         data = ctx.files.data,
         nuget_info = nuget_info,
-        deps = depset([dep[DotnetAssemblyRuntimeInfo] for dep in ctx.attr.deps], transitive = [dep[DotnetAssemblyRuntimeInfo].deps for dep in ctx.attr.deps]),
+        deps = runtime_deps,
         direct_deps_depsjson_fragment = {dep[DotnetAssemblyRuntimeInfo].name: dep[DotnetAssemblyRuntimeInfo].version for dep in ctx.attr.deps},
+        ready_to_run = compile_ready_to_run_images(ctx.actions, get_ready_to_run_tools(ctx), ctx.label, ctx.files.libs, runtime_deps),
     )
 
     return [
@@ -101,7 +111,7 @@ def _import_library(ctx):
 import_library = rule(
     _import_library,
     doc = "Creates a target for a static DLL for a specific target framework",
-    attrs = {
+    attrs = dicts.add(READY_TO_RUN_ATTRS, {
         "library_name": attr.string(
             doc = "The name of the library",
             mandatory = True,
@@ -184,7 +194,7 @@ import_library = rule(
             doc = "The `.nupkg` file providing this import",
             allow_single_file = True,
         ),
-    },
+    }),
     toolchains = [
         "//dotnet:toolchain_type",
     ],
