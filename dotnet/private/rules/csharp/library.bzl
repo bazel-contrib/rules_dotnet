@@ -15,7 +15,6 @@ load(
 load("//dotnet/private/rules/common:attrs.bzl", "CSHARP_LIBRARY_COMMON_ATTRS")
 load("//dotnet/private/rules/common:library.bzl", "build_library")
 load("//dotnet/private/rules/csharp/actions:csharp_assembly.bzl", "AssemblyAction")
-load("//dotnet/private/rules/ready_to_run:ready_to_run.bzl", "get_ready_to_run_tools")
 load("//dotnet/private/transitions:tfm_transition.bzl", "tfm_transition")
 
 def _compile_action(ctx, tfm, toolchain):
@@ -66,7 +65,6 @@ def _compile_action(ctx, tfm, toolchain):
         compiler_options = ctx.attr.compiler_options,
         interceptors_namespaces = ctx.attr.interceptors_namespaces,
         is_windows = targets_windows(ctx),
-        ready_to_run_tools = get_ready_to_run_tools(ctx),
     )
 
 def _library_impl(ctx):

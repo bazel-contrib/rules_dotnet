@@ -25,7 +25,6 @@ load(
     "DotnetAssemblyRuntimeInfo",
 )
 load("//dotnet/private/icu:settings.bzl", "globalization_env", "icu_wrapper_arguments")
-load("//dotnet/private/rules/ready_to_run:ready_to_run.bzl", "compile_ready_to_run_images")
 
 def _format_targetprofile(tfm):
     if is_standard_framework(tfm):
@@ -145,8 +144,7 @@ def AssemblyAction(
         nullable,
         project_sdk,
         compiler_options,
-        is_windows,
-        ready_to_run_tools = None):
+        is_windows):
     """Creates an action that runs the F# compiler with the specified inputs.
 
     This macro aims to match the [F# compiler](https://docs.microsoft.com/en-us/dotnet/fsharp/language-reference/compiler-options), with the inputs mapping to compiler options.
@@ -187,7 +185,6 @@ def AssemblyAction(
         project_sdk: The project SDK being targeted
         compiler_options: Additional compiler options to pass to the compiler.
         is_windows: Whether or not the target is running on Windows.
-        ready_to_run_tools: What to compile the assembly's ReadyToRun images with, or None when no publish asked for them.
 
     Returns:
         The compile and runtime providers, and the static web assets the compile
@@ -349,8 +346,6 @@ def AssemblyAction(
                 out_xml = None,
             )
 
-    runtime_deps = depset([dep[DotnetAssemblyRuntimeInfo] for dep in deps], transitive = [dep[DotnetAssemblyRuntimeInfo].deps for dep in deps])
-
     return (DotnetAssemblyCompileInfo(
         name = assembly_name,
         version = version or DEFAULT_ASSEMBLY_VERSION,
@@ -381,10 +376,9 @@ def AssemblyAction(
         data = data,
         appsetting_files = depset(out_appsettings),
         native = [],
-        deps = runtime_deps,
+        deps = depset([dep[DotnetAssemblyRuntimeInfo] for dep in deps], transitive = [dep[DotnetAssemblyRuntimeInfo].deps for dep in deps]),
         nuget_info = None,
         direct_deps_depsjson_fragment = {dep[DotnetAssemblyRuntimeInfo].name: dep[DotnetAssemblyRuntimeInfo].version for dep in deps},
-        ready_to_run = compile_ready_to_run_images(actions, ready_to_run_tools, label, [out_dll], runtime_deps),
     ), [])
 
 def _compile(

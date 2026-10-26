@@ -28,7 +28,6 @@ load(
     "razor_compile_inputs",
 )
 load("//dotnet/private/rules/csharp/actions:scoped_css.bzl", "scoped_css_action")
-load("//dotnet/private/rules/ready_to_run:ready_to_run.bzl", "compile_ready_to_run_images")
 load("//dotnet/private/sdk:packs.bzl", "uses_razor")
 
 def _write_internals_visible_to_csharp(actions, label_name, dll_name, others):
@@ -159,8 +158,7 @@ def AssemblyAction(
         analyzer_configs,
         compiler_options,
         interceptors_namespaces,
-        is_windows,
-        ready_to_run_tools = None):
+        is_windows):
     """Creates an action that runs the CSharp compiler with the specified inputs.
 
     This macro aims to match the [C# compiler](https://docs.microsoft.com/en-us/dotnet/csharp/language-reference/compiler-options/listed-alphabetically), with the inputs mapping to compiler options.
@@ -212,7 +210,6 @@ def AssemblyAction(
         compiler_options: Additional options to pass to the compiler.
         interceptors_namespaces: Namespaces that are allowed to contain interceptors.
         is_windows: Whether or not the target is running on Windows.
-        ready_to_run_tools: What to compile the assembly's ReadyToRun images with, or None when no publish asked for them.
     Returns:
         The compile and runtime providers, and the static web assets the compile
         generated.
@@ -481,17 +478,6 @@ def AssemblyAction(
             out_xml = None,
         )
 
-    is_runtime_assembly = not (is_analyzer or is_language_specific_analyzer)
-    runtime_libs = [out_dll] if is_runtime_assembly else []
-
-    # `compile_deps` rather than `deps`: an assembly pulled in from the
-    # toolchain has to be resolvable at run time too, which is what puts it
-    # in deps.json.
-    runtime_deps = depset(
-        [dep[DotnetAssemblyRuntimeInfo] for dep in compile_deps],
-        transitive = [dep[DotnetAssemblyRuntimeInfo].deps for dep in deps],
-    ) if is_runtime_assembly else depset()
-
     return (DotnetAssemblyCompileInfo(
         name = assembly_name,
         version = version or DEFAULT_ASSEMBLY_VERSION,
@@ -515,17 +501,22 @@ def AssemblyAction(
     ), DotnetAssemblyRuntimeInfo(
         name = assembly_name,
         version = version or DEFAULT_ASSEMBLY_VERSION,
-        libs = runtime_libs,
+        libs = [out_dll] if not (is_analyzer or is_language_specific_analyzer) else [],
         resource_assemblies = [],
         pdbs = [out_pdb] if out_pdb else [],
         xml_docs = [out_xml] if out_xml else [],
         data = data,
         appsetting_files = depset(out_appsettings),
         native = [],
-        deps = runtime_deps,
+        # `compile_deps` rather than `deps`: an assembly pulled in from the
+        # toolchain has to be resolvable at run time too, which is what puts it
+        # in deps.json.
+        deps = depset(
+            [dep[DotnetAssemblyRuntimeInfo] for dep in compile_deps],
+            transitive = [dep[DotnetAssemblyRuntimeInfo].deps for dep in deps],
+        ) if not (is_analyzer or is_language_specific_analyzer) else depset(),
         nuget_info = None,
         direct_deps_depsjson_fragment = {dep[DotnetAssemblyRuntimeInfo].name: dep[DotnetAssemblyRuntimeInfo].version for dep in deps},
-        ready_to_run = compile_ready_to_run_images(actions, ready_to_run_tools, label, runtime_libs, runtime_deps),
     ), generated_web_assets)
 
 def _compile(

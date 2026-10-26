@@ -9,8 +9,8 @@ compiles too. Its own configuration then only decides what it ships.
 
 Unless what it compiles differs: a target that selects its sources on the
 runtime identifier, or depends on one that does, compiles in its own
-configuration as before. Both copies say what they compile from, and the
-compilation is reused only when they agree.
+configuration. Both copies say what they compile from, and the compilation is
+reused only when they agree.
 
 An attribute default can neither name the target it belongs to nor be a select,
 so the macros declaring the targets set `compilation` with `compilation_of`.
@@ -135,6 +135,24 @@ def _compile_inputs(ctx):
 
     return inputs
 
+def _with_ready_to_run(ctx, compiled, deps, direct_deps_depsjson_fragment):
+    """The runtime info of `compiled`, depending on `deps`, with the ReadyToRun images a publish asked for."""
+    return DotnetAssemblyRuntimeInfo(
+        name = compiled.name,
+        version = compiled.version,
+        libs = compiled.libs,
+        pdbs = compiled.pdbs,
+        xml_docs = compiled.xml_docs,
+        native = compiled.native,
+        data = compiled.data,
+        resource_assemblies = compiled.resource_assemblies,
+        appsetting_files = compiled.appsetting_files,
+        nuget_info = compiled.nuget_info,
+        deps = deps,
+        direct_deps_depsjson_fragment = direct_deps_depsjson_fragment,
+        ready_to_run = compile_ready_to_run_images(ctx.actions, get_ready_to_run_tools(ctx), ctx.label, compiled.libs, deps),
+    )
+
 def _reuse(ctx, compilation, toolchain):
     """The providers of a target whose compilation happened in another configuration.
 
@@ -154,25 +172,14 @@ def _reuse(ctx, compilation, toolchain):
         transitive = [dep[DotnetAssemblyRuntimeInfo].deps for dep in ctx.attr.deps],
     ) if compiled.libs else depset()
 
-    runtime_info = DotnetAssemblyRuntimeInfo(
-        name = compiled.name,
-        version = compiled.version,
-        libs = compiled.libs,
-        pdbs = compiled.pdbs,
-        xml_docs = compiled.xml_docs,
-        native = compiled.native,
-        data = compiled.data,
-        resource_assemblies = compiled.resource_assemblies,
-        appsetting_files = compiled.appsetting_files,
-        nuget_info = compiled.nuget_info,
-        deps = deps,
-        direct_deps_depsjson_fragment = {dep[DotnetAssemblyRuntimeInfo].name: dep[DotnetAssemblyRuntimeInfo].version for dep in ctx.attr.deps},
-        ready_to_run = compile_ready_to_run_images(ctx.actions, get_ready_to_run_tools(ctx), ctx.label, compiled.libs, deps),
-    )
-
     return struct(
         compile_info = compilation[DotnetAssemblyCompileInfo],
-        runtime_info = runtime_info,
+        runtime_info = _with_ready_to_run(
+            ctx,
+            compiled,
+            deps,
+            {dep[DotnetAssemblyRuntimeInfo].name: dep[DotnetAssemblyRuntimeInfo].version for dep in ctx.attr.deps},
+        ),
         static_web_assets_info = compilation[StaticWebAssetsInfo],
         files = compilation[DefaultInfo].files.to_list(),
         inputs_info = compilation[_CompileInputsInfo],
@@ -209,7 +216,7 @@ def compile_once(ctx, compile_action, tfm, toolchain, is_application):
     return struct(
         inputs_info = _CompileInputsInfo(inputs = inputs),
         compile_info = compile_info,
-        runtime_info = runtime_info,
+        runtime_info = _with_ready_to_run(ctx, runtime_info, runtime_info.deps, runtime_info.direct_deps_depsjson_fragment),
         static_web_assets_info = collect_static_web_assets(
             label = ctx.label,
             assembly_name = runtime_info.name,

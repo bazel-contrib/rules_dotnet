@@ -1,11 +1,10 @@
 """Compiles each assembly to ReadyToRun once, in the target that defines it.
 
-A publish used to compile every assembly it shipped, so a library or package
-shared by many applications was compiled once per application. Instead, a
-publish that compiles image by image puts the framework it runs on in the
+A publish that compiles image by image puts the framework it runs on in the
 configuration, and every target below it compiles its own assemblies against
 that framework and its own dependencies. The action is then the same for every
-publish of that framework that ships the assembly.
+publish of that framework that ships the assembly, so a library or package
+shared by many applications is compiled once.
 
 The framework is the one the published binary runs on rather than the one an
 assembly was built for: a netstandard2.0 library in a net10.0 publish is

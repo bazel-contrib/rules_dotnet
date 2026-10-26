@@ -438,7 +438,7 @@ def host_tool_tfms(pack):
     return [
         tfm
         for tfm in runtime_pack_tfms()
-        if [rid for rid in _HOST_RIDS if pack(tfm, rid) != None]
+        if any([pack(tfm, rid) != None for rid in _HOST_RIDS])
     ]
 
 RUNTIME_PACK_LOOKUP_TABLE = {

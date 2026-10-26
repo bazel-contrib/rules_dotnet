@@ -612,7 +612,10 @@ def _shipped_images(runtime_infos, framework, published):
     return shipped
 
 def _ready_to_run_images(ctx, binary_info, assembly_files, runtime_pack_files, runtime_identifier):
-    """Compiles the published assemblies to ReadyToRun.
+    """The ReadyToRun images of the published assemblies.
+
+    A composite image is compiled here. Otherwise the targets below the binary
+    compiled their own assemblies, and the publish compiles only the rest.
 
     crossgen2 cross-compiles, so the tool comes from the pack for the execution
     platform while the target platform and the references come from the target.
