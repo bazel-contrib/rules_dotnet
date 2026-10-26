@@ -2,6 +2,7 @@
 
 load("@bazel_skylib//lib:dicts.bzl", "dicts")
 load("//dotnet/private:providers.bzl", "DotnetAssemblyCompileInfo", "DotnetAssemblyRuntimeInfo")
+load("//dotnet/private/rules/common:compilation.bzl", "COMPILATION_ATTRS")
 load("//dotnet/private/rules/common:static_web_assets.bzl", "STATIC_WEB_ASSETS_ATTRS")
 load("//dotnet/private/rules/ready_to_run:ready_to_run.bzl", "READY_TO_RUN_ATTRS")
 load("//dotnet/private/sdk:packs.bzl", "USER_PACKS", "USER_PROJECT_SDKS")
@@ -231,6 +232,7 @@ BINARY_COMMON_ATTRS = dicts.add(STATIC_WEB_ASSETS_ATTRS, {
 # These are attributes that are common across all the binary/library/test C# rules
 CSHARP_COMMON_ATTRS = dicts.add(
     COMMON_ATTRS,
+    COMPILATION_ATTRS,
     READY_TO_RUN_ATTRS,
     {
         "srcs": attr.label_list(
@@ -341,6 +343,7 @@ CSHARP_BINARY_COMMON_ATTRS = dicts.add(
 # These are attributes that are common across all the binary/library/test F# rules
 FSHARP_COMMON_ATTRS = dicts.add(
     COMMON_ATTRS,
+    COMPILATION_ATTRS,
     READY_TO_RUN_ATTRS,
     {
         "_fsharp_compiler_worker": attr.label(

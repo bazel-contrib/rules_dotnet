@@ -1,10 +1,36 @@
 load("@bazel_lib//:bzl_library.bzl", "bzl_library")
+load(":compilation.bzl", "HOST_RID")
+
+# The configuration a target compiles in: where an ordinary build of it is. A
+# target anywhere else takes its compilation from there; see compilation.bzl.
+config_setting(
+    name = "compiles_here",
+    flag_values = {
+        "//dotnet:rid": HOST_RID,
+        "//dotnet/private/rules/ready_to_run:framework": "",
+    },
+    visibility = ["//visibility:public"],
+)
+
+bzl_library(
+    name = "compilation",
+    srcs = ["compilation.bzl"],
+    visibility = ["//dotnet:__subpackages__"],
+    deps = [
+        ":static_web_assets",
+        "//dotnet/private:providers",
+        "//dotnet/private/rules/ready_to_run",
+        "//dotnet/private/transitions:common",
+        "@bazel_skylib//lib:dicts",
+    ],
+)
 
 bzl_library(
     name = "binary",
     srcs = ["binary.bzl"],
     visibility = ["//dotnet:__subpackages__"],
     deps = [
+        ":compilation",
         ":static_web_assets",
         "//dotnet/private:common",
         "//dotnet/private:providers",
@@ -38,7 +64,7 @@ bzl_library(
     srcs = ["library.bzl"],
     visibility = ["//dotnet:__subpackages__"],
     deps = [
-        ":static_web_assets",
+        ":compilation",
         "//dotnet/private:common",
         "@bazel_skylib//rules:common_settings",
     ],
@@ -49,6 +75,7 @@ bzl_library(
     srcs = ["attrs.bzl"],
     visibility = ["//dotnet:__subpackages__"],
     deps = [
+        ":compilation",
         ":static_web_assets",
         "//dotnet/private:providers",
         "//dotnet/private/rules/ready_to_run",

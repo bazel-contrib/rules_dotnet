@@ -12,6 +12,10 @@ load(
     _blazor_devserver = "blazor_devserver",
 )
 load(
+    "//dotnet/private/rules/common:compilation.bzl",
+    _compilation_of = "compilation_of",
+)
+load(
     "//dotnet/private/rules/common:embed_sources.bzl",
     _embed_sources_or_flag = "embed_sources_or_flag",
 )
@@ -94,7 +98,7 @@ def _binary(name, rule, kwargs):
     if kwargs.get("project_sdk", None) == _BLAZORWASM_SDK:
         _blazor_wasm_app(name, rule, kwargs)
     else:
-        rule(name = name, **kwargs)
+        rule(name = name, compilation = _compilation_of(name), **kwargs)
 
 def csharp_binary(name, **kwargs):
     """Builds a C# binary.
@@ -120,9 +124,10 @@ def fsharp_binary(name, **kwargs):
     """
     _binary(name, _fsharp_binary, kwargs)
 
-# The remaining wrappers exist only so that an unset `embed_sources` can default
-# to `//dotnet/settings:embed_all_sources`, which a rule attribute cannot do
-# because the default would have to be a `select`.
+# The remaining wrappers exist so that an unset `embed_sources` can default to
+# `//dotnet/settings:embed_all_sources`, and so that a target can name itself in
+# `compilation`, which a rule attribute cannot do because the default would have
+# to be a `select` naming the target.
 def csharp_library(name, **kwargs):
     """Builds a C# library.
 
@@ -130,7 +135,12 @@ def csharp_library(name, **kwargs):
       name: The target name.
       **kwargs: Passed to the underlying rule.
     """
-    _csharp_library(name = name, embed_sources = _embed_sources_or_flag(kwargs.pop("embed_sources", None)), **kwargs)
+    _csharp_library(
+        name = name,
+        compilation = _compilation_of(name),
+        embed_sources = _embed_sources_or_flag(kwargs.pop("embed_sources", None)),
+        **kwargs
+    )
 
 def csharp_test(name, **kwargs):
     """Builds a C# test.
@@ -139,7 +149,12 @@ def csharp_test(name, **kwargs):
       name: The target name.
       **kwargs: Passed to the underlying rule.
     """
-    _csharp_test(name = name, embed_sources = _embed_sources_or_flag(kwargs.pop("embed_sources", None)), **kwargs)
+    _csharp_test(
+        name = name,
+        compilation = _compilation_of(name),
+        embed_sources = _embed_sources_or_flag(kwargs.pop("embed_sources", None)),
+        **kwargs
+    )
 
 def fsharp_library(name, **kwargs):
     """Builds an F# library.
@@ -148,7 +163,12 @@ def fsharp_library(name, **kwargs):
       name: The target name.
       **kwargs: Passed to the underlying rule.
     """
-    _fsharp_library(name = name, embed_sources = _embed_sources_or_flag(kwargs.pop("embed_sources", None)), **kwargs)
+    _fsharp_library(
+        name = name,
+        compilation = _compilation_of(name),
+        embed_sources = _embed_sources_or_flag(kwargs.pop("embed_sources", None)),
+        **kwargs
+    )
 
 def fsharp_test(name, **kwargs):
     """Builds an F# test.
@@ -157,7 +177,12 @@ def fsharp_test(name, **kwargs):
       name: The target name.
       **kwargs: Passed to the underlying rule.
     """
-    _fsharp_test(name = name, embed_sources = _embed_sources_or_flag(kwargs.pop("embed_sources", None)), **kwargs)
+    _fsharp_test(
+        name = name,
+        compilation = _compilation_of(name),
+        embed_sources = _embed_sources_or_flag(kwargs.pop("embed_sources", None)),
+        **kwargs
+    )
 
 csharp_nunit_test = _csharp_nunit_test
 fsharp_nunit_test = _fsharp_nunit_test
