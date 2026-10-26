@@ -1,5 +1,6 @@
 load("@bazel_lib//:bzl_library.bzl", "bzl_library")
 load("@bazel_skylib//rules:common_settings.bzl", "string_setting")
+load("//dotnet/private:common.bzl", "FRAMEWORK_COMPATIBILITY")
 load(":ready_to_run.bzl", "ready_to_run_tools")
 
 # The framework a publish that compiles image by image runs on, which every
@@ -23,7 +24,22 @@ string_setting(
 config_setting(
     name = "off",
     flag_values = {":framework": ""},
+    visibility = ["//visibility:public"],
 )
+
+# A target already under the publish's framework, where a package compiles
+# the images its other configurations reuse.
+[
+    config_setting(
+        name = "at_" + framework,
+        flag_values = {
+            "//dotnet:target_framework": framework,
+            ":framework": framework,
+        },
+        visibility = ["//visibility:public"],
+    )
+    for framework in FRAMEWORK_COMPATIBILITY.keys()
+]
 
 alias(
     name = "tools",

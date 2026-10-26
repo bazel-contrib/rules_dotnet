@@ -50,6 +50,7 @@ bzl_library(
         ":imports",
         ":package_metadata",
         "//dotnet/private:common",
+        "//dotnet/private/rules/ready_to_run",
     ],
 )
 

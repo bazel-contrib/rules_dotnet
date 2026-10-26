@@ -18,9 +18,9 @@ load(
 )
 load(
     "//dotnet/private/rules/ready_to_run:ready_to_run.bzl",
+    "PACKAGE_READY_TO_RUN_ATTRS",
     "READY_TO_RUN_ATTRS",
-    "compile_ready_to_run_images",
-    "get_ready_to_run_tools",
+    "package_ready_to_run_images",
 )
 
 def _import_library(ctx):
@@ -86,7 +86,7 @@ def _import_library(ctx):
         nuget_info = nuget_info,
         deps = runtime_deps,
         direct_deps_depsjson_fragment = {dep[DotnetAssemblyRuntimeInfo].name: dep[DotnetAssemblyRuntimeInfo].version for dep in ctx.attr.deps},
-        ready_to_run = compile_ready_to_run_images(ctx.actions, get_ready_to_run_tools(ctx), ctx.label, ctx.files.libs, runtime_deps),
+        ready_to_run = package_ready_to_run_images(ctx, ctx.files.libs, runtime_deps),
     )
 
     return [
@@ -111,7 +111,7 @@ def _import_library(ctx):
 import_library = rule(
     _import_library,
     doc = "Creates a target for a static DLL for a specific target framework",
-    attrs = dicts.add(READY_TO_RUN_ATTRS, {
+    attrs = dicts.add(READY_TO_RUN_ATTRS, PACKAGE_READY_TO_RUN_ATTRS, {
         "library_name": attr.string(
             doc = "The name of the library",
             mandatory = True,
