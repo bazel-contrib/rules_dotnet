@@ -201,7 +201,7 @@ def _assemble_action(ctx, binary, tfm, output, trimmed = None, trim_mode = "full
     # SDK's runtime, as under MSBuild, rather than on the one this tool runs on.
     illink_host = get_toolchain(ctx).compiler_host if trimmed else None
 
-    symbols =_application_symbols(runtime_info) if debug else []
+    symbols = _application_symbols(runtime_info) if debug else []
 
     # Beside the directory it describes, so that the two rules that assemble an
     # application do not collide on a package-relative path.
