@@ -1,5 +1,29 @@
 # Getting started
 
+## Usage
+
+### Installation
+
+The minimal supported Bazel version is 9.0.0.
+
+From the release you wish to use: https://github.com/bazel-contrib/rules_dotnet/releases copy the WORKSPACE snippet into your WORKSPACE file.
+
+If you are using Windows you need to make sure that symlinks and runfiles are enabled.
+You can do that by adding the following snippet to your `.bazelrc` file:
+
+```
+startup --windows_enable_symlinks
+build --enable_runfiles
+```
+
+More information on these flags can be found here:
+
+[--windows_enable_symlinks](https://bazel.build/reference/command-line-reference#param-no-windows-enable-symlinks)
+
+[--enable_runfiles](https://bazel.build/reference/command-line-reference#param-no-enable-runfiles)
+
+Various examples of how each rule can be used are in the [examples](../examples) folder.
+
 ## Design
 
 ### Dependency resolution
@@ -225,30 +249,6 @@ own platform.
 The output from `publish_binary` can easily be used to build container images.
 See the [container image example](../examples/container_image) for how to do this with `rules_img`.
 
-## Usage
-
-### Installation
-
-The minimal supported Bazel version is 7.0.0 and bzlmod has to enabled.
-
-From the release you wish to use: https://github.com/bazel-contrib/rules_dotnet/releases copy the WORKSPACE snippet into your WORKSPACE file.
-
-If you are using Windows you need to make sure that symlinks and runfiles are enabled.
-You can do that by adding the following snippet to your `.bazelrc` file:
-
-```
-startup --windows_enable_symlinks
-build --enable_runfiles
-```
-
-More information on these flags can be found here:
-
-[--windows_enable_symlinks](https://docs.bazel.build/versions/main/command-line-reference.html#flag--windows_enable_symlinks)
-
-[--enable_runfiles](https://docs.bazel.build/versions/main/command-line-reference.html#flag--enable_runfiles)
-
-Various examples of how each rule can be used are in the [examples](../examples) folder.
-
 ## IDE Support
 
 Currently the rules do not support IDE support out of the box so for
@@ -406,8 +406,11 @@ The rules_dotnet compile actions support
 which strips the configuration segment out of the paths a compile action sees, so the *same*
 compilation reached through two different configurations produces one cache **key** instead of two.
 
+You also need to have disk/remote caching enabled for Bazel to take full advantage of path mapping.
+
 ```
 common --experimental_output_paths=strip
+common --disk_cache=path/to/cache
 ```
 
 ### It cannot be used on Windows
