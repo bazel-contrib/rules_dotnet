@@ -226,6 +226,13 @@ BINARY_COMMON_ATTRS = dicts.add(STATIC_WEB_ASSETS_ATTRS, {
         default = "//dotnet/private/sdk/runtime_packs:runtime_pack",
         cfg = runtime_pack_transition,
     ),
+    "_native_tools": attr.label(
+        doc = """The native compiler a ReadyToRun or NativeAOT publish of the binary asks for.
+
+Resolved for the binary's own target framework, and to nothing unless a publish
+asked, so that no other build analyses the packs.""",
+        default = "//dotnet/private/rules/publish_binary:native_tools",
+    ),
 })
 
 # These are attributes that are common across all the binary/library/test C# rules

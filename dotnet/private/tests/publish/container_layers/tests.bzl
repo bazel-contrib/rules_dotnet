@@ -3,7 +3,7 @@
 load("@rules_testing//lib:analysis_test.bzl", "analysis_test", "test_suite")
 load("@rules_testing//lib:util.bzl", "TestingAspectInfo")
 load("//dotnet:defs.bzl", "publish_binary")
-load("//dotnet/private:providers.bzl", "DotnetAssemblyRuntimeInfo", "DotnetBinaryInfo")
+load("//dotnet/private:providers.bzl", "DotnetAssemblyRuntimeInfo", "DotnetBinaryInfo", "DotnetNativeToolsInfo")
 
 LAYERS = ["runtime", "third_party", "first_party", "app"]
 
@@ -44,9 +44,21 @@ def _publish_copy_outputs(target):
         for file in action.outputs.to_list()
     }
 
+def _binary(target):
+    """The binary a publish publishes.
+
+    A ReadyToRun or NativeAOT publish also reaches it for its native compiler,
+    which carries no DotnetBinaryInfo.
+    """
+    return [dep for dep in target[TestingAspectInfo].attrs.binary if DotnetBinaryInfo in dep][0]
+
+def _native_tools(target):
+    """The native compiler the binary resolved for a publish."""
+    return [dep for dep in target[TestingAspectInfo].attrs.binary if DotnetNativeToolsInfo in dep][0][DotnetNativeToolsInfo]
+
 def _repo_mapping(target):
     """The repository mapping the layers carry, which is the binary's."""
-    return target[TestingAspectInfo].attrs.binary[0][DefaultInfo].files_to_run.repo_mapping_manifest
+    return _binary(target)[DefaultInfo].files_to_run.repo_mapping_manifest
 
 def _data(target):
     """The data files a publish carries as runfiles."""
@@ -192,7 +204,7 @@ def _ready_to_run_images(target):
 
 def _images_compiled_below(target):
     """What the targets below a publish compiled to ReadyToRun."""
-    binary = target[TestingAspectInfo].attrs.binary[0]
+    binary = _binary(target)
     infos = [binary[DotnetAssemblyRuntimeInfo]] + binary[DotnetBinaryInfo].transitive_runtime_deps
 
     return [entry for info in infos for entry in (getattr(info, "ready_to_run", None) or [])]
@@ -350,6 +362,43 @@ def _native_aot_test_impl(env, target):
     env.expect.that_collection(_owners(layers["first_party"])).contains_exactly([Label(_APP + ":native")])
     env.expect.that_collection(layers["third_party"]).has_size(1)
 
+def _native_compiler_other_framework_test(name):
+    for (suffix, kwargs) in [
+        ("_ready_to_run_composite", {"ready_to_run": True, "ready_to_run_composite": True}),
+        ("_native_aot", {"native_aot": True, "target_compatible_with": _NOT_WINDOWS}),
+    ]:
+        publish_binary(
+            name = name + suffix,
+            binary = ":net9_app",
+            self_contained = True,
+            tags = ["manual"],
+            target_framework = "net10.0",
+            **kwargs
+        )
+
+    analysis_test(
+        name = name,
+        impl = _native_compiler_other_framework_test_impl,
+        targets = {
+            "composite": name + "_ready_to_run_composite",
+            "native_aot": name + "_native_aot",
+        },
+    )
+
+def _native_compiler_other_framework_test_impl(env, targets):
+    # The binary is built for net9.0, so it runs on net9.0 whatever framework
+    # the publish asked for, and a runtime only uses native code from a
+    # compiler of its own version. The compilers come from the binary's band.
+    crossgen2 = _native_tools(targets.composite).crossgen2.tool
+    env.expect.that_str(crossgen2.path).contains("/net9.0/")
+    env.expect.that_collection(_actions(targets.composite, ["Crossgen2Composite"])[0].inputs.to_list()).contains(crossgen2)
+
+    native_tools = _native_tools(targets.native_aot)
+    env.expect.that_str(native_tools.ilcompiler.tool.path).contains("/net9.0/")
+    env.expect.that_bool(len(native_tools.nativeaot_pack.libs) > 0).equals(True)
+    env.expect.that_collection([lib.path for lib in native_tools.nativeaot_pack.libs if ".v9.0." not in lib.path]).has_size(0)
+    env.expect.that_collection(_actions(targets.native_aot, ["Ilc"])[0].inputs.to_list()).contains(native_tools.ilcompiler.tool)
+
 def _data_test(name):
     _publish_test(name, _data_test_impl, binary = ":data_app", self_contained = True)
 
@@ -373,6 +422,7 @@ def container_layers_test_suite(name):
             _ready_to_run_other_framework_test,
             _ready_to_run_composite_test,
             _native_aot_test,
+            _native_compiler_other_framework_test,
             _data_test,
         ],
     )

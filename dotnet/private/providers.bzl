@@ -172,6 +172,15 @@ DotnetNativeAotPackInfo = provider(
     },
 )
 
+DotnetNativeToolsInfo = provider(
+    doc = "The native compiler a ReadyToRun or NativeAOT publish asks its binary for.",
+    fields = {
+        "crossgen2": "DotnetToolPackInfo: crossgen2, for a ReadyToRun publish, or None.",
+        "ilcompiler": "DotnetToolPackInfo: ilc, for a NativeAOT publish, or None.",
+        "nativeaot_pack": "DotnetNativeAotPackInfo: The framework ilc compiles and links against, or None.",
+    },
+)
+
 DotnetApphostPackInfo = provider(
     doc = "Information about a .Net runtime pack.",
     fields = {

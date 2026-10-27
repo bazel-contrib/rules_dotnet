@@ -10,6 +10,7 @@ load("//dotnet/private/sdk:packs.bzl", "DEFAULT_SDK", "normalize_project_sdk")
 load(
     "//dotnet/private/transitions:common.bzl",
     "FRAMEWORK_COMPATABILITY_TRANSITION_OUTPUTS",
+    "NATIVE_COMPILER",
     "NO_READY_TO_RUN",
     "READY_TO_RUN_FRAMEWORK",
     "READY_TO_RUN_PROJECT_SDK",
@@ -28,17 +29,26 @@ def _ready_to_run(settings, attr, transitioned_tfm):
     """
     if hasattr(attr, "ready_to_run"):
         if attr.ready_to_run and not attr.ready_to_run_composite:
-            return {READY_TO_RUN_FRAMEWORK: attr.target_framework, READY_TO_RUN_PROJECT_SDK: DEFAULT_SDK}
+            return dicts.add(NO_READY_TO_RUN, {READY_TO_RUN_FRAMEWORK: attr.target_framework, READY_TO_RUN_PROJECT_SDK: DEFAULT_SDK})
 
         return NO_READY_TO_RUN
 
-    if settings[READY_TO_RUN_FRAMEWORK] and hasattr(attr, "winexe"):
-        return {
+    is_binary = hasattr(attr, "winexe")
+
+    # Only the binary resolves the native compiler its publish asked for, so
+    # nothing below it is configured again for it.
+    native_compiler = {NATIVE_COMPILER: settings[NATIVE_COMPILER] if is_binary else ""}
+
+    if settings[READY_TO_RUN_FRAMEWORK] and is_binary:
+        return dicts.add(native_compiler, {
             READY_TO_RUN_FRAMEWORK: transitioned_tfm,
             READY_TO_RUN_PROJECT_SDK: normalize_project_sdk(attr.project_sdk),
-        }
+        })
 
-    return {key: settings[key] for key in NO_READY_TO_RUN}
+    return dicts.add(native_compiler, {
+        READY_TO_RUN_FRAMEWORK: settings[READY_TO_RUN_FRAMEWORK],
+        READY_TO_RUN_PROJECT_SDK: settings[READY_TO_RUN_PROJECT_SDK],
+    })
 
 def _impl(settings, attr):
     incoming_tfm = settings["//dotnet:target_framework"]
@@ -68,6 +78,34 @@ def _impl(settings, attr):
 
 tfm_transition = transition(
     implementation = _impl,
+    inputs = ["//dotnet:target_framework", "//dotnet:rid"] + NO_READY_TO_RUN.keys(),
+    outputs = TFM_RID_TRANSITION_OUTPUTS,
+)
+
+def _publish_binary_impl(settings, attr):
+    binary = _impl(settings, attr)
+
+    if attr.native_aot:
+        native_compiler = "ilcompiler"
+    elif attr.ready_to_run:
+        native_compiler = "crossgen2"
+    else:
+        return {"binary": binary}
+
+    # The compiler's band and packs follow the framework the binary picks, which
+    # can be lower than the publish's, and only the binary knows it. So the
+    # publish reaches the binary a second time, where it compiles nothing and
+    # resolves the compiler instead.
+    return {
+        "binary": binary,
+        "native_tools": dicts.add(binary, NO_READY_TO_RUN, {NATIVE_COMPILER: native_compiler}),
+    }
+
+# The edge from a publish to its binary: `binary` is the binary itself, and a
+# ReadyToRun or NativeAOT publish also gets `native_tools`, the native compiler
+# for the binary's framework.
+publish_binary_transition = transition(
+    implementation = _publish_binary_impl,
     inputs = ["//dotnet:target_framework", "//dotnet:rid"] + NO_READY_TO_RUN.keys(),
     outputs = TFM_RID_TRANSITION_OUTPUTS,
 )

@@ -14,9 +14,14 @@ load("//dotnet/private:portable_rids.bzl", "PORTABLE_RUNTIME_GRAPH", "to_portabl
 READY_TO_RUN_FRAMEWORK = "//dotnet/private/rules/ready_to_run:framework"
 READY_TO_RUN_PROJECT_SDK = "//dotnet/private/rules/ready_to_run:project_sdk"
 
+# The native compiler a ReadyToRun or NativeAOT publish asks its binary for,
+# which the binary resolves for its own target framework. Only a binary keeps
+# it. See //dotnet/private/rules/publish_binary:native_tools.
+NATIVE_COMPILER = "//dotnet/private/rules/publish_binary:native_compiler"
+
 # What every transition but the publish's leaves them at: a target reached any
-# other way is not compiled to ReadyToRun.
-NO_READY_TO_RUN = {READY_TO_RUN_FRAMEWORK: "", READY_TO_RUN_PROJECT_SDK: ""}
+# other way is not compiled to native code.
+NO_READY_TO_RUN = {READY_TO_RUN_FRAMEWORK: "", READY_TO_RUN_PROJECT_SDK: "", NATIVE_COMPILER: ""}
 
 # Every transition that moves the TFM/RID graph writes the same settings.
 TFM_RID_TRANSITION_OUTPUTS = ["//dotnet:target_framework", "//dotnet:rid"] + \

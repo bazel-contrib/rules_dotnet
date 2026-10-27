@@ -13,7 +13,7 @@ load(
     "is_standard_framework",
     "to_rlocation_path",
 )
-load("//dotnet/private:providers.bzl", "DotnetApphostPackInfo", "DotnetAssemblyRuntimeInfo", "DotnetBinaryInfo", "DotnetRuntimePackInfo")
+load("//dotnet/private:providers.bzl", "DotnetApphostPackInfo", "DotnetAssemblyRuntimeInfo", "DotnetBinaryInfo", "DotnetNativeToolsInfo", "DotnetRuntimePackInfo")
 load("//dotnet/private/icu:settings.bzl", "icu_files", "icu_launcher_environment")
 load(
     "//dotnet/private/rules/common:static_web_assets.bzl",
@@ -69,6 +69,18 @@ def _create_launcher(ctx, executable, toolchain):
 
     return launcher
 
+def _native_tools(ctx, native_tools):
+    """The binary as a publish asking for native code reaches it a second time.
+
+    Only the binary knows the framework it picked, so it resolves the compiler
+    for it. It compiles nothing here; an executable rule still has to create its
+    executable.
+    """
+    executable = ctx.actions.declare_file("{}/native_tools/{}".format(ctx.label.name, ctx.label.name))
+    ctx.actions.write(executable, "", is_executable = True)
+
+    return [DefaultInfo(executable = executable), native_tools]
+
 def build_binary(ctx, compile_action, toolchain):
     """Builds a .Net binary from a compilation action
 
@@ -81,6 +93,9 @@ def build_binary(ctx, compile_action, toolchain):
     Returns:
         A collection of the references, runfiles and native dlls.
     """
+    if DotnetNativeToolsInfo in ctx.attr._native_tools:
+        return _native_tools(ctx, ctx.attr._native_tools[DotnetNativeToolsInfo])
+
     tfm = ctx.attr._target_framework[BuildSettingInfo].value
 
     if is_standard_framework(tfm):

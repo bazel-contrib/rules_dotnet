@@ -1,4 +1,71 @@
 load("@bazel_lib//:bzl_library.bzl", "bzl_library")
+load("@bazel_skylib//rules:common_settings.bzl", "string_setting")
+load(":native_tools.bzl", "native_tools")
+
+# The native compiler a ReadyToRun or NativeAOT publish asks its binary for.
+# Only the binary keeps it; see //dotnet/private/transitions:tfm_transition.
+string_setting(
+    name = "native_compiler",
+    build_setting_default = "",
+    scope = "target",
+    values = [
+        "",
+        "crossgen2",
+        "ilcompiler",
+    ],
+    visibility = ["//visibility:public"],
+)
+
+config_setting(
+    name = "crossgen2",
+    flag_values = {":native_compiler": "crossgen2"},
+)
+
+config_setting(
+    name = "ilcompiler",
+    flag_values = {":native_compiler": "ilcompiler"},
+)
+
+# What a binary resolves for its publish. Nothing unless a publish asked, so
+# that no other build analyses the packs.
+alias(
+    name = "native_tools",
+    actual = select({
+        ":crossgen2": ":crossgen2_tools",
+        ":ilcompiler": ":ilcompiler_tools",
+        "//conditions:default": ":no_native_tools",
+    }),
+    visibility = ["//dotnet:__subpackages__"],
+)
+
+filegroup(
+    name = "no_native_tools",
+)
+
+# Marked manual because they only resolve in the configuration of a binary
+# under a publish that asked for them.
+native_tools(
+    name = "crossgen2_tools",
+    crossgen2 = "//dotnet/private:crossgen2_pack",
+    tags = ["manual"],
+)
+
+native_tools(
+    name = "ilcompiler_tools",
+    ilcompiler = "//dotnet/private:ilcompiler_pack",
+    nativeaot_pack = "//dotnet/private/sdk/nativeaot_packs:nativeaot_pack",
+    tags = ["manual"],
+)
+
+bzl_library(
+    name = "native_tools_bzl",
+    srcs = ["native_tools.bzl"],
+    visibility = ["//dotnet:__subpackages__"],
+    deps = [
+        "//dotnet/private:providers",
+        "//dotnet/private/sdk/nativeaot_packs:nativeaot_pack_transition",
+    ],
+)
 
 bzl_library(
     name = "publish_binary",
@@ -11,7 +78,6 @@ bzl_library(
         "//dotnet/private/rules/blazor:blazor_wasm_publish",
         "//dotnet/private/rules/common:publish_layout",
         "//dotnet/private/rules/ready_to_run",
-        "//dotnet/private/sdk/nativeaot_packs:nativeaot_pack_transition",
         "//dotnet/private/sdk/runtime_packs:runtime_pack_transition",
         "//dotnet/private/transitions:default_transition",
         "//dotnet/private/transitions:tfm_transition",

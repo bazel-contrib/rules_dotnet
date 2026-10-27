@@ -13,8 +13,7 @@ load(
     "DotnetAssemblyCompileInfo",
     "DotnetAssemblyRuntimeInfo",
     "DotnetBinaryInfo",
-    "DotnetNativeAotPackInfo",
-    "DotnetToolPackInfo",
+    "DotnetNativeToolsInfo",
 )
 load(
     "//dotnet/private/rules/blazor:blazor_wasm_publish.bzl",
@@ -42,8 +41,7 @@ load(
     "ready_to_run_references",
 )
 load("//dotnet/private/sdk:packs.bzl", "WASM_RID")
-load("//dotnet/private/sdk/nativeaot_packs:nativeaot_pack_transition.bzl", "nativeaot_pack_transition")
-load("//dotnet/private/transitions:tfm_transition.bzl", "tfm_transition")
+load("//dotnet/private/transitions:tfm_transition.bzl", "publish_binary_transition", "tfm_transition")
 
 # How many sources one `cp` invocation takes. A self-contained publish copies
 # several hundred files into one directory, and the point of batching is lost if
@@ -114,6 +112,14 @@ def _render_copy_script(copies, is_windows, directories = []):
     return script_body
 
 _NO_READY_TO_RUN = struct(replace = {}, extra = [])
+
+def _binary(ctx):
+    """The binary being published."""
+    return ctx.split_attr.binary["binary"]
+
+def _native_tools(ctx):
+    """The native compiler the binary resolved for its own framework."""
+    return ctx.split_attr.binary["native_tools"][DotnetNativeToolsInfo]
 
 # The framework assemblies ilc has to initialise explicitly, because nothing
 # in the managed closure references them.
@@ -251,7 +257,7 @@ def _ilc_compile(ctx, dll, closure, aot):
     Returns that object and the list of symbols to export from the executable
     linked from it.
     """
-    ilc = ctx.attr._ilcompiler_pack[DotnetToolPackInfo]
+    ilc = _native_tools(ctx).ilcompiler
 
     # The AOT framework replaces the JIT one wholesale: ilc compiles the app
     # and its dependencies against assemblies built for ahead-of-time use. The
@@ -405,7 +411,7 @@ def _ilc_link(ctx, compiled, aot):
 
 def _native_aot_executable(ctx, dll, closure, runtime_identifier, target_framework):
     """Compiles the managed closure to native code and links it into one executable."""
-    pack = ctx.attr._nativeaot_pack[0][DotnetNativeAotPackInfo]
+    pack = _native_tools(ctx).nativeaot_pack
 
     if not pack.libs:
         fail("NativeAOT is not available for {} on {}".format(target_framework, runtime_identifier))
@@ -526,7 +532,7 @@ def _runfiles_entries(ctx, executable, data, beside = []):
     for (path, file) in beside:
         entries["{}/{}/{}".format(root, here, path)] = file
 
-    repo_mapping = ctx.attr.binary[0][DefaultInfo].files_to_run.repo_mapping_manifest
+    repo_mapping = _binary(ctx)[DefaultInfo].files_to_run.repo_mapping_manifest
     if repo_mapping:
         entries[root + "/_repo_mapping"] = repo_mapping
         entries[executable.basename + ".repo_mapping"] = repo_mapping
@@ -620,7 +626,7 @@ def _ready_to_run_images(ctx, binary_info, assembly_files, runtime_pack_files, r
     crossgen2 cross-compiles, so the tool comes from the pack for the execution
     platform while the target platform and the references come from the target.
     """
-    crossgen2 = ctx.attr._crossgen2_pack[DotnetToolPackInfo]
+    crossgen2 = _native_tools(ctx).crossgen2
     framework = ready_to_run_framework(binary_info.runtime_pack_info)
 
     # Runtime pack assemblies already ship as ReadyToRun images, so only a
@@ -637,7 +643,7 @@ def _ready_to_run_images(ctx, binary_info, assembly_files, runtime_pack_files, r
     if ctx.attr.ready_to_run_composite:
         image = ctx.actions.declare_file("{}/composite/{}.r2r.dll".format(
             root,
-            ctx.attr.binary[0][DotnetAssemblyRuntimeInfo].name,
+            _binary(ctx)[DotnetAssemblyRuntimeInfo].name,
         ))
 
         components = {}
@@ -669,7 +675,7 @@ def _ready_to_run_images(ctx, binary_info, assembly_files, runtime_pack_files, r
 
     # Each target below the binary compiled its own assemblies, so that every
     # publish shipping one shares its image.
-    runtime_infos = [ctx.attr.binary[0][DotnetAssemblyRuntimeInfo]] + binary_info.transitive_runtime_deps
+    runtime_infos = [_binary(ctx)[DotnetAssemblyRuntimeInfo]] + binary_info.transitive_runtime_deps
     images = _shipped_images(runtime_infos, framework, {assembly.path: None for assembly in assemblies})
 
     # A target that pins a runtime identifier of its own compiled against
@@ -832,9 +838,9 @@ def _generate_depsjson(
     return depsjson_struct
 
 def _publish_binary_impl(ctx):
-    assembly_compile_info = ctx.attr.binary[0][DotnetAssemblyCompileInfo]
-    assembly_runtime_info = ctx.attr.binary[0][DotnetAssemblyRuntimeInfo]
-    binary_info = ctx.attr.binary[0][DotnetBinaryInfo]
+    assembly_compile_info = _binary(ctx)[DotnetAssemblyCompileInfo]
+    assembly_runtime_info = _binary(ctx)[DotnetAssemblyRuntimeInfo]
+    binary_info = _binary(ctx)[DotnetBinaryInfo]
     transitive_runtime_deps = binary_info.transitive_runtime_deps
     target_framework = ctx.attr.target_framework
     is_self_contained = ctx.attr.self_contained
@@ -994,8 +1000,10 @@ executable, each data file in the layer of the target it belongs to.""",
     attrs = {
         "binary": attr.label(
             doc = "The .Net binary that is being published",
-            providers = [DotnetBinaryInfo],
-            cfg = tfm_transition,
+            # The binary, or in the `native_tools` branch the compiler it
+            # resolved for its framework.
+            providers = [[DotnetBinaryInfo], [DotnetNativeToolsInfo]],
+            cfg = publish_binary_transition,
             mandatory = True,
         ),
         "self_contained": attr.bool(
@@ -1049,25 +1057,6 @@ managed publish layout does not apply: `deps.json`, `runtimeconfig.json` and
 the apphost shim are all absent. Implies trimming, and needs a registered
 C/C++ toolchain to link with.""",
             default = False,
-        ),
-        "_ilcompiler_pack": attr.label(
-            doc = """The ILCompiler pack to compile native code with.
-
-Its band follows the target framework, and its pack the execution platform:
-ilc cross-compiles, so what matters is the machine it runs on.""",
-            default = Label("//dotnet/private:ilcompiler_pack"),
-        ),
-        "_nativeaot_pack": attr.label(
-            doc = "The framework a NativeAOT publish compiles and links against.",
-            cfg = nativeaot_pack_transition,
-            default = Label("//dotnet/private/sdk/nativeaot_packs:nativeaot_pack"),
-        ),
-        "_crossgen2_pack": attr.label(
-            doc = """The crossgen2 pack to compile ReadyToRun images with.
-
-Its band follows the target framework, and its pack the execution platform:
-crossgen2 cross-compiles, so what matters is the machine it runs on.""",
-            default = Label("//dotnet/private:crossgen2_pack"),
         ),
         "_apphost_shimmer": attr.label(
             providers = [DotnetAssemblyCompileInfo, DotnetAssemblyRuntimeInfo],

@@ -88,7 +88,10 @@ def get_target_rid(target):
         return target[TestingAspectInfo].attrs.runtime_identifier
 
     if getattr(target[TestingAspectInfo].attrs, "binary", None):
-        return target[TestingAspectInfo].attrs.binary[0][DotnetBinaryInfo].runtime_pack_info.runtime_identifier
+        # A ReadyToRun or NativeAOT publish also reaches the binary for its native
+        # compiler; that branch carries no DotnetBinaryInfo.
+        binary = [dep for dep in target[TestingAspectInfo].attrs.binary if DotnetBinaryInfo in dep][0]
+        return binary[DotnetBinaryInfo].runtime_pack_info.runtime_identifier
 
     fail("Could not determine target runtime identifier")
 

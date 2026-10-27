@@ -11,9 +11,8 @@ def _impl(settings, _attr):
     by_rid = NATIVEAOT_PACK_LOOKUP_TABLE.get(settings["//dotnet:target_framework"], {})
     rid = get_highest_compatible_runtime_identifier(settings["//dotnet:rid"], by_rid.keys())
 
-    # Every publish carries this attribute but only a NativeAOT one reads it, so
-    # a framework or platform without a pack keeps the empty default and is
-    # reported at the point of use.
+    # A framework or platform without a pack keeps the empty default, and the
+    # publish reports it where it reads the pack.
     return dicts.add({_SETTING: by_rid.get(rid) or settings[_SETTING]}, NO_READY_TO_RUN)
 
 # A pack's assemblies are never compiled to ReadyToRun here: a runtime pack
