@@ -10,6 +10,7 @@ bzl_library(
         "//dotnet/private:common",
         "//dotnet/private:providers",
         "//dotnet/private/rules/ready_to_run",
+        "//dotnet/private/transitions:native_transition",
         "@bazel_skylib//lib:dicts",
     ],
 )

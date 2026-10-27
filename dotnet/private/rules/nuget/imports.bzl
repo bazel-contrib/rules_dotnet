@@ -22,6 +22,7 @@ load(
     "compile_ready_to_run_images",
     "get_ready_to_run_tools",
 )
+load("//dotnet/private/transitions:native_transition.bzl", "native_transition")
 
 def _import_library(ctx):
     (
@@ -140,6 +141,7 @@ import_library = rule(
             doc = "Native runtime DLLs",
             allow_files = True,  # [".dll"] currently does not work with empty file groups
             allow_empty = True,
+            cfg = native_transition,
         ),
         "analyzers": attr.label_list(
             doc = "Static analyzer DLLs",
@@ -178,6 +180,7 @@ import_library = rule(
         "data": attr.label_list(
             doc = "Other files that this DLL depends on at runtime",
             allow_files = True,
+            cfg = native_transition,
         ),
         "targeting_pack_overrides": attr.string_dict(
             doc = "Targeting packs like e.g. Microsoft.NETCore.App.Ref have a PackageOverride.txt that includes a list of NuGet packages that should be omitted in a compiliation because they are included in the targeting pack",
@@ -259,6 +262,7 @@ import_dll = rule(
         "data": attr.label_list(
             doc = "Other files that this DLL depends on at runtime",
             allow_files = True,
+            cfg = native_transition,
         ),
     },
     executable = False,
