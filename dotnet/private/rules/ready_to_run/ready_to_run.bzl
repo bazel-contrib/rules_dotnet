@@ -76,6 +76,15 @@ def ready_to_run_framework(runtime_pack_info):
         key = " ".join([runtime_pack_info.runtime_identifier] + ["{}/{}".format(pack.name, pack.version) for pack in packs]),
     )
 
+def _mapped_path(file):
+    """The path of `file` as `--experimental_output_paths=strip` passes it to an action."""
+    if file.is_source:
+        return file.path
+
+    (output_dir, _configuration, rest) = file.path.split("/", 2)
+
+    return "{}/cfg/{}".format(output_dir, rest)
+
 def ready_to_run_references(libs, deps):
     """What an assembly is compiled against besides the framework.
 
@@ -87,7 +96,9 @@ def ready_to_run_references(libs, deps):
     JIT.
 
     Sorted, so that the order of the dependency graph cannot change a command
-    line.
+    line. Sorted by the paths path mapping passes, so that neither can the
+    configurations the references were built in: an assembly reached in two
+    configurations is then compiled to one image under path mapping.
 
     Args:
         libs: The target's own assemblies.
@@ -102,7 +113,7 @@ def ready_to_run_references(libs, deps):
         for file in dep.libs:
             by_path[file.path] = file
 
-    files = tuple([by_path[path] for path in sorted(by_path)])
+    files = tuple(sorted(by_path.values(), key = _mapped_path))
 
     return struct(files = files, depset = depset(files))
 
