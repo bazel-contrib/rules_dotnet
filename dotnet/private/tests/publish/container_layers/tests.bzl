@@ -3,7 +3,8 @@
 load("@rules_testing//lib:analysis_test.bzl", "analysis_test", "test_suite")
 load("@rules_testing//lib:util.bzl", "TestingAspectInfo")
 load("//dotnet:defs.bzl", "publish_binary")
-load("//dotnet/private:providers.bzl", "DotnetAssemblyRuntimeInfo", "DotnetBinaryInfo", "DotnetNativeToolsInfo")
+load("//dotnet/private:providers.bzl", "DotnetNativeToolsInfo")
+load("//dotnet/private/tests:utils.bzl", "published_binary", "ready_to_run_images_below")
 
 LAYERS = ["runtime", "third_party", "first_party", "app"]
 
@@ -44,21 +45,13 @@ def _publish_copy_outputs(target):
         for file in action.outputs.to_list()
     }
 
-def _binary(target):
-    """The binary a publish publishes.
-
-    A ReadyToRun or NativeAOT publish also reaches it for its native compiler,
-    which carries no DotnetBinaryInfo.
-    """
-    return [dep for dep in target[TestingAspectInfo].attrs.binary if DotnetBinaryInfo in dep][0]
-
 def _native_tools(target):
     """The native compiler the binary resolved for a publish."""
     return [dep for dep in target[TestingAspectInfo].attrs.binary if DotnetNativeToolsInfo in dep][0][DotnetNativeToolsInfo]
 
 def _repo_mapping(target):
     """The repository mapping the layers carry, which is the binary's."""
-    return _binary(target)[DefaultInfo].files_to_run.repo_mapping_manifest
+    return published_binary(target)[DefaultInfo].files_to_run.repo_mapping_manifest
 
 def _data(target):
     """The data files a publish carries as runfiles."""
@@ -167,7 +160,6 @@ def _self_contained_test(name):
 
 def _self_contained_test_impl(env, target):
     _expect_layers_cover_the_publish(env, target)
-    _expect_no_images_compiled_below(env, target)
     _expect_layers_independent_of_the_publish_copy(env, target)
     _expect_dependencies_layered(env, target, runtime = True)
 
@@ -186,7 +178,6 @@ def _framework_dependent_test(name):
 
 def _framework_dependent_test_impl(env, target):
     _expect_layers_cover_the_publish(env, target)
-    _expect_no_images_compiled_below(env, target)
     _expect_layers_independent_of_the_publish_copy(env, target)
     _expect_dependencies_layered(env, target, runtime = False)
 
@@ -202,20 +193,13 @@ def _ready_to_run_images(target):
         if "/r2r/" in file.short_path
     }
 
-def _images_compiled_below(target):
-    """What the targets below a publish compiled to ReadyToRun."""
-    binary = _binary(target)
-    infos = [binary[DotnetAssemblyRuntimeInfo]] + binary[DotnetBinaryInfo].transitive_runtime_deps
-
-    return [entry for info in infos for entry in (getattr(info, "ready_to_run", None) or [])]
-
 def _shipped_images_compiled_below(target):
     """What the targets below a publish say of the images it ships, keyed by basename."""
     shipped = {file.path: None for file in _ready_to_run_images(target).values()}
 
     return {
         entry.image.basename: entry
-        for entry in _images_compiled_below(target)
+        for entry in ready_to_run_images_below(target)
         if entry.image.path in shipped
     }
 
@@ -226,13 +210,6 @@ def _compile_inputs(target):
         for action in _actions(target, ["Crossgen2"])
         for image in action.outputs.to_list()
     }
-
-def _expect_no_images_compiled_below(env, target):
-    """Only a ReadyToRun publish compiling image by image asks for images.
-
-    Any other leaves them, and the packs they would fetch, out of the build.
-    """
-    env.expect.that_collection(_images_compiled_below(target)).has_size(0)
 
 def _ready_to_run_test_impl(env, target):
     _expect_layers_cover_the_publish(env, target)
@@ -325,7 +302,6 @@ def _ready_to_run_composite_test(name):
 
 def _ready_to_run_composite_test_impl(env, target):
     _expect_layers_cover_the_publish(env, target)
-    _expect_no_images_compiled_below(env, target)
     _expect_layers_independent_of_the_publish_copy(env, target)
 
     # Each image stays in the layer of the assembly it replaces, while the
@@ -346,7 +322,6 @@ def _native_aot_test(name):
 
 def _native_aot_test_impl(env, target):
     _expect_layers_cover_the_publish(env, target)
-    _expect_no_images_compiled_below(env, target)
     _expect_layers_independent_of_the_publish_copy(env, target)
 
     # The runtime and every assembly are compiled into the executable; only

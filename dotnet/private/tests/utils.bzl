@@ -3,7 +3,7 @@
 load("@bazel_skylib//lib:unittest.bzl", "analysistest", "asserts")
 load("@bazel_skylib//rules:common_settings.bzl", "BuildSettingInfo")
 load("@rules_testing//lib:util.bzl", "TestingAspectInfo")
-load("//dotnet/private:providers.bzl", "DotnetBinaryInfo")
+load("//dotnet/private:providers.bzl", "DotnetAssemblyRuntimeInfo", "DotnetBinaryInfo")
 
 ACTION_ARGS_TEST_ARGS = {
     "action_mnemonic": attr.string(),
@@ -88,12 +88,37 @@ def get_target_rid(target):
         return target[TestingAspectInfo].attrs.runtime_identifier
 
     if getattr(target[TestingAspectInfo].attrs, "binary", None):
-        # A ReadyToRun or NativeAOT publish also reaches the binary for its native
-        # compiler; that branch carries no DotnetBinaryInfo.
-        binary = [dep for dep in target[TestingAspectInfo].attrs.binary if DotnetBinaryInfo in dep][0]
-        return binary[DotnetBinaryInfo].runtime_pack_info.runtime_identifier
+        return published_binary(target)[DotnetBinaryInfo].runtime_pack_info.runtime_identifier
 
     fail("Could not determine target runtime identifier")
+
+def published_binary(target):
+    """Returns the binary a publish publishes.
+
+    A ReadyToRun or NativeAOT publish also reaches the binary for its native
+    compiler, and that branch carries no DotnetBinaryInfo.
+
+    Args:
+        target: The publish_binary target under test.
+
+    Returns:
+        The binary's Target.
+    """
+    return [dep for dep in target[TestingAspectInfo].attrs.binary if DotnetBinaryInfo in dep][0]
+
+def ready_to_run_images_below(target):
+    """Returns the ReadyToRun images the targets below a publish compiled.
+
+    Args:
+        target: The publish_binary target under test.
+
+    Returns:
+        The images of the binary and of everything it depends on.
+    """
+    binary = published_binary(target)
+    infos = [binary[DotnetAssemblyRuntimeInfo]] + binary[DotnetBinaryInfo].transitive_runtime_deps
+
+    return [entry for info in infos for entry in (getattr(info, "ready_to_run", None) or [])]
 
 RUN_ENVIRONMENT_INFO_TEST_ARGS = {
     "expected_inherited_environment": attr.string_list(),
