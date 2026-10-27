@@ -15,13 +15,14 @@ load(
 )
 load("//dotnet/private:providers.bzl", "DotnetApphostPackInfo", "DotnetAssemblyRuntimeInfo", "DotnetBinaryInfo", "DotnetRuntimePackInfo")
 load("//dotnet/private/icu:settings.bzl", "icu_files", "icu_launcher_environment")
-load("//dotnet/private/rules/common:compilation.bzl", "compile_once")
 load(
     "//dotnet/private/rules/common:static_web_assets.bzl",
     "WEB_ROOT",
+    "collect_static_web_assets",
     "endpoints_manifest_action",
     "plan_static_web_assets",
 )
+load("//dotnet/private/rules/ready_to_run:ready_to_run.bzl", "with_ready_to_run_images")
 
 def _collect_native_dlls(assembly_runtime_info, deps):
     """Groups the native DLLs of a target and its dependencies by RID.
@@ -85,9 +86,8 @@ def build_binary(ctx, compile_action, toolchain):
     if is_standard_framework(tfm):
         fail("It doesn't make sense to build an executable for " + tfm)
 
-    compiled = compile_once(ctx, compile_action, tfm, toolchain, is_application = True)
-    compile_provider = compiled.compile_info
-    runtime_provider = compiled.runtime_info
+    (compile_provider, runtime_provider, generated_assets) = compile_action(ctx, tfm, toolchain)
+    runtime_provider = with_ready_to_run_images(ctx, runtime_provider)
     dll = runtime_provider.libs[0]
     appsetting_files = runtime_provider.appsetting_files.to_list()
     default_info_files = [dll] + runtime_provider.xml_docs + appsetting_files
@@ -195,7 +195,14 @@ def build_binary(ctx, compile_action, toolchain):
     # application has.
     assembly_name = runtime_provider.name
     out_dir = "{}/{}".format(ctx.label.name, tfm)
-    static_web_assets_info = compiled.static_web_assets_info
+    static_web_assets_info = collect_static_web_assets(
+        label = ctx.label,
+        assembly_name = assembly_name,
+        files = ctx.files.static_web_assets,
+        deps = ctx.attr.deps,
+        is_application = True,
+        generated = generated_assets,
+    )
     static_web_assets = plan_static_web_assets(
         ctx.actions,
         label = ctx.label,
@@ -242,4 +249,4 @@ def build_binary(ctx, compile_action, toolchain):
         runtime_pack_info = ctx.attr._runtime_pack[0][DotnetRuntimePackInfo],
     )
 
-    return [default_info, dotnet_binary_info, compile_provider, runtime_provider, static_web_assets_info, compiled.inputs_info, RunEnvironmentInfo(environment = {key: expand_variables(ctx, expand_locations(ctx, value, ctx.attr.data)) for key, value in ctx.attr.envs.items()}, inherited_environment = ctx.attr.env_inherit)]
+    return [default_info, dotnet_binary_info, compile_provider, runtime_provider, static_web_assets_info, RunEnvironmentInfo(environment = {key: expand_variables(ctx, expand_locations(ctx, value, ctx.attr.data)) for key, value in ctx.attr.envs.items()}, inherited_environment = ctx.attr.env_inherit)]

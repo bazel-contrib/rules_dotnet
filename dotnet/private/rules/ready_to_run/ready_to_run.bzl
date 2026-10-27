@@ -199,57 +199,6 @@ def compile_ready_to_run_images(actions, tools, label, libs, deps):
 
     return images
 
-def package_ready_to_run_images(ctx, libs, deps):
-    """Compiles a package's assemblies to ReadyToRun, or reuses the images it has under the publish's framework.
-
-    A package is configured for each framework of the targets depending on it,
-    so one reached through a library of a lower framework would otherwise
-    compile its assemblies again, often the very same files. Under the
-    publish's framework it compiles them once, and the other configurations
-    reuse those images when they resolved the same assemblies and references.
-
-    Args:
-        ctx: The rule context, of a rule with `READY_TO_RUN_ATTRS` and
-            `PACKAGE_READY_TO_RUN_ATTRS`.
-        libs: The package's assemblies.
-        deps: The depset of the DotnetAssemblyRuntimeInfo it depends on.
-
-    Returns:
-        The images, as `compile_ready_to_run_images` returns them.
-    """
-    tools = get_ready_to_run_tools(ctx)
-
-    if tools == None or not libs:
-        return []
-
-    if ctx.attr.ready_to_run_from:
-        there = ctx.attr.ready_to_run_from[0][DotnetAssemblyRuntimeInfo]
-        images = there.ready_to_run or []
-        references = ready_to_run_references(libs, deps).files
-
-        if there.libs == libs and images and all([image.references == references for image in images]):
-            return images
-
-    return compile_ready_to_run_images(ctx.actions, tools, ctx.label, libs, deps)
-
-def ready_to_run_from(name):
-    """What a package's `ready_to_run_from` is: itself, unless already under the publish's framework.
-
-    Args:
-        name: The name of the package target, in the package being loaded.
-
-    Returns:
-        A select for the `ready_to_run_from` attribute.
-    """
-    return select({
-        Label("//dotnet/private/rules/ready_to_run:off"): None,
-    } | {
-        Label("//dotnet/private/rules/ready_to_run:at_" + framework): None
-        for framework in FRAMEWORK_COMPATIBILITY.keys()
-    } | {
-        "//conditions:default": ":" + name,
-    })
-
 def get_ready_to_run_tools(ctx):
     """The tools to compile the target's ReadyToRun images with.
 
@@ -262,6 +211,32 @@ def get_ready_to_run_tools(ctx):
     tools = ctx.attr._ready_to_run_tools[0]
 
     return tools[DotnetReadyToRunToolsInfo] if DotnetReadyToRunToolsInfo in tools else None
+
+def with_ready_to_run_images(ctx, runtime_info):
+    """Adds the ReadyToRun images of a compiled target's assemblies, when a publish asked for them.
+
+    Args:
+        ctx: The rule context, of a rule with `READY_TO_RUN_ATTRS`.
+        runtime_info: The DotnetAssemblyRuntimeInfo of the target's compile.
+
+    Returns:
+        The DotnetAssemblyRuntimeInfo, with `ready_to_run` set.
+    """
+    return DotnetAssemblyRuntimeInfo(
+        name = runtime_info.name,
+        version = runtime_info.version,
+        libs = runtime_info.libs,
+        pdbs = runtime_info.pdbs,
+        xml_docs = runtime_info.xml_docs,
+        native = runtime_info.native,
+        data = runtime_info.data,
+        resource_assemblies = runtime_info.resource_assemblies,
+        appsetting_files = runtime_info.appsetting_files,
+        nuget_info = runtime_info.nuget_info,
+        deps = runtime_info.deps,
+        direct_deps_depsjson_fragment = runtime_info.direct_deps_depsjson_fragment,
+        ready_to_run = compile_ready_to_run_images(ctx.actions, get_ready_to_run_tools(ctx), ctx.label, runtime_info.libs, runtime_info.deps),
+    )
 
 _PINNED = ["//dotnet:target_framework"] + ["//dotnet:framework_compatible_%s" % framework for framework in FRAMEWORK_COMPATIBILITY.keys()]
 
@@ -293,16 +268,6 @@ Resolves to nothing unless a publish of the target asked for images, so that
 no other build analyses the packs.""",
         default = Label("//dotnet/private/rules/ready_to_run:tools"),
         cfg = _pin_framework,
-    ),
-}
-
-PACKAGE_READY_TO_RUN_ATTRS = {
-    "ready_to_run_from": attr.label(
-        doc = """This package under the publish's framework, when it is under another.
-
-Set by the macro declaring the package, with `ready_to_run_from`.""",
-        cfg = _pin_framework,
-        providers = [DotnetAssemblyRuntimeInfo],
     ),
 }
 

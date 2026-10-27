@@ -2,7 +2,8 @@
 
 load("@bazel_skylib//rules:common_settings.bzl", "BuildSettingInfo")
 load("//dotnet/private:common.bzl", "collect_transitive_runfiles")
-load("//dotnet/private/rules/common:compilation.bzl", "compile_once")
+load("//dotnet/private/rules/common:static_web_assets.bzl", "collect_static_web_assets")
+load("//dotnet/private/rules/ready_to_run:ready_to_run.bzl", "with_ready_to_run_images")
 
 def build_library(ctx, compile_action, toolchain):
     """Builds a .Net library from a compilation action
@@ -18,18 +19,28 @@ def build_library(ctx, compile_action, toolchain):
     """
     tfm = ctx.attr._target_framework[BuildSettingInfo].value
 
-    compiled = compile_once(ctx, compile_action, tfm, toolchain, is_application = False)
+    (compile_provider, runtime_provider, generated_assets) = compile_action(ctx, tfm, toolchain)
+    runtime_provider = with_ready_to_run_images(ctx, runtime_provider)
 
     return [
-        compiled.compile_info,
-        compiled.runtime_info,
-        compiled.static_web_assets_info,
-        compiled.inputs_info,
+        compile_provider,
+        runtime_provider,
+        collect_static_web_assets(
+            label = ctx.label,
+            assembly_name = runtime_provider.name,
+            files = ctx.files.static_web_assets,
+            deps = ctx.attr.deps,
+            is_application = False,
+            generated = generated_assets,
+        ),
         DefaultInfo(
-            files = depset(compiled.files),
+            files = depset(
+                runtime_provider.libs + runtime_provider.xml_docs +
+                [asset.file for asset in generated_assets],
+            ),
             default_runfiles = collect_transitive_runfiles(
                 ctx,
-                compiled.runtime_info,
+                runtime_provider,
                 ctx.attr.deps,
             ),
         ),

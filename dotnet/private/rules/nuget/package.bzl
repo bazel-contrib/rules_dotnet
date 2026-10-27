@@ -14,7 +14,6 @@ load(
 load("//dotnet/private/rules/nuget:dotnet_tool.bzl", "dotnet_tool")
 load("//dotnet/private/rules/nuget:imports.bzl", "import_library")
 load("//dotnet/private/rules/nuget:package_metadata.bzl", "ANY_FRAMEWORK")
-load("//dotnet/private/rules/ready_to_run:ready_to_run.bzl", "ready_to_run_from")
 
 def deps_by_tfm(dependency_groups, packages):
     """Maps every supported TFM onto the labels of the deps it should use.
@@ -122,7 +121,6 @@ def nuget_package(
         targeting_pack_overrides = targeting_pack_overrides,
         version = version,
         deps = select(deps_by_tfm(dependency_groups, packages)),
-        ready_to_run_from = ready_to_run_from(version),
         tags = tags,
     )
 

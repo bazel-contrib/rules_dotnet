@@ -41,7 +41,6 @@ bzl_library(
     deps = [
         "//dotnet/private/rules/blazor:app",
         "//dotnet/private/rules/blazor:devserver",
-        "//dotnet/private/rules/common:compilation",
         "//dotnet/private/rules/common:embed_sources",
         "//dotnet/private/rules/csharp:binary",
         "//dotnet/private/rules/csharp:library",
