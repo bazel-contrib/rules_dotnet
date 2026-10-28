@@ -51,6 +51,8 @@ namespace FSharpCompilerWorker
 
             int Compile(List<string> arguments, StringBuilder output)
             {
+                arguments = Worker.ResolveReferenceLinks(arguments, "-r:", "--reference:");
+
                 // A type provider's designer assembly is loaded into the default
                 // load context, which holds one assembly per simple name and cannot
                 // be unloaded. A second package carrying its own copy of a designer
