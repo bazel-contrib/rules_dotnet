@@ -3,6 +3,8 @@
 load("@rules_testing//lib:analysis_test.bzl", "analysis_test", "test_suite")
 load("@rules_testing//lib:util.bzl", "TestingAspectInfo")
 load("//dotnet:defs.bzl", "publish_binary")
+load("//dotnet/private:providers.bzl", "DotnetNativeToolsInfo")
+load("//dotnet/private/tests:utils.bzl", "published_binary", "ready_to_run_images_below")
 
 LAYERS = ["runtime", "third_party", "first_party", "app"]
 
@@ -43,9 +45,13 @@ def _publish_copy_outputs(target):
         for file in action.outputs.to_list()
     }
 
+def _native_tools(target):
+    """The native compiler the binary resolved for a publish."""
+    return [dep for dep in target[TestingAspectInfo].attrs.binary if DotnetNativeToolsInfo in dep][0][DotnetNativeToolsInfo]
+
 def _repo_mapping(target):
     """The repository mapping the layers carry, which is the binary's."""
-    return target[TestingAspectInfo].attrs.binary[0][DefaultInfo].files_to_run.repo_mapping_manifest
+    return published_binary(target)[DefaultInfo].files_to_run.repo_mapping_manifest
 
 def _data(target):
     """The data files a publish carries as runfiles."""
@@ -178,26 +184,111 @@ def _framework_dependent_test_impl(env, target):
 def _ready_to_run_test(name):
     _publish_test(name, _ready_to_run_test_impl, ready_to_run = True, self_contained = True)
 
-def _ready_to_run_test_impl(env, target):
-    _expect_layers_cover_the_publish(env, target)
-    _expect_layers_independent_of_the_publish_copy(env, target)
+def _ready_to_run_images(target):
+    """The ReadyToRun images a publish ships, keyed by basename."""
+    return {
+        file.basename: file
+        for files in _layers(target).values()
+        for file in files
+        if "/r2r/" in file.short_path
+    }
 
-    # Each image is compiled against what its assembly can reference, so that
-    # changing the application recompiles none of its dependencies, and
-    # changing a library of ours leaves the packages alone.
-    inputs = {
+def _shipped_images_compiled_below(target):
+    """What the targets below a publish say of the images it ships, keyed by basename."""
+    shipped = {file.path: None for file in _ready_to_run_images(target).values()}
+
+    return {
+        entry.image.basename: entry
+        for entry in ready_to_run_images_below(target)
+        if entry.image.path in shipped
+    }
+
+def _compile_inputs(target):
+    """What each image the publish compiles itself is compiled from, keyed by basename."""
+    return {
         image.basename: _basenames(action.inputs.to_list())
         for action in _actions(target, ["Crossgen2"])
         for image in action.outputs.to_list()
     }
 
-    for image in ["LibGit2Sharp.dll", "runfiles.dll", "app_to_publish.dll"]:
-        env.expect.that_collection(inputs[image]).contains("System.Private.CoreLib.dll")
+def _ready_to_run_test_impl(env, target):
+    _expect_layers_cover_the_publish(env, target)
+    _expect_layers_independent_of_the_publish_copy(env, target)
 
-    env.expect.that_collection(inputs["LibGit2Sharp.dll"]).contains_none_of(["runfiles.dll", "app_to_publish.dll"])
-    env.expect.that_collection(inputs["runfiles.dll"]).contains("LibGit2Sharp.dll")
-    env.expect.that_collection(inputs["runfiles.dll"]).not_contains("app_to_publish.dll")
-    env.expect.that_collection(inputs["app_to_publish.dll"]).contains_at_least(["LibGit2Sharp.dll", "runfiles.dll"])
+    # Each image is compiled in the target that defines its assembly, so that
+    # other publishes can share it, and the publish compiles none itself.
+    images = _ready_to_run_images(target)
+    env.expect.that_str(str(images["app_to_publish.dll"].owner)).equals(str(Label(_APP)))
+    env.expect.that_str(str(images["runfiles.dll"].owner)).equals(str(Label("//tools/runfiles")))
+    env.expect.that_str(images["LibGit2Sharp.dll"].owner.package.split("/")[0]).equals("libgit2sharp")
+    env.expect.that_collection(_compile_inputs(target).keys()).has_size(0)
+
+    # The application is not a web one, so its images are compiled against the
+    # default runtime pack. The runfiles library is built for netstandard2.0,
+    # but runs on what the publish ships, so it is compiled against the same
+    # framework as the application.
+    shared = _shipped_images_compiled_below(target)
+    env.expect.that_bool("AspNetCore" in shared["app_to_publish.dll"].framework).equals(False)
+    env.expect.that_str(shared["runfiles.dll"].framework).equals(shared["app_to_publish.dll"].framework)
+
+    # Each image is compiled against what its assembly can reference, so that
+    # changing the application recompiles none of its dependencies, and
+    # changing a library of ours leaves the packages alone.
+    references = {name: _basenames(entry.references) for (name, entry) in shared.items()}
+    env.expect.that_collection(references["LibGit2Sharp.dll"]).contains_none_of(["runfiles.dll", "app_to_publish.dll"])
+    env.expect.that_collection(references["runfiles.dll"]).contains_none_of(["LibGit2Sharp.dll", "app_to_publish.dll"])
+    env.expect.that_collection(references["app_to_publish.dll"]).contains_at_least(["LibGit2Sharp.dll", "runfiles.dll"])
+
+def _ready_to_run_other_framework_test(name):
+    _publish_test(
+        name,
+        _ready_to_run_other_framework_test_impl,
+        binary = ":net9_app",
+        ready_to_run = True,
+        self_contained = True,
+    )
+
+def _ready_to_run_other_framework_test_impl(env, target):
+    # The binary is built for net9.0, so it runs on that runtime pack rather
+    # than the net10.0 one the publish asked for. It says so to the targets
+    # below it, which compile their images against net9.0 themselves.
+    images = _ready_to_run_images(target)
+    env.expect.that_str(str(images["net9_app.dll"].owner)).equals(str(Label(":net9_app")))
+    env.expect.that_str(str(images["runfiles.dll"].owner)).equals(str(Label("//tools/runfiles")))
+    env.expect.that_collection(_compile_inputs(target).keys()).has_size(0)
+
+    shared = _shipped_images_compiled_below(target)
+    for name in ["net9_app.dll", "runfiles.dll"]:
+        env.expect.that_str(shared[name].framework).contains("/9.0.")
+
+def _shared_ready_to_run_test(name):
+    for (suffix, binary, self_contained) in [("_a", _APP, True), ("_b", _APP, False), ("_c", ":data_app", True)]:
+        publish_binary(
+            name = name + suffix,
+            binary = binary,
+            ready_to_run = True,
+            self_contained = self_contained,
+            tags = ["manual"],
+            target_framework = "net10.0",
+        )
+
+    analysis_test(
+        name = name,
+        impl = _shared_ready_to_run_test_impl,
+        targets = {"a": name + "_a", "b": name + "_b", "c": name + "_c"},
+    )
+
+def _shared_ready_to_run_test_impl(env, targets):
+    # Publishes of the same assemblies share their images, whichever
+    # application they publish.
+    a = _ready_to_run_images(targets.a)
+    b = _ready_to_run_images(targets.b)
+    c = _ready_to_run_images(targets.c)
+
+    for name in ["LibGit2Sharp.dll", "runfiles.dll", "app_to_publish.dll"]:
+        env.expect.that_str(b[name].path).equals(a[name].path)
+
+    env.expect.that_str(c["runfiles.dll"].path).equals(a["runfiles.dll"].path)
 
 def _ready_to_run_composite_test(name):
     _publish_test(
@@ -245,6 +336,74 @@ def _native_aot_test_impl(env, target):
     env.expect.that_collection(_owners(layers["first_party"])).contains_exactly([Label(_APP + ":native")])
     env.expect.that_collection(layers["third_party"]).has_size(1)
 
+def _native_compiler_other_framework_test(name):
+    for (suffix, kwargs) in [
+        ("_ready_to_run_composite", {"ready_to_run": True, "ready_to_run_composite": True}),
+        ("_native_aot", {"native_aot": True, "target_compatible_with": _NOT_WINDOWS}),
+    ]:
+        publish_binary(
+            name = name + suffix,
+            binary = ":net9_app",
+            self_contained = True,
+            tags = ["manual"],
+            target_framework = "net10.0",
+            **kwargs
+        )
+
+    analysis_test(
+        name = name,
+        impl = _native_compiler_other_framework_test_impl,
+        targets = {
+            "composite": name + "_ready_to_run_composite",
+            "native_aot": name + "_native_aot",
+        },
+    )
+
+def _native_compiler_other_framework_test_impl(env, targets):
+    # The binary is built for net9.0, so it runs on net9.0 whatever framework
+    # the publish asked for, and a runtime only uses native code from a
+    # compiler of its own version. The compilers come from the binary's band.
+    crossgen2 = _native_tools(targets.composite).crossgen2.tool
+    env.expect.that_str(crossgen2.path).contains("/net9.0/")
+    env.expect.that_collection(_actions(targets.composite, ["Crossgen2Composite"])[0].inputs.to_list()).contains(crossgen2)
+
+    native_tools = _native_tools(targets.native_aot)
+    env.expect.that_str(native_tools.ilcompiler.tool.path).contains("/net9.0/")
+    env.expect.that_bool(len(native_tools.nativeaot_pack.libs) > 0).equals(True)
+    env.expect.that_collection([lib.path for lib in native_tools.nativeaot_pack.libs if ".v9.0." not in lib.path]).has_size(0)
+    env.expect.that_collection(_actions(targets.native_aot, ["Ilc"])[0].inputs.to_list()).contains(native_tools.ilcompiler.tool)
+
+def _binary_dependency_test(name):
+    for (suffix, kwargs) in [
+        ("_ready_to_run", {"ready_to_run": True}),
+        ("_native_aot", {"native_aot": True, "target_compatible_with": _NOT_WINDOWS}),
+    ]:
+        publish_binary(
+            name = name + suffix,
+            binary = ":uses_net9_app",
+            self_contained = True,
+            tags = ["manual"],
+            target_framework = "net10.0",
+            **kwargs
+        )
+
+    analysis_test(
+        name = name,
+        impl = _binary_dependency_test_impl,
+        targets = {
+            "native_aot": name + "_native_aot",
+            "ready_to_run": name + "_ready_to_run",
+        },
+    )
+
+def _binary_dependency_test_impl(env, targets):
+    # A binary the published one depends on is compiled like a library: against
+    # the published binary's framework, and with its compiler.
+    shared = _shipped_images_compiled_below(targets.ready_to_run)
+    env.expect.that_str(shared["net9_app.dll"].framework).equals(shared["uses_net9_app.dll"].framework)
+    env.expect.that_collection(_compile_inputs(targets.ready_to_run).keys()).has_size(0)
+    env.expect.that_str(_native_tools(targets.native_aot).ilcompiler.tool.path).contains("/net10.0/")
+
 def _data_test(name):
     _publish_test(name, _data_test_impl, binary = ":data_app", self_contained = True)
 
@@ -264,8 +423,12 @@ def container_layers_test_suite(name):
             _self_contained_test,
             _framework_dependent_test,
             _ready_to_run_test,
+            _shared_ready_to_run_test,
+            _ready_to_run_other_framework_test,
             _ready_to_run_composite_test,
             _native_aot_test,
+            _native_compiler_other_framework_test,
+            _binary_dependency_test,
             _data_test,
         ],
     )

@@ -3,6 +3,7 @@
 load("@bazel_skylib//lib:dicts.bzl", "dicts")
 load("//dotnet/private:providers.bzl", "DotnetAssemblyCompileInfo", "DotnetAssemblyRuntimeInfo")
 load("//dotnet/private/rules/common:static_web_assets.bzl", "STATIC_WEB_ASSETS_ATTRS")
+load("//dotnet/private/rules/ready_to_run:ready_to_run.bzl", "READY_TO_RUN_ATTRS")
 load("//dotnet/private/sdk:packs.bzl", "USER_PACKS", "USER_PROJECT_SDKS")
 load("//dotnet/private/sdk/apphost_packs:apphost_pack_transition.bzl", "apphost_pack_transition")
 load("//dotnet/private/sdk/runtime_packs:runtime_pack_transition.bzl", "runtime_pack_transition")
@@ -225,11 +226,18 @@ BINARY_COMMON_ATTRS = dicts.add(STATIC_WEB_ASSETS_ATTRS, {
         default = "//dotnet/private/sdk/runtime_packs:runtime_pack",
         cfg = runtime_pack_transition,
     ),
+    "_native_tools": attr.label(
+        doc = """The native compiler a ReadyToRun or NativeAOT publish of the binary asks for, for the binary's framework.
+
+Resolves to nothing unless a publish asked, so that no other build analyses the packs.""",
+        default = "//dotnet/private/rules/publish_binary:native_tools",
+    ),
 })
 
 # These are attributes that are common across all the binary/library/test C# rules
 CSHARP_COMMON_ATTRS = dicts.add(
     COMMON_ATTRS,
+    READY_TO_RUN_ATTRS,
     {
         "srcs": attr.label_list(
             doc = "The source files used in the compilation",
@@ -339,6 +347,7 @@ CSHARP_BINARY_COMMON_ATTRS = dicts.add(
 # These are attributes that are common across all the binary/library/test F# rules
 FSHARP_COMMON_ATTRS = dicts.add(
     COMMON_ATTRS,
+    READY_TO_RUN_ATTRS,
     {
         "_fsharp_compiler_worker": attr.label(
             doc = """The persistent worker that runs the F# compiler, keeping it warm between compilations.

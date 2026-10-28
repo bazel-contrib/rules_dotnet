@@ -46,3 +46,44 @@ def tool_pack_rule(tool_name):
             "_windows_constraint": attr.label(default = "@platforms//os:windows"),
         },
     )
+
+def _host_tool_pack_impl(ctx):
+    return [ctx.attr.pack[DotnetToolPackInfo]]
+
+host_tool_pack = rule(
+    _host_tool_pack_impl,
+    doc = """A native tool for the machine the build runs on, from the band of the target framework.
+
+`pack` selects the band in the target configuration, and past its exec
+transition the band's `host` alias selects the pack for the execution
+platform.""",
+    attrs = {
+        "pack": attr.label(
+            doc = "The band's `host` alias, selected by target framework.",
+            cfg = "exec",
+            mandatory = True,
+            providers = [DotnetToolPackInfo],
+        ),
+    },
+    # Picks the execution platform the way the rules running the tool do, so
+    # that the pack is the one for the machine their actions run on.
+    toolchains = ["//dotnet:toolchain_type"],
+    provides = [DotnetToolPackInfo],
+)
+
+def host_tool_pack_band(repo, tfms):
+    """Selects a tool pack's band by the target framework of the configuration.
+
+    Args:
+      repo: The repository holding a package per band.
+      tfms: The bands the tool shipped for, oldest first.
+
+    Returns:
+      A select of each band's `host` alias.
+    """
+    bands = {"//dotnet:tfm_" + tfm: "@{}//{}:host".format(repo, tfm) for tfm in tfms}
+
+    # A framework older than every band, such as netstandard2.0, gets the newest.
+    bands["//conditions:default"] = "@{}//{}:host".format(repo, tfms[-1])
+
+    return select(bands)

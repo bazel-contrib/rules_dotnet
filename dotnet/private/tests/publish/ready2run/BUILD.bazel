@@ -4,6 +4,9 @@ load(
     "//dotnet:defs.bzl",
     "publish_binary",
 )
+load(":tests.bzl", "ready_to_run_test_suite")
+
+ready_to_run_test_suite(name = "ready_to_run_test_suite")
 
 publish_binary(
     name = "ready2run",

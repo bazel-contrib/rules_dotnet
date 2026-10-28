@@ -9,10 +9,25 @@ load(
 )
 load("//dotnet/private:portable_rids.bzl", "PORTABLE_RUNTIME_GRAPH", "to_portable_rid")
 
+# The framework a ReadyToRun publish runs on, and the project SDK of the binary
+# it publishes. See //dotnet/private/rules/ready_to_run.
+READY_TO_RUN_FRAMEWORK = "//dotnet/private/rules/ready_to_run:framework"
+READY_TO_RUN_PROJECT_SDK = "//dotnet/private/rules/ready_to_run:project_sdk"
+
+# Set on the edge from a publish to its binary: that the binary is the one
+# published, and the native compiler the publish asks it for. See
+# //dotnet/private/rules/publish_binary.
+PUBLISHED = "//dotnet/private/rules/publish_binary:published"
+NATIVE_COMPILER = "//dotnet/private/rules/publish_binary:native_compiler"
+
+# What every transition but the publish's leaves them at.
+NO_READY_TO_RUN = {READY_TO_RUN_FRAMEWORK: "", READY_TO_RUN_PROJECT_SDK: "", NATIVE_COMPILER: "", PUBLISHED: False}
+
 # Every transition that moves the TFM/RID graph writes the same settings.
 TFM_RID_TRANSITION_OUTPUTS = ["//dotnet:target_framework", "//dotnet:rid"] + \
                              ["//dotnet:framework_compatible_%s" % framework for framework in FRAMEWORK_COMPATIBILITY.keys()] + \
-                             ["//dotnet:rid_compatible_%s" % rid for rid in PORTABLE_RUNTIME_GRAPH.keys()]
+                             ["//dotnet:rid_compatible_%s" % rid for rid in PORTABLE_RUNTIME_GRAPH.keys()] + \
+                             NO_READY_TO_RUN.keys()
 
 def platform_to_rid():
     """Determines the .Net runtime identifier (RID) of the host that Bazel is running on.

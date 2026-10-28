@@ -9,6 +9,7 @@ bzl_library(
         "//dotnet/private:common",
         "//dotnet/private:providers",
         "//dotnet/private/icu:settings",
+        "//dotnet/private/rules/ready_to_run",
         "@bazel_skylib//rules:common_settings",
     ],
 )
@@ -40,6 +41,7 @@ bzl_library(
     deps = [
         ":static_web_assets",
         "//dotnet/private:common",
+        "//dotnet/private/rules/ready_to_run",
         "@bazel_skylib//rules:common_settings",
     ],
 )
@@ -51,6 +53,7 @@ bzl_library(
     deps = [
         ":static_web_assets",
         "//dotnet/private:providers",
+        "//dotnet/private/rules/ready_to_run",
         "//dotnet/private/sdk:packs",
         "//dotnet/private/sdk/apphost_packs:apphost_pack_transition",
         "//dotnet/private/sdk/runtime_packs:runtime_pack_transition",

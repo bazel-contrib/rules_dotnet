@@ -4,6 +4,7 @@ load(":apphost_pack.bzl", "apphost_pack")
 label_setting(
     name = "apphost_pack",
     build_setting_default = ":empty_pack",
+    scope = "target",
     visibility = ["//visibility:public"],
 )
 
@@ -19,5 +20,9 @@ bzl_library(
     name = "apphost_pack_transition",
     srcs = ["apphost_pack_transition.bzl"],
     visibility = ["//dotnet:__subpackages__"],
-    deps = ["//dotnet/private/sdk:packs"],
+    deps = [
+        "//dotnet/private/sdk:packs",
+        "//dotnet/private/transitions:common",
+        "@bazel_skylib//lib:dicts",
+    ],
 )

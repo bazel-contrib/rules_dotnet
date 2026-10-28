@@ -33,6 +33,18 @@ bzl_library(
         ":common",
         "//dotnet/private:common",
         "//dotnet/private:portable_rids",
+        "//dotnet/private/sdk:packs",
+        "@bazel_skylib//lib:dicts",
+    ],
+)
+
+bzl_library(
+    name = "native_transition",
+    srcs = ["native_transition.bzl"],
+    visibility = ["//dotnet:__subpackages__"],
+    deps = [
+        ":common",
+        "//dotnet/private:common",
         "@bazel_skylib//lib:dicts",
     ],
 )

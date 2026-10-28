@@ -10,6 +10,7 @@ load("//dotnet/private/sdk:packs.bzl", "WASM_RID")
 load(
     "//dotnet/private/transitions:common.bzl",
     "FRAMEWORK_COMPATABILITY_TRANSITION_OUTPUTS",
+    "NO_READY_TO_RUN",
     "TFM_RID_TRANSITION_OUTPUTS",
     "rid_compatability_transition_outputs",
 )
@@ -22,6 +23,7 @@ def _impl(_settings, attr):
         },
         FRAMEWORK_COMPATABILITY_TRANSITION_OUTPUTS[attr.target_framework],
         rid_compatability_transition_outputs(WASM_RID),
+        NO_READY_TO_RUN,
     )
 
 wasm_pack_transition = transition(

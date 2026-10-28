@@ -394,9 +394,9 @@ TARGETING_PACK_LOOKUP_TABLE = {
 }
 
 # The runtime identifiers a build can run on, and so the ones the tool packs
-# are fetched for. Matches the platforms the `crossgen2_pack` and
-# `ilcompiler_pack` aliases select over; a musl host is not distinguishable as
-# a Bazel platform here.
+# are fetched for. Each has a platform `config_setting` the tool packs' `host`
+# aliases select over; a musl host is not distinguishable as a Bazel platform
+# here.
 _HOST_RIDS = [
     "linux-arm64",
     "linux-x64",
@@ -413,6 +413,33 @@ def host_rids():
       A list of runtime identifiers.
     """
     return _HOST_RIDS
+
+def host_platform_setting(rid):
+    """The `config_setting` that matches the platform of a host runtime identifier.
+
+    Args:
+      rid: One of `host_rids()`.
+
+    Returns:
+      The label of the `config_setting`.
+    """
+    return "@rules_dotnet//dotnet/private:" + rid.replace("win-", "windows-")
+
+def host_tool_tfms(pack):
+    """The target frameworks a host tool shipped for on at least one host.
+
+    Args:
+      pack: Returns the (id, version) of the tool's pack for a tfm and host
+        rid, or None where the tool did not ship for that combination.
+
+    Returns:
+      A list of target frameworks, oldest band first.
+    """
+    return [
+        tfm
+        for tfm in runtime_pack_tfms()
+        if any([pack(tfm, rid) != None for rid in _HOST_RIDS])
+    ]
 
 RUNTIME_PACK_LOOKUP_TABLE = {
     project_sdk: {

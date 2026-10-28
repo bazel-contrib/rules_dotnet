@@ -17,6 +17,7 @@ load(
 load(
     "//dotnet/private/transitions:common.bzl",
     "FRAMEWORK_COMPATABILITY_TRANSITION_OUTPUTS",
+    "NO_READY_TO_RUN",
     "TFM_RID_TRANSITION_OUTPUTS",
     "rid_compatability_transition_outputs",
 )
@@ -28,6 +29,7 @@ _DEFAULT_OUTPUTS = dicts.add(
     {"//dotnet:target_framework": DEFAULT_TFM, "//dotnet:rid": DEFAULT_RID},
     FRAMEWORK_COMPATABILITY_TRANSITION_OUTPUTS[DEFAULT_TFM],
     rid_compatability_transition_outputs(DEFAULT_RID),
+    NO_READY_TO_RUN,
 )
 
 def _impl(_settings, _attr):

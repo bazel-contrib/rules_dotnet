@@ -16,6 +16,7 @@ def register_tfms():
         name = "target_framework",
         values = FRAMEWORK_COMPATIBILITY.keys(),
         build_setting_default = DEFAULT_TFM,
+        scope = "target",
         visibility = ["//visibility:public"],
     )
 
@@ -27,6 +28,7 @@ def register_tfms():
         bool_setting(
             name = "framework_compatible_%s" % framework,
             build_setting_default = sets.contains(TRANSITIVE_FRAMEWORK_COMPATIBILITY[DEFAULT_TFM], framework),
+            scope = "target",
             visibility = ["//visibility:public"],
         )
 

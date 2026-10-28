@@ -13,7 +13,7 @@ load(
     "is_standard_framework",
     "to_rlocation_path",
 )
-load("//dotnet/private:providers.bzl", "DotnetApphostPackInfo", "DotnetAssemblyRuntimeInfo", "DotnetBinaryInfo", "DotnetRuntimePackInfo")
+load("//dotnet/private:providers.bzl", "DotnetApphostPackInfo", "DotnetAssemblyRuntimeInfo", "DotnetBinaryInfo", "DotnetNativeToolsInfo", "DotnetRuntimePackInfo")
 load("//dotnet/private/icu:settings.bzl", "icu_files", "icu_launcher_environment")
 load(
     "//dotnet/private/rules/common:static_web_assets.bzl",
@@ -22,6 +22,7 @@ load(
     "endpoints_manifest_action",
     "plan_static_web_assets",
 )
+load("//dotnet/private/rules/ready_to_run:ready_to_run.bzl", "with_ready_to_run_images")
 
 def _collect_native_dlls(assembly_runtime_info, deps):
     """Groups the native DLLs of a target and its dependencies by RID.
@@ -68,6 +69,16 @@ def _create_launcher(ctx, executable, toolchain):
 
     return launcher
 
+def _native_tools(ctx, native_tools):
+    """The binary in the branch a ReadyToRun or NativeAOT publish reaches it for the compiler.
+
+    It compiles nothing, but an executable rule has to create its executable.
+    """
+    executable = ctx.actions.declare_file("{}/native_tools/{}".format(ctx.label.name, ctx.label.name))
+    ctx.actions.write(executable, "", is_executable = True)
+
+    return [DefaultInfo(executable = executable), native_tools]
+
 def build_binary(ctx, compile_action, toolchain):
     """Builds a .Net binary from a compilation action
 
@@ -80,12 +91,16 @@ def build_binary(ctx, compile_action, toolchain):
     Returns:
         A collection of the references, runfiles and native dlls.
     """
+    if DotnetNativeToolsInfo in ctx.attr._native_tools:
+        return _native_tools(ctx, ctx.attr._native_tools[DotnetNativeToolsInfo])
+
     tfm = ctx.attr._target_framework[BuildSettingInfo].value
 
     if is_standard_framework(tfm):
         fail("It doesn't make sense to build an executable for " + tfm)
 
     (compile_provider, runtime_provider, generated_assets) = compile_action(ctx, tfm, toolchain)
+    runtime_provider = with_ready_to_run_images(ctx, runtime_provider)
     dll = runtime_provider.libs[0]
     appsetting_files = runtime_provider.appsetting_files.to_list()
     default_info_files = [dll] + runtime_provider.xml_docs + appsetting_files

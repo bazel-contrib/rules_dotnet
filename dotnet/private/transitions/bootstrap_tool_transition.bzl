@@ -13,6 +13,7 @@ load(
 load(
     "//dotnet/private/transitions:common.bzl",
     "FRAMEWORK_COMPATABILITY_TRANSITION_OUTPUTS",
+    "NO_READY_TO_RUN",
     "TFM_RID_TRANSITION_OUTPUTS",
     "platform_to_rid",
     "rid_compatability_transition_outputs",
@@ -25,6 +26,7 @@ def _impl(_settings, _attr):
         {"//dotnet:target_framework": tfm, "//dotnet:rid": rid},
         FRAMEWORK_COMPATABILITY_TRANSITION_OUTPUTS[tfm],
         rid_compatability_transition_outputs(rid),
+        NO_READY_TO_RUN,
     )
 
 bootstrap_tool_transition = transition(

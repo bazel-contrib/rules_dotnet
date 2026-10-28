@@ -38,7 +38,9 @@ load(
     "apphost_pack",
     "band_is_movable",
     "crossgen2_pack",
+    "host_platform_setting",
     "host_rids",
+    "host_tool_tfms",
     "ilcompiler_pack",
     "nativeaot_pack",
     "runtime_pack_rids",
@@ -208,10 +210,11 @@ def _apphost(versions):
     return struct(build_files = build_files, packages = collections.uniq(packages))
 
 def _host_tool(kind, pack, versions):
-    """One target per host runtime identifier, selecting its pack by framework.
+    """One package per band, each holding the band's pack for every host.
 
-    The tool is picked by the machine the build runs on while the framework
-    comes from the configuration, and a rule attribute cannot select on both.
+    `host_tool_pack` selects the band in the target configuration, and the
+    band's `host` alias, reached through the exec transition, selects the pack
+    for the execution platform.
 
     Args:
       kind: The pack rule's name, which also names the `.bzl` file it lives in.
@@ -223,12 +226,12 @@ def _host_tool(kind, pack, versions):
       A struct of build files and the packages they reference.
     """
     packages = []
-    targets = []
+    bands = {}
 
-    for rid in host_rids():
-        by_tfm = {}
+    for tfm in host_tool_tfms(pack):
+        targets = []
 
-        for tfm in runtime_pack_tfms():
+        for rid in host_rids():
             found = pack(tfm, rid)
 
             if found == None:
@@ -241,24 +244,30 @@ def _host_tool(kind, pack, versions):
             # The tool is a native executable with its JIT libraries beside it,
             # none of which the package rules classify, so the pack reads the
             # archive's file list directly.
-            by_tfm["@rules_dotnet//dotnet:tfm_{}".format(tfm)] = "@{}//:files".format(nuget_archive_name(id, version))
+            targets.append({
+                "name": rid,
+                "pack_files": "@{}//:files".format(nuget_archive_name(id, version)),
+            })
 
-        if by_tfm:
-            # Nothing sets a target framework outside a tfm transition, so the
-            # target still has to resolve without one. Bands come oldest first,
-            # so this is the newest the tool shipped for.
-            by_tfm["//conditions:default"] = by_tfm.values()[-1]
+        bands[tfm] = targets
 
-        targets.append({
-            "name": rid,
-            "pack_files": by_tfm,
-        })
+    # Bands come oldest first. A host that an older band did not ship the tool
+    # for gets the newest band's.
+    newest = bands.keys()[-1] if bands else None
+    build_files = {}
 
-    return struct(
-        # Not the root BUILD: the hub writes its own there.
-        build_files = {"tool/BUILD.bazel": _build_file(kind, targets)},
-        packages = collections.uniq(packages),
-    )
+    for (tfm, targets) in bands.items():
+        hosts = {host_platform_setting(target["name"]): ":" + target["name"] for target in targets}
+
+        if tfm != newest:
+            hosts["//conditions:default"] = "//{}:host".format(newest)
+
+        build_files["{}/BUILD.bazel".format(tfm)] = "{}\nalias(\n    name = \"host\",\n    actual = {},\n)\n".format(
+            _build_file(kind, targets),
+            _render(hosts),
+        )
+
+    return struct(build_files = build_files, packages = collections.uniq(packages))
 
 def _nativeaot():
     """One target per runtime identifier a framework can publish AOT for.

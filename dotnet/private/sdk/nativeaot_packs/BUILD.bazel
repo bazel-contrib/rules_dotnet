@@ -4,6 +4,7 @@ load(":nativeaot_pack.bzl", "nativeaot_pack")
 label_setting(
     name = "nativeaot_pack",
     build_setting_default = ":empty_pack",
+    scope = "target",
     visibility = ["//visibility:public"],
 )
 
@@ -21,5 +22,7 @@ bzl_library(
     deps = [
         "//dotnet/private:common",
         "//dotnet/private/sdk:packs",
+        "//dotnet/private/transitions:common",
+        "@bazel_skylib//lib:dicts",
     ],
 )

@@ -1,0 +1,58 @@
+load("@bazel_lib//:bzl_library.bzl", "bzl_library")
+load("@bazel_skylib//rules:common_settings.bzl", "string_setting")
+load(":ready_to_run.bzl", "ready_to_run_tools")
+
+# The framework the binary of a ReadyToRun publish runs on, which every target
+# below it compiles its images against. Empty everywhere else.
+string_setting(
+    name = "framework",
+    build_setting_default = "",
+    scope = "target",
+    visibility = ["//visibility:public"],
+)
+
+# The project SDK of the published binary, which decides whether that
+# framework includes ASP.NET Core.
+string_setting(
+    name = "project_sdk",
+    build_setting_default = "",
+    scope = "target",
+    visibility = ["//visibility:public"],
+)
+
+config_setting(
+    name = "off",
+    flag_values = {":framework": ""},
+)
+
+alias(
+    name = "tools",
+    actual = select({
+        ":off": ":no_tools",
+        "//conditions:default": ":compile_tools",
+    }),
+    visibility = ["//visibility:public"],
+)
+
+filegroup(
+    name = "no_tools",
+)
+
+# Manual: it only resolves below a ReadyToRun publish.
+ready_to_run_tools(
+    name = "compile_tools",
+    tags = ["manual"],
+)
+
+bzl_library(
+    name = "ready_to_run",
+    srcs = ["ready_to_run.bzl"],
+    visibility = ["//dotnet:__subpackages__"],
+    deps = [
+        "//dotnet/private:common",
+        "//dotnet/private:providers",
+        "//dotnet/private/sdk:packs",
+        "//dotnet/private/transitions:common",
+        "@bazel_skylib//lib:dicts",
+    ],
+)
