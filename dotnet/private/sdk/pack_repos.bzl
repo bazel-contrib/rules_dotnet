@@ -207,12 +207,9 @@ def _apphost(versions):
 def _host_tool(kind, pack, versions):
     """One package per band, each holding the band's pack for every host.
 
-    The band comes from the target framework and the pack from the machine the
-    build runs on, which sit on either side of the exec transition:
     `host_tool_pack` selects the band in the target configuration, and the
     band's `host` alias, reached through the exec transition, selects the pack
-    for the execution platform. An exec configuration then never has to carry
-    the target framework.
+    for the execution platform.
 
     Args:
       kind: The pack rule's name, which also names the `.bzl` file it lives in.

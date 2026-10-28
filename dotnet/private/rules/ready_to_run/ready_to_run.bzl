@@ -1,19 +1,10 @@
-"""Compiles each assembly to ReadyToRun once, in the target that defines it.
+"""Compiles each assembly to ReadyToRun in the target that defines it.
 
-A publish that compiles image by image puts the framework it runs on in the
-configuration, and every target below it compiles its own assemblies against
-that framework and its own dependencies. The action is then the same for every
-publish of that framework that ships the assembly, so a library or package
-shared by many applications is compiled once.
-
-The framework is the one the published binary runs on rather than the one an
-assembly was built for: a netstandard2.0 library in a net10.0 publish is
-compiled against net10.0. The binary sets it from its own framework and
-project SDK, so that the images are compiled against the runtime pack the
-publish ships.
-
-The settings are scoped to the target configuration, so the tools a publish
-runs are configured once, not once per framework.
+A ReadyToRun publish puts the framework and project SDK of its binary in the
+configuration, and every target below the binary compiles its own assemblies
+against that runtime pack and its own dependencies. A netstandard2.0 library
+in a net10.0 publish is compiled against net10.0, once for every publish of
+that framework that ships it.
 """
 
 load("@bazel_skylib//lib:dicts.bzl", "dicts")
@@ -88,17 +79,13 @@ def _mapped_path(file):
 def ready_to_run_references(libs, deps):
     """What an assembly is compiled against besides the framework.
 
-    The assemblies of the target defining it and of everything that target
-    depends on, and nothing that depends on it, so that changing the
-    application recompiles none of its dependencies and changing a library of
-    ours leaves the packages alone. A reference its metadata does not declare
-    is left unresolved, and crossgen2 leaves the methods that need it to the
-    JIT.
+    The assemblies of its target and of everything that target depends on, so
+    that changing the application recompiles none of its dependencies. crossgen2
+    leaves methods needing any other reference to the JIT.
 
-    Sorted, so that the order of the dependency graph cannot change a command
-    line. Sorted by the paths path mapping passes, so that neither can the
-    configurations the references were built in: an assembly reached in two
-    configurations is then compiled to one image under path mapping.
+    Sorted by the path path mapping passes, so that neither the order of the
+    dependency graph nor the configurations of the references change the
+    command line.
 
     Args:
         libs: The target's own assemblies.
@@ -219,7 +206,7 @@ def get_ready_to_run_tools(ctx):
     Returns:
         The DotnetReadyToRunToolsInfo, or None when no publish asked for images.
     """
-    tools = ctx.attr._ready_to_run_tools[0]
+    tools = ctx.attr._ready_to_run_tools
 
     return tools[DotnetReadyToRunToolsInfo] if DotnetReadyToRunToolsInfo in tools else None
 
@@ -231,8 +218,13 @@ def with_ready_to_run_images(ctx, runtime_info):
         runtime_info: The DotnetAssemblyRuntimeInfo of the target's compile.
 
     Returns:
-        The DotnetAssemblyRuntimeInfo, with `ready_to_run` set.
+        The DotnetAssemblyRuntimeInfo, with `ready_to_run` set if a publish asked.
     """
+    tools = get_ready_to_run_tools(ctx)
+
+    if tools == None:
+        return runtime_info
+
     return DotnetAssemblyRuntimeInfo(
         name = runtime_info.name,
         version = runtime_info.version,
@@ -246,30 +238,8 @@ def with_ready_to_run_images(ctx, runtime_info):
         nuget_info = runtime_info.nuget_info,
         deps = runtime_info.deps,
         direct_deps_depsjson_fragment = runtime_info.direct_deps_depsjson_fragment,
-        ready_to_run = compile_ready_to_run_images(ctx.actions, get_ready_to_run_tools(ctx), ctx.label, runtime_info.libs, runtime_info.deps),
+        ready_to_run = compile_ready_to_run_images(ctx.actions, tools, ctx.label, runtime_info.libs, runtime_info.deps),
     )
-
-_PINNED = ["//dotnet:target_framework"] + ["//dotnet:framework_compatible_%s" % framework for framework in FRAMEWORK_COMPATIBILITY.keys()]
-
-def _pin_framework_impl(settings, _attr):
-    framework = settings[READY_TO_RUN_FRAMEWORK]
-
-    # Unchanged, which keeps the configuration the target is in.
-    if not framework:
-        return {key: settings[key] for key in _PINNED}
-
-    return dicts.add(
-        {"//dotnet:target_framework": framework},
-        FRAMEWORK_COMPATABILITY_TRANSITION_OUTPUTS[framework],
-    )
-
-# Moves the tools onto the publish's framework, whatever the target's, so that
-# the targets below one publish share them.
-_pin_framework = transition(
-    implementation = _pin_framework_impl,
-    inputs = [READY_TO_RUN_FRAMEWORK] + _PINNED,
-    outputs = _PINNED,
-)
 
 READY_TO_RUN_ATTRS = {
     "_ready_to_run_tools": attr.label(
@@ -278,9 +248,30 @@ READY_TO_RUN_ATTRS = {
 Resolves to nothing unless a publish of the target asked for images, so that
 no other build analyses the packs.""",
         default = Label("//dotnet/private/rules/ready_to_run:tools"),
-        cfg = _pin_framework,
     ),
 }
+
+_PINNED = ["//dotnet:target_framework"] + ["//dotnet:framework_compatible_%s" % framework for framework in FRAMEWORK_COMPATIBILITY.keys()]
+
+def _pin_framework_impl(settings, _attr):
+    framework = settings[READY_TO_RUN_FRAMEWORK]
+
+    # Only a target built directly has no framework.
+    if not framework:
+        return {key: settings[key] for key in _PINNED}
+
+    return dicts.add(
+        {"//dotnet:target_framework": framework},
+        FRAMEWORK_COMPATABILITY_TRANSITION_OUTPUTS[framework],
+    )
+
+# Puts the tools on the published binary's framework, whatever the target's, so
+# that the targets below one publish share them.
+_pin_framework = transition(
+    implementation = _pin_framework_impl,
+    inputs = [READY_TO_RUN_FRAMEWORK] + _PINNED,
+    outputs = _PINNED,
+)
 
 def _runtime_pack_impl(settings, _attr):
     project_sdk = settings[READY_TO_RUN_PROJECT_SDK]
@@ -313,8 +304,7 @@ ready_to_run_tools = rule(
     _ready_to_run_tools_impl,
     doc = """What the targets below a ReadyToRun publish compile their images with.
 
-The target framework is the publish's, pinned by `READY_TO_RUN_ATTRS`, and the
-project SDK the published binary's.""",
+The target framework and project SDK are the published binary's.""",
     attrs = {
         "_runtime_pack": attr.label(
             default = Label("//dotnet/private/sdk/runtime_packs:runtime_pack"),
@@ -327,4 +317,5 @@ project SDK the published binary's.""",
         ),
     },
     provides = [DotnetReadyToRunToolsInfo],
+    cfg = _pin_framework,
 )

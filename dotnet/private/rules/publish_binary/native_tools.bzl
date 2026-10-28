@@ -14,8 +14,8 @@ native_tools = rule(
     _native_tools_impl,
     doc = """The native compiler a ReadyToRun or NativeAOT publish asks its binary for.
 
-Resolved in the binary's configuration, so that the bands of crossgen2 and ilc
-and the NativeAOT framework follow the framework the binary picked.""",
+Resolved in the binary's configuration, so that crossgen2, ilc and the NativeAOT
+framework follow the framework the binary picked.""",
     attrs = {
         "crossgen2": attr.label(providers = [DotnetToolPackInfo]),
         "ilcompiler": attr.label(providers = [DotnetToolPackInfo]),

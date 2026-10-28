@@ -54,9 +54,9 @@ host_tool_pack = rule(
     _host_tool_pack_impl,
     doc = """A native tool for the machine the build runs on, from the band of the target framework.
 
-The band is selected on `pack` in the target configuration, where the target
-framework is, and the pack for the host is selected past the exec transition,
-so that no exec configuration has to carry the target framework.""",
+`pack` selects the band in the target configuration, and past its exec
+transition the band's `host` alias selects the pack for the execution
+platform.""",
     attrs = {
         "pack": attr.label(
             doc = "The band's `host` alias, selected by target framework.",
@@ -83,8 +83,7 @@ def host_tool_pack_band(repo, tfms):
     """
     bands = {"//dotnet:tfm_" + tfm: "@{}//{}:host".format(repo, tfm) for tfm in tfms}
 
-    # Nothing sets a target framework outside a tfm transition, so the tool
-    # still has to resolve without one: to the newest band.
+    # A framework older than every band, such as netstandard2.0, gets the newest.
     bands["//conditions:default"] = "@{}//{}:host".format(repo, tfms[-1])
 
     return select(bands)

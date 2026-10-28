@@ -70,11 +70,9 @@ def _create_launcher(ctx, executable, toolchain):
     return launcher
 
 def _native_tools(ctx, native_tools):
-    """The binary as a publish asking for native code reaches it a second time.
+    """The binary in the branch a ReadyToRun or NativeAOT publish reaches it for the compiler.
 
-    Only the binary knows the framework it picked, so it resolves the compiler
-    for it. It compiles nothing here; an executable rule still has to create its
-    executable.
+    It compiles nothing, but an executable rule has to create its executable.
     """
     executable = ctx.actions.declare_file("{}/native_tools/{}".format(ctx.label.name, ctx.label.name))
     ctx.actions.write(executable, "", is_executable = True)

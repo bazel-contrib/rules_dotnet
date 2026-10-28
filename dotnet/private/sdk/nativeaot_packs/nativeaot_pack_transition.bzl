@@ -15,8 +15,7 @@ def _impl(settings, _attr):
     # publish reports it where it reads the pack.
     return dicts.add({_SETTING: by_rid.get(rid) or settings[_SETTING]}, NO_READY_TO_RUN)
 
-# A pack's assemblies are never compiled to ReadyToRun here: a runtime pack
-# ships its images already, and the others are not published.
+# A pack's assemblies are never compiled to ReadyToRun.
 nativeaot_pack_transition = transition(
     implementation = _impl,
     inputs = [_SETTING, "//dotnet:target_framework", "//dotnet:rid"],

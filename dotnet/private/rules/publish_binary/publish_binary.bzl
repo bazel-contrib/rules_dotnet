@@ -584,13 +584,12 @@ def _publish_layers(ctx, entries, dependency_layers):
     return output_groups
 
 def _shipped_images(runtime_infos, framework, published):
-    """The images the publish's targets compiled for the published assemblies.
+    """The images the targets below the binary compiled for the published assemblies.
 
-    An assembly reached in more than one configuration is compiled once in
-    each, possibly against different files: a package's assembly is the same
-    file whichever framework resolved the package. The image compiled against
-    published files is the one to ship, and otherwise the first by path, so
-    that the order of the dependency graph cannot decide.
+    A package reached in several configurations compiles its assembly in each,
+    possibly against different files. The image compiled against published
+    files is shipped, else the first by path, so that the order of the
+    dependency graph cannot decide.
 
     Args:
         runtime_infos: The DotnetAssemblyRuntimeInfo of the binary and of
@@ -673,14 +672,11 @@ def _ready_to_run_images(ctx, binary_info, assembly_files, runtime_pack_files, r
 
         return struct(replace = components, extra = [image])
 
-    # Each target below the binary compiled its own assemblies, so that every
-    # publish shipping one shares its image.
     runtime_infos = [_binary(ctx)[DotnetAssemblyRuntimeInfo]] + binary_info.transitive_runtime_deps
     images = _shipped_images(runtime_infos, framework, {assembly.path: None for assembly in assemblies})
 
-    # A target that pins a runtime identifier of its own compiled against
-    # another runtime pack, and an imported DLL compiles nothing. The publish
-    # compiles those images itself, in the same way.
+    # An imported DLL compiles nothing, and a target pinning its own runtime
+    # identifier compiled against another runtime pack.
     remaining = [assembly for assembly in assemblies if assembly.path not in images]
     if remaining:
         owners = {lib.path: info for info in runtime_infos for lib in info.libs}
@@ -1000,8 +996,7 @@ executable, each data file in the layer of the target it belongs to.""",
     attrs = {
         "binary": attr.label(
             doc = "The .Net binary that is being published",
-            # The binary, or in the `native_tools` branch the compiler it
-            # resolved for its framework.
+            # The `native_tools` branch carries only the compiler.
             providers = [[DotnetBinaryInfo], [DotnetNativeToolsInfo]],
             cfg = publish_binary_transition,
             mandatory = True,

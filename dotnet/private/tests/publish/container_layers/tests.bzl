@@ -279,9 +279,8 @@ def _shared_ready_to_run_test(name):
     )
 
 def _shared_ready_to_run_test_impl(env, targets):
-    # Publishes of the same assemblies ship the very same images rather than
-    # compiling them once each, whether or not they publish the same
-    # application.
+    # Publishes of the same assemblies share their images, whichever
+    # application they publish.
     a = _ready_to_run_images(targets.a)
     b = _ready_to_run_images(targets.b)
     c = _ready_to_run_images(targets.c)
@@ -374,6 +373,37 @@ def _native_compiler_other_framework_test_impl(env, targets):
     env.expect.that_collection([lib.path for lib in native_tools.nativeaot_pack.libs if ".v9.0." not in lib.path]).has_size(0)
     env.expect.that_collection(_actions(targets.native_aot, ["Ilc"])[0].inputs.to_list()).contains(native_tools.ilcompiler.tool)
 
+def _binary_dependency_test(name):
+    for (suffix, kwargs) in [
+        ("_ready_to_run", {"ready_to_run": True}),
+        ("_native_aot", {"native_aot": True, "target_compatible_with": _NOT_WINDOWS}),
+    ]:
+        publish_binary(
+            name = name + suffix,
+            binary = ":uses_net9_app",
+            self_contained = True,
+            tags = ["manual"],
+            target_framework = "net10.0",
+            **kwargs
+        )
+
+    analysis_test(
+        name = name,
+        impl = _binary_dependency_test_impl,
+        targets = {
+            "native_aot": name + "_native_aot",
+            "ready_to_run": name + "_ready_to_run",
+        },
+    )
+
+def _binary_dependency_test_impl(env, targets):
+    # A binary the published one depends on is compiled like a library: against
+    # the published binary's framework, and with its compiler.
+    shared = _shipped_images_compiled_below(targets.ready_to_run)
+    env.expect.that_str(shared["net9_app.dll"].framework).equals(shared["uses_net9_app.dll"].framework)
+    env.expect.that_collection(_compile_inputs(targets.ready_to_run).keys()).has_size(0)
+    env.expect.that_str(_native_tools(targets.native_aot).ilcompiler.tool.path).contains("/net10.0/")
+
 def _data_test(name):
     _publish_test(name, _data_test_impl, binary = ":data_app", self_contained = True)
 
@@ -398,6 +428,7 @@ def container_layers_test_suite(name):
             _ready_to_run_composite_test,
             _native_aot_test,
             _native_compiler_other_framework_test,
+            _binary_dependency_test,
             _data_test,
         ],
     )

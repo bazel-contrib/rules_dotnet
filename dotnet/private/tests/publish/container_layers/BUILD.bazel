@@ -35,6 +35,14 @@ csharp_binary(
     deps = ["//tools/runfiles"],
 )
 
+# Depends on another binary, which a publish of it ships as a library.
+csharp_binary(
+    name = "uses_net9_app",
+    srcs = ["UsesNet9App.cs"],
+    target_frameworks = ["net10.0"],
+    deps = [":net9_app"],
+)
+
 # Each publish is packed into image layers, which a test stacks and runs. The
 # NativeAOT one carries its sidecars as runfiles too.
 PUBLISHES = {

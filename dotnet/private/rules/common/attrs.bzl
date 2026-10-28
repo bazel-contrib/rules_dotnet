@@ -227,10 +227,9 @@ BINARY_COMMON_ATTRS = dicts.add(STATIC_WEB_ASSETS_ATTRS, {
         cfg = runtime_pack_transition,
     ),
     "_native_tools": attr.label(
-        doc = """The native compiler a ReadyToRun or NativeAOT publish of the binary asks for.
+        doc = """The native compiler a ReadyToRun or NativeAOT publish of the binary asks for, for the binary's framework.
 
-Resolved for the binary's own target framework, and to nothing unless a publish
-asked, so that no other build analyses the packs.""",
+Resolves to nothing unless a publish asked, so that no other build analyses the packs.""",
         default = "//dotnet/private/rules/publish_binary:native_tools",
     ),
 })

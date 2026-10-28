@@ -16,8 +16,7 @@ def _impl(settings, attr):
 
     fail("No targeting pack found for project SDK/target framework: {}/{}".format(project_sdk, incoming_target_framework))
 
-# A pack's assemblies are never compiled to ReadyToRun here: a runtime pack
-# ships its images already, and the others are not published.
+# A pack's assemblies are never compiled to ReadyToRun.
 targeting_pack_transition = transition(
     implementation = _impl,
     inputs = ["//dotnet/private/sdk/targeting_packs:targeting_pack", "//dotnet:target_framework"],

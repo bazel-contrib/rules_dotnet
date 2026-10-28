@@ -2,8 +2,8 @@ load("@bazel_lib//:bzl_library.bzl", "bzl_library")
 load("@bazel_skylib//rules:common_settings.bzl", "string_setting")
 load(":ready_to_run.bzl", "ready_to_run_tools")
 
-# The framework a publish that compiles image by image runs on, which every
-# target below it compiles its assemblies against. Empty everywhere else.
+# The framework the binary of a ReadyToRun publish runs on, which every target
+# below it compiles its images against. Empty everywhere else.
 string_setting(
     name = "framework",
     build_setting_default = "",
@@ -38,8 +38,7 @@ filegroup(
     name = "no_tools",
 )
 
-# Marked manual because it only resolves in a configuration that a publish set
-# the framework in.
+# Manual: it only resolves below a ReadyToRun publish.
 ready_to_run_tools(
     name = "compile_tools",
     tags = ["manual"],

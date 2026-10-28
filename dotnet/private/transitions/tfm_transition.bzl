@@ -6,12 +6,13 @@ load(
     "FRAMEWORK_COMPATIBILITY",
     "get_highest_compatible_target_framework",
 )
-load("//dotnet/private/sdk:packs.bzl", "DEFAULT_SDK", "normalize_project_sdk")
+load("//dotnet/private/sdk:packs.bzl", "normalize_project_sdk")
 load(
     "//dotnet/private/transitions:common.bzl",
     "FRAMEWORK_COMPATABILITY_TRANSITION_OUTPUTS",
     "NATIVE_COMPILER",
     "NO_READY_TO_RUN",
+    "PUBLISHED",
     "READY_TO_RUN_FRAMEWORK",
     "READY_TO_RUN_PROJECT_SDK",
     "TFM_RID_TRANSITION_OUTPUTS",
@@ -22,32 +23,27 @@ load(
 def _ready_to_run(settings, attr, transitioned_tfm):
     """The ReadyToRun settings a target passes down.
 
-    A publish that compiles image by image asks for the images of what it
-    ships, and the binary it publishes then names the runtime they are compiled
-    against: its own framework and project SDK, whatever the publish asked for.
-    Everything below the binary passes that on.
+    The published binary keeps the native compiler its publish asked for, and
+    names the runtime the images below it are compiled against: its own
+    framework and project SDK. Everything else passes the framework on.
     """
-    if hasattr(attr, "ready_to_run"):
-        if attr.ready_to_run and not attr.ready_to_run_composite:
-            return dicts.add(NO_READY_TO_RUN, {READY_TO_RUN_FRAMEWORK: attr.target_framework, READY_TO_RUN_PROJECT_SDK: DEFAULT_SDK})
 
+    # A publish asks its binary through publish_binary_transition.
+    if hasattr(attr, "ready_to_run"):
         return NO_READY_TO_RUN
 
-    is_binary = hasattr(attr, "winexe")
+    framework = settings[READY_TO_RUN_FRAMEWORK]
 
-    # Only the binary resolves the native compiler its publish asked for, so
-    # nothing below it is configured again for it.
-    native_compiler = {NATIVE_COMPILER: settings[NATIVE_COMPILER] if is_binary else ""}
-
-    if settings[READY_TO_RUN_FRAMEWORK] and is_binary:
-        return dicts.add(native_compiler, {
-            READY_TO_RUN_FRAMEWORK: transitioned_tfm,
-            READY_TO_RUN_PROJECT_SDK: normalize_project_sdk(attr.project_sdk),
+    if not settings[PUBLISHED]:
+        return dicts.add(NO_READY_TO_RUN, {
+            READY_TO_RUN_FRAMEWORK: framework,
+            READY_TO_RUN_PROJECT_SDK: settings[READY_TO_RUN_PROJECT_SDK],
         })
 
-    return dicts.add(native_compiler, {
-        READY_TO_RUN_FRAMEWORK: settings[READY_TO_RUN_FRAMEWORK],
-        READY_TO_RUN_PROJECT_SDK: settings[READY_TO_RUN_PROJECT_SDK],
+    return dicts.add(NO_READY_TO_RUN, {
+        NATIVE_COMPILER: settings[NATIVE_COMPILER],
+        READY_TO_RUN_FRAMEWORK: transitioned_tfm if framework else "",
+        READY_TO_RUN_PROJECT_SDK: normalize_project_sdk(attr.project_sdk) if framework else "",
     })
 
 def _impl(settings, attr):
@@ -83,7 +79,11 @@ tfm_transition = transition(
 )
 
 def _publish_binary_impl(settings, attr):
-    binary = _impl(settings, attr)
+    # Any framework asks for images; the binary replaces it with its own.
+    binary = dicts.add(_impl(settings, attr), {
+        PUBLISHED: True,
+        READY_TO_RUN_FRAMEWORK: attr.target_framework if attr.ready_to_run and not attr.ready_to_run_composite else "",
+    })
 
     if attr.native_aot:
         native_compiler = "ilcompiler"
@@ -92,18 +92,15 @@ def _publish_binary_impl(settings, attr):
     else:
         return {"binary": binary}
 
-    # The compiler's band and packs follow the framework the binary picks, which
-    # can be lower than the publish's, and only the binary knows it. So the
-    # publish reaches the binary a second time, where it compiles nothing and
-    # resolves the compiler instead.
+    # The compiler's band follows the framework the binary picks, which only the
+    # binary knows, so the publish reaches it a second time for the compiler.
     return {
         "binary": binary,
-        "native_tools": dicts.add(binary, NO_READY_TO_RUN, {NATIVE_COMPILER: native_compiler}),
+        "native_tools": dicts.add(binary, {NATIVE_COMPILER: native_compiler}),
     }
 
-# The edge from a publish to its binary: `binary` is the binary itself, and a
-# ReadyToRun or NativeAOT publish also gets `native_tools`, the native compiler
-# for the binary's framework.
+# `binary` is the binary itself; a ReadyToRun or NativeAOT publish also gets
+# `native_tools`, the native compiler for the binary's framework.
 publish_binary_transition = transition(
     implementation = _publish_binary_impl,
     inputs = ["//dotnet:target_framework", "//dotnet:rid"] + NO_READY_TO_RUN.keys(),

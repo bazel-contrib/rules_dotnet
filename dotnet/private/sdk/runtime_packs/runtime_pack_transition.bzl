@@ -21,8 +21,7 @@ def _impl(settings, attr):
 
     fail("No runtime pack found for project SDK/target framework: {}/{}".format(project_sdk, incoming_target_framework))
 
-# A pack's assemblies are never compiled to ReadyToRun here: a runtime pack
-# ships its images already, and the others are not published.
+# A pack's assemblies are never compiled to ReadyToRun.
 runtime_pack_transition = transition(
     implementation = _impl,
     inputs = ["//dotnet/private/sdk/runtime_packs:runtime_pack", "//dotnet:target_framework", "//dotnet:rid"],

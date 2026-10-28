@@ -1,6 +1,15 @@
 load("@bazel_lib//:bzl_library.bzl", "bzl_library")
-load("@bazel_skylib//rules:common_settings.bzl", "string_setting")
+load("@bazel_skylib//rules:common_settings.bzl", "bool_setting", "string_setting")
 load(":native_tools.bzl", "native_tools")
+
+# True only on the edge from a publish to its binary, so that the binary can
+# tell itself apart from a binary it depends on.
+bool_setting(
+    name = "published",
+    build_setting_default = False,
+    scope = "target",
+    visibility = ["//visibility:public"],
+)
 
 # The native compiler a ReadyToRun or NativeAOT publish asks its binary for.
 # Only the binary keeps it; see //dotnet/private/transitions:tfm_transition.
@@ -26,8 +35,7 @@ config_setting(
     flag_values = {":native_compiler": "ilcompiler"},
 )
 
-# What a binary resolves for its publish. Nothing unless a publish asked, so
-# that no other build analyses the packs.
+# Nothing unless a publish asked, so that no other build analyses the packs.
 alias(
     name = "native_tools",
     actual = select({
@@ -42,8 +50,7 @@ filegroup(
     name = "no_native_tools",
 )
 
-# Marked manual because they only resolve in the configuration of a binary
-# under a publish that asked for them.
+# Manual: they only resolve in a binary whose publish asked for them.
 native_tools(
     name = "crossgen2_tools",
     crossgen2 = "//dotnet/private:crossgen2_pack",

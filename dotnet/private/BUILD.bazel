@@ -197,8 +197,7 @@ filegroup(
 ]
 
 # The crossgen2 pack of the target framework's band, for the machine the build
-# runs on. Depended on in the target configuration: the band is selected here,
-# and the pack for the execution platform past the exec transition.
+# runs on.
 host_tool_pack(
     name = "crossgen2_pack",
     pack = host_tool_pack_band(

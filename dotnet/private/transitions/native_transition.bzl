@@ -1,9 +1,8 @@
 """A transition for the native libraries and data files a .NET target ships.
 
-They read none of the .NET settings but the runtime identifier, which picks the
-native files of a package, so the rest goes back to its default. Otherwise a
-native library would be built again for every target framework, and for every
-ReadyToRun publish, that reaches it.
+They read no .NET setting but the runtime identifier, which picks the native
+files of a package, so the rest goes back to its default: a native library is
+built once, whatever framework or ReadyToRun publish reaches it.
 """
 
 load("@bazel_skylib//lib:dicts.bzl", "dicts")
@@ -14,8 +13,6 @@ load(
     "NO_READY_TO_RUN",
 )
 
-# Constant, so it is built once at load time rather than on every application
-# of the transition.
 _OUTPUTS = dicts.add(
     {"//dotnet:target_framework": DEFAULT_TFM},
     FRAMEWORK_COMPATABILITY_TRANSITION_OUTPUTS[DEFAULT_TFM],

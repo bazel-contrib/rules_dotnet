@@ -18,8 +18,7 @@ def _impl(settings, _attr):
 
     fail("No apphost pack found for project target framework/runtime identifier: {}/{}".format(incoming_target_framework, incoming_rid))
 
-# A pack's assemblies are never compiled to ReadyToRun here: a runtime pack
-# ships its images already, and the others are not published.
+# A pack's assemblies are never compiled to ReadyToRun.
 apphost_pack_transition = transition(
     implementation = _impl,
     inputs = ["//dotnet/private/sdk/apphost_packs:apphost_pack", "//dotnet:target_framework", "//dotnet:rid"],
