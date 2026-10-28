@@ -2,8 +2,9 @@
 
 load("@bazel_skylib//rules:common_settings.bzl", "BuildSettingInfo")
 load("//dotnet/private:common.bzl", "collect_transitive_runfiles")
+load("//dotnet/private:providers.bzl", "DotnetAssemblyCompileInfo", "DotnetAssemblyRuntimeInfo", "StaticWebAssetsInfo")
 load("//dotnet/private/rules/common:static_web_assets.bzl", "collect_static_web_assets")
-load("//dotnet/private/rules/ready_to_run:ready_to_run.bzl", "with_ready_to_run_images")
+load("//dotnet/private/rules/ready_to_run:ready_to_run.bzl", "ready_to_run_compilation", "ready_to_run_images")
 
 def build_library(ctx, compile_action, toolchain):
     """Builds a .Net library from a compilation action
@@ -17,10 +18,20 @@ def build_library(ctx, compile_action, toolchain):
     Returns:
         A collection of the references, runfiles and native dlls.
     """
+    compilation = ready_to_run_compilation(ctx)
+
+    # Under a ReadyToRun publish: its build outside one, plus the images below it.
+    if compilation:
+        return [
+            compilation[DefaultInfo],
+            compilation[DotnetAssemblyCompileInfo],
+            compilation[DotnetAssemblyRuntimeInfo],
+            compilation[StaticWebAssetsInfo],
+        ] + ready_to_run_images(ctx, compilation[DotnetAssemblyRuntimeInfo], ctx.attr.deps)
+
     tfm = ctx.attr._target_framework[BuildSettingInfo].value
 
     (compile_provider, runtime_provider, generated_assets) = compile_action(ctx, tfm, toolchain)
-    runtime_provider = with_ready_to_run_images(ctx, runtime_provider)
 
     return [
         compile_provider,

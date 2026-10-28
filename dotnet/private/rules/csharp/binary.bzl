@@ -17,6 +17,7 @@ load("//dotnet/private:toolchains_repo.bzl", "BOOTSTRAP_TOOLCHAIN_TYPE")
 load("//dotnet/private/rules/common:attrs.bzl", "CSHARP_BINARY_COMMON_ATTRS")
 load("//dotnet/private/rules/common:binary.bzl", "build_binary")
 load("//dotnet/private/rules/csharp/actions:csharp_assembly.bzl", "AssemblyAction")
+load("//dotnet/private/rules/ready_to_run:ready_to_run.bzl", "ready_to_run_initializer")
 load("//dotnet/private/sdk:packs.bzl", "BOOTSTRAP_PACKS")
 load("//dotnet/private/transitions:bootstrap_tool_transition.bzl", "bootstrap_tool_transition")
 load("//dotnet/private/transitions:tfm_transition.bzl", "tfm_transition")
@@ -93,6 +94,7 @@ _BINARY_ATTRS = dicts.add(
 
 csharp_binary = rule(
     _binary_impl,
+    initializer = ready_to_run_initializer,
     doc = """Compile a C# exe""",
     attrs = _BINARY_ATTRS,
     executable = True,

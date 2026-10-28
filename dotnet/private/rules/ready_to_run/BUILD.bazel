@@ -20,9 +20,12 @@ string_setting(
     visibility = ["//visibility:public"],
 )
 
+# Outside a ReadyToRun publish. Public: the rules' initializers select on it in
+# every package.
 config_setting(
     name = "off",
     flag_values = {":framework": ""},
+    visibility = ["//visibility:public"],
 )
 
 alias(

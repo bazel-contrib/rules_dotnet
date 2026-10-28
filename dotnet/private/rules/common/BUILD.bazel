@@ -41,6 +41,7 @@ bzl_library(
     deps = [
         ":static_web_assets",
         "//dotnet/private:common",
+        "//dotnet/private:providers",
         "//dotnet/private/rules/ready_to_run",
         "@bazel_skylib//rules:common_settings",
     ],

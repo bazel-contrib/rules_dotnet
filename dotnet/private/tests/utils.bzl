@@ -3,7 +3,7 @@
 load("@bazel_skylib//lib:unittest.bzl", "analysistest", "asserts")
 load("@bazel_skylib//rules:common_settings.bzl", "BuildSettingInfo")
 load("@rules_testing//lib:util.bzl", "TestingAspectInfo")
-load("//dotnet/private:providers.bzl", "DotnetAssemblyRuntimeInfo", "DotnetBinaryInfo")
+load("//dotnet/private:providers.bzl", "DotnetBinaryInfo", "DotnetReadyToRunInfo")
 
 ACTION_ARGS_TEST_ARGS = {
     "action_mnemonic": attr.string(),
@@ -116,9 +116,8 @@ def ready_to_run_images_below(target):
         The images of the binary and of everything it depends on.
     """
     binary = published_binary(target)
-    infos = [binary[DotnetAssemblyRuntimeInfo]] + binary[DotnetBinaryInfo].transitive_runtime_deps
 
-    return [entry for info in infos for entry in (getattr(info, "ready_to_run", None) or [])]
+    return binary[DotnetReadyToRunInfo].images.to_list() if DotnetReadyToRunInfo in binary else []
 
 RUN_ENVIRONMENT_INFO_TEST_ARGS = {
     "expected_inherited_environment": attr.string_list(),

@@ -14,6 +14,7 @@ load(
     "DotnetAssemblyRuntimeInfo",
     "DotnetBinaryInfo",
     "DotnetNativeToolsInfo",
+    "DotnetReadyToRunInfo",
 )
 load(
     "//dotnet/private/rules/blazor:blazor_wasm_publish.bzl",
@@ -583,7 +584,7 @@ def _publish_layers(ctx, entries, dependency_layers):
 
     return output_groups
 
-def _shipped_images(runtime_infos, framework, published):
+def _shipped_images(images, framework, published):
     """The images the targets below the binary compiled for the published assemblies.
 
     A package reached in several configurations compiles its assembly in each,
@@ -592,8 +593,8 @@ def _shipped_images(runtime_infos, framework, published):
     dependency graph cannot decide.
 
     Args:
-        runtime_infos: The DotnetAssemblyRuntimeInfo of the binary and of
-            everything it depends on.
+        images: The images of the binary and of everything it depends on, from
+            DotnetReadyToRunInfo.
         framework: The publish's framework, from `ready_to_run_framework`.
         published: The paths of the published assemblies, as dict keys.
 
@@ -601,10 +602,9 @@ def _shipped_images(runtime_infos, framework, published):
         The image of each assembly a target compiled, keyed by its path.
     """
     candidates = {}
-    for info in runtime_infos:
-        for entry in getattr(info, "ready_to_run", None) or []:
-            if entry.framework == framework.key and entry.assembly.path in published:
-                candidates.setdefault(entry.assembly.path, []).append(entry)
+    for entry in images:
+        if entry.framework == framework.key and entry.assembly.path in published:
+            candidates.setdefault(entry.assembly.path, []).append(entry)
 
     shipped = {}
     for (path, entries) in candidates.items():
@@ -672,13 +672,15 @@ def _ready_to_run_images(ctx, binary_info, assembly_files, runtime_pack_files, r
 
         return struct(replace = components, extra = [image])
 
-    runtime_infos = [_binary(ctx)[DotnetAssemblyRuntimeInfo]] + binary_info.transitive_runtime_deps
-    images = _shipped_images(runtime_infos, framework, {assembly.path: None for assembly in assemblies})
+    binary = _binary(ctx)
+    declared = binary[DotnetReadyToRunInfo].images.to_list() if DotnetReadyToRunInfo in binary else []
+    images = _shipped_images(declared, framework, {assembly.path: None for assembly in assemblies})
 
     # An imported DLL compiles nothing, and a target pinning its own runtime
     # identifier compiled against another runtime pack.
     remaining = [assembly for assembly in assemblies if assembly.path not in images]
     if remaining:
+        runtime_infos = [binary[DotnetAssemblyRuntimeInfo]] + binary_info.transitive_runtime_deps
         owners = {lib.path: info for info in runtime_infos for lib in info.libs}
 
         for assembly in remaining:
