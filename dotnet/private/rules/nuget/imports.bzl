@@ -19,8 +19,7 @@ load(
 load(
     "//dotnet/private/rules/ready_to_run:ready_to_run.bzl",
     "READY_TO_RUN_ATTRS",
-    "compile_ready_to_run_images",
-    "get_ready_to_run_tools",
+    "ready_to_run_images",
 )
 load("//dotnet/private/transitions:native_transition.bzl", "native_transition")
 
@@ -72,8 +71,6 @@ def _import_library(ctx):
         internals_visible_to = [],
     )
 
-    runtime_deps = depset([dep[DotnetAssemblyRuntimeInfo] for dep in ctx.attr.deps], transitive = [dep[DotnetAssemblyRuntimeInfo].deps for dep in ctx.attr.deps])
-
     dotnet_assembly_runtime_info = DotnetAssemblyRuntimeInfo(
         name = ctx.attr.library_name,
         version = ctx.attr.version,
@@ -85,9 +82,8 @@ def _import_library(ctx):
         native = ctx.files.native,
         data = ctx.files.data,
         nuget_info = nuget_info,
-        deps = runtime_deps,
+        deps = depset([dep[DotnetAssemblyRuntimeInfo] for dep in ctx.attr.deps], transitive = [dep[DotnetAssemblyRuntimeInfo].deps for dep in ctx.attr.deps]),
         direct_deps_depsjson_fragment = {dep[DotnetAssemblyRuntimeInfo].name: dep[DotnetAssemblyRuntimeInfo].version for dep in ctx.attr.deps},
-        ready_to_run = compile_ready_to_run_images(ctx.actions, get_ready_to_run_tools(ctx), ctx.label, ctx.files.libs, runtime_deps),
     )
 
     return [
@@ -107,7 +103,7 @@ def _import_library(ctx):
             content_root = PACKAGE_CONTENT_ROOT,
         ),
         nuget_info,
-    ]
+    ] + ready_to_run_images(ctx, dotnet_assembly_runtime_info, ctx.attr.deps)
 
 import_library = rule(
     _import_library,

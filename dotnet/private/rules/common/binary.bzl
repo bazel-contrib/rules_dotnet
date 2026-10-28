@@ -13,7 +13,16 @@ load(
     "is_standard_framework",
     "to_rlocation_path",
 )
-load("//dotnet/private:providers.bzl", "DotnetApphostPackInfo", "DotnetAssemblyRuntimeInfo", "DotnetBinaryInfo", "DotnetNativeToolsInfo", "DotnetRuntimePackInfo")
+load(
+    "//dotnet/private:providers.bzl",
+    "DotnetApphostPackInfo",
+    "DotnetAssemblyCompileInfo",
+    "DotnetAssemblyRuntimeInfo",
+    "DotnetBinaryInfo",
+    "DotnetNativeToolsInfo",
+    "DotnetRuntimePackInfo",
+    "StaticWebAssetsInfo",
+)
 load("//dotnet/private/icu:settings.bzl", "icu_files", "icu_launcher_environment")
 load(
     "//dotnet/private/rules/common:static_web_assets.bzl",
@@ -22,7 +31,7 @@ load(
     "endpoints_manifest_action",
     "plan_static_web_assets",
 )
-load("//dotnet/private/rules/ready_to_run:ready_to_run.bzl", "with_ready_to_run_images")
+load("//dotnet/private/rules/ready_to_run:ready_to_run.bzl", "ready_to_run_compilation", "ready_to_run_images")
 
 def _collect_native_dlls(assembly_runtime_info, deps):
     """Groups the native DLLs of a target and its dependencies by RID.
@@ -79,6 +88,30 @@ def _native_tools(ctx, native_tools):
 
     return [DefaultInfo(executable = executable), native_tools]
 
+def _under_ready_to_run(ctx, compilation):
+    """The binary under a ReadyToRun publish: its build outside one, plus the images below it.
+
+    An executable rule has to create its executable, so it links the launcher.
+    """
+    default_info = compilation[DefaultInfo]
+    launcher = default_info.files_to_run.executable
+    link = ctx.actions.declare_file("{}/ready_to_run/{}".format(ctx.label.name, launcher.basename))
+    ctx.actions.symlink(output = link, target_file = launcher, is_executable = True)
+    runtime_info = compilation[DotnetAssemblyRuntimeInfo]
+
+    return [
+        DefaultInfo(
+            executable = link,
+            files = default_info.files,
+            runfiles = default_info.default_runfiles,
+        ),
+        compilation[DotnetBinaryInfo],
+        compilation[DotnetAssemblyCompileInfo],
+        runtime_info,
+        compilation[StaticWebAssetsInfo],
+        compilation[RunEnvironmentInfo],
+    ] + ready_to_run_images(ctx, runtime_info, ctx.attr.deps)
+
 def build_binary(ctx, compile_action, toolchain):
     """Builds a .Net binary from a compilation action
 
@@ -94,13 +127,16 @@ def build_binary(ctx, compile_action, toolchain):
     if DotnetNativeToolsInfo in ctx.attr._native_tools:
         return _native_tools(ctx, ctx.attr._native_tools[DotnetNativeToolsInfo])
 
+    compilation = ready_to_run_compilation(ctx)
+    if compilation:
+        return _under_ready_to_run(ctx, compilation)
+
     tfm = ctx.attr._target_framework[BuildSettingInfo].value
 
     if is_standard_framework(tfm):
         fail("It doesn't make sense to build an executable for " + tfm)
 
     (compile_provider, runtime_provider, generated_assets) = compile_action(ctx, tfm, toolchain)
-    runtime_provider = with_ready_to_run_images(ctx, runtime_provider)
     dll = runtime_provider.libs[0]
     appsetting_files = runtime_provider.appsetting_files.to_list()
     default_info_files = [dll] + runtime_provider.xml_docs + appsetting_files

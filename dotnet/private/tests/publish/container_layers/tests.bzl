@@ -290,6 +290,32 @@ def _shared_ready_to_run_test_impl(env, targets):
 
     env.expect.that_str(c["runfiles.dll"].path).equals(a["runfiles.dll"].path)
 
+def _ready_to_run_builds_once_test(name):
+    for (suffix, ready_to_run) in [("_ready_to_run", True), ("_plain", False)]:
+        publish_binary(
+            name = name + suffix,
+            binary = _APP,
+            ready_to_run = ready_to_run,
+            self_contained = True,
+            tags = ["manual"],
+            target_framework = "net10.0",
+        )
+
+    analysis_test(
+        name = name,
+        impl = _ready_to_run_builds_once_test_impl,
+        targets = {"ready_to_run": name + "_ready_to_run", "plain": name + "_plain"},
+    )
+
+def _ready_to_run_builds_once_test_impl(env, targets):
+    # The targets below a ReadyToRun publish reuse their build from outside it:
+    # their images are compiled from the very assemblies a plain publish ships.
+    compiled = {name: entry.assembly.path for (name, entry) in _shipped_images_compiled_below(targets.ready_to_run).items()}
+    plain = {file.basename: file.path for files in _layers(targets.plain).values() for file in files}
+
+    for name in ["app_to_publish.dll", "runfiles.dll", "LibGit2Sharp.dll"]:
+        env.expect.that_str(compiled[name]).equals(plain[name])
+
 def _ready_to_run_composite_test(name):
     _publish_test(
         name,
@@ -424,6 +450,7 @@ def container_layers_test_suite(name):
             _framework_dependent_test,
             _ready_to_run_test,
             _shared_ready_to_run_test,
+            _ready_to_run_builds_once_test,
             _ready_to_run_other_framework_test,
             _ready_to_run_composite_test,
             _native_aot_test,

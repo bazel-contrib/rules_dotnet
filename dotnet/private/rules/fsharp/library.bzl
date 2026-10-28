@@ -14,6 +14,7 @@ load(
 load("//dotnet/private/rules/common:attrs.bzl", "FSHARP_LIBRARY_COMMON_ATTRS")
 load("//dotnet/private/rules/common:library.bzl", "build_library")
 load("//dotnet/private/rules/fsharp/actions:fsharp_assembly.bzl", "AssemblyAction")
+load("//dotnet/private/rules/ready_to_run:ready_to_run.bzl", "ready_to_run_initializer")
 load("//dotnet/private/transitions:tfm_transition.bzl", "tfm_transition")
 
 def _compile_action(ctx, tfm, toolchain):
@@ -61,6 +62,7 @@ def _library_impl(ctx):
 
 fsharp_library = rule(
     _library_impl,
+    initializer = ready_to_run_initializer,
     doc = "Compile a F# DLL",
     attrs = FSHARP_LIBRARY_COMMON_ATTRS,
     executable = False,
