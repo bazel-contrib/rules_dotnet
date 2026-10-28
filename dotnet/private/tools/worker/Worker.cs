@@ -35,6 +35,57 @@ namespace RulesDotnet
             arguments.RemoveAll(argument => argument == flag) > 0;
 
         /// <summary>
+        /// Returns <paramref name="arguments"/> with every reference that is a
+        /// symlink -- an argument starting with one of <paramref name="prefixes"/>
+        /// -- pointed at the file behind the link.
+        /// </summary>
+        /// <remarks>
+        /// Both compilers keep what they read from a reference for as long as its
+        /// full path and last-write time stay the same -- fsc inside the F# worker,
+        /// Roslyn inside its build server -- and on Unix that time is the link's
+        /// own, not its target's. A sandboxed worker, which path mapping always
+        /// makes it, keeps a link for as long as it points at the same output, so
+        /// a rebuilt reference keeps its old time and the next compile is handed
+        /// its old contents. The target's time moves with every rebuild, and the
+        /// outputs are the same either way: the compilers record no reference
+        /// paths in them.
+        /// </remarks>
+        public static List<string> ResolveReferenceLinks(List<string> arguments, params string[] prefixes)
+        {
+            var resolved = new List<string>(arguments.Count);
+            foreach (var argument in arguments)
+            {
+                resolved.Add(ResolveReferenceLink(argument, prefixes));
+            }
+
+            return resolved;
+        }
+
+        private static string ResolveReferenceLink(string argument, string[] prefixes)
+        {
+            foreach (var prefix in prefixes)
+            {
+                if (!argument.StartsWith(prefix, StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                try
+                {
+                    var target = File.ResolveLinkTarget(argument[prefix.Length..], returnFinalTarget: true);
+                    return target == null ? argument : prefix + target.FullName;
+                }
+                catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+                {
+                    // Missing or unreadable: the compiler reports it by the name it was given.
+                    return argument;
+                }
+            }
+
+            return argument;
+        }
+
+        /// <summary>
         /// Serves work requests on stdin and stdout until the stream closes. One
         /// at a time: the compile actions ask for <c>supports-workers</c>, not for
         /// multiplexing.
