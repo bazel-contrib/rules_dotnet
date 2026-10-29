@@ -388,7 +388,7 @@ Expected vóór de commit: alleen `dotnet/gazelle/private/parser/parser_test.go`
 - Modify: `dotnet/gazelle/testdata/nuget_dep/src/Store/BUILD.out`
 - Test: `dotnet/gazelle/testdata/nuget_dep`
 
-- [ ] **Step 1: Controleer de onaangeroerde Store-fixture**
+- [x] **Step 1: Controleer de onaangeroerde Store-fixture**
 
 Run:
 
@@ -406,7 +406,7 @@ PY
 
 Expected: `git status` is stil en Python drukt exact `Store.cs has the expected pre-BOM prefix` met exit 0. Stop bij een andere uitkomst.
 
-- [ ] **Step 2: Schrijf de synthetische BOM-fixture via een binaire old-byte-guard**
+- [x] **Step 2: Schrijf de synthetische BOM-fixture via een binaire old-byte-guard**
 
 Voer exact dit commando uit; het schrijft alleen als de volledige oude file byte voor byte overeenkomt en verandert geen bestandsmodus:
 
@@ -444,7 +444,7 @@ PY
 
 Expected: geen uitvoer en exit 0. De nieuwe C#-inhoud begint onmiddellijk na de drie BOM-bytes met `using MessagePack;`, heeft daarna `using Newtonsoft.Json;`, gebruikt een block-scoped `namespace Store`, behoudt LF-regeleinden en eindigt op LF. Er is geen inhoud uit `SignalRServerBuilderExtensions.cs` overgenomen.
 
-- [ ] **Step 3: Werk de Store-verwachting bij naar beide gesorteerde dependencies**
+- [x] **Step 3: Werk de Store-verwachting bij naar beide gesorteerde dependencies**
 
 Vervang de volledige inhoud van `dotnet/gazelle/testdata/nuget_dep/src/Store/BUILD.out` exact van:
 
@@ -481,7 +481,7 @@ csharp_library(
 
 Wijzig geen andere attributen en voeg geen `BUILD.in` toe.
 
-- [ ] **Step 4: Controleer de BOM en de volledige Store-bytes**
+- [x] **Step 4: Controleer de BOM en de volledige Store-bytes**
 
 Run:
 
@@ -517,7 +517,7 @@ first-bytes=ef bb bf
 Store.cs bytes match the synthetic BOM fixture
 ```
 
-- [ ] **Step 5: Bewijs dat de Store-BOM-golden op de ongefixeerde parser faalt**
+- [x] **Step 5: Bewijs dat de Store-BOM-golden op de ongefixeerde parser faalt**
 
 Run:
 
@@ -527,7 +527,7 @@ bazel test //dotnet/gazelle/testdata:nuget_dep --test_output=all
 
 Expected: niet-nul exit met `//dotnet/gazelle/testdata:nuget_dep   FAILED`. Het testlog toont voor Store dat de gegenereerde `deps` het verwachte label `@nuget.net10.0//messagepack` niet bevat terwijl `@nuget.net10.0//newtonsoft.json` behouden blijft. Er mag geen mismatch voor `src/FileScoped/BUILD.out` in het log staan: die golden was in Task 2 op dezelfde parser groen en Task 4 wijzigt die bestanden niet. Verwijder de BOM of het MessagePack-label niet om dit rode resultaat te vermijden.
 
-- [ ] **Step 6: Review bytes en diff, corrigeer binnen scope en commit de rode golden**
+- [x] **Step 6: Review bytes en diff, corrigeer binnen scope en commit de rode golden**
 
 Run:
 
