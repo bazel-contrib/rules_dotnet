@@ -121,6 +121,12 @@ func TestParseNamespacesAndUsings(t *testing.T) {
 			wantUsings: []Using{{Namespace: "MessagePack"}},
 		},
 		{
+			name:       "UTF-8 BOM with block namespace",
+			src:        "\uFEFFusing MessagePack;\nusing Newtonsoft.Json;\n\nnamespace Store\n{\n    public class C {}\n}\n",
+			wantNs:     "Store",
+			wantUsings: []Using{{Namespace: "MessagePack"}, {Namespace: "Newtonsoft.Json"}},
+		},
+		{
 			name:       "block namespace with usings inside",
 			src:        "using System;\n\nnamespace Foo\n{\n    using System.IO;\n    public class C {}\n}\n",
 			wantNs:     "Foo",
