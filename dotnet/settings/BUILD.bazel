@@ -102,3 +102,11 @@ alias(
     }),
     visibility = ["//visibility:public"],
 )
+
+# The tool `bazel coverage` runs C# and F# tests through. The default is
+# coverlet.console. See docs/README.md#code-coverage.
+label_flag(
+    name = "coverage_tool",
+    build_setting_default = "//dotnet/private/coverage:coverlet",
+    visibility = ["//visibility:public"],
+)

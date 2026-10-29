@@ -187,3 +187,10 @@ DotnetApphostPackInfo = provider(
         "apphost": "File: The apphost file",
     },
 )
+
+DotnetCoverageInfo = provider(
+    doc = "The assemblies `bazel coverage` instruments for a test that depends on a target.",
+    fields = {
+        "assemblies": "depset[File]: The DLLs of the target and of its transitive dependencies that `--instrumentation_filter` selects. Their PDBs sit next to them in the runfiles.",
+    },
+)

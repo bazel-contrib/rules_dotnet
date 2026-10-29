@@ -2,6 +2,7 @@
 
 load("@bazel_skylib//rules:common_settings.bzl", "BuildSettingInfo")
 load("//dotnet/private:common.bzl", "collect_transitive_runfiles")
+load("//dotnet/private/rules/common:coverage.bzl", "coverage_providers")
 load("//dotnet/private/rules/common:static_web_assets.bzl", "collect_static_web_assets")
 load("//dotnet/private/rules/ready_to_run:ready_to_run.bzl", "with_ready_to_run_images")
 
@@ -22,7 +23,7 @@ def build_library(ctx, compile_action, toolchain):
     (compile_provider, runtime_provider, generated_assets) = compile_action(ctx, tfm, toolchain)
     runtime_provider = with_ready_to_run_images(ctx, runtime_provider)
 
-    return [
+    return coverage_providers(ctx, runtime_provider, ["deps", "exports"]) + [
         compile_provider,
         runtime_provider,
         collect_static_web_assets(

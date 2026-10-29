@@ -1,0 +1,38 @@
+load("@bazel_lib//:bzl_library.bzl", "bzl_library")
+load(":coverlet_coverage_tool.bzl", "coverlet_coverage_tool")
+
+exports_files(["coverlet.sh.tpl"])
+
+# The default of //dotnet/settings:coverage_tool.
+coverlet_coverage_tool(
+    name = "coverlet",
+    coverlet = "@paket.rules_dotnet_nuget_packages//coverlet.console/tools:coverlet",
+    visibility = ["//visibility:public"],
+)
+
+config_setting(
+    name = "collect_code_coverage",
+    values = {"collect_code_coverage": "true"},
+)
+
+# What a test depends on: the coverage tool under `bazel coverage`, nothing
+# otherwise, so that `bazel test` never analyses the tool or fetches coverlet.
+alias(
+    name = "test_coverage_tool",
+    actual = select({
+        ":collect_code_coverage": "//dotnet/settings:coverage_tool",
+        "//conditions:default": ":no_coverage_tool",
+    }),
+    visibility = ["//visibility:public"],
+)
+
+filegroup(
+    name = "no_coverage_tool",
+)
+
+bzl_library(
+    name = "coverlet_coverage_tool",
+    srcs = ["coverlet_coverage_tool.bzl"],
+    visibility = ["//dotnet:__subpackages__"],
+    deps = ["//dotnet/private:common"],
+)

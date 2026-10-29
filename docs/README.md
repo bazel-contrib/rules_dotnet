@@ -333,6 +333,38 @@ also exposes it as an executable, at `@paket.<group>//<package>/tools:<tool>`.
 binary, and `nuget_push` publishes it. See
 [examples/nuget_pack](../examples/nuget_pack).
 
+## Code coverage
+
+`bazel coverage` measures C# and F# tests with [coverlet](https://github.com/coverlet-coverage/coverlet),
+and the report joins the LCOV output of every other language in the build:
+
+```
+bazel coverage --combined_report=lcov //...
+```
+
+The assemblies measured are those of the `csharp_library`, `fsharp_library`, `csharp_binary` and
+`fsharp_binary` targets a test depends on that `--instrumentation_filter` selects. Test targets are left
+out unless `--instrument_test_targets` is set, as for every other language. A test depending on nothing
+the filter selects runs as it does under `bazel test`.
+
+Under `bazel test`, coverlet is neither fetched nor analysed.
+
+Coverage runs on Linux and macOS. On Windows, `bazel coverage` runs the tests without measuring them.
+
+### Using another coverage tool
+
+`--@rules_dotnet//dotnet/settings:coverage_tool` points at the tool a test runs through under
+`bazel coverage`. The test launcher calls it as
+
+```
+<tool> <dotnet> <test.dll> <assemblies> [test arguments...]
+```
+
+where `<assemblies>` is a file listing, one per line, the runfiles paths of the DLLs to instrument. The
+tool has to run the test, exit with its status, and write LCOV to a `*.dat` file under `$COVERAGE_DIR`.
+The default, `@rules_dotnet//dotnet/private/coverage:coverlet`, documents how it maps coverlet onto
+Bazel in [its wrapper](../dotnet/private/coverage/coverlet.sh.tpl).
+
 ## Remote execution
 
 The rules support remote execution out of the box. The remote runners do need to have the required .Net

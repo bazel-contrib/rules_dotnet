@@ -454,8 +454,10 @@ def collect_transitive_runfiles(ctx, assembly_runtime_info, deps):
     """
 
     # XML documentation is a build output, not a runtime input: nothing loads it
-    # and a publish does not ship it, so it stays out of the runfiles tree.
-    runfiles = ctx.runfiles(files = assembly_runtime_info.data + assembly_runtime_info.native + assembly_runtime_info.libs + assembly_runtime_info.resource_assemblies)
+    # and a publish does not ship it, so it stays out of the runfiles tree. The
+    # PDBs do go in: a stack trace needs them to name files and lines, and
+    # `bazel coverage` needs them to map the code it instruments to sources.
+    runfiles = ctx.runfiles(files = assembly_runtime_info.data + assembly_runtime_info.native + assembly_runtime_info.libs + assembly_runtime_info.pdbs + assembly_runtime_info.resource_assemblies)
 
     transitive_runfiles = [dep[DefaultInfo].default_runfiles for dep in deps]
     transitive_runfiles.extend([

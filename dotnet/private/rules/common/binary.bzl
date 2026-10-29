@@ -15,6 +15,7 @@ load(
 )
 load("//dotnet/private:providers.bzl", "DotnetApphostPackInfo", "DotnetAssemblyRuntimeInfo", "DotnetBinaryInfo", "DotnetNativeToolsInfo", "DotnetRuntimePackInfo")
 load("//dotnet/private/icu:settings.bzl", "icu_files", "icu_launcher_environment")
+load("//dotnet/private/rules/common:coverage.bzl", "coverage_launcher", "coverage_providers")
 load(
     "//dotnet/private/rules/common:static_web_assets.bzl",
     "WEB_ROOT",
@@ -52,9 +53,10 @@ def _collect_native_dlls(assembly_runtime_info, deps):
 
     return result
 
-def _create_launcher(ctx, executable, toolchain):
+def _create_launcher(ctx, executable, toolchain, coverage_info):
     is_windows = ctx.target_platform_has_constraint(ctx.attr._windows_constraint[platform_common.ConstraintValueInfo])
     launcher = ctx.actions.declare_file("{}.{}".format(executable.basename, "bat" if is_windows else "sh"), sibling = executable)
+    (coverage, coverage_runfiles) = coverage_launcher(ctx, coverage_info, executable, toolchain, is_windows)
 
     ctx.actions.expand_template(
         template = ctx.file._launcher_bat if is_windows else ctx.file._launcher_sh,
@@ -63,11 +65,12 @@ def _create_launcher(ctx, executable, toolchain):
             "TEMPLATED_dotnet": to_rlocation_path(ctx, toolchain.runtime.files_to_run.executable),
             "TEMPLATED_executable": to_rlocation_path(ctx, executable),
             "TEMPLATED_environment": icu_launcher_environment(ctx, toolchain, is_windows),
+            "TEMPLATED_coverage": coverage,
         },
         is_executable = True,
     )
 
-    return launcher
+    return (launcher, coverage_runfiles)
 
 def _native_tools(ctx, native_tools):
     """The binary in the branch a ReadyToRun or NativeAOT publish reaches it for the compiler.
@@ -105,7 +108,8 @@ def build_binary(ctx, compile_action, toolchain):
     appsetting_files = runtime_provider.appsetting_files.to_list()
     default_info_files = [dll] + runtime_provider.xml_docs + appsetting_files
 
-    launcher = _create_launcher(ctx, dll, toolchain)
+    coverage = coverage_providers(ctx, runtime_provider, ["deps"])
+    (launcher, coverage_runfiles) = _create_launcher(ctx, dll, toolchain, coverage[0])
 
     additional_runfiles = list(appsetting_files)
 
@@ -159,7 +163,8 @@ def build_binary(ctx, compile_action, toolchain):
     if depsjson != None:
         additional_runfiles.append(depsjson)
 
-    runfiles = collect_transitive_runfiles(ctx, runtime_provider, ctx.attr.deps).merge(
+    runfiles = collect_transitive_runfiles(ctx, runtime_provider, ctx.attr.deps).merge_all([
+        coverage_runfiles,
         ctx.runfiles(
             files = additional_runfiles,
             transitive_files = depset(transitive = [
@@ -167,7 +172,7 @@ def build_binary(ctx, compile_action, toolchain):
                 icu_files(toolchain),
             ]),
         ),
-    )
+    ])
 
     # The apphost shimmer loads Microsoft.NET.HostModel.dll at run time.
     # `include_host_model_dll` makes it a compile dependency; the runtime needs
@@ -262,4 +267,4 @@ def build_binary(ctx, compile_action, toolchain):
         runtime_pack_info = ctx.attr._runtime_pack[0][DotnetRuntimePackInfo],
     )
 
-    return [default_info, dotnet_binary_info, compile_provider, runtime_provider, static_web_assets_info, RunEnvironmentInfo(environment = {key: expand_variables(ctx, expand_locations(ctx, value, ctx.attr.data)) for key, value in ctx.attr.envs.items()}, inherited_environment = ctx.attr.env_inherit)]
+    return coverage + [default_info, dotnet_binary_info, compile_provider, runtime_provider, static_web_assets_info, RunEnvironmentInfo(environment = {key: expand_variables(ctx, expand_locations(ctx, value, ctx.attr.data)) for key, value in ctx.attr.envs.items()}, inherited_environment = ctx.attr.env_inherit)]

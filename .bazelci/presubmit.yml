@@ -20,6 +20,8 @@ matrix:
       ["--@rules_dotnet//dotnet/settings:strict_deps=false"],
     ]
   e2e_working_directory: ["e2e/net8.0", "e2e/net9.0", "e2e/net10.0", "e2e/web_sdk"]
+  # The coverage tool runs on Linux and macOS only.
+  coverage_platform: ["ubuntu2004", "macos_arm64"]
 
 tasks:
   test_all:
@@ -62,3 +64,13 @@ tasks:
       - "//..."
     test_targets:
       - "//..."
+  coverage:
+    name: Coverage
+    bazel: ${{ bazel }}
+    platform: ${{ coverage_platform }}
+    working_directory: ""
+    coverage_targets:
+      - "//dotnet/private/tests/coverage:test"
+    coverage_flags:
+      - "--combined_report=lcov"
+      - "--instrumentation_filter=//dotnet/private/tests/coverage:lib"
