@@ -44,7 +44,7 @@ De root-`BUILD.in`/`BUILD.out`, bestaande resolvercode, andere goldenfixtures en
 - Modify: `dotnet/gazelle/private/parser/parser_test.go`
 - Test: `dotnet/gazelle/private/parser/parser_test.go`
 
-- [ ] **Step 1: Controleer de beginstatus van het testbestand**
+- [x] **Step 1: Controleer de beginstatus van het testbestand**
 
 Run:
 
@@ -54,7 +54,7 @@ git status --short -- dotnet/gazelle/private/parser/parser_test.go
 
 Expected: geen uitvoer en exit 0. Als er wel uitvoer is, stop volgens het uitvoeringscontract in plaats van bestaande wijzigingen te overschrijven.
 
-- [ ] **Step 2: Voeg de file-scoped testcase toe**
+- [x] **Step 2: Voeg de file-scoped testcase toe**
 
 Vervang in `dotnet/gazelle/private/parser/parser_test.go` exact deze old string:
 
@@ -96,7 +96,7 @@ gofmt -w dotnet/gazelle/private/parser/parser_test.go
 
 Expected: `gofmt` is stil en exit 0. De nieuwe test gebruikt geen BOM en verwacht exact namespace `Fixture` en één using `MessagePack`.
 
-- [ ] **Step 3: Verifieer dat de file-scoped controle op de ongefixeerde parser slaagt**
+- [x] **Step 3: Verifieer dat de file-scoped controle op de ongefixeerde parser slaagt**
 
 Run:
 
@@ -112,7 +112,7 @@ PASS
 ok  	github.com/bazel-contrib/rules_dotnet/dotnet/gazelle/private/parser
 ```
 
-- [ ] **Step 4: Draai de volledige parser-unittests**
+- [x] **Step 4: Draai de volledige parser-unittests**
 
 Run:
 
@@ -122,7 +122,7 @@ CGO_ENABLED=0 GOPATH=/tmp/opencode/gopath GOCACHE=/tmp/opencode/gocache go test 
 
 Expected: exit 0 en één `ok`-regel voor `github.com/bazel-contrib/rules_dotnet/dotnet/gazelle/private/parser`, zonder `FAIL`.
 
-- [ ] **Step 5: Review, corrigeer binnen scope en commit alleen de behoudstest**
+- [x] **Step 5: Review, corrigeer binnen scope en commit alleen de behoudstest**
 
 Run:
 
