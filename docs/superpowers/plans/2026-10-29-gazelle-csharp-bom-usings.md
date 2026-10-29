@@ -286,7 +286,7 @@ Expected vóór de commit: de staged namen zijn exact de drie genoemde bestanden
 - Modify: `dotnet/gazelle/private/parser/parser_test.go`
 - Test: `dotnet/gazelle/private/parser/parser_test.go`
 
-- [ ] **Step 1: Controleer dat alleen de beoogde testbasis aanwezig is**
+- [x] **Step 1: Controleer dat alleen de beoogde testbasis aanwezig is**
 
 Run:
 
@@ -296,7 +296,7 @@ git status --short -- dotnet/gazelle/private/parser/parser_test.go dotnet/gazell
 
 Expected: geen uitvoer en exit 0; Tasks 1 en 2 zijn gecommit en de parser is nog ongefixeerd.
 
-- [ ] **Step 2: Voeg de BOM/block-namespacecase toe zonder parserwijziging**
+- [x] **Step 2: Voeg de BOM/block-namespacecase toe zonder parserwijziging**
 
 Vervang in `dotnet/gazelle/private/parser/parser_test.go` exact deze old string:
 
@@ -338,7 +338,7 @@ gofmt -w dotnet/gazelle/private/parser/parser_test.go
 
 Expected: `gofmt` is stil. De Go-string bevat de letterlijke escape `\uFEFF` uitsluitend aan het begin; de verwachte usinglijst heeft exact twee elementen in bronvolgorde.
 
-- [ ] **Step 3: Bewijs dat alleen de nieuwe BOM-controle rood is**
+- [x] **Step 3: Bewijs dat alleen de nieuwe BOM-controle rood is**
 
 Run:
 
@@ -348,7 +348,7 @@ CGO_ENABLED=0 GOPATH=/tmp/opencode/gopath GOCACHE=/tmp/opencode/gocache go test 
 
 Expected: niet-nul exit met `--- FAIL: TestParseNamespacesAndUsings/UTF-8_BOM_with_block_namespace`. De assertie toont namespace `Store` als correct, maar de feitelijke usinglijst bevat alleen `Newtonsoft.Json`; de gewenste lijst begint met `MessagePack` gevolgd door `Newtonsoft.Json`. De fout mag geen parse-error zijn.
 
-- [ ] **Step 4: Herhaal de file-scoped controletest op dezelfde ongefixeerde parser**
+- [x] **Step 4: Herhaal de file-scoped controletest op dezelfde ongefixeerde parser**
 
 Run:
 
@@ -358,7 +358,7 @@ CGO_ENABLED=0 GOPATH=/tmp/opencode/gopath GOCACHE=/tmp/opencode/gocache go test 
 
 Expected: exit 0 met `--- PASS: TestParseNamespacesAndUsings/file-scoped_namespace_followed_by_usings` en `PASS`. Zo blijft het BOM-regressiebewijs gescheiden van het bestaande file-scoped gedrag.
 
-- [ ] **Step 5: Review het rode bewijs en commit alleen de regressietest**
+- [x] **Step 5: Review het rode bewijs en commit alleen de regressietest**
 
 Run:
 
