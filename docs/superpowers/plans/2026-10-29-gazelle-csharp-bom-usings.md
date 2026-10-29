@@ -557,7 +557,7 @@ Expected vóór de commit: alleen de twee Store-bestanden zijn staged. Expected 
 - Test: `dotnet/gazelle/private/parser/parser_test.go`
 - Test: `dotnet/gazelle/testdata/nuget_dep`
 
-- [ ] **Step 1: Controleer dat de fix op een schone parser start**
+- [x] **Step 1: Controleer dat de fix op een schone parser start**
 
 Run:
 
@@ -567,7 +567,7 @@ git status --short -- dotnet/gazelle/private/parser/parser.go
 
 Expected: geen uitvoer en exit 0. De rode tests uit Tasks 3 en 4 zijn al gecommit; voeg in deze task geen nieuwe fixtures of resolverwijzigingen toe.
 
-- [ ] **Step 2: Voeg de minimale normalisatie vóór blanking toe**
+- [x] **Step 2: Voeg de minimale normalisatie vóór blanking toe**
 
 Vervang in `dotnet/gazelle/private/parser/parser.go` exact:
 
@@ -586,7 +586,7 @@ func Parse(name, src string) (*File, error) {
 
 `strings` is al geïmporteerd. `strings.TrimPrefix` verwijdert exact één U+FEFF (`EF BB BF`) uitsluitend op bytepositie nul; een tweede BOM en BOM's op andere posities blijven staan. Zonder BOM is `src` ongewijzigd. Wijzig de using-regex, namespace-regex, `TrimSpace`, `ParseFile`, foutafhandeling en alle code na `blankCommentsAndStrings` niet.
 
-- [ ] **Step 3: Formatteer en maak beide parservormen groen**
+- [x] **Step 3: Formatteer en maak beide parservormen groen**
 
 Run:
 
@@ -597,7 +597,7 @@ CGO_ENABLED=0 GOPATH=/tmp/opencode/gopath GOCACHE=/tmp/opencode/gocache go test 
 
 Expected: beide commando's slagen; de testuitvoer bevat zowel `--- PASS: TestParseNamespacesAndUsings/UTF-8_BOM_with_block_namespace` als `--- PASS: TestParseNamespacesAndUsings/file-scoped_namespace_followed_by_usings`, gevolgd door `PASS` en de `ok`-regel voor het parserpackage. Er is geen `FAIL`.
 
-- [ ] **Step 4: Draai de volledige relevante Go-verificatie**
+- [x] **Step 4: Draai de volledige relevante Go-verificatie**
 
 Run exact:
 
@@ -607,7 +607,7 @@ CGO_ENABLED=0 GOPATH=/tmp/opencode/gopath GOCACHE=/tmp/opencode/gocache go test 
 
 Expected: exit 0; ieder getest package eindigt met `ok` en packages zonder tests mogen `[no test files]` tonen; nergens staat `FAIL`. Deze run dekt naast de parser ook de bestaande Gazelle-configuratie, generatie- en resolutietests zonder die code te wijzigen.
 
-- [ ] **Step 5: Draai beide relevante Bazel-targets samen**
+- [x] **Step 5: Draai beide relevante Bazel-targets samen**
 
 Run exact:
 
@@ -624,7 +624,7 @@ Expected: exit 0 met beide sleutelregels en een samenvatting dat beide tests sla
 
 De `nuget_dep`-golden bewijst nu dat Store zowel `@nuget.net10.0//messagepack` als `@nuget.net10.0//newtonsoft.json` krijgt en dat FileScoped `@nuget.net10.0//messagepack` behoudt.
 
-- [ ] **Step 6: Herbevestig dat verificatie de BOM-fixture niet heeft herschreven**
+- [x] **Step 6: Herbevestig dat verificatie de BOM-fixture niet heeft herschreven**
 
 Run:
 
@@ -659,7 +659,7 @@ first-bytes=ef bb bf
 Store.cs bytes unchanged after verification
 ```
 
-- [ ] **Step 7: Voer de laatste implementer-side scope-review uit en commit alleen de fix**
+- [x] **Step 7: Voer de laatste implementer-side scope-review uit en commit alleen de fix**
 
 Run:
 
