@@ -115,6 +115,12 @@ func TestParseNamespacesAndUsings(t *testing.T) {
 			wantUsings: []Using{{Namespace: "System"}},
 		},
 		{
+			name:       "file-scoped namespace followed by usings",
+			src:        "namespace Fixture;\n\nusing MessagePack;\n\npublic class C {}\n",
+			wantNs:     "Fixture",
+			wantUsings: []Using{{Namespace: "MessagePack"}},
+		},
+		{
 			name:       "block namespace with usings inside",
 			src:        "using System;\n\nnamespace Foo\n{\n    using System.IO;\n    public class C {}\n}\n",
 			wantNs:     "Foo",
