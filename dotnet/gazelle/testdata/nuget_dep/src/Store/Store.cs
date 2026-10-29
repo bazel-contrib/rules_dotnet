@@ -1,8 +1,10 @@
+﻿using MessagePack;
 using Newtonsoft.Json;
 
-namespace Store;
-
-public static class Serializer
+namespace Store
 {
-    public static string ToJson(object value) => JsonConvert.SerializeObject(value);
+    public static class Serializer
+    {
+        public static string ToJson(object value) => JsonConvert.SerializeObject(value);
+    }
 }

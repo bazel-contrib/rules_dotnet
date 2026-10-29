@@ -6,5 +6,8 @@ csharp_library(
     project_sdk = "default",
     target_frameworks = ["net10.0"],
     visibility = ["//visibility:public"],
-    deps = ["@nuget.net10.0//newtonsoft.json"],
+    deps = [
+        "@nuget.net10.0//messagepack",
+        "@nuget.net10.0//newtonsoft.json",
+    ],
 )
