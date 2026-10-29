@@ -5,6 +5,14 @@
     "net10.0": {
       "packages": [
         {
+          "id": "MessagePack",
+          "version": "3.1.4",
+          "sha512": "sha512-HrC5BXdl00IP9zeV+0Z848QWPAoCr9P3bDEZguI+gkLcBKAOxix/tLEAAHC+UvDNPv4a2d18lOReHMOagPa+zQ==",
+          "urls": [
+            "https://api.nuget.org/v3-flatcontainer/messagepack/3.1.4/messagepack.3.1.4.nupkg"
+          ]
+        },
+        {
           "id": "Newtonsoft.Json",
           "version": "13.0.3",
           "sha512": "sha512-HrC5BXdl00IP9zeV+0Z848QWPAoCr9P3bDEZguI+gkLcBKAOxix/tLEAAHC+UvDNPv4a2d18lOReHMOagPa+zQ==",
