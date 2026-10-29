@@ -153,7 +153,7 @@ Expected vóór de commit: `git diff --cached --name-only` toont uitsluitend `do
 - Create: `dotnet/gazelle/testdata/nuget_dep/src/FileScoped/BUILD.out`
 - Test: `dotnet/gazelle/testdata/nuget_dep`
 
-- [ ] **Step 1: Controleer de fixturebeginstatus en maak alleen de nieuwe directory**
+- [x] **Step 1: Controleer de fixturebeginstatus en maak alleen de nieuwe directory**
 
 Run:
 
@@ -165,7 +165,7 @@ mkdir -p dotnet/gazelle/testdata/nuget_dep/src/FileScoped
 
 Expected: de statusopdracht geeft geen uitvoer; `test -d` en `mkdir -p` slagen met exit 0. Stop bij een bestaande onverwachte wijziging in plaats van die te overschrijven.
 
-- [ ] **Step 2: Voeg MessagePack aan de bestaande NuGet-index toe**
+- [x] **Step 2: Voeg MessagePack aan de bestaande NuGet-index toe**
 
 Vervang in `dotnet/gazelle/testdata/nuget_dep/nuget_resolve.json` exact deze old string:
 
@@ -211,7 +211,7 @@ python3 -m json.tool dotnet/gazelle/testdata/nuget_dep/nuget_resolve.json >/dev/
 
 Expected: geen uitvoer en exit 0.
 
-- [ ] **Step 3: Maak `FileScoped.cs` met exact deze volledige inhoud**
+- [x] **Step 3: Maak `FileScoped.cs` met exact deze volledige inhoud**
 
 Bestand: `dotnet/gazelle/testdata/nuget_dep/src/FileScoped/FileScoped.cs`
 
@@ -227,7 +227,7 @@ public class Packet
 
 Het bestand eindigt met LF en bevat geen BOM, testmarkering, `Main` of top-level statement.
 
-- [ ] **Step 4: Maak `BUILD.out` met exact deze volledige inhoud**
+- [x] **Step 4: Maak `BUILD.out` met exact deze volledige inhoud**
 
 Bestand: `dotnet/gazelle/testdata/nuget_dep/src/FileScoped/BUILD.out`
 
@@ -246,7 +246,7 @@ csharp_library(
 
 Het bestand eindigt met LF. Maak geen `BUILD.in` in deze directory en verander de root-`BUILD.in`/`BUILD.out` niet.
 
-- [ ] **Step 5: Bewijs dat de file-scoped golden vóór de BOM-fix slaagt**
+- [x] **Step 5: Bewijs dat de file-scoped golden vóór de BOM-fix slaagt**
 
 Run:
 
@@ -256,7 +256,7 @@ bazel test //dotnet/gazelle/testdata:nuget_dep
 
 Expected: exit 0 met `//dotnet/gazelle/testdata:nuget_dep   PASSED` en uiteindelijk `Executed 1 out of 1 test: 1 test passes.` (of dezelfde pass-samenvatting als Bazel de cache benoemt). De bestaande Store-golden en nieuwe FileScoped-golden slagen allebei op de nog ongefixeerde parser.
 
-- [ ] **Step 6: Review, corrigeer binnen scope en commit de groene golden**
+- [x] **Step 6: Review, corrigeer binnen scope en commit de groene golden**
 
 Run:
 
