@@ -239,6 +239,7 @@ func ParseFile(path string) (*File, error) {
 
 // Parse parses C# source text. name is the file's base name, used in errors.
 func Parse(name, src string) (*File, error) {
+	src = strings.TrimPrefix(src, "\uFEFF")
 	blanked, err := blankCommentsAndStrings(src)
 	if err != nil {
 		return nil, fmt.Errorf("%s: %w", name, err)
