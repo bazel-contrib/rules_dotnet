@@ -1,6 +1,8 @@
 package gazelle
 
 import (
+	"bytes"
+	"log"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -128,6 +130,30 @@ func TestResolveSkipsSelfImport(t *testing.T) {
 	input := resolveInput{imports: []string{"Calculator"}, own: []string{"Calculator"}}
 	l.Resolver.Resolve(c, ix, nil, r, input, label.New("", "src/calculator", "calculator"))
 
+	if got := r.AttrStrings("deps"); len(got) != 0 {
+		t.Errorf("deps = %v, want empty", got)
+	}
+}
+
+func TestResolveHandlesExactOwnNamespaceForUnindexedTest(t *testing.T) {
+	l, c, _ := setupLang(t, net10Directive, "src", "src/app")
+
+	ix := resolve.NewRuleIndex(func(r *rule.Rule, pkgRel string) resolve.Resolver { return l.Resolver })
+	ix.Finish()
+
+	r := rule.NewRule("csharp_nunit_test", "app_nunit_test")
+	input := resolveInput{imports: []string{"Foo.Tests"}, own: []string{"Foo.Tests"}}
+
+	var logOutput bytes.Buffer
+	previousLogOutput := log.Writer()
+	log.SetOutput(&logOutput)
+	defer log.SetOutput(previousLogOutput)
+
+	l.Resolver.Resolve(c, ix, nil, r, input, label.New("", "src/app", "app_nunit_test"))
+
+	if got := logOutput.String(); got != "" {
+		t.Errorf("log output = %q, want no unresolved import warning", got)
+	}
 	if got := r.AttrStrings("deps"); len(got) != 0 {
 		t.Errorf("deps = %v, want empty", got)
 	}

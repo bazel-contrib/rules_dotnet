@@ -76,8 +76,16 @@ func (r *Resolver) Resolve(c *config.Config, ix *resolve.RuleIndex, rc *repo.Rem
 		deps[d] = true
 	}
 
+	own := map[string]bool{}
+	for _, ns := range input.own {
+		own[ns] = true
+	}
+
 	for _, imp := range input.imports {
 		depLabels, resolved := r.resolveNamespace(c, ix, cfg, imp, from)
+		if !resolved && own[imp] {
+			continue
+		}
 		if !resolved {
 			// using static fallback to enclosing namespaces
 			for ns := parentNamespace(imp); ns != ""; ns = parentNamespace(ns) {
