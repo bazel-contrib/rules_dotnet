@@ -402,13 +402,13 @@
 
 ## Task Group 3: Add Output-Directory Generation Tests
 
-- [ ] **Group status: Add output-directory generation tests**
+- [x] **Group status: Add output-directory generation tests**
 
 **Files:**
 - Modify: `dotnet/gazelle/generate_test.go`
 - Test: `dotnet/gazelle/generate_test.go`
 
-- [ ] **Task 9: Insert output-path exclusion and cleanup tests**
+- [x] **Task 9: Insert output-path exclusion and cleanup tests**
 
   In `dotnet/gazelle/generate_test.go`, replace this exact string:
 
@@ -534,7 +534,7 @@
 
   The three C# deletion stubs and the assertion that there are exactly three prove that the existing `filegroup` is not marked for deletion. No new imports are required.
 
-- [ ] **Task 10: Run the output-path tests and verify the intended failures**
+- [x] **Task 10: Run the output-path tests and verify the intended failures**
 
   Run:
 
