@@ -35,13 +35,13 @@
 
 ## Task Group 1: Add Resolver Regression Tests
 
-- [ ] **Group status: Add resolver regression tests**
+- [x] **Group status: Add resolver regression tests**
 
 **Files:**
 - Modify: `dotnet/gazelle/resolve_test.go`
 - Test: `dotnet/gazelle/resolve_test.go`
 
-- [ ] **Task 1: Confirm the repository baseline**
+- [x] **Task 1: Confirm the repository baseline**
 
   Run:
 
@@ -51,7 +51,7 @@
 
   Expected: the first line is `b26f2f4`; there is no additional output, confirming a clean worktree. Stop if another repository or unexpected changes are present.
 
-- [ ] **Task 2: Insert four failing resolver tests**
+- [x] **Task 2: Insert four failing resolver tests**
 
   In `dotnet/gazelle/resolve_test.go`, replace this exact string:
 
@@ -153,7 +153,7 @@
 
   No import changes are needed; the new tests use imports already present in this test file.
 
-- [ ] **Task 3: Run the new resolver tests and verify the intended failures**
+- [x] **Task 3: Run the new resolver tests and verify the intended failures**
 
   Run:
 
