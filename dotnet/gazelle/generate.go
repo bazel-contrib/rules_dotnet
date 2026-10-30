@@ -82,8 +82,37 @@ func mergeNullableAndImplicitUsingsAttrs(generated *rule.Rule, file *rule.File, 
 	}
 }
 
+// isDotnetOutputPath reports whether rel contains a complete bin or obj
+// directory segment. Matching is case-insensitive for Windows output paths.
+func isDotnetOutputPath(rel string) bool {
+	for _, segment := range strings.Split(filepath.ToSlash(rel), "/") {
+		switch strings.ToLower(segment) {
+		case "bin", "obj":
+			return true
+		}
+	}
+	return false
+}
+
+// emptyCsharpRules returns deletion stubs for existing C# rules only.
+func emptyCsharpRules(file *rule.File) []*rule.Rule {
+	var empty []*rule.Rule
+	if file != nil {
+		for _, r := range file.Rules {
+			if isCsharpKind(r.Kind()) {
+				empty = append(empty, rule.NewRule(r.Kind(), r.Name()))
+			}
+		}
+	}
+	return empty
+}
+
 // GenerateRules implements language.Language.
 func (l *csharpLang) GenerateRules(args language.GenerateArgs) language.GenerateResult {
+	if isDotnetOutputPath(args.Rel) {
+		return language.GenerateResult{Empty: emptyCsharpRules(args.File)}
+	}
+
 	cfg := getConfig(args.Config, args.Rel)
 	if cfg == nil {
 		return language.GenerateResult{}
@@ -102,17 +131,8 @@ func (l *csharpLang) GenerateRules(args language.GenerateArgs) language.Generate
 		files = append(files, f)
 	}
 	if len(files) == 0 {
-		// No C# sources left: existing csharp rules become empty so gazelle
-		// deletes them.
-		var empty []*rule.Rule
-		if args.File != nil {
-			for _, r := range args.File.Rules {
-				if isCsharpKind(r.Kind()) {
-					empty = append(empty, rule.NewRule(r.Kind(), r.Name()))
-				}
-			}
-		}
-		return language.GenerateResult{Empty: empty}
+		// No C# sources left: existing csharp rules become empty so gazelle deletes them.
+		return language.GenerateResult{Empty: emptyCsharpRules(args.File)}
 	}
 	sort.Slice(files, func(i, j int) bool { return files[i].Name < files[j].Name })
 

@@ -286,6 +286,96 @@ func TestGenerateEmptyDirDeletesRules(t *testing.T) {
 	}
 }
 
+func TestGenerateSkipsDotnetOutputDirectories(t *testing.T) {
+	tests := []struct {
+		name string
+		rel  string
+	}{
+		{name: "root bin", rel: "bin"},
+		{name: "root obj", rel: "obj"},
+		{name: "nested bin", rel: "src/bin"},
+		{name: "nested obj", rel: "src/obj/Debug/net10.0"},
+		{name: "mixed case bin", rel: "src/BiN"},
+		{name: "mixed case obj", rel: "src/OBJ"},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			l, c, dir := setupLang(t, net10Directive, "src", "src/obj", "src/obj/Debug", tc.rel)
+			writeFile(t, filepath.Join(dir, filepath.FromSlash(tc.rel)), "Output.cs", calculatorSrc)
+
+			res := generate(t, l, c, dir, tc.rel, "Output.cs")
+			if len(res.Gen) != 0 || len(res.Imports) != 0 || len(res.Empty) != 0 {
+				t.Fatalf(
+					"GenerateRules() = %d gen, %d imports, %d empty; want 0, 0, 0",
+					len(res.Gen), len(res.Imports), len(res.Empty),
+				)
+			}
+		})
+	}
+}
+
+func TestGenerateDoesNotSkipBinObjSubstrings(t *testing.T) {
+	for _, rel := range []string{"src/binary", "src/object"} {
+		t.Run(rel, func(t *testing.T) {
+			l, c, dir := setupLang(t, net10Directive, "src", rel)
+			writeFile(t, filepath.Join(dir, filepath.FromSlash(rel)), "Calculator.cs", calculatorSrc)
+
+			res := generate(t, l, c, dir, rel, "Calculator.cs")
+			if len(res.Gen) != 1 || len(res.Imports) != 1 || len(res.Empty) != 0 {
+				t.Fatalf(
+					"GenerateRules() = %d gen, %d imports, %d empty; want 1, 1, 0",
+					len(res.Gen), len(res.Imports), len(res.Empty),
+				)
+			}
+			if got := res.Gen[0].Kind(); got != "csharp_library" {
+				t.Errorf("generated kind = %q, want csharp_library", got)
+			}
+		})
+	}
+}
+
+func TestGenerateOutputDirDeletesOnlyExistingCsharpRules(t *testing.T) {
+	l, c, dir := setupLang(t, net10Directive, "src", "src/bin")
+	f, err := rule.LoadData(
+		filepath.Join(dir, "src", "bin", "BUILD.bazel"),
+		"src/bin",
+		[]byte(`csharp_library(name = "stale")
+csharp_binary(name = "old_program")
+csharp_nunit_test(name = "stale_test")
+filegroup(name = "keep")
+`),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Valid source ensures RED comes from missing output guard, not no-source cleanup.
+	writeFile(t, filepath.Join(dir, "src", "bin"), "Generated.cs", calculatorSrc)
+
+	res := l.GenerateRules(language.GenerateArgs{
+		Config:       c,
+		Dir:          filepath.Join(dir, "src", "bin"),
+		Rel:          "src/bin",
+		RegularFiles: []string{"Generated.cs"},
+		File:         f,
+	})
+	if len(res.Gen) != 0 || len(res.Imports) != 0 || len(res.Empty) != 3 {
+		t.Fatalf("GenerateRules() = %d gen, %d imports, %d empty; want 0, 0, 3", len(res.Gen), len(res.Imports), len(res.Empty))
+	}
+
+	want := []struct{ kind, name string }{
+		{kind: "csharp_library", name: "stale"},
+		{kind: "csharp_binary", name: "old_program"},
+		{kind: "csharp_nunit_test", name: "stale_test"},
+	}
+	for i, expected := range want {
+		got := res.Empty[i]
+		if got.Kind() != expected.kind || got.Name() != expected.name {
+			t.Errorf("Empty[%d] = %s %s, want %s %s", i, got.Kind(), got.Name(), expected.kind, expected.name)
+		}
+	}
+}
+
 func TestGenerateTestInBinaryOnlyDirectory(t *testing.T) {
 	l, c, dir := setupLang(t, net10Directive, "src", "src/app")
 	writeFile(t, filepath.Join(dir, "src", "app"), "Program.cs", programWithMethodSrc)
