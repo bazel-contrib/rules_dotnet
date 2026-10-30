@@ -706,7 +706,7 @@
 
 ## Task Group 5: Run Focused and Full Gazelle Verification
 
-- [ ] **Group status: Run focused and full Gazelle verification**
+- [x] **Group status: Run focused and full Gazelle verification**
 
 **Files:**
 - Verify: `dotnet/gazelle/resolve.go`
@@ -715,7 +715,7 @@
 - Verify: `dotnet/gazelle/generate_test.go`
 - Verify: all existing targets under `dotnet/gazelle`, including `testdata`
 
-- [ ] **Task 15: Run the focused Bazel Go test**
+- [x] **Task 15: Run the focused Bazel Go test**
 
   Run:
 
@@ -731,7 +731,7 @@
 
   There must be no `FAILED` or `ERROR` result. A cached `PASSED` result is acceptable.
 
-- [ ] **Task 16: Run the complete Go Gazelle package suite**
+- [x] **Task 16: Run the complete Go Gazelle package suite**
 
   Run:
 
@@ -741,7 +741,7 @@
 
   Expected: exit status `0`, an `ok` line for every package with tests under `dotnet/gazelle`, and no `FAIL` line. This includes the main language tests and the private parser and NuGet packages.
 
-- [ ] **Task 17: Run the complete Bazel Gazelle suite**
+- [x] **Task 17: Run the complete Bazel Gazelle suite**
 
   Run:
 
@@ -753,7 +753,7 @@
 
   This is the primary full acceptance run. Do not substitute a Gazelle run against `monorepo/monorepo`, and do not update any monorepo source file.
 
-- [ ] **Task 18: Check the final patch and worktree**
+- [x] **Task 18: Check the final patch and worktree**
 
   Run:
 
