@@ -63,89 +63,89 @@
 
   ```go
   func TestResolveCollectsAllWorkspaceProvidersDeterministically(t *testing.T) {
-  	l, c, _ := setupLang(t, net10Directive, "src", "src/app", "src/zeta", "src/alpha")
+      l, c, _ := setupLang(t, net10Directive, "src", "src/app", "src/zeta", "src/alpha")
 
-  	ix := resolve.NewRuleIndex(func(r *rule.Rule, pkgRel string) resolve.Resolver { return l.Resolver })
-  	// Index in reverse lexical order so the expected result also verifies
-  	// that final dependency output does not depend on match order.
-  	indexLibrary(t, l, c, ix, "src/zeta", "zeta", "Shared")
-  	indexLibrary(t, l, c, ix, "src/alpha", "alpha", "Shared")
-  	ix.Finish()
+      ix := resolve.NewRuleIndex(func(r *rule.Rule, pkgRel string) resolve.Resolver { return l.Resolver })
+      // Index in reverse lexical order so the expected result also verifies
+      // that final dependency output does not depend on match order.
+      indexLibrary(t, l, c, ix, "src/zeta", "zeta", "Shared")
+      indexLibrary(t, l, c, ix, "src/alpha", "alpha", "Shared")
+      ix.Finish()
 
-  	r := rule.NewRule("csharp_library", "app")
-  	r.SetAttr("deps", []string{"//manual:dep"})
-  	input := resolveInput{imports: []string{"Shared"}, own: []string{"App"}}
-  	l.Resolver.Resolve(c, ix, nil, r, input, label.New("", "src/app", "app"))
+      r := rule.NewRule("csharp_library", "app")
+      r.SetAttr("deps", []string{"//manual:dep"})
+      input := resolveInput{imports: []string{"Shared"}, own: []string{"App"}}
+      l.Resolver.Resolve(c, ix, nil, r, input, label.New("", "src/app", "app"))
 
-  	got := r.AttrStrings("deps")
-  	want := []string{"//manual:dep", "//src/alpha:alpha", "//src/zeta:zeta"}
-  	if !reflect.DeepEqual(got, want) {
-  		t.Errorf("deps = %v, want %v", got, want)
-  	}
+      got := r.AttrStrings("deps")
+      want := []string{"//manual:dep", "//src/alpha:alpha", "//src/zeta:zeta"}
+      if !reflect.DeepEqual(got, want) {
+          t.Errorf("deps = %v, want %v", got, want)
+      }
   }
 
   func TestResolveKeepsOtherProviderWhenOwnNamespaceMatches(t *testing.T) {
-  	l, c, _ := setupLang(t, net10Directive, "src", "src/calculator", "src/other")
+      l, c, _ := setupLang(t, net10Directive, "src", "src/calculator", "src/other")
 
-  	ix := resolve.NewRuleIndex(func(r *rule.Rule, pkgRel string) resolve.Resolver { return l.Resolver })
-  	indexLibrary(t, l, c, ix, "src/calculator", "calculator", "Calculator")
-  	indexLibrary(t, l, c, ix, "src/other", "other", "Calculator")
-  	ix.Finish()
+      ix := resolve.NewRuleIndex(func(r *rule.Rule, pkgRel string) resolve.Resolver { return l.Resolver })
+      indexLibrary(t, l, c, ix, "src/calculator", "calculator", "Calculator")
+      indexLibrary(t, l, c, ix, "src/other", "other", "Calculator")
+      ix.Finish()
 
-  	r := rule.NewRule("csharp_library", "calculator")
-  	input := resolveInput{imports: []string{"Calculator"}, own: []string{"Calculator"}}
-  	l.Resolver.Resolve(c, ix, nil, r, input, label.New("", "src/calculator", "calculator"))
+      r := rule.NewRule("csharp_library", "calculator")
+      input := resolveInput{imports: []string{"Calculator"}, own: []string{"Calculator"}}
+      l.Resolver.Resolve(c, ix, nil, r, input, label.New("", "src/calculator", "calculator"))
 
-  	got := r.AttrStrings("deps")
-  	want := []string{"//src/other:other"}
-  	if !reflect.DeepEqual(got, want) {
-  		t.Errorf("deps = %v, want %v (self excluded by label, other provider retained)", got, want)
-  	}
+      got := r.AttrStrings("deps")
+      want := []string{"//src/other:other"}
+      if !reflect.DeepEqual(got, want) {
+          t.Errorf("deps = %v, want %v (self excluded by label, other provider retained)", got, want)
+      }
   }
 
   func TestResolveSelfOnlyDoesNotFallBackToNuGet(t *testing.T) {
-  	l, c, dir := setupLang(t, net10Directive, "src", "src/calculator")
-  	writeFile(t, dir, "nuget_resolve.json", `{"version":1,"frameworks":{"net10.0":{"packages":[{"id":"Calculator"}]}}}`)
-  	idx, err := nuget.LoadIndex(filepath.Join(dir, "nuget_resolve.json"))
-  	if err != nil {
-  		t.Fatal(err)
-  	}
-  	l.nugetIndex = idx
+      l, c, dir := setupLang(t, net10Directive, "src", "src/calculator")
+      writeFile(t, dir, "nuget_resolve.json", `{"version":1,"frameworks":{"net10.0":{"packages":[{"id":"Calculator"}]}}}`)
+      idx, err := nuget.LoadIndex(filepath.Join(dir, "nuget_resolve.json"))
+      if err != nil {
+          t.Fatal(err)
+      }
+      l.nugetIndex = idx
 
-  	ix := resolve.NewRuleIndex(func(r *rule.Rule, pkgRel string) resolve.Resolver { return l.Resolver })
-  	indexLibrary(t, l, c, ix, "src/calculator", "calculator", "Calculator")
-  	ix.Finish()
+      ix := resolve.NewRuleIndex(func(r *rule.Rule, pkgRel string) resolve.Resolver { return l.Resolver })
+      indexLibrary(t, l, c, ix, "src/calculator", "calculator", "Calculator")
+      ix.Finish()
 
-  	r := rule.NewRule("csharp_library", "calculator")
-  	// Keep own different from the import so this test exercises target-label
-  	// self-filtering rather than the removed namespace-based shortcut.
-  	input := resolveInput{imports: []string{"Calculator"}, own: []string{"App"}}
-  	l.Resolver.Resolve(c, ix, nil, r, input, label.New("", "src/calculator", "calculator"))
+      r := rule.NewRule("csharp_library", "calculator")
+      // Keep own different from the import so this test exercises target-label
+      // self-filtering rather than the removed namespace-based shortcut.
+      input := resolveInput{imports: []string{"Calculator"}, own: []string{"App"}}
+      l.Resolver.Resolve(c, ix, nil, r, input, label.New("", "src/calculator", "calculator"))
 
-  	if got := r.AttrStrings("deps"); len(got) != 0 {
-  		t.Errorf("deps = %v, want empty; self-only workspace match must not fall back to NuGet", got)
-  	}
+      if got := r.AttrStrings("deps"); len(got) != 0 {
+          t.Errorf("deps = %v, want empty; self-only workspace match must not fall back to NuGet", got)
+      }
   }
 
   func TestResolveParentNamespaceFallbackWithOwnParentNamespace(t *testing.T) {
-  	l, c, _ := setupLang(t, net10Directive, "src", "src/app", "src/acme")
+      l, c, _ := setupLang(t, net10Directive, "src", "src/app", "src/acme")
 
-  	ix := resolve.NewRuleIndex(func(r *rule.Rule, pkgRel string) resolve.Resolver { return l.Resolver })
-  	indexLibrary(t, l, c, ix, "src/acme", "acme", "Acme")
-  	ix.Finish()
+      ix := resolve.NewRuleIndex(func(r *rule.Rule, pkgRel string) resolve.Resolver { return l.Resolver })
+      indexLibrary(t, l, c, ix, "src/acme", "acme", "Acme")
+      ix.Finish()
 
-  	r := rule.NewRule("csharp_library", "app")
-  	input := resolveInput{
-  		imports: []string{"Acme.Widget.SomeType"},
-  		own:     []string{"Acme"},
-  	}
-  	l.Resolver.Resolve(c, ix, nil, r, input, label.New("", "src/app", "app"))
+      r := rule.NewRule("csharp_library", "app")
+      input := resolveInput{
+          imports: []string{"Acme.Widget.SomeType"},
+          own:     []string{"Acme"},
+      }
+      l.Resolver.Resolve(c, ix, nil, r, input, label.New("", "src/app", "app"))
 
-  	got := r.AttrStrings("deps")
-  	want := []string{"//src/acme:acme"}
-  	if !reflect.DeepEqual(got, want) {
-  		t.Errorf("deps = %v, want %v (own namespace must not suppress parent fallback)", got, want)
-  	}
+      got := r.AttrStrings("deps")
+      want := []string{"//src/acme:acme"}
+      if !reflect.DeepEqual(got, want) {
+          t.Errorf("deps = %v, want %v (own namespace must not suppress parent fallback)", got, want)
+      }
   }
 
   func TestResolveSamePackageWithRepoName(t *testing.T) {
@@ -185,82 +185,82 @@
   In `dotnet/gazelle/resolve.go`, replace this exact block:
 
   ```go
-  	deps := map[string]bool{}
-  	for _, d := range ru.AttrStrings("deps") {
-  		deps[d] = true
-  	}
+      deps := map[string]bool{}
+      for _, d := range ru.AttrStrings("deps") {
+          deps[d] = true
+      }
 
-  	own := map[string]bool{}
-  	for _, ns := range input.own {
-  		own[ns] = true
-  	}
+      own := map[string]bool{}
+      for _, ns := range input.own {
+          own[ns] = true
+      }
 
-  	for _, imp := range input.imports {
-  		if own[imp] {
-  			continue
-  		}
-  		dep := r.resolveNamespace(c, ix, cfg, imp, from)
-  		if dep == "" {
-  			// `using static Foo.Bar.SomeType;` imports a type, not a
-  			// namespace: retry with the enclosing namespaces.
-  			for ns := parentNamespace(imp); ns != "" && !own[ns]; ns = parentNamespace(ns) {
-  				if dep = r.resolveNamespace(c, ix, cfg, ns, from); dep != "" {
-  					break
-  				}
-  			}
-  		}
-  		if dep == "" {
-  			if imp == "System" || strings.HasPrefix(imp, "System.") {
-  				// Provided by the base class library.
-  				continue
-  			}
-  			msg := fmt.Sprintf("unresolved C# import %q for %s", imp, from)
-  			if cfg.UnresolvedImports() == "error" {
-  				log.Fatalf("%s: set a '# gazelle:%s %s <label>' directive to resolve it", msg, dotnetconfig.DotnetResolve, imp)
-  			}
-  			log.Printf("warning: %s", msg)
-  			continue
-  		}
-  		deps[dep] = true
-  	}
+      for _, imp := range input.imports {
+          if own[imp] {
+              continue
+          }
+          dep := r.resolveNamespace(c, ix, cfg, imp, from)
+          if dep == "" {
+              // `using static Foo.Bar.SomeType;` imports a type, not a
+              // namespace: retry with the enclosing namespaces.
+              for ns := parentNamespace(imp); ns != "" && !own[ns]; ns = parentNamespace(ns) {
+                  if dep = r.resolveNamespace(c, ix, cfg, ns, from); dep != "" {
+                      break
+                  }
+              }
+          }
+          if dep == "" {
+              if imp == "System" || strings.HasPrefix(imp, "System.") {
+                  // Provided by the base class library.
+                  continue
+              }
+              msg := fmt.Sprintf("unresolved C# import %q for %s", imp, from)
+              if cfg.UnresolvedImports() == "error" {
+                  log.Fatalf("%s: set a '# gazelle:%s %s <label>' directive to resolve it", msg, dotnetconfig.DotnetResolve, imp)
+              }
+              log.Printf("warning: %s", msg)
+              continue
+          }
+          deps[dep] = true
+      }
   ```
 
   with this exact block:
 
   ```go
-  	deps := map[string]bool{}
-  	for _, d := range ru.AttrStrings("deps") {
-  		deps[d] = true
-  	}
+      deps := map[string]bool{}
+      for _, d := range ru.AttrStrings("deps") {
+          deps[d] = true
+      }
 
-  	for _, imp := range input.imports {
-  		depLabels, resolved := r.resolveNamespace(c, ix, cfg, imp, from)
-  		if !resolved {
-  			// `using static Foo.Bar.SomeType;` imports a type, not a
-  			// namespace: retry with the enclosing namespaces.
-  			for ns := parentNamespace(imp); ns != ""; ns = parentNamespace(ns) {
-  				depLabels, resolved = r.resolveNamespace(c, ix, cfg, ns, from)
-  				if resolved {
-  					break
-  				}
-  			}
-  		}
-  		if !resolved {
-  			if imp == "System" || strings.HasPrefix(imp, "System.") {
-  				// Provided by the base class library.
-  				continue
-  			}
-  			msg := fmt.Sprintf("unresolved C# import %q for %s", imp, from)
-  			if cfg.UnresolvedImports() == "error" {
-  				log.Fatalf("%s: set a '# gazelle:%s %s <label>' directive to resolve it", msg, dotnetconfig.DotnetResolve, imp)
-  			}
-  			log.Printf("warning: %s", msg)
-  			continue
-  		}
-  		for _, dep := range depLabels {
-  			deps[dep] = true
-  		}
-  	}
+      for _, imp := range input.imports {
+          depLabels, resolved := r.resolveNamespace(c, ix, cfg, imp, from)
+          if !resolved {
+              // `using static Foo.Bar.SomeType;` imports a type, not a
+              // namespace: retry with the enclosing namespaces.
+              for ns := parentNamespace(imp); ns != ""; ns = parentNamespace(ns) {
+                  depLabels, resolved = r.resolveNamespace(c, ix, cfg, ns, from)
+                  if resolved {
+                      break
+                  }
+              }
+          }
+          if !resolved {
+              if imp == "System" || strings.HasPrefix(imp, "System.") {
+                  // Provided by the base class library.
+                  continue
+              }
+              msg := fmt.Sprintf("unresolved C# import %q for %s", imp, from)
+              if cfg.UnresolvedImports() == "error" {
+                  log.Fatalf("%s: set a '# gazelle:%s %s <label>' directive to resolve it", msg, dotnetconfig.DotnetResolve, imp)
+              }
+              log.Printf("warning: %s", msg)
+              continue
+          }
+          for _, dep := range depLabels {
+              deps[dep] = true
+          }
+      }
   ```
 
   Leave the existing final map-to-slice conversion, `sort.Strings(sorted)`, `deps` deletion, and `deps` assignment unchanged. This preserves manual dependencies, deduplication, and deterministic output.
@@ -274,41 +274,41 @@
   // dotnet_resolve override, workspace rule index, NuGet package. It returns
   // "" when the namespace does not resolve.
   func (r *Resolver) resolveNamespace(c *config.Config, ix *resolve.RuleIndex, cfg *dotnetconfig.Config, ns string, from label.Label) string {
-  	if override, ok := cfg.ResolveOverride(ns); ok {
-  		return override
-  	}
+      if override, ok := cfg.ResolveOverride(ns); ok {
+          return override
+      }
 
-  	matches := ix.FindRulesByImportWithConfig(c, resolve.ImportSpec{Lang: languageName, Imp: ns}, languageName)
-  	for _, m := range matches {
-  		if m.IsSelfImport(from) {
-  			continue
-  		}
-  		l := m.Label
-  		if l.Repo == c.RepoName {
-  			// FindRulesByImportWithConfig stamps labels with the
-  			// workspace's canonical repo name. Drop it before the
-  			// same-package check so an in-workspace label relativizes
-  			// to ":name" and deduplicates against the generate-time
-  			// sibling dep instead of appearing twice in deps.
-  			l.Repo = ""
-  		}
-  		if l.Repo == "" && l.Pkg == from.Pkg {
-  			l = label.Label{Name: l.Name, Relative: true}
-  		}
-  		return l.String()
-  	}
+      matches := ix.FindRulesByImportWithConfig(c, resolve.ImportSpec{Lang: languageName, Imp: ns}, languageName)
+      for _, m := range matches {
+          if m.IsSelfImport(from) {
+              continue
+          }
+          l := m.Label
+          if l.Repo == c.RepoName {
+              // FindRulesByImportWithConfig stamps labels with the
+              // workspace's canonical repo name. Drop it before the
+              // same-package check so an in-workspace label relativizes
+              // to ":name" and deduplicates against the generate-time
+              // sibling dep instead of appearing twice in deps.
+              l.Repo = ""
+          }
+          if l.Repo == "" && l.Pkg == from.Pkg {
+              l = label.Label{Name: l.Name, Relative: true}
+          }
+          return l.String()
+      }
 
-  	if len(cfg.TargetFrameworks()) > 0 {
-  		id, err := r.lang.nugetIndex.Resolve(ns)
-  		if err != nil {
-  			log.Fatalf("%v: set a '# gazelle:%s' directive to resolve the ambiguity", err, dotnetconfig.DotnetResolve)
-  		}
-  		if id != "" {
-  			return cfg.NugetLabel(id)
-  		}
-  	}
+      if len(cfg.TargetFrameworks()) > 0 {
+          id, err := r.lang.nugetIndex.Resolve(ns)
+          if err != nil {
+              log.Fatalf("%v: set a '# gazelle:%s' directive to resolve the ambiguity", err, dotnetconfig.DotnetResolve)
+          }
+          if id != "" {
+              return cfg.NugetLabel(id)
+          }
+      }
 
-  	return ""
+      return ""
   }
   ```
 
@@ -320,45 +320,45 @@
   // reports whether the namespace was handled. A workspace match is handled
   // even when every matching rule is a self-import and no labels are returned.
   func (r *Resolver) resolveNamespace(c *config.Config, ix *resolve.RuleIndex, cfg *dotnetconfig.Config, ns string, from label.Label) ([]string, bool) {
-  	if override, ok := cfg.ResolveOverride(ns); ok {
-  		return []string{override}, true
-  	}
+      if override, ok := cfg.ResolveOverride(ns); ok {
+          return []string{override}, true
+      }
 
-  	matches := ix.FindRulesByImportWithConfig(c, resolve.ImportSpec{Lang: languageName, Imp: ns}, languageName)
-  	if len(matches) > 0 {
-  		deps := make([]string, 0, len(matches))
-  		for _, m := range matches {
-  			if m.IsSelfImport(from) {
-  				continue
-  			}
-  			l := m.Label
-  			if l.Repo == c.RepoName {
-  				// FindRulesByImportWithConfig stamps labels with the
-  				// workspace's canonical repo name. Drop it before the
-  				// same-package check so an in-workspace label relativizes
-  				// to ":name" and deduplicates against the generate-time
-  				// sibling dep instead of appearing twice in deps.
-  				l.Repo = ""
-  			}
-  			if l.Repo == "" && l.Pkg == from.Pkg {
-  				l = label.Label{Name: l.Name, Relative: true}
-  			}
-  			deps = append(deps, l.String())
-  		}
-  		return deps, true
-  	}
+      matches := ix.FindRulesByImportWithConfig(c, resolve.ImportSpec{Lang: languageName, Imp: ns}, languageName)
+      if len(matches) > 0 {
+          deps := make([]string, 0, len(matches))
+          for _, m := range matches {
+              if m.IsSelfImport(from) {
+                  continue
+              }
+              l := m.Label
+              if l.Repo == c.RepoName {
+                  // FindRulesByImportWithConfig stamps labels with the
+                  // workspace's canonical repo name. Drop it before the
+                  // same-package check so an in-workspace label relativizes
+                  // to ":name" and deduplicates against the generate-time
+                  // sibling dep instead of appearing twice in deps.
+                  l.Repo = ""
+              }
+              if l.Repo == "" && l.Pkg == from.Pkg {
+                  l = label.Label{Name: l.Name, Relative: true}
+              }
+              deps = append(deps, l.String())
+          }
+          return deps, true
+      }
 
-  	if len(cfg.TargetFrameworks()) > 0 {
-  		id, err := r.lang.nugetIndex.Resolve(ns)
-  		if err != nil {
-  			log.Fatalf("%v: set a '# gazelle:%s' directive to resolve the ambiguity", err, dotnetconfig.DotnetResolve)
-  		}
-  		if id != "" {
-  			return []string{cfg.NugetLabel(id)}, true
-  		}
-  	}
+      if len(cfg.TargetFrameworks()) > 0 {
+          id, err := r.lang.nugetIndex.Resolve(ns)
+          if err != nil {
+              log.Fatalf("%v: set a '# gazelle:%s' directive to resolve the ambiguity", err, dotnetconfig.DotnetResolve)
+          }
+          if id != "" {
+              return []string{cfg.NugetLabel(id)}, true
+          }
+      }
 
-  	return nil, false
+      return nil, false
   }
   ```
 
@@ -385,7 +385,7 @@
   Expected: exit status `0` and:
 
   ```text
-  ok  	github.com/bazel-contrib/rules_dotnet/dotnet/gazelle
+  ok      github.com/bazel-contrib/rules_dotnet/dotnet/gazelle
   ```
 
   This includes the new regressions and the existing `TestResolveSkipsSelfImport`, `TestResolveKeepsExistingDepsAndSimplifiesSamePackage`, `TestResolveOverride`, `TestResolveSamePackageWithRepoName`, `TestResolveTestAgainstSiblingBinary`, and `TestResolveNamespaces`. The last test retains coverage of `System` suppression and the ordinary unresolved-import path.
@@ -420,113 +420,113 @@
 
   ```go
   func TestGenerateSkipsDotnetOutputDirectories(t *testing.T) {
-  	tests := []struct {
-  		name string
-  		rel  string
-  	}{
-  		{name: "root bin", rel: "bin"},
-  		{name: "root obj", rel: "obj"},
-  		{name: "nested bin", rel: "src/bin"},
-  		{name: "nested obj", rel: "src/obj/Debug/net10.0"},
-  		{name: "mixed case bin", rel: "src/BiN"},
-  		{name: "mixed case obj", rel: "src/OBJ"},
-  	}
+      tests := []struct {
+          name string
+          rel  string
+      }{
+          {name: "root bin", rel: "bin"},
+          {name: "root obj", rel: "obj"},
+          {name: "nested bin", rel: "src/bin"},
+          {name: "nested obj", rel: "src/obj/Debug/net10.0"},
+          {name: "mixed case bin", rel: "src/BiN"},
+          {name: "mixed case obj", rel: "src/OBJ"},
+      }
 
-  	for _, tc := range tests {
-  		t.Run(tc.name, func(t *testing.T) {
-  			l, c, dir := setupLang(t, net10Directive, tc.rel)
-  			writeFile(t, filepath.Join(dir, filepath.FromSlash(tc.rel)), "Output.cs", calculatorSrc)
+      for _, tc := range tests {
+          t.Run(tc.name, func(t *testing.T) {
+              l, c, dir := setupLang(t, net10Directive, tc.rel)
+              writeFile(t, filepath.Join(dir, filepath.FromSlash(tc.rel)), "Output.cs", calculatorSrc)
 
-  			res := generate(t, l, c, dir, tc.rel, "Output.cs")
-  			if len(res.Gen) != 0 || len(res.Imports) != 0 || len(res.Empty) != 0 {
-  				t.Fatalf(
-  					"GenerateRules() = %d gen, %d imports, %d empty; want 0, 0, 0",
-  					len(res.Gen),
-  					len(res.Imports),
-  					len(res.Empty),
-  				)
-  			}
-  		})
-  	}
+              res := generate(t, l, c, dir, tc.rel, "Output.cs")
+              if len(res.Gen) != 0 || len(res.Imports) != 0 || len(res.Empty) != 0 {
+                  t.Fatalf(
+                      "GenerateRules() = %d gen, %d imports, %d empty; want 0, 0, 0",
+                      len(res.Gen),
+                      len(res.Imports),
+                      len(res.Empty),
+                  )
+              }
+          })
+      }
   }
 
   func TestGenerateDoesNotSkipBinObjSubstrings(t *testing.T) {
-  	for _, rel := range []string{"src/binary", "src/object"} {
-  		t.Run(rel, func(t *testing.T) {
-  			l, c, dir := setupLang(t, net10Directive, rel)
-  			writeFile(t, filepath.Join(dir, filepath.FromSlash(rel)), "Calculator.cs", calculatorSrc)
+      for _, rel := range []string{"src/binary", "src/object"} {
+          t.Run(rel, func(t *testing.T) {
+              l, c, dir := setupLang(t, net10Directive, rel)
+              writeFile(t, filepath.Join(dir, filepath.FromSlash(rel)), "Calculator.cs", calculatorSrc)
 
-  			res := generate(t, l, c, dir, rel, "Calculator.cs")
-  			if len(res.Gen) != 1 || len(res.Imports) != 1 || len(res.Empty) != 0 {
-  				t.Fatalf(
-  					"GenerateRules() = %d gen, %d imports, %d empty; want 1, 1, 0",
-  					len(res.Gen),
-  					len(res.Imports),
-  					len(res.Empty),
-  				)
-  			}
-  			if got := res.Gen[0].Kind(); got != "csharp_library" {
-  				t.Errorf("generated kind = %q, want csharp_library", got)
-  			}
-  		})
-  	}
+              res := generate(t, l, c, dir, rel, "Calculator.cs")
+              if len(res.Gen) != 1 || len(res.Imports) != 1 || len(res.Empty) != 0 {
+                  t.Fatalf(
+                      "GenerateRules() = %d gen, %d imports, %d empty; want 1, 1, 0",
+                      len(res.Gen),
+                      len(res.Imports),
+                      len(res.Empty),
+                  )
+              }
+              if got := res.Gen[0].Kind(); got != "csharp_library" {
+                  t.Errorf("generated kind = %q, want csharp_library", got)
+              }
+          })
+      }
   }
 
   func TestGenerateOutputDirDeletesOnlyExistingCsharpRules(t *testing.T) {
-  	l, c, dir := setupLang(t, net10Directive, "src/bin")
-  	f, err := rule.LoadData(
-  		filepath.Join(dir, "src", "bin", "BUILD.bazel"),
-  		"src/bin",
-  		[]byte(`csharp_library(name = "stale")
+      l, c, dir := setupLang(t, net10Directive, "src/bin")
+      f, err := rule.LoadData(
+          filepath.Join(dir, "src", "bin", "BUILD.bazel"),
+          "src/bin",
+          []byte(`csharp_library(name = "stale")
   csharp_binary(name = "old_program")
   csharp_nunit_test(name = "stale_test")
   filegroup(name = "keep")
   `),
-  	)
-  	if err != nil {
-  		t.Fatal(err)
-  	}
-  	// A valid source ensures this test fails on the old implementation rather
-  	// than passing through the existing no-source cleanup path.
-  	writeFile(t, filepath.Join(dir, "src", "bin"), "Generated.cs", calculatorSrc)
+      )
+      if err != nil {
+          t.Fatal(err)
+      }
+      // A valid source ensures this test fails on the old implementation rather
+      // than passing through the existing no-source cleanup path.
+      writeFile(t, filepath.Join(dir, "src", "bin"), "Generated.cs", calculatorSrc)
 
-  	res := l.GenerateRules(language.GenerateArgs{
-  		Config:       c,
-  		Dir:          filepath.Join(dir, "src", "bin"),
-  		Rel:          "src/bin",
-  		RegularFiles: []string{"Generated.cs"},
-  		File:         f,
-  	})
-  	if len(res.Gen) != 0 || len(res.Imports) != 0 || len(res.Empty) != 3 {
-  		t.Fatalf(
-  			"GenerateRules() = %d gen, %d imports, %d empty; want 0, 0, 3",
-  			len(res.Gen),
-  			len(res.Imports),
-  			len(res.Empty),
-  		)
-  	}
+      res := l.GenerateRules(language.GenerateArgs{
+          Config:       c,
+          Dir:          filepath.Join(dir, "src", "bin"),
+          Rel:          "src/bin",
+          RegularFiles: []string{"Generated.cs"},
+          File:         f,
+      })
+      if len(res.Gen) != 0 || len(res.Imports) != 0 || len(res.Empty) != 3 {
+          t.Fatalf(
+              "GenerateRules() = %d gen, %d imports, %d empty; want 0, 0, 3",
+              len(res.Gen),
+              len(res.Imports),
+              len(res.Empty),
+          )
+      }
 
-  	want := []struct {
-  		kind string
-  		name string
-  	}{
-  		{kind: "csharp_library", name: "stale"},
-  		{kind: "csharp_binary", name: "old_program"},
-  		{kind: "csharp_nunit_test", name: "stale_test"},
-  	}
-  	for i, expected := range want {
-  		got := res.Empty[i]
-  		if got.Kind() != expected.kind || got.Name() != expected.name {
-  			t.Errorf(
-  				"Empty[%d] = %s %s, want %s %s",
-  				i,
-  				got.Kind(),
-  				got.Name(),
-  				expected.kind,
-  				expected.name,
-  			)
-  		}
-  	}
+      want := []struct {
+          kind string
+          name string
+      }{
+          {kind: "csharp_library", name: "stale"},
+          {kind: "csharp_binary", name: "old_program"},
+          {kind: "csharp_nunit_test", name: "stale_test"},
+      }
+      for i, expected := range want {
+          got := res.Empty[i]
+          if got.Kind() != expected.kind || got.Name() != expected.name {
+              t.Errorf(
+                  "Empty[%d] = %s %s, want %s %s",
+                  i,
+                  got.Kind(),
+                  got.Name(),
+                  expected.kind,
+                  expected.name,
+              )
+          }
+      }
   }
 
   func TestGenerateTestInBinaryOnlyDirectory(t *testing.T) {
@@ -574,37 +574,37 @@
   ```go
   // GenerateRules implements language.Language.
   func (l *csharpLang) GenerateRules(args language.GenerateArgs) language.GenerateResult {
-  	cfg := getConfig(args.Config, args.Rel)
-  	if cfg == nil {
-  		return language.GenerateResult{}
-  	}
+      cfg := getConfig(args.Config, args.Rel)
+      if cfg == nil {
+          return language.GenerateResult{}
+      }
 
-  	var files []*parser.File
-  	for _, name := range args.RegularFiles {
-  		if !strings.HasSuffix(name, ".cs") {
-  			continue
-  		}
-  		f, err := parser.ParseFile(filepath.Join(args.Dir, name))
-  		if err != nil {
-  			log.Printf("warning: skipping unparseable file %s: %v", path.Join(args.Rel, name), err)
-  			continue
-  		}
-  		files = append(files, f)
-  	}
-  	if len(files) == 0 {
-  		// No C# sources left: existing csharp rules become empty so gazelle
-  		// deletes them.
-  		var empty []*rule.Rule
-  		if args.File != nil {
-  			for _, r := range args.File.Rules {
-  				if isCsharpKind(r.Kind()) {
-  					empty = append(empty, rule.NewRule(r.Kind(), r.Name()))
-  				}
-  			}
-  		}
-  		return language.GenerateResult{Empty: empty}
-  	}
-  	sort.Slice(files, func(i, j int) bool { return files[i].Name < files[j].Name })
+      var files []*parser.File
+      for _, name := range args.RegularFiles {
+          if !strings.HasSuffix(name, ".cs") {
+              continue
+          }
+          f, err := parser.ParseFile(filepath.Join(args.Dir, name))
+          if err != nil {
+              log.Printf("warning: skipping unparseable file %s: %v", path.Join(args.Rel, name), err)
+              continue
+          }
+          files = append(files, f)
+      }
+      if len(files) == 0 {
+          // No C# sources left: existing csharp rules become empty so gazelle
+          // deletes them.
+          var empty []*rule.Rule
+          if args.File != nil {
+              for _, r := range args.File.Rules {
+                  if isCsharpKind(r.Kind()) {
+                      empty = append(empty, rule.NewRule(r.Kind(), r.Name()))
+                  }
+              }
+          }
+          return language.GenerateResult{Empty: empty}
+      }
+      sort.Slice(files, func(i, j int) bool { return files[i].Name < files[j].Name })
   ```
 
   with this exact block:
@@ -613,57 +613,57 @@
   // isDotnetOutputPath reports whether rel contains a complete bin or obj
   // directory segment. Matching is case-insensitive for Windows output paths.
   func isDotnetOutputPath(rel string) bool {
-  	for _, segment := range strings.Split(filepath.ToSlash(rel), "/") {
-  		switch strings.ToLower(segment) {
-  		case "bin", "obj":
-  			return true
-  		}
-  	}
-  	return false
+      for _, segment := range strings.Split(filepath.ToSlash(rel), "/") {
+          switch strings.ToLower(segment) {
+          case "bin", "obj":
+              return true
+          }
+      }
+      return false
   }
 
   // emptyCsharpRules returns deletion stubs for existing C# rules only.
   func emptyCsharpRules(file *rule.File) []*rule.Rule {
-  	var empty []*rule.Rule
-  	if file != nil {
-  		for _, r := range file.Rules {
-  			if isCsharpKind(r.Kind()) {
-  				empty = append(empty, rule.NewRule(r.Kind(), r.Name()))
-  			}
-  		}
-  	}
-  	return empty
+      var empty []*rule.Rule
+      if file != nil {
+          for _, r := range file.Rules {
+              if isCsharpKind(r.Kind()) {
+                  empty = append(empty, rule.NewRule(r.Kind(), r.Name()))
+              }
+          }
+      }
+      return empty
   }
 
   // GenerateRules implements language.Language.
   func (l *csharpLang) GenerateRules(args language.GenerateArgs) language.GenerateResult {
-  	if isDotnetOutputPath(args.Rel) {
-  		return language.GenerateResult{Empty: emptyCsharpRules(args.File)}
-  	}
+      if isDotnetOutputPath(args.Rel) {
+          return language.GenerateResult{Empty: emptyCsharpRules(args.File)}
+      }
 
-  	cfg := getConfig(args.Config, args.Rel)
-  	if cfg == nil {
-  		return language.GenerateResult{}
-  	}
+      cfg := getConfig(args.Config, args.Rel)
+      if cfg == nil {
+          return language.GenerateResult{}
+      }
 
-  	var files []*parser.File
-  	for _, name := range args.RegularFiles {
-  		if !strings.HasSuffix(name, ".cs") {
-  			continue
-  		}
-  		f, err := parser.ParseFile(filepath.Join(args.Dir, name))
-  		if err != nil {
-  			log.Printf("warning: skipping unparseable file %s: %v", path.Join(args.Rel, name), err)
-  			continue
-  		}
-  		files = append(files, f)
-  	}
-  	if len(files) == 0 {
-  		// No C# sources left: existing csharp rules become empty so gazelle
-  		// deletes them.
-  		return language.GenerateResult{Empty: emptyCsharpRules(args.File)}
-  	}
-  	sort.Slice(files, func(i, j int) bool { return files[i].Name < files[j].Name })
+      var files []*parser.File
+      for _, name := range args.RegularFiles {
+          if !strings.HasSuffix(name, ".cs") {
+              continue
+          }
+          f, err := parser.ParseFile(filepath.Join(args.Dir, name))
+          if err != nil {
+              log.Printf("warning: skipping unparseable file %s: %v", path.Join(args.Rel, name), err)
+              continue
+          }
+          files = append(files, f)
+      }
+      if len(files) == 0 {
+          // No C# sources left: existing csharp rules become empty so gazelle
+          // deletes them.
+          return language.GenerateResult{Empty: emptyCsharpRules(args.File)}
+      }
+      sort.Slice(files, func(i, j int) bool { return files[i].Name < files[j].Name })
   ```
 
   No import changes are needed because `strings`, `filepath`, `language`, and `rule` are already imported. The guard runs before configuration and source parsing, returns no `Gen` or `Imports`, and returns deletion stubs only when an existing BUILD file contains C# rules.
@@ -689,7 +689,7 @@
   Expected: exit status `0` and:
 
   ```text
-  ok  	github.com/bazel-contrib/rules_dotnet/dotnet/gazelle
+  ok      github.com/bazel-contrib/rules_dotnet/dotnet/gazelle
   ```
 
   This must include passing root, nested, and mixed-case exclusion subtests; passing `binary` and `object` substring subtests; passing C#-only output-directory cleanup; and the existing `TestGenerateEmptyDirDeletesRules`, which verifies that factoring the no-source cleanup did not change its behavior.
