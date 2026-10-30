@@ -50,10 +50,10 @@ independently pinned stable SDK.
 
 See the [.NET 11 integration tests](../e2e/net11.0) for a complete consumer.
 
-Paket CLI 11.0.1 does not yet recognize `framework: net11.0`. When generating
-a lockfile, use an older compatible framework restriction if the packages
-support it. The integration tests resolve FSharp.Core's `netstandard2.0`
-assets this way; their native Bazel targets still compile and run as `net11.0`.
+Paket CLI 11.0.1 does not yet recognize `framework: net11.0`. The integration
+tests use `framework: netstandard2.0` to lock FSharp.Core, which supports that
+framework; Bazel still selects dependency assets and compiles for `net11.0`.
+This does not replace Paket support for a `net11.0`-specific dependency graph.
 
 ## Design
 
