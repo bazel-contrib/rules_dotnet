@@ -76,26 +76,18 @@ func (r *Resolver) Resolve(c *config.Config, ix *resolve.RuleIndex, rc *repo.Rem
 		deps[d] = true
 	}
 
-	own := map[string]bool{}
-	for _, ns := range input.own {
-		own[ns] = true
-	}
-
 	for _, imp := range input.imports {
-		if own[imp] {
-			continue
-		}
-		dep := r.resolveNamespace(c, ix, cfg, imp, from)
-		if dep == "" {
-			// `using static Foo.Bar.SomeType;` imports a type, not a
-			// namespace: retry with the enclosing namespaces.
-			for ns := parentNamespace(imp); ns != "" && !own[ns]; ns = parentNamespace(ns) {
-				if dep = r.resolveNamespace(c, ix, cfg, ns, from); dep != "" {
+		depLabels, resolved := r.resolveNamespace(c, ix, cfg, imp, from)
+		if !resolved {
+			// using static fallback to enclosing namespaces
+			for ns := parentNamespace(imp); ns != ""; ns = parentNamespace(ns) {
+				depLabels, resolved = r.resolveNamespace(c, ix, cfg, ns, from)
+				if resolved {
 					break
 				}
 			}
 		}
-		if dep == "" {
+		if !resolved {
 			if imp == "System" || strings.HasPrefix(imp, "System.") {
 				// Provided by the base class library.
 				continue
@@ -107,7 +99,9 @@ func (r *Resolver) Resolve(c *config.Config, ix *resolve.RuleIndex, rc *repo.Rem
 			log.Printf("warning: %s", msg)
 			continue
 		}
-		deps[dep] = true
+		for _, dep := range depLabels {
+			deps[dep] = true
+		}
 	}
 
 	sorted := make([]string, 0, len(deps))
@@ -121,32 +115,37 @@ func (r *Resolver) Resolve(c *config.Config, ix *resolve.RuleIndex, rc *repo.Rem
 	}
 }
 
-// resolveNamespace maps one imported namespace to a Bazel label, in order:
-// dotnet_resolve override, workspace rule index, NuGet package. It returns
-// "" when the namespace does not resolve.
-func (r *Resolver) resolveNamespace(c *config.Config, ix *resolve.RuleIndex, cfg *dotnetconfig.Config, ns string, from label.Label) string {
+// resolveNamespace maps one imported namespace to Bazel labels, in order:
+// dotnet_resolve override, workspace rule index, NuGet package. The boolean
+// reports whether the namespace was handled. A workspace match is handled even
+// when every match is a self import and the returned label slice is empty.
+func (r *Resolver) resolveNamespace(c *config.Config, ix *resolve.RuleIndex, cfg *dotnetconfig.Config, ns string, from label.Label) ([]string, bool) {
 	if override, ok := cfg.ResolveOverride(ns); ok {
-		return override
+		return []string{override}, true
 	}
 
 	matches := ix.FindRulesByImportWithConfig(c, resolve.ImportSpec{Lang: languageName, Imp: ns}, languageName)
-	for _, m := range matches {
-		if m.IsSelfImport(from) {
-			continue
+	if len(matches) > 0 {
+		var depLabels []string
+		for _, m := range matches {
+			if m.IsSelfImport(from) {
+				continue
+			}
+			l := m.Label
+			if l.Repo == c.RepoName {
+				// FindRulesByImportWithConfig stamps labels with the
+				// workspace's canonical repo name. Drop it before the
+				// same-package check so an in-workspace label relativizes
+				// to ":name" and deduplicates against the generate-time
+				// sibling dep instead of appearing twice in deps.
+				l.Repo = ""
+			}
+			if l.Repo == "" && l.Pkg == from.Pkg {
+				l = label.Label{Name: l.Name, Relative: true}
+			}
+			depLabels = append(depLabels, l.String())
 		}
-		l := m.Label
-		if l.Repo == c.RepoName {
-			// FindRulesByImportWithConfig stamps labels with the
-			// workspace's canonical repo name. Drop it before the
-			// same-package check so an in-workspace label relativizes
-			// to ":name" and deduplicates against the generate-time
-			// sibling dep instead of appearing twice in deps.
-			l.Repo = ""
-		}
-		if l.Repo == "" && l.Pkg == from.Pkg {
-			l = label.Label{Name: l.Name, Relative: true}
-		}
-		return l.String()
+		return depLabels, true
 	}
 
 	if len(cfg.TargetFrameworks()) > 0 {
@@ -155,11 +154,11 @@ func (r *Resolver) resolveNamespace(c *config.Config, ix *resolve.RuleIndex, cfg
 			log.Fatalf("%v: set a '# gazelle:%s' directive to resolve the ambiguity", err, dotnetconfig.DotnetResolve)
 		}
 		if id != "" {
-			return cfg.NugetLabel(id)
+			return []string{cfg.NugetLabel(id)}, true
 		}
 	}
 
-	return ""
+	return nil, false
 }
 
 // parentNamespace strips the last dot segment: "A.B.C" -> "A.B", "A" -> "".

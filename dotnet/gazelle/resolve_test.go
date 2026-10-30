@@ -133,6 +133,90 @@ func TestResolveSkipsSelfImport(t *testing.T) {
 	}
 }
 
+func TestResolveCollectsAllWorkspaceProvidersDeterministically(t *testing.T) {
+	l, c, _ := setupLang(t, net10Directive, "src", "src/app", "src/zeta", "src/alpha")
+
+	ix := resolve.NewRuleIndex(func(r *rule.Rule, pkgRel string) resolve.Resolver { return l.Resolver })
+	// Index in reverse lexical order so expected output also verifies sorting.
+	indexLibrary(t, l, c, ix, "src/zeta", "zeta", "Shared")
+	indexLibrary(t, l, c, ix, "src/alpha", "alpha", "Shared")
+	ix.Finish()
+
+	r := rule.NewRule("csharp_library", "app")
+	r.SetAttr("deps", []string{"//manual:dep"})
+	input := resolveInput{imports: []string{"Shared"}, own: []string{"App"}}
+	l.Resolver.Resolve(c, ix, nil, r, input, label.New("", "src/app", "app"))
+
+	got := r.AttrStrings("deps")
+	want := []string{"//manual:dep", "//src/alpha", "//src/zeta"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("deps = %v, want %v", got, want)
+	}
+}
+
+func TestResolveKeepsOtherProviderWhenOwnNamespaceMatches(t *testing.T) {
+	l, c, _ := setupLang(t, net10Directive, "src", "src/calculator", "src/other")
+
+	ix := resolve.NewRuleIndex(func(r *rule.Rule, pkgRel string) resolve.Resolver { return l.Resolver })
+	indexLibrary(t, l, c, ix, "src/calculator", "calculator", "Calculator")
+	indexLibrary(t, l, c, ix, "src/other", "other", "Calculator")
+	ix.Finish()
+
+	r := rule.NewRule("csharp_library", "calculator")
+	input := resolveInput{imports: []string{"Calculator"}, own: []string{"Calculator"}}
+	l.Resolver.Resolve(c, ix, nil, r, input, label.New("", "src/calculator", "calculator"))
+
+	got := r.AttrStrings("deps")
+	want := []string{"//src/other"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("deps = %v, want %v (self excluded by label, other provider retained)", got, want)
+	}
+}
+
+func TestResolveSelfOnlyDoesNotFallBackToNuGet(t *testing.T) {
+	l, c, dir := setupLang(t, net10Directive, "src", "src/calculator")
+	writeFile(t, dir, "nuget_resolve.json", `{"version":1,"frameworks":{"net10.0":{"packages":[{"id":"Calculator"}]}}}`)
+	idx, err := nuget.LoadIndex(filepath.Join(dir, "nuget_resolve.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	l.nugetIndex = idx
+
+	ix := resolve.NewRuleIndex(func(r *rule.Rule, pkgRel string) resolve.Resolver { return l.Resolver })
+	indexLibrary(t, l, c, ix, "src/calculator", "calculator", "Calculator")
+	ix.Finish()
+
+	r := rule.NewRule("csharp_library", "calculator")
+	// Deliberately keep own different from import to exercise label self-filtering later.
+	input := resolveInput{imports: []string{"Calculator"}, own: []string{"App"}}
+	l.Resolver.Resolve(c, ix, nil, r, input, label.New("", "src/calculator", "calculator"))
+
+	if got := r.AttrStrings("deps"); len(got) != 0 {
+		t.Errorf("deps = %v, want empty; self-only workspace match must not fall back to NuGet", got)
+	}
+}
+
+func TestResolveParentNamespaceFallbackWithOwnParentNamespace(t *testing.T) {
+	l, c, _ := setupLang(t, net10Directive, "src", "src/app", "src/acme")
+
+	ix := resolve.NewRuleIndex(func(r *rule.Rule, pkgRel string) resolve.Resolver { return l.Resolver })
+	indexLibrary(t, l, c, ix, "src/acme", "acme", "Acme")
+	ix.Finish()
+
+	r := rule.NewRule("csharp_library", "app")
+	input := resolveInput{
+		imports: []string{"Acme.Widget.SomeType"},
+		own:     []string{"Acme"},
+	}
+	l.Resolver.Resolve(c, ix, nil, r, input, label.New("", "src/app", "app"))
+
+	got := r.AttrStrings("deps")
+	want := []string{"//src/acme"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("deps = %v, want %v (own namespace must not suppress parent fallback)", got, want)
+	}
+}
+
 func TestResolveSamePackageWithRepoName(t *testing.T) {
 	l, c, _ := setupLang(t, "# gazelle:dotnet_target_frameworks net10.0\n", "src", "src/calculator")
 	// Simulate a real workspace: RuleIndex.AddRule stamps every indexed
