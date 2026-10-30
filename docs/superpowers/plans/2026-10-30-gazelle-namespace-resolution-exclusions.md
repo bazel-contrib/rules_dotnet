@@ -561,13 +561,13 @@
 
 ## Task Group 4: Exclude Complete `bin` and `obj` Path Segments
 
-- [ ] **Group status: Exclude complete bin and obj path segments**
+- [x] **Group status: Exclude complete bin and obj path segments**
 
 **Files:**
 - Modify: `dotnet/gazelle/generate.go:85-117`
 - Test: `dotnet/gazelle/generate_test.go`
 
-- [ ] **Task 11: Add the early output-path guard and shared cleanup helper**
+- [x] **Task 11: Add the early output-path guard and shared cleanup helper**
 
   In `dotnet/gazelle/generate.go`, replace this exact block:
 
@@ -668,7 +668,7 @@
 
   No import changes are needed because `strings`, `filepath`, `language`, and `rule` are already imported. The guard runs before configuration and source parsing, returns no `Gen` or `Imports`, and returns deletion stubs only when an existing BUILD file contains C# rules.
 
-- [ ] **Task 12: Format the generation source and tests**
+- [x] **Task 12: Format the generation source and tests**
 
   Run:
 
@@ -678,7 +678,7 @@
 
   Expected: no output and exit status `0`.
 
-- [ ] **Task 13: Run all focused generation tests**
+- [x] **Task 13: Run all focused generation tests**
 
   Run:
 
@@ -694,7 +694,7 @@
 
   This must include passing root, nested, and mixed-case exclusion subtests; passing `binary` and `object` substring subtests; passing C#-only output-directory cleanup; and the existing `TestGenerateEmptyDirDeletesRules`, which verifies that factoring the no-source cleanup did not change its behavior.
 
-- [ ] **Task 14: Commit the output-directory exclusion**
+- [x] **Task 14: Commit the output-directory exclusion**
 
   Run:
 
