@@ -24,6 +24,37 @@ More information on these flags can be found here:
 
 Various examples of how each rule can be used are in the [examples](../examples) folder.
 
+### .NET 11 previews
+
+.NET 11 is opt-in while it is a prerelease. Register the SDK explicitly in
+`MODULE.bazel`:
+
+```python
+dotnet = use_extension("@rules_dotnet//dotnet:extensions.bzl", "dotnet")
+dotnet.toolchain(dotnet_version = "11.0.100-rc.3.26522.148")
+use_repo(dotnet, "dotnet_toolchains")
+register_toolchains("@dotnet_toolchains//:all")
+```
+
+Select the framework in `.bazelrc` (or pass the flag on the command line):
+
+```
+common --@rules_dotnet//dotnet:target_framework=net11.0
+```
+
+Set `target_frameworks = ["net11.0"]` on C# and F# targets, or
+`target_framework = "net11.0"` on a publish. Matching prerelease targeting,
+runtime, and apphost packs are resolved automatically. The default target
+framework remains `net10.0`, and rules_dotnet's internal tools retain their
+independently pinned stable SDK.
+
+See the [.NET 11 integration tests](../e2e/net11.0) for a complete consumer.
+
+Paket CLI 11.0.1 does not yet recognize `framework: net11.0`. The integration
+tests use `framework: netstandard2.0` to lock FSharp.Core, which supports that
+framework; Bazel still selects dependency assets and compiles for `net11.0`.
+This does not replace Paket support for a `net11.0`-specific dependency graph.
+
 ## Design
 
 ### Dependency resolution

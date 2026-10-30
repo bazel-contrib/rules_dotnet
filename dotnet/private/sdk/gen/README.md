@@ -65,22 +65,23 @@ new C# version -- and the harness is what tells you whether rules_dotnet moved
 the same way. `dotnet/private/tests/harness/FINDINGS.md` lists the divergences
 that are known and expected, so anything outside that list is new.
 
-### Nothing appears until it is generally available
+### Preview support does not change the default
 
-The generator reads the newest SDK there is, previews included, but every table
-stops at the newest **generally-available** release. When .NET 11 was still a
-release candidate, running the generator picked up the .NET 11 SDK, learned
-that `net11.0` exists, and then deliberately emitted nothing for it.
+The generator includes every available release channel, including previews and
+release candidates. For prerelease channels it resolves prerelease packs from
+NuGet; generally-available channels continue to use stable packs only. SDK,
+framework, and pack tables therefore describe the same set of releases.
 
-That is not caution for its own sake. A preview release has no stable
-reference or runtime packs on NuGet, so a `pack_bands.bzl` entry for it cannot
-resolve. Keeping `frameworks.bzl`, `pack_bands.bzl` and `versions.bzl` all
-keyed off the same GA cutoff is what stops them disagreeing -- and it is why
-`DEFAULT_TFM` can never land on a preview.
+`DEFAULT_TFM` remains the newest **generally-available** framework. Using a
+preview is explicit: register its SDK and request its target framework. For
+example, .NET 11 RC3 uses
+`dotnet.toolchain(dotnet_version = "11.0.100-rc.3.26522.148")` and
+`target_frameworks = ["net11.0"]`, with
+`--@rules_dotnet//dotnet:target_framework=net11.0` selecting the framework.
+This does not change the stable SDK used to build rules_dotnet's own tools.
 
-The practical consequence: **run `./update-sdk.sh` again once the new release
-goes GA.** Running it during the preview period is harmless but will not add
-the new framework.
+Run `./update-sdk.sh versions packs frameworks` when updating a preview. Once
+the release goes GA, regeneration also advances the default framework.
 
 ### Things that still need a human
 

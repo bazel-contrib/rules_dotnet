@@ -1,0 +1,5 @@
+framework: netstandard2.0
+storage: none
+source https://api.nuget.org/v3/index.json
+
+nuget FSharp.Core 11.0.101-rc3.26522.148

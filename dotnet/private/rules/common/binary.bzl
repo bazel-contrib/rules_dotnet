@@ -11,6 +11,7 @@ load(
     "generate_runtimeconfig",
     "is_core_framework",
     "is_standard_framework",
+    "tfm_to_semver",
     "to_rlocation_path",
 )
 load("//dotnet/private:providers.bzl", "DotnetApphostPackInfo", "DotnetAssemblyRuntimeInfo", "DotnetBinaryInfo", "DotnetNativeToolsInfo", "DotnetRuntimePackInfo")
@@ -110,16 +111,22 @@ def build_binary(ctx, compile_action, toolchain):
     additional_runfiles = list(appsetting_files)
 
     runtimeconfig = None
+    runtime_version = None
     depsjson = None
     transitive_runtime_deps = runtime_provider.deps.to_list()
 
     if is_core_framework(tfm):
+        runtime_version = tfm_to_semver(tfm)
+        if tfm == toolchain.dotnetinfo.runtime_tfm and "-" in toolchain.dotnetinfo.runtime_version:
+            runtime_version = toolchain.dotnetinfo.runtime_version
+
         runtimeconfig = ctx.actions.declare_file("%s/%s/%s.runtimeconfig.json" % (ctx.label.name, tfm, ctx.attr.out or ctx.attr.name))
         runtimeconfig_struct = generate_runtimeconfig(
             target_framework = tfm,
             project_sdk = ctx.attr.project_sdk,
             is_self_contained = False,
             roll_forward_behavior = ctx.attr.roll_forward_behavior,
+            runtime_version = runtime_version,
         )
 
         # Add additional lookup paths so that we can avoid copying all DLLs
@@ -260,6 +267,7 @@ def build_binary(ctx, compile_action, toolchain):
         transitive_runtime_deps = transitive_runtime_deps,
         apphost_pack_info = ctx.attr._apphost_pack[0][DotnetApphostPackInfo],
         runtime_pack_info = ctx.attr._runtime_pack[0][DotnetRuntimePackInfo],
+        runtime_version = runtime_version,
     )
 
     return [default_info, dotnet_binary_info, compile_provider, runtime_provider, static_web_assets_info, RunEnvironmentInfo(environment = {key: expand_variables(ctx, expand_locations(ctx, value, ctx.attr.data)) for key, value in ctx.attr.envs.items()}, inherited_environment = ctx.attr.env_inherit)]

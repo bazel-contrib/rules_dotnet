@@ -808,8 +808,8 @@ def _create_shim_exe(ctx, apphost_pack_info, dll, runtime_identifier):
 
     return output
 
-def _generate_runtimeconfig(ctx, output, target_framework, project_sdk, is_self_contained, roll_forward_behavior, runtime_pack_info):
-    runtimeconfig_struct = generate_runtimeconfig(target_framework, project_sdk, is_self_contained, roll_forward_behavior, runtime_pack_info)
+def _generate_runtimeconfig(ctx, output, target_framework, project_sdk, is_self_contained, roll_forward_behavior, runtime_pack_info, runtime_version):
+    runtimeconfig_struct = generate_runtimeconfig(target_framework, project_sdk, is_self_contained, roll_forward_behavior, runtime_pack_info, runtime_version)
 
     ctx.actions.write(
         output = output,
@@ -919,6 +919,7 @@ def _publish_binary_impl(ctx):
         is_self_contained,
         roll_forward_behavior,
         runtime_pack_info,
+        binary_info.runtime_version,
     )
 
     assembly_files = collect_assembly_files(assembly_runtime_info, transitive_runtime_deps, depsjson_struct)

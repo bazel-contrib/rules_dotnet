@@ -48,6 +48,7 @@ _PRE_NET6_RIDS = [
 _BAND_TFMS = {
     "default": [
         "net10.0",
+        "net11.0",
         "net5.0",
         "net6.0",
         "net7.0",
@@ -63,6 +64,7 @@ _BAND_TFMS = {
     ],
     "web": [
         "net10.0",
+        "net11.0",
         "net5.0",
         "net6.0",
         "net7.0",
@@ -77,6 +79,7 @@ _BAND_TFMS = {
 
 _RUNTIME_PACK_RIDS = {
     "net10.0": _ALL_RIDS,
+    "net11.0": _ALL_RIDS,
     "net5.0": _PRE_NET6_RIDS,
     "net6.0": _ALL_RIDS,
     "net7.0": _ALL_RIDS,
@@ -189,6 +192,11 @@ _TARGETING_PACKS = [
     (("net48", DEFAULT_SDK), [("Microsoft.NETFramework.ReferenceAssemblies.net48", "1.0.3")]),
     (("netcoreapp2.1", DEFAULT_SDK), [("Microsoft.NETCore.App", "2.1.30")]),
     (("net10.0", DEFAULT_SDK), [("Microsoft.NETCore.App.Ref", "10.0.14")]),
+    (("net11.0", DEFAULT_SDK), [("Microsoft.NETCore.App.Ref", "11.0.0-rc.3.26522.148")]),
+    (("net11.0", WEB_SDK), [
+        ("Microsoft.AspNetCore.App.Ref", "11.0.0-rc.3.26522.148"),
+        ("Microsoft.NETCore.App.Ref", "11.0.0-rc.3.26522.148"),
+    ]),
     (("netcoreapp2.1", WEB_SDK), [
         ("Microsoft.AspNetCore.App", "2.1.34"),
         ("Microsoft.NETCore.App", "2.1.30"),
@@ -205,6 +213,10 @@ _RUNTIME_PACKS = [
     (("net10.0", "win-arm64", WEB_SDK), [
         ("Microsoft.AspNetCore.App.Runtime.win-arm64", "10.0.14"),
         ("Microsoft.NETCore.App.Runtime.win-arm64", "10.0.14"),
+    ]),
+    (("net11.0", "win-x64", WEB_SDK), [
+        ("Microsoft.AspNetCore.App.Runtime.win-x64", "11.0.0-rc.3.26522.148"),
+        ("Microsoft.NETCore.App.Runtime.win-x64", "11.0.0-rc.3.26522.148"),
     ]),
 ]
 
@@ -229,6 +241,16 @@ def _pack_ids_test_impl(ctx):
     )
     asserts.equals(
         env,
+        ("Microsoft.NETCore.App.Host.win-x64", "11.0.0-rc.3.26522.148"),
+        apphost_pack("net11.0", "win-x64"),
+    )
+    asserts.equals(
+        env,
+        ("Microsoft.NETCore.App.Crossgen2.win-x64", "11.0.0-rc.3.26522.148"),
+        crossgen2_pack("net11.0", "win-x64"),
+    )
+    asserts.equals(
+        env,
         None,
         apphost_pack("net5.0", "osx-arm64"),
         "Apple silicon packs only exist from .NET 6 onwards",
@@ -245,6 +267,11 @@ def _wasm_test_impl(ctx):
         env,
         ("Microsoft.NETCore.App.Runtime.Mono.browser-wasm", "10.0.14"),
         wasm_runtime_pack("net10.0"),
+    )
+    asserts.equals(
+        env,
+        ("Microsoft.NETCore.App.Runtime.Mono.browser-wasm", "11.0.0-rc.3.26522.148"),
+        wasm_runtime_pack("net11.0"),
     )
 
     for tfm in ["netcoreapp3.1", "net5.0", "net9.0"]:

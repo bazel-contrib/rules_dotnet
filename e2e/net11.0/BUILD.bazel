@@ -1,0 +1,8 @@
+load(":publish_tests.bzl", "publish_test_suite")
+
+exports_files([
+    "paket.dependencies",
+    "paket.lock",
+])
+
+publish_test_suite(name = "publish")

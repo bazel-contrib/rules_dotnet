@@ -42,23 +42,21 @@ let main argv =
             // Discovered once and shared: which .NET channels exist, and which of them
             // are still previews.
             let index = Sdk.downloadReleaseIndex ()
+            let channels = Sdk.supportedChannels index
             let stableChannel = Sdk.latestStableChannel index
 
-            let channelList = String.concat ", " (Sdk.gaChannels index)
+            let channelList = String.concat ", " channels
             printfn $"channels: {channelList}"
             printfn $"newest non-preview channel: {stableChannel}"
 
             if shouldRun "versions" then
-                // GA channels only, matching the hardcoded list this replaced: a
-                // preview SDK has no stable packs to pair with, so offering it as a
-                // dotnet_version would produce a toolchain that cannot resolve them.
-                Sdk.generateSdks (Path.Combine(sdkFolder, "versions.bzl")) (Sdk.gaChannels index)
+                Sdk.generateSdks (Path.Combine(sdkFolder, "versions.bzl")) channels
 
             if shouldRun "rids" then
                 Sdk.generateRids (Path.Combine(sdkFolder, "rids.bzl"))
 
             if shouldRun "packs" then
-                Packs.generatePackBands (Path.Combine(sdkFolder, "pack_bands.bzl")) (Sdk.gaChannels index)
+                Packs.generatePackBands (Path.Combine(sdkFolder, "pack_bands.bzl")) channels stableChannel
 
             // Framework lists and the per-framework C# language version cap, both read
             // from the installed SDK rather than hardcoded in Starlark.
@@ -70,6 +68,7 @@ let main argv =
                     sdkVersion
                     sdkUrl
                     stableChannel
+                    (List.last channels)
 
             if shouldRun "paket" then
                 Paket.updatePaket (Path.Combine(sdkFolder, "..", "..", ".."))

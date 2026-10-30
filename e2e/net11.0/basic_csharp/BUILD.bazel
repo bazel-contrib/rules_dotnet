@@ -1,0 +1,59 @@
+load(
+    "@rules_dotnet//dotnet:defs.bzl",
+    "csharp_binary",
+    "csharp_library",
+    "csharp_nunit_test",
+    "nuget_pack",
+)
+
+csharp_library(
+    name = "compat",
+    srcs = ["compat.cs"],
+    target_frameworks = [
+        "netstandard2.0",
+        "net10.0",
+    ],
+    visibility = ["//visibility:public"],
+)
+
+csharp_library(
+    name = "lib",
+    srcs = ["lib.cs"],
+    internals_visible_to = ["lib_test"],
+    target_frameworks = ["net11.0"],
+    deps = [":compat"],
+)
+
+csharp_binary(
+    name = "hello",
+    srcs = ["hello.cs"],
+    target_frameworks = ["net11.0"],
+    visibility = ["//visibility:public"],
+    deps = [":lib"],
+)
+
+csharp_nunit_test(
+    name = "lib_test",
+    srcs = ["libtest.cs"],
+    target_frameworks = ["net11.0"],
+    deps = [":lib"],
+)
+
+csharp_binary(
+    name = "web",
+    srcs = ["web.cs"],
+    project_sdk = "web",
+    target_frameworks = ["net11.0"],
+    visibility = ["//visibility:public"],
+)
+
+nuget_pack(
+    name = "tool_pack",
+    authors = ["rules_dotnet"],
+    binary = ":hello",
+    command_name = "net11-smoke",
+    description = "A .NET 11 tool packed by rules_dotnet's integration tests.",
+    package_id = "RulesDotnet.Tests.Net11.Tool",
+    target_frameworks = ["net11.0"],
+    version = "1.0.0",
+)
