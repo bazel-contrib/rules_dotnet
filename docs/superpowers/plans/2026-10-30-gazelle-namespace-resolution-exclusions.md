@@ -174,13 +174,13 @@
 
 ## Task Group 2: Resolve All Non-Self Workspace Providers
 
-- [ ] **Group status: Resolve all non-self workspace providers**
+- [x] **Group status: Resolve all non-self workspace providers**
 
 **Files:**
 - Modify: `dotnet/gazelle/resolve.go:74-163`
 - Test: `dotnet/gazelle/resolve_test.go`
 
-- [ ] **Task 4: Replace namespace suppression with handled-result resolution**
+- [x] **Task 4: Replace namespace suppression with handled-result resolution**
 
   In `dotnet/gazelle/resolve.go`, replace this exact block:
 
@@ -265,7 +265,7 @@
 
   Leave the existing final map-to-slice conversion, `sort.Strings(sorted)`, `deps` deletion, and `deps` assignment unchanged. This preserves manual dependencies, deduplication, and deterministic output.
 
-- [ ] **Task 5: Return every workspace label and an explicit handled result**
+- [x] **Task 5: Return every workspace label and an explicit handled result**
 
   In `dotnet/gazelle/resolve.go`, replace this exact function and its comment:
 
@@ -364,7 +364,7 @@
 
   This preserves `dotnet_resolve` as one explicit label, retains workspace-over-NuGet precedence, and makes self-only workspace matches successfully handled with no dependency and no NuGet or parent fallback.
 
-- [ ] **Task 6: Format the resolver source and tests**
+- [x] **Task 6: Format the resolver source and tests**
 
   Run:
 
@@ -374,7 +374,7 @@
 
   Expected: no output and exit status `0`.
 
-- [ ] **Task 7: Run all focused resolver tests**
+- [x] **Task 7: Run all focused resolver tests**
 
   Run:
 
@@ -390,7 +390,7 @@
 
   This includes the new regressions and the existing `TestResolveSkipsSelfImport`, `TestResolveKeepsExistingDepsAndSimplifiesSamePackage`, `TestResolveOverride`, `TestResolveSamePackageWithRepoName`, `TestResolveTestAgainstSiblingBinary`, and `TestResolveNamespaces`. The last test retains coverage of `System` suppression and the ordinary unresolved-import path.
 
-- [ ] **Task 8: Commit the resolver correction**
+- [x] **Task 8: Commit the resolver correction**
 
   Run:
 
