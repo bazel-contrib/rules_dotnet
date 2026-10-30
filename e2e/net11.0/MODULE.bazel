@@ -1,0 +1,33 @@
+"rules_dotnet .NET 11 integration tests"
+
+module(
+    name = "e2e_net11.0",
+    version = "0.0.0",
+)
+
+bazel_dep(name = "rules_dotnet", version = "0.0.0")
+local_path_override(
+    module_name = "rules_dotnet",
+    path = "../..",
+)
+
+dotnet = use_extension("@rules_dotnet//dotnet:extensions.bzl", "dotnet")
+dotnet.toolchain(dotnet_version = "11.0.100-rc.3.26522.148")
+use_repo(dotnet, "dotnet_toolchains")
+
+register_toolchains("@dotnet_toolchains//:all")
+
+paket = use_extension("@rules_dotnet//dotnet:paket.bzl", "paket")
+paket.parse(
+    dependencies = "//:paket.dependencies",
+    lock = "//:paket.lock",
+)
+use_repo(paket, "paket.main")
+
+bazel_dep(name = "bazel_ci_rules", version = "1.0.0", dev_dependency = True)
+bazel_dep(name = "platforms", version = "1.0.0", dev_dependency = True)
+bazel_dep(name = "rules_pkg", version = "1.1.0", dev_dependency = True)
+bazel_dep(name = "rules_shell", version = "0.5.0", dev_dependency = True)
+
+internal_dev_deps = use_extension("//:internal_dev_deps.bzl", "internal_dev_deps", dev_dependency = True)
+use_repo(internal_dev_deps, "buildkite_config")

@@ -1,0 +1,38 @@
+load(
+    "@rules_dotnet//dotnet:defs.bzl",
+    "fsharp_binary",
+    "fsharp_library",
+    "fsharp_nunit_test",
+)
+
+fsharp_library(
+    name = "lib",
+    srcs = ["lib.fs"],
+    internals_visible_to = ["lib_test"],
+    target_frameworks = ["net11.0"],
+    deps = [
+        "//basic_csharp:compat",
+        "@paket.main//fsharp.core",
+    ],
+)
+
+fsharp_binary(
+    name = "hello",
+    srcs = ["hello.fs"],
+    target_frameworks = ["net11.0"],
+    visibility = ["//visibility:public"],
+    deps = [
+        ":lib",
+        "@paket.main//fsharp.core",
+    ],
+)
+
+fsharp_nunit_test(
+    name = "lib_test",
+    srcs = ["libtest.fs"],
+    target_frameworks = ["net11.0"],
+    deps = [
+        ":lib",
+        "@paket.main//fsharp.core",
+    ],
+)

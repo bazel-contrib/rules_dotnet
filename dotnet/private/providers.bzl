@@ -126,6 +126,7 @@ binary, so a publish copies these rather than laying the tree out a second time.
         "transitive_runtime_deps": "list[DotnetAssemblyRuntimeInfo]: The transitive runtime dependencies of the binary",
         "apphost_pack_info": "DotnetApphostPackInfo: The apphost pack for the binary",
         "runtime_pack_info": "DotnetRuntimePackInfo: The runtime pack for the binary",
+        "runtime_version": "string | None: The minimum shared runtime version, including the selected SDK's prerelease suffix when targeting its framework.",
     },
 )
 

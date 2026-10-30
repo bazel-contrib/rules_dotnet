@@ -12,9 +12,8 @@ defaults to for it. Newer language features depend on runtime support that
 older targets lack, which is why the cap exists.
 
 DEFAULT_TARGET_FRAMEWORK is the newest generally-available framework.
-Previews and release candidates are excluded: their packs are not
-published as stable versions, so every table here stops at the same
-release and they cannot drift apart.
+Preview frameworks are available for explicit targets, with matching
+prerelease packs, but never become the default.
 """
 
 # Read from .NET SDK 11.0.100-rc.3.26522.148.
@@ -65,6 +64,7 @@ SDK_NETCOREAPP_FRAMEWORKS = [
     "net8.0",
     "net9.0",
     "net10.0",
+    "net11.0",
 ]
 
 SDK_LANG_VERSIONS = {
@@ -105,6 +105,7 @@ SDK_LANG_VERSIONS = {
     "net8.0": "12.0",
     "net9.0": "13.0",
     "net10.0": "14.0",
+    "net11.0": "15.0",
 }
 
 # Each framework mapped to the frameworks it can directly compile against.
@@ -156,4 +157,5 @@ FRAMEWORK_COMPATIBILITY = {
     "net8.0": ["net7.0"],
     "net9.0": ["net8.0"],
     "net10.0": ["net9.0"],
+    "net11.0": ["net10.0"],
 }

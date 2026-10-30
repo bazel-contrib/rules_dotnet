@@ -159,11 +159,11 @@ let private filterSdkFiles (sdk: Sdk) =
             | "win-arm64" -> true
             | _ -> false)
         |> Seq.filter (fun f ->
-            // We are only intersted in the compressed artifacts, not exe or pkg or similar artifacts
-            f.Name.EndsWith(".zip") || f.Name.EndsWith(".tar.gz"))
-        |> Seq.filter (fun f ->
-            // Some releases have .zip and .tar.gz artifacts for linux so we remove the .zip artifacts
-            not (f.Rid = "linux-x64" && f.Name.EndsWith(".zip")))
+            // Some releases publish both archive formats for the same RID.
+            if f.Rid.StartsWith("win-") then
+                f.Name.EndsWith(".zip")
+            else
+                f.Name.EndsWith(".tar.gz"))
         |> Seq.filter (fun f ->
             // There were some incorrect preview releases which had arm binaries released as x64 binaries, removing those
             not (f.Rid = "osx-x64" && f.Name.EndsWith("arm64.tar.gz")))
@@ -283,23 +283,6 @@ let hostRid () =
     else
         $"linux-{arch}"
 
-/// Channels up to and including the newest generally-available one, oldest
-/// first.
-///
-/// This is the set of frameworks rules_dotnet claims to support. A release
-/// that is still a preview or a release candidate is deliberately excluded:
-/// its reference and runtime packs are not published as stable versions yet,
-/// so a framework entry for it would resolve to nothing. Keeping every
-/// generated table keyed off this one list is what stops them drifting apart.
-let gaChannels (index: (Version * ReleaseIndexEntry) list) =
-    let stable = Version(latestStableChannel index)
-
-    index
-    |> List.map fst
-    |> List.filter (fun version -> version <= stable)
-    |> List.sort
-    |> List.map (fun version -> version.ToString())
-
 /// The newest SDK archive for the host, as (version, url).
 ///
 /// Deliberately the newest *available* SDK including previews: the generator's
@@ -321,7 +304,7 @@ let newestSdkArchive (index: (Version * ReleaseIndexEntry) list) =
     | Some sdk ->
         let rid = hostRid ()
 
-        match sdk.Files |> Seq.filter (fun f -> f.Rid = rid) |> Seq.filter (fun f -> f.Name.EndsWith ".tar.gz" || f.Name.EndsWith ".zip") |> Seq.tryHead with
+        match filterSdkFiles sdk |> Seq.tryFind (fun f -> f.Rid = rid) with
         | None -> failwith $"No SDK archive for {rid} in {sdk.Version}"
         | Some file -> sdk.Version, file.Url
 

@@ -221,25 +221,19 @@ let private chainCompatibility (chain: string list) =
             |> List.pairwise
             |> List.map (fun (previous, tfm) -> tfm, previous :: bridge tfm))
 
-/// Drops frameworks newer than the newest generally-available release.
-///
-/// The SDK we read is the newest available, previews included, so its lists
-/// mention frameworks whose packs do not exist as stable versions yet. Those
-/// must not reach the generated tables: `pack_bands.bzl` could not resolve
-/// them, and a framework rules_dotnet cannot build has no business being in
-/// the compatibility graph.
-let private upToStable (stableChannel: string) (aliases: string list) =
-    let stable = Version stableChannel
+/// Keeps framework support aligned with the channels used to generate packs.
+let private upToChannel (latestChannel: string) (aliases: string list) =
+    let latest = Version latestChannel
 
     // Only netX.Y monikers parse; netstandard*, netcoreapp* and net48 fall
     // through and are always kept.
     aliases
     |> List.filter (fun alias ->
         match Version.TryParse(alias.Substring 3) with
-        | true, version -> version <= stable
+        | true, version -> version <= latest
         | _ -> true)
 
-let generateFrameworks output sdkVersion sdkUrl stableChannel =
+let generateFrameworks output sdkVersion sdkUrl stableChannel latestChannel =
     let sdk = downloadSdk sdkVersion sdkUrl
     let props = XDocument.Load(sdkTargetsFile sdk "Microsoft.NET.SupportedTargetFrameworks.props")
     let itemNames = defineItemNames (sdkTargetsFile sdk "Microsoft.NET.Sdk.BeforeCommon.targets")
@@ -254,7 +248,7 @@ let generateFrameworks output sdkVersion sdkUrl stableChannel =
     let groups =
         families
         |> List.map (fun identity ->
-            let aliases = readAliases props itemNames.[identity] |> upToStable stableChannel
+            let aliases = readAliases props itemNames.[identity] |> upToChannel latestChannel
 
             if List.isEmpty aliases then
                 failwith $"Item group {itemNames.[identity]} for {identity} is empty"
@@ -313,9 +307,8 @@ let generateFrameworks output sdkVersion sdkUrl stableChannel =
     line ""
 
     line "DEFAULT_TARGET_FRAMEWORK is the newest generally-available framework."
-    line "Previews and release candidates are excluded: their packs are not"
-    line "published as stable versions, so every table here stops at the same"
-    line "release and they cannot drift apart."
+    line "Preview frameworks are available for explicit targets, with matching"
+    line "prerelease packs, but never become the default."
 
     line "\"\"\""
     line ""

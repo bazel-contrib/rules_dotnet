@@ -81,6 +81,7 @@ _subsystem_version = {
     "net8.0": None,
     "net9.0": None,
     "net10.0": None,
+    "net11.0": None,
 }
 
 _net = FRAMEWORK_COMPATIBILITY.keys().index("net11")
@@ -146,8 +147,10 @@ def fsharp_ref_assemblies_are_deterministic(sdk_version):
     Returns:
         True if `--refout` output is deterministic on this SDK.
     """
-    return semver.to_comparable(sdk_version, relaxed = True) >= \
-           semver.to_comparable(_DETERMINISTIC_FSHARP_REF_ASSEMBLY_SDK, relaxed = True)
+    return (
+        semver.to_comparable(sdk_version, relaxed = True) >=
+        semver.to_comparable(_DETERMINISTIC_FSHARP_REF_ASSEMBLY_SDK, relaxed = True)
+    )
 
 # The first major SDK version with F# 9, whose compiler checks nullness.
 # https://devblogs.microsoft.com/dotnet/nullable-reference-types-in-fsharp-9/
@@ -1072,7 +1075,7 @@ def generate_depsjson(
     return base
 
 # For runtimeconfig.json spec see https://github.com/dotnet/sdk/blob/main/documentation/specs/runtime-configuration-file.md
-def generate_runtimeconfig(target_framework, project_sdk, is_self_contained, roll_forward_behavior, runtime_pack_info = None):
+def generate_runtimeconfig(target_framework, project_sdk, is_self_contained, roll_forward_behavior, runtime_pack_info = None, runtime_version = None):
     """Generates a runtimeconfig.json file.
 
     Args:
@@ -1081,6 +1084,7 @@ def generate_runtimeconfig(target_framework, project_sdk, is_self_contained, rol
         is_self_contained: If the target is a self-contained publish.
         roll_forward_behavior: The roll forward behavior to use.
         runtime_pack_info: The DotnetRuntimePackInfo of the runtime pack that is used for a self contained publish.
+        runtime_version: The minimum shared runtime version, or None to use the target framework's release version.
     Returns:
         The runtimeconfig.json file as a struct.
     """
@@ -1098,7 +1102,8 @@ def generate_runtimeconfig(target_framework, project_sdk, is_self_contained, rol
             frameworks.append({"name": assembly_runtime_info.name, "version": assembly_runtime_info.version})
         base["runtimeOptions"]["includedFrameworks"] = frameworks
     else:
-        runtime_version = tfm_to_semver(target_framework)
+        if runtime_version == None:
+            runtime_version = tfm_to_semver(target_framework)
         frameworks = [
             {"name": "Microsoft.NETCore.App", "version": runtime_version},
         ]
