@@ -1,0 +1,146 @@
+{
+  "version": 1,
+  "inputHash": "521199934",
+  "frameworks": {
+    "net10.0": {
+      "packages": [
+        {
+          "id": "Microsoft.Extensions.Configuration",
+          "version": "8.0.0",
+          "sha512": "sha512-2kio7ztM0qa\u002Bt4AIOC2fzNzdQv86cdnvxaxp1AIEISlKyVsHzxFSA0GmnuJBklzQQNSaOC3yQ\u002BL6GU9olu\u002BXNA==",
+          "urls": [
+            "https://api.nuget.org/v3-flatcontainer/microsoft.extensions.configuration/8.0.0/microsoft.extensions.configuration.8.0.0.nupkg"
+          ]
+        },
+        {
+          "id": "Microsoft.Extensions.Configuration.Abstractions",
+          "version": "8.0.0",
+          "sha512": "sha512-MxYXCRCpQpDI30/tJvqISkfdm/l063rSI2jVpjMIZgoB0tq0pEZiBh2srsz0ugnNq/zNRjb3arMXi\u002BzsWtMaLw==",
+          "urls": [
+            "https://api.nuget.org/v3-flatcontainer/microsoft.extensions.configuration.abstractions/8.0.0/microsoft.extensions.configuration.abstractions.8.0.0.nupkg"
+          ]
+        },
+        {
+          "id": "Microsoft.Extensions.Configuration.Binder",
+          "version": "8.0.0",
+          "sha512": "sha512-mlkx6dQXuM1JA/6LlKqOwHofDUM4Zxe\u002BOBcaXrQysXZdfalefwkuaZfszz9IKNVxYxemj8yP7TLwrU8fgrtyIw==",
+          "urls": [
+            "https://api.nuget.org/v3-flatcontainer/microsoft.extensions.configuration.binder/8.0.0/microsoft.extensions.configuration.binder.8.0.0.nupkg"
+          ]
+        },
+        {
+          "id": "Microsoft.Extensions.DependencyInjection",
+          "version": "8.0.0",
+          "sha512": "sha512-ljka9K4FQvSulsgAnJ/78wSsrfR2zaJiqOpz4zsXJSlUEEQYbFnWVjd7st5CyfWSXgYyqB9udRbypkbokW8W7A==",
+          "urls": [
+            "https://api.nuget.org/v3-flatcontainer/microsoft.extensions.dependencyinjection/8.0.0/microsoft.extensions.dependencyinjection.8.0.0.nupkg"
+          ]
+        },
+        {
+          "id": "Microsoft.Extensions.DependencyInjection.Abstractions",
+          "version": "8.0.0",
+          "sha512": "sha512-lLwF7Sl1UQlWXZzfyQEIfuH6CDAt2jkxBryaC9c4Tw3CtsLxI8G9U/zga6vb\u002BoRdxtIqFjxLBkbFJR3MWurCgg==",
+          "urls": [
+            "https://api.nuget.org/v3-flatcontainer/microsoft.extensions.dependencyinjection.abstractions/8.0.0/microsoft.extensions.dependencyinjection.abstractions.8.0.0.nupkg"
+          ]
+        },
+        {
+          "id": "Microsoft.Extensions.Diagnostics",
+          "version": "8.0.0",
+          "sha512": "sha512-5PPIUzwNmj/VQ\u002BM4NSMKcVVDfhl\u002BmwdIu\u002B9v\u002BC7lFWeFE/b2DBTL33qadO5me/5yBotLB\u002BcUjWCDNMWPfaQtWw==",
+          "urls": [
+            "https://api.nuget.org/v3-flatcontainer/microsoft.extensions.diagnostics/8.0.0/microsoft.extensions.diagnostics.8.0.0.nupkg"
+          ]
+        },
+        {
+          "id": "Microsoft.Extensions.Diagnostics.Abstractions",
+          "version": "8.0.0",
+          "sha512": "sha512-p13QQOPgPpDIuqAGvVaduf0JmDz5wnv8skbZanPiWVzqeu5hFkOJifjfMbVrx/5q2qen/LarlexbHWTQsX/2Fw==",
+          "urls": [
+            "https://api.nuget.org/v3-flatcontainer/microsoft.extensions.diagnostics.abstractions/8.0.0/microsoft.extensions.diagnostics.abstractions.8.0.0.nupkg"
+          ]
+        },
+        {
+          "id": "Microsoft.Extensions.Http",
+          "version": "8.0.0",
+          "sha512": "sha512-yQptohoBXO60\u002BHhhBrjxwS/tFOwvOsClhGCAYghRa\u002BY0VuUeTLXuCi8pntIfCb0DvWDV5KZR6t8UVmPAUP3u8Q==",
+          "urls": [
+            "https://api.nuget.org/v3-flatcontainer/microsoft.extensions.http/8.0.0/microsoft.extensions.http.8.0.0.nupkg"
+          ]
+        },
+        {
+          "id": "Microsoft.Extensions.Logging",
+          "version": "8.0.0",
+          "sha512": "sha512-qjBXbEKN/2m6xfXXFyGvbE71g7xSTtvQqUtJy9gPaYkFAhJg4aQywy5tSM5aMPaCLCCfEdz3yBmrofqDR5JbBg==",
+          "urls": [
+            "https://api.nuget.org/v3-flatcontainer/microsoft.extensions.logging/8.0.0/microsoft.extensions.logging.8.0.0.nupkg"
+          ]
+        },
+        {
+          "id": "Microsoft.Extensions.Logging.Abstractions",
+          "version": "8.0.0",
+          "sha512": "sha512-UKCt2W0w2QWA\u002B44ColzqCqFfTSJ0Qnm1rP4YzIVot0QCqgYtXbE8xYh6CL/STgfLyIsvwQ7o7sLDft87zaf4pw==",
+          "urls": [
+            "https://api.nuget.org/v3-flatcontainer/microsoft.extensions.logging.abstractions/8.0.0/microsoft.extensions.logging.abstractions.8.0.0.nupkg"
+          ]
+        },
+        {
+          "id": "Microsoft.Extensions.Options",
+          "version": "8.0.0",
+          "sha512": "sha512-HABAgqEy57daDJWs7zV4pNXbQsVeCZbkC5W2Y\u002BmoPFog7Ugahdt1Z//34949u6an1P5cgl3HzpXelWaJr6FsWg==",
+          "urls": [
+            "https://api.nuget.org/v3-flatcontainer/microsoft.extensions.options/8.0.0/microsoft.extensions.options.8.0.0.nupkg"
+          ]
+        },
+        {
+          "id": "Microsoft.Extensions.Options.ConfigurationExtensions",
+          "version": "8.0.0",
+          "sha512": "sha512-XDKuZ65OhzIWu77BVVR3jgrL68KDhiot68sRqZXEKl/XX5Q2yNpCGqUbxcEttObE6C8S2h/5QrxabhqM88d6fQ==",
+          "urls": [
+            "https://api.nuget.org/v3-flatcontainer/microsoft.extensions.options.configurationextensions/8.0.0/microsoft.extensions.options.configurationextensions.8.0.0.nupkg"
+          ]
+        },
+        {
+          "id": "Microsoft.Extensions.Primitives",
+          "version": "8.0.0",
+          "sha512": "sha512-H1R1yj084YRjRW3RNa\u002BsUC1vgv6m5OSBSmH4ZhbDSN7PKLc9FcK7J20aPAOepgZPdeEyn286ZMqjUg1wq5LDLQ==",
+          "urls": [
+            "https://api.nuget.org/v3-flatcontainer/microsoft.extensions.primitives/8.0.0/microsoft.extensions.primitives.8.0.0.nupkg"
+          ]
+        },
+        {
+          "id": "Serilog",
+          "version": "4.1.0",
+          "sha512": "sha512-SwvLxu81tNGRTchw8\u002ByvxKfjILZoQvj84D1zOHT9TRcYhTQ8keQ90dXkn1XFD5SM9saBxkgZqGMhhzCf\u002BCvhWg==",
+          "urls": [
+            "https://api.nuget.org/v3-flatcontainer/serilog/4.1.0/serilog.4.1.0.nupkg"
+          ]
+        },
+        {
+          "id": "Serilog.Sinks.Async",
+          "version": "2.1.0",
+          "sha512": "sha512-BMYYH5h89FnZb/r8oqfLfVvvD1sHknfetawAnSOJKf\u002BLB1suc1BDMFBUYtdmUs4QaWbdOgQHyHmb/l0L7H8P3Q==",
+          "urls": [
+            "https://api.nuget.org/v3-flatcontainer/serilog.sinks.async/2.1.0/serilog.sinks.async.2.1.0.nupkg"
+          ]
+        },
+        {
+          "id": "Serilog.Sinks.File",
+          "version": "6.0.0",
+          "sha512": "sha512-kNqlQDN0WXMYuJc/Sncl3RTURCWnV5PIK6pBQ66ztK64QjY27dKzuCqd82fU5CM55zuq9i1CyH59SpWPpDlGCQ==",
+          "urls": [
+            "https://api.nuget.org/v3-flatcontainer/serilog.sinks.file/6.0.0/serilog.sinks.file.6.0.0.nupkg"
+          ]
+        },
+        {
+          "id": "System.Diagnostics.DiagnosticSource",
+          "version": "8.0.0",
+          "sha512": "sha512-huMsYul3PboZKmO/8OL/zVeCbtESPJJh\u002BoySKfnR3CaWKzdA\u002BwJfatXBORYldabEk7ITqe8/wXR9FcoO3QxYeA==",
+          "urls": [
+            "https://api.nuget.org/v3-flatcontainer/system.diagnostics.diagnosticsource/8.0.0/system.diagnostics.diagnosticsource.8.0.0.nupkg"
+          ]
+        }
+      ]
+    }
+  }
+}

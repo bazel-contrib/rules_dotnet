@@ -60,6 +60,7 @@ def _compile_action(ctx, tfm, toolchain):
         root_namespace = ctx.attr.root_namespace,
         scoped_css_tool = ctx.attr._scoped_css_tool,
         allow_unsafe_blocks = ctx.attr.allow_unsafe_blocks,
+        implicit_usings = ctx.attr.implicit_usings,
         nullable = ctx.attr.nullable,
         run_analyzers = ctx.attr.run_analyzers,
         is_analyzer = False,

@@ -1,0 +1,21 @@
+load("@bazel_gazelle//:def.bzl", "gazelle", "gazelle_binary")
+
+package(default_visibility = ["//visibility:public"])
+
+# gazelle:dotnet_target_frameworks net10.0
+
+gazelle_binary(
+    name = "gazelle_bin",
+    languages = ["@rules_dotnet//dotnet/gazelle"],
+)
+
+# Regenerate the BUILD files in this directory tree:
+# bazel run //gazelle_csharp:gazelle
+gazelle(
+    name = "gazelle",
+    extra_args = [
+        "-dotnet_nuget_lock_file=gazelle_csharp/nuget_resolve.json",
+        "gazelle_csharp",
+    ],
+    gazelle = "gazelle_bin",
+)

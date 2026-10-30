@@ -1,0 +1,2 @@
+gazelle: no nuget_resolve.json at %WORKSPACEPATH%/nuget_resolve.json; NuGet resolution is disabled
+gazelle: warning: unresolved C# import "Xunit" for //src/Calculator:calculator_nunit_test

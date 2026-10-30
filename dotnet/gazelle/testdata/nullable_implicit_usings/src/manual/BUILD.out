@@ -1,0 +1,11 @@
+load("@rules_dotnet//dotnet:defs.bzl", "csharp_library")
+
+csharp_library(
+    name = "manual",
+    srcs = ["Manual.cs"],
+    implicit_usings = True,
+    nullable = "annotations",
+    project_sdk = "default",
+    target_frameworks = ["net10.0"],
+    visibility = ["//visibility:public"],
+)

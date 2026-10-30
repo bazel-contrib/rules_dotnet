@@ -1,0 +1,30 @@
+load("@bazel_gazelle//:def.bzl", "gazelle_binary", "gazelle_generation_test")
+
+# It is important not to add any BUILD.bazel files in any subdirectory of
+# this one: BUILD.in/BUILD.out are the fixtures and are picked up as test
+# data. The exclude directive keeps a root `bazel run //:gazelle` out of the
+# fixture directories, while this file itself stays visible to gazelle so
+# testdata/** is not globbed into the parent package.
+# gazelle:exclude *
+
+gazelle_binary(
+    name = "gazelle",
+    languages = ["//dotnet/gazelle"],
+    visibility = ["//visibility:private"],
+)
+
+# A directory is a test case if it contains a MODULE.bazel file.
+TEST_CASE_DIRS = sorted({
+    marker_file.rsplit("/", 1)[0]: None
+    for marker_file in glob(["**/MODULE.bazel"])
+}.keys())
+
+[
+    gazelle_generation_test(
+        name = test_dir,
+        gazelle_binary = ":gazelle",
+        gazelle_timeout_seconds = 60,
+        test_data = glob([test_dir + "/**"]),
+    )
+    for test_dir in TEST_CASE_DIRS
+]

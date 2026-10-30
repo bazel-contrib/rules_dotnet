@@ -1,0 +1,26 @@
+{
+  "version": 1,
+  "inputHash": "1824490472",
+  "frameworks": {
+    "net10.0": {
+      "packages": [
+        {
+          "id": "Serilog",
+          "version": "4.0.0",
+          "sha512": "sha512-H2J5vPqTypwTGA3Xx\u002BWUTVNRNYuc06Ngy78S8t2lCHAMuf\u002Bt7/1N/ncqbdssAp4sNHPmVaO2YKZE3lHWcTMmjA==",
+          "urls": [
+            "https://api.nuget.org/v3-flatcontainer/serilog/4.0.0/serilog.4.0.0.nupkg"
+          ]
+        },
+        {
+          "id": "Serilog.Sinks.Console",
+          "version": "6.0.0",
+          "sha512": "sha512-ScaiD0KptG2MzNdtKH6SIQrrln2Pja\u002BTvoJWH6BQ2R\u002BSfQu16oGhR8qombmr9Hthbl10qM/P/q3BVF2gtzqXnA==",
+          "urls": [
+            "https://api.nuget.org/v3-flatcontainer/serilog.sinks.console/6.0.0/serilog.sinks.console.6.0.0.nupkg"
+          ]
+        }
+      ]
+    }
+  }
+}

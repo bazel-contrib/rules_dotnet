@@ -1,0 +1,10 @@
+load(
+    "//dotnet:defs.bzl",
+    "csharp_mstest_test",
+)
+
+csharp_mstest_test(
+    name = "MSTestTest",
+    srcs = ["mstesttest.cs"],
+    target_frameworks = ["net9.0"],
+)

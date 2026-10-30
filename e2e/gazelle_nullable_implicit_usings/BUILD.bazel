@@ -1,0 +1,17 @@
+load("@bazel_gazelle//:def.bzl", "gazelle", "gazelle_binary")
+
+package(default_visibility = ["//visibility:public"])
+
+# gazelle:dotnet_target_frameworks net10.0
+
+gazelle_binary(
+    name = "gazelle_bin",
+    languages = ["@rules_dotnet//dotnet/gazelle"],
+)
+
+# Regenerate the BUILD files in this module:
+# bazel run //:gazelle
+gazelle(
+    name = "gazelle",
+    gazelle = "gazelle_bin",
+)

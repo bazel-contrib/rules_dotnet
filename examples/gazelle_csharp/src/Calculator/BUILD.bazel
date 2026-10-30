@@ -1,0 +1,20 @@
+load("@rules_dotnet//dotnet:defs.bzl", "csharp_library", "csharp_nunit_test")
+
+csharp_library(
+    name = "calculator",
+    srcs = ["Calculator.cs"],
+    internals_visible_to = ["calculator_nunit_test"],
+    project_sdk = "default",
+    target_frameworks = ["net10.0"],
+    visibility = ["//visibility:public"],
+    deps = ["@nuget.net10.0//newtonsoft.json"],
+)
+
+csharp_nunit_test(
+    name = "calculator_nunit_test",
+    srcs = ["CalculatorTests.cs"],
+    project_sdk = "default",
+    target_frameworks = ["net10.0"],
+    visibility = ["//visibility:public"],
+    deps = [":calculator"],
+)

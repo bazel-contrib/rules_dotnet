@@ -1,0 +1,14 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "nuget",
+    srcs = ["nuget.go"],
+    importpath = "github.com/bazel-contrib/rules_dotnet/dotnet/gazelle/private/nuget",
+    visibility = ["//visibility:public"],
+)
+
+go_test(
+    name = "nuget_test",
+    srcs = ["nuget_test.go"],
+    embed = [":nuget"],
+)

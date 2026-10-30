@@ -5,6 +5,7 @@ bzl_library(
     srcs = ["csharp_assembly.bzl"],
     visibility = ["//dotnet:__subpackages__"],
     deps = [
+        ":implicit_usings",
         ":razor",
         ":scoped_css",
         "//dotnet/private:common",
@@ -14,6 +15,13 @@ bzl_library(
         "//dotnet/private/sdk:packs",
         "@bazel_skylib//lib:dicts",
     ],
+)
+
+bzl_library(
+    name = "implicit_usings",
+    srcs = ["implicit_usings.bzl"],
+    visibility = ["//dotnet:__subpackages__"],
+    deps = ["//dotnet/private:common"],
 )
 
 bzl_library(

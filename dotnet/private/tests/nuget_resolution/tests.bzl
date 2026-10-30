@@ -547,4 +547,56 @@ TESTS = [
         default_configuration = True,
         expected_libs = ["lib/netstandard2.0/A.dll"],
     ),
+    nuget_resolution_test(
+        name = "build_transitive_assemblies_are_added_to_the_lib_group",
+        # What `MSTest.TestFramework` looks like at one framework: its own
+        # assembly under `lib/net8.0/` plus `TestFramework.Extensions.dll`
+        # under `buildTransitive/net8.0/`. Both end up next to the binary and
+        # the compile group falls back to both (same as the Task 3
+        # workaround's refs = libs).
+        files = [
+            "lib/net8.0/A.dll",
+            "buildTransitive/net8.0/T.dll",
+        ],
+        expected_libs = ["buildTransitive/net8.0/T.dll", "lib/net8.0/A.dll"],
+        expected_refs = ["buildTransitive/net8.0/T.dll", "lib/net8.0/A.dll"],
+    ),
+    nuget_resolution_test(
+        name = "a_package_of_only_build_transitive_assemblies_resolves",
+        # What `MSTest.TestAdapter` looks like: no `lib/` folder at all. The
+        # assemblies are the package's payload, so the compile group falls
+        # back to them the same way it falls back to `lib` assemblies.
+        files = [
+            "buildTransitive/netstandard2.0/A.dll",
+            "buildTransitive/net8.0/A.dll",
+        ],
+        expected_libs = ["buildTransitive/net8.0/A.dll"],
+        expected_refs = ["buildTransitive/net8.0/A.dll"],
+    ),
+    nuget_resolution_test(
+        name = "build_transitive_assemblies_resolve_by_framework_compatibility",
+        # A net6.0 build cannot use the net8.0 assemblies and lands on
+        # netstandard2.0, through the same nearest-compatible-framework walk
+        # as every other group.
+        files = [
+            "buildTransitive/netstandard2.0/A.dll",
+            "buildTransitive/net8.0/A.dll",
+        ],
+        target_framework = "net6.0",
+        expected_libs = ["buildTransitive/netstandard2.0/A.dll"],
+        expected_refs = ["buildTransitive/netstandard2.0/A.dll"],
+    ),
+    nuget_resolution_test(
+        name = "only_portable_build_transitive_assemblies_are_collected",
+        # `MSTest.TestAdapter` ships `winui`/`uwp` subfolders and a
+        # `_localization` folder under `buildTransitive/`; neither is a
+        # portable framework folder.
+        files = [
+            "buildTransitive/net8.0/A.dll",
+            "buildTransitive/net8.0/winui/W.dll",
+            "buildTransitive/_localization/de/A.resources.dll",
+        ],
+        expected_libs = ["buildTransitive/net8.0/A.dll"],
+        expected_refs = ["buildTransitive/net8.0/A.dll"],
+    ),
 ]

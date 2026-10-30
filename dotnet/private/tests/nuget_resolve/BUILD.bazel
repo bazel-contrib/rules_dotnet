@@ -1,0 +1,9 @@
+load(":extension_test.bzl", "extension_test_suite")
+load(":input_hash_test.bzl", "input_hash_test_suite")
+load(":lock_test.bzl", "lock_test_suite")
+
+extension_test_suite(name = "extension_test")
+
+input_hash_test_suite(name = "input_hash_test")
+
+lock_test_suite(name = "lock_test")

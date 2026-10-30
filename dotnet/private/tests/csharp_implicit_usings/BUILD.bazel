@@ -1,0 +1,135 @@
+load(
+    "//dotnet:defs.bzl",
+    "csharp_binary",
+    "csharp_library",
+    "csharp_mstest_test",
+    "csharp_nunit_test",
+    "csharp_test",
+    "csharp_xunit_test",
+)
+load(":action_test.bzl", "implicit_usings_action_test")
+load(":implicit_usings_test.bzl", "implicit_usings_test_suite")
+
+csharp_library(
+    name = "library_enabled",
+    srcs = ["Library.cs"],
+    implicit_usings = True,
+    target_frameworks = ["net10.0"],
+)
+
+implicit_usings_action_test(
+    name = "library_enabled_actions_test",
+    expected_output_suffix = "library_enabled/net10.0/library_enabled.GlobalUsings.g.cs",
+    target_under_test = ":library_enabled",
+)
+
+csharp_binary(
+    name = "binary_enabled",
+    srcs = ["Binary.cs"],
+    implicit_usings = True,
+    target_frameworks = ["net10.0"],
+)
+
+implicit_usings_action_test(
+    name = "binary_enabled_actions_test",
+    expected_output_suffix = "binary_enabled/net10.0/binary_enabled.GlobalUsings.g.cs",
+    target_under_test = ":binary_enabled",
+)
+
+csharp_test(
+    name = "generic_test_enabled",
+    srcs = ["GenericTest.cs"],
+    implicit_usings = True,
+    target_frameworks = ["net10.0"],
+)
+
+implicit_usings_action_test(
+    name = "generic_test_enabled_actions_test",
+    expected_output_suffix = "generic_test_enabled/net10.0/generic_test_enabled.GlobalUsings.g.cs",
+    target_under_test = ":generic_test_enabled",
+)
+
+csharp_nunit_test(
+    name = "nunit_test_enabled",
+    srcs = ["NUnitTests.cs"],
+    implicit_usings = True,
+    target_frameworks = ["net10.0"],
+)
+
+implicit_usings_action_test(
+    name = "nunit_test_enabled_actions_test",
+    expected_output_suffix = "nunit_test_enabled/net10.0/nunit_test_enabled.GlobalUsings.g.cs",
+    target_under_test = ":nunit_test_enabled",
+)
+
+csharp_xunit_test(
+    name = "xunit_test_enabled",
+    srcs = ["XunitTests.cs"],
+    implicit_usings = True,
+    target_frameworks = ["net10.0"],
+)
+
+implicit_usings_action_test(
+    name = "xunit_test_enabled_actions_test",
+    expected_output_suffix = "xunit_test_enabled/net10.0/xunit_test_enabled.GlobalUsings.g.cs",
+    target_under_test = ":xunit_test_enabled",
+)
+
+csharp_mstest_test(
+    name = "mstest_test_enabled",
+    srcs = ["MSTestTests.cs"],
+    implicit_usings = True,
+    target_frameworks = ["net10.0"],
+)
+
+implicit_usings_action_test(
+    name = "mstest_test_enabled_actions_test",
+    expected_output_suffix = "mstest_test_enabled/net10.0/mstest_test_enabled.GlobalUsings.g.cs",
+    target_under_test = ":mstest_test_enabled",
+)
+
+csharp_library(
+    name = "internals_enabled",
+    srcs = ["Internals.cs"],
+    implicit_usings = True,
+    internals_visible_to = ["friend"],
+    target_frameworks = ["net10.0"],
+)
+
+implicit_usings_action_test(
+    name = "internals_enabled_actions_test",
+    expected_compile_actions = 2,
+    expected_output_suffix = "internals_enabled/net10.0/internals_enabled.GlobalUsings.g.cs",
+    target_under_test = ":internals_enabled",
+)
+
+csharp_library(
+    name = "library_unset",
+    srcs = ["Disabled.cs"],
+    target_frameworks = ["net10.0"],
+)
+
+implicit_usings_action_test(
+    name = "library_unset_actions_test",
+    expected_args = ["/nullable:disable"],
+    expected_content = "",
+    expected_source = "Disabled.cs",
+    target_under_test = ":library_unset",
+)
+
+csharp_library(
+    name = "library_disabled",
+    srcs = ["Disabled.cs"],
+    implicit_usings = False,
+    target_frameworks = ["net10.0"],
+)
+
+implicit_usings_action_test(
+    name = "library_disabled_actions_test",
+    expected_args = ["/nullable:disable"],
+    expected_content = "",
+    expected_source = "Disabled.cs",
+    target_under_test = ":library_disabled",
+)
+
+implicit_usings_test_suite(name = "implicit_usings_namespaces_test")

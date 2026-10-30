@@ -1,0 +1,18 @@
+load("@rules_dotnet//dotnet:defs.bzl", "csharp_binary", "csharp_nunit_test")
+
+csharp_nunit_test(
+    name = "app_nunit_test",
+    srcs = ["ProgramTests.cs"],
+    project_sdk = "default",
+    target_frameworks = ["net10.0"],
+    visibility = ["//visibility:public"],
+    deps = [":program"],
+)
+
+csharp_binary(
+    name = "program",
+    srcs = ["Program.cs"],
+    project_sdk = "default",
+    target_frameworks = ["net10.0"],
+    visibility = ["//visibility:public"],
+)

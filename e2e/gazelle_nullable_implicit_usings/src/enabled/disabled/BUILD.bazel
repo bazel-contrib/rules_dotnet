@@ -1,0 +1,14 @@
+# gazelle:dotnet_nullable disable
+# gazelle:dotnet_implicit_usings disable
+
+load("@rules_dotnet//dotnet:defs.bzl", "csharp_library")
+
+csharp_library(
+    name = "disabled",
+    srcs = ["Disabled.cs"],
+    implicit_usings = False,
+    nullable = "disable",
+    project_sdk = "default",
+    target_frameworks = ["net10.0"],
+    visibility = ["//visibility:public"],
+)
