@@ -678,17 +678,20 @@ def _nuget_archive_impl(ctx):
     # Then get the auth dict for the package base urls
     auth = _get_auth_dict(ctx, urls)
 
-    # We download it as .zip because ctx.extract reads the file extension to determine the archive type
-    file_name = "%s.zip" % ctx.name
+    # The package is kept under its own name rather than linked to: a symlink
+    # would point into this output base, and the repository could not be
+    # shared through the repository contents cache.
     nupkg_name = "%s.%s.nupkg" % (ctx.attr.id, ctx.attr.version)
 
-    ctx.download(urls, output = file_name, integrity = ctx.attr.sha512, auth = auth)
-    ctx.extract(archive = file_name)
-    ctx.symlink(file_name, nupkg_name)
+    ctx.download(urls, output = nupkg_name, integrity = ctx.attr.sha512, auth = auth)
+    ctx.extract(archive = nupkg_name, type = "zip")
 
     all_files = sorted(_read_dir(ctx, ".").replace(str(ctx.path(".")) + "/", "").splitlines())
 
     _write_repository(ctx, ctx.attr.id, nupkg_name, all_files)
+
+    # Without a checksum the package is whatever the feed serves today.
+    return ctx.repo_metadata(reproducible = bool(ctx.attr.sha512))
 
 def _write_repository(ctx, id, nupkg_name, all_files, prefix = ""):
     """Turns an extracted package into the metadata and targets it is consumed through.
