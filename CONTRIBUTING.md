@@ -21,6 +21,12 @@ Some targets are generated from sources.
 Currently this is just the `bzl_library` targets.
 Run `bazel run //:gazelle` to keep them up-to-date.
 
+## Updating .NET
+
+A newly released SDK needs no change here: `rules_dotnet` looks SDKs up in
+Microsoft's release metadata when a build first asks for one. Supporting a new
+.NET release is described in [dotnet/private/sdk](dotnet/private/sdk/README.md).
+
 ## Using this as a development dependency of other rules
 
 You'll commonly find that you develop in another WORKSPACE, such as

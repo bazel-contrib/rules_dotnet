@@ -84,6 +84,26 @@ NUGET
       Microsoft.Bcl.Cryptography (>= 9.0)
       System.Security.Cryptography.Pkcs (>= 9.0)
 
+GROUP rules_dotnet_nuget_pack_tests
+RESTRICTION: == net10.0
+NUGET
+  remote: https://api.nuget.org/v3/index.json
+    Newtonsoft.Json (13.0.3)
+    NuGet.Common (7.0)
+      NuGet.Frameworks (>= 7.0)
+    NuGet.Configuration (7.0)
+      NuGet.Common (>= 7.0)
+      System.Security.Cryptography.ProtectedData (>= 9.0.6)
+    NuGet.Frameworks (7.0)
+    Nuget.Packaging (7.0)
+      Newtonsoft.Json (>= 13.0.3)
+      NuGet.Configuration (>= 7.0)
+      NuGet.Versioning (>= 7.0)
+      System.Security.Cryptography.Pkcs (>= 9.0.6)
+    NuGet.Versioning (7.0)
+    System.Security.Cryptography.Pkcs (10.0)
+    System.Security.Cryptography.ProtectedData (10.0)
+
 GROUP rules_dotnet_nuget_packages
 RESTRICTION: == net9.0
 NUGET
@@ -380,27 +400,3 @@ NUGET
     Microsoft.JSInterop (10.0.12)
     Microsoft.JSInterop.WebAssembly (10.0.12)
       Microsoft.JSInterop (>= 10.0.12)
-
-GROUP sdk_gen_dependencies
-RESTRICTION: == net10.0
-NUGET
-  remote: https://api.nuget.org/v3/index.json
-    FSharp.Core (10.1.401)
-    Newtonsoft.Json (13.0.3)
-    NuGet.Common (7.0)
-      NuGet.Frameworks (>= 7.0)
-    NuGet.Configuration (7.0)
-      NuGet.Common (>= 7.0)
-      System.Security.Cryptography.ProtectedData (>= 9.0.6)
-    NuGet.Frameworks (7.0)
-    Nuget.Packaging (7.0)
-      Newtonsoft.Json (>= 13.0.3)
-      NuGet.Configuration (>= 7.0)
-      NuGet.Versioning (>= 7.0)
-      System.Security.Cryptography.Pkcs (>= 9.0.6)
-    NuGet.Protocol (7.0)
-      Nuget.Packaging (>= 7.0)
-    NuGet.Versioning (7.0)
-    System.Security.Cryptography.Pkcs (10.0)
-    System.Security.Cryptography.ProtectedData (10.0)
-    System.Text.Json (10.0)

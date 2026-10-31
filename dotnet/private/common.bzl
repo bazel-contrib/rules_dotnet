@@ -33,7 +33,7 @@ def _collect_transitive():
         t[framework] = sets.union(sets.make([framework]), *[t[c] for c in compat])
     return t
 
-# Generated; see dotnet/private/sdk/frameworks.bzl.
+# See dotnet/private/sdk/frameworks.bzl.
 DEFAULT_TFM = _DEFAULT_TARGET_FRAMEWORK
 DEFAULT_RID = "base"
 
@@ -722,7 +722,7 @@ _NETCOREAPP = "netcoreapp"
 _NETFRAMEWORK = "netframework"
 
 # SDK-recognised frameworks per family, ascending. Anything absent (net11,
-# net403) gets no `*_OR_GREATER` symbol. Generated -- see dotnet/private/sdk/gen.
+# net403) gets no `*_OR_GREATER` symbol. See dotnet/private/sdk/frameworks.bzl.
 _SDK_TFMS_BY_FAMILY = {
     _NETCOREAPP: SDK_NETCOREAPP_FRAMEWORKS,
     _NETFRAMEWORK: SDK_NETFRAMEWORK_FRAMEWORKS,

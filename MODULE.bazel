@@ -22,12 +22,11 @@ paket.parse(
     dependencies = "//:paket.dependencies",
     groups = [
         "paket_cli",
-        "sdk_gen_dependencies",
         "rules_dotnet_nuget_packages",
     ],
     lock = "//:paket.lock",
 )
-use_repo(paket, "paket.paket_cli", "paket.rules_dotnet_nuget_packages", "paket.sdk_gen_dependencies")
+use_repo(paket, "paket.paket_cli", "paket.rules_dotnet_nuget_packages")
 
 bazel_dep(name = "bazel_skylib", version = "1.8.1")
 bazel_dep(name = "platforms", version = "1.0.0")
@@ -90,6 +89,7 @@ dev_paket.parse(
         "rules_dotnet_dev_nuget_packages",
         "rules_dotnet_nuget_resource_assemblies_tests",
         "rules_dotnet_framework_override_not_provided_tests",
+        "rules_dotnet_nuget_pack_tests",
         "rules_dotnet_nuget_tool_tests",
         "rules_dotnet_static_web_assets_tests",
     ],
@@ -99,6 +99,7 @@ use_repo(
     dev_paket,
     "paket.rules_dotnet_dev_nuget_packages",
     "paket.rules_dotnet_framework_override_not_provided_tests",
+    "paket.rules_dotnet_nuget_pack_tests",
     "paket.rules_dotnet_nuget_resource_assemblies_tests",
     "paket.rules_dotnet_nuget_tool_tests",
     "paket.rules_dotnet_static_web_assets_tests",

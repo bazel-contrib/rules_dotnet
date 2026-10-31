@@ -192,17 +192,15 @@ def _package_versions_test_impl(ctx):
         _versions(feed, "BadIndex"): {"error": "not found"},
     })
 
-    asserts.equals(env, ["1.0.0"], package_versions(module_ctx, _source(feed), "Listed", {}, {}))
-    asserts.equals(env, None, package_versions(module_ctx, _source(feed), "Unlisted", {}, {}))
     asserts.equals(
         env,
-        None,
-        package_versions(module_ctx, _source(feed), "BadIndex", {}, {}),
-        "an index without a version list is not an answer",
+        {"listed": ["1.0.0"]},
+        package_versions(module_ctx, _source(feed), ["Listed", "Unlisted", "BadIndex"], {}, {}),
+        "a package without a list, or with an index that has none, is left out",
     )
 
     indexes = {}
-    asserts.equals(env, None, package_versions(_fake_module_ctx({}), _source(feed), "Listed", {}, indexes))
+    asserts.equals(env, None, package_versions(_fake_module_ctx({}), _source(feed), ["Listed"], {}, indexes))
     asserts.equals(env, {}, indexes, "an unreachable feed is not cached as one without resources")
 
     return unittest.end(env)

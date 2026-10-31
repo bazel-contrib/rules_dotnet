@@ -24,9 +24,11 @@ DOTNET_TOOLCHAIN_TYPE = "@rules_dotnet//dotnet:toolchain_type"
 BOOTSTRAP_TOOLCHAIN_TYPE = "@rules_dotnet//dotnet:bootstrap_toolchain_type"
 
 # Add more platforms as needed to mirror all the binaries
-# published by the upstream project.
+# published by the upstream project. `rid` names the platform's SDK archive in
+# the release metadata.
 PLATFORMS = {
     "x86_64-apple-darwin": struct(
+        rid = "osx-x64",
         os = "osx",
         compatible_with = [
             "@platforms//os:macos",
@@ -34,6 +36,7 @@ PLATFORMS = {
         ],
     ),
     "aarch64-apple-darwin": struct(
+        rid = "osx-arm64",
         os = "osx",
         compatible_with = [
             "@platforms//os:macos",
@@ -41,6 +44,7 @@ PLATFORMS = {
         ],
     ),
     "x86_64-unknown-linux-gnu": struct(
+        rid = "linux-x64",
         os = "linux",
         compatible_with = [
             "@platforms//os:linux",
@@ -48,6 +52,7 @@ PLATFORMS = {
         ],
     ),
     "arm64-unknown-linux-gnu": struct(
+        rid = "linux-arm64",
         os = "linux",
         compatible_with = [
             "@platforms//os:linux",
@@ -55,6 +60,7 @@ PLATFORMS = {
         ],
     ),
     "x86_64-pc-windows-msvc": struct(
+        rid = "win-x64",
         os = "windows",
         compatible_with = [
             "@platforms//os:windows",
@@ -62,6 +68,7 @@ PLATFORMS = {
         ],
     ),
     "arm64-pc-windows-msvc": struct(
+        rid = "win-arm64",
         os = "windows",
         compatible_with = [
             "@platforms//os:windows",

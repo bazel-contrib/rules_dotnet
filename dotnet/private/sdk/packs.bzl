@@ -1,9 +1,14 @@
 """The NuGet packs that back each target framework.
 
-A .NET release publishes its packs under a handful of predictable names, so
-`PACK_BANDS` only has to pin the version each target framework resolves to and
-which runtime identifiers that release shipped. The pack ids, the set of
-targets, and the tables the pack transitions read are all derived from it.
+A .NET release publishes its packs under a handful of predictable names, so a
+band only has to say what version each target framework resolves to and which
+runtime identifiers that release shipped. The pack ids, the set of targets, and
+the tables the pack transitions read are all derived from the bands.
+
+Which packs exist does not depend on the SDK in use, so the tables built while
+loading read `PACK_BANDS`. Which version of them to download does, so the
+functions that return one have to be given bands: those `pack_bands` resolves
+for the SDK, or `PACK_BANDS`, with no versions, where only existence matters.
 
 `netstandard` and .NET Framework are frozen reference assemblies rather than
 release packs, so their versions are literals here.
@@ -88,12 +93,14 @@ def _app_pack_id(tfm, aspnet, suffix = ""):
     # runtime pack; before that one package carried both.
     return base if tfm.startswith("netcoreapp1") or tfm.startswith("netcoreapp2") else base + ".Ref"
 
-def targeting_packs(tfm, project_sdk = DEFAULT_SDK):
+def targeting_packs(tfm, project_sdk = DEFAULT_SDK, *, bands):
     """Returns the targeting packs a target framework compiles against.
 
     Args:
       tfm: The target framework.
       project_sdk: The project SDK, `default` or `web`.
+      bands: The bands to take versions from: `PACK_BANDS` where only which
+        packs exist matters.
 
     Returns:
       A list of (package id, version) tuples, empty if the combination has no
@@ -109,7 +116,7 @@ def targeting_packs(tfm, project_sdk = DEFAULT_SDK):
         if tfm in _NETFRAMEWORK_TFMS:
             return [("Microsoft.NETFramework.ReferenceAssemblies." + tfm, _NETFRAMEWORK_PACK_VERSION)]
 
-    band = PACK_BANDS.get(tfm)
+    band = bands.get(tfm)
     if band == None:
         return []
 
@@ -124,13 +131,15 @@ def targeting_packs(tfm, project_sdk = DEFAULT_SDK):
         (_app_pack_id(tfm, False), band["ref"]),
     ]
 
-def runtime_packs(tfm, rid, project_sdk = DEFAULT_SDK):
+def runtime_packs(tfm, rid, project_sdk = DEFAULT_SDK, *, bands):
     """Returns the runtime packs a self-contained publish needs.
 
     Args:
       tfm: The target framework.
       rid: The runtime identifier.
       project_sdk: The project SDK, `default` or `web`.
+      bands: The bands to take versions from: `PACK_BANDS` where only which
+        packs exist matters.
 
     Returns:
       A list of (package id, version) tuples, empty if the combination has no
@@ -139,7 +148,7 @@ def runtime_packs(tfm, rid, project_sdk = DEFAULT_SDK):
     if rid not in runtime_pack_rids(tfm, project_sdk):
         return []
 
-    band = PACK_BANDS[tfm]
+    band = bands[tfm]
 
     packs = [(_app_pack_id(tfm, False, "Runtime." + rid), band["runtime"])]
 
@@ -160,17 +169,19 @@ def wasm_pack_tfms():
     """
     return [tfm for tfm in PACK_BANDS if "wasm" in PACK_BANDS[tfm]]
 
-def wasm_runtime_pack(tfm):
+def wasm_runtime_pack(tfm, *, bands):
     """Returns the runtime pack a Blazor WebAssembly application runs on.
 
     Args:
       tfm: The target framework.
+      bands: The bands to take versions from: `PACK_BANDS` where only which
+        packs exist matters.
 
     Returns:
       A (package id, version) tuple, or None if the band predates Blazor
       WebAssembly.
     """
-    band = PACK_BANDS.get(tfm)
+    band = bands.get(tfm)
     if band == None or "wasm" not in band:
         return None
 
@@ -187,17 +198,19 @@ _WASM_TOOL_PACKS = {
     "devserver": "Microsoft.AspNetCore.Components.WebAssembly.DevServer",
 }
 
-def wasm_tool_packs(tfm):
+def wasm_tool_packs(tfm, *, bands):
     """Returns the tool packs a Blazor WebAssembly publish runs.
 
     Args:
       tfm: The target framework.
+      bands: The bands to take versions from: `PACK_BANDS` where only which
+        packs exist matters.
 
     Returns:
       A list of (name, (package id, version)) tuples, empty if the band carries
       no WebAssembly toolchain.
     """
-    band = PACK_BANDS.get(tfm, {})
+    band = bands.get(tfm, {})
 
     return [
         (name, (id, band[name]))
@@ -205,12 +218,14 @@ def wasm_tool_packs(tfm):
         if name in band
     ]
 
-def apphost_pack(tfm, rid):
+def apphost_pack(tfm, rid, *, bands):
     """Returns the apphost pack that produces a native executable.
 
     Args:
       tfm: The target framework.
       rid: The runtime identifier.
+      bands: The bands to take versions from: `PACK_BANDS` where only which
+        packs exist matters.
 
     Returns:
       A (package id, version) tuple, or None if there is no apphost pack.
@@ -218,7 +233,7 @@ def apphost_pack(tfm, rid):
     if rid not in runtime_pack_rids(tfm):
         return None
 
-    return (_app_pack_id(tfm, False, "Host." + rid), PACK_BANDS[tfm]["runtime"])
+    return (_app_pack_id(tfm, False, "Host." + rid), bands[tfm]["runtime"])
 
 def crossgen2_pack_rids(tfm):
     """Returns the host runtime identifiers a target framework ships crossgen2 for.
@@ -236,7 +251,7 @@ def crossgen2_pack_rids(tfm):
 
     return band["crossgen2_rids"] if "crossgen2_rids" in band else runtime_pack_rids(tfm)
 
-def crossgen2_pack(tfm, rid):
+def crossgen2_pack(tfm, rid, *, bands):
     """Returns the crossgen2 pack that compiles ReadyToRun images.
 
     Keyed by the *host* runtime identifier, not the target: crossgen2 runs on
@@ -245,6 +260,8 @@ def crossgen2_pack(tfm, rid):
     Args:
       tfm: The target framework.
       rid: The runtime identifier of the machine crossgen2 will run on.
+      bands: The bands to take versions from: `PACK_BANDS` where only which
+        packs exist matters.
 
     Returns:
       A (package id, version) tuple, or None if there is no crossgen2 pack.
@@ -252,7 +269,7 @@ def crossgen2_pack(tfm, rid):
     if rid not in crossgen2_pack_rids(tfm):
         return None
 
-    return (_app_pack_id(tfm, False, "Crossgen2." + rid), PACK_BANDS[tfm]["runtime"])
+    return (_app_pack_id(tfm, False, "Crossgen2." + rid), bands[tfm]["runtime"])
 
 def aot_pack_rids(tfm):
     """Returns the runtime identifiers a target framework can publish AOT for.
@@ -276,7 +293,7 @@ def aot_pack_tfms():
     """
     return [tfm for tfm in runtime_pack_tfms() if aot_pack_rids(tfm)]
 
-def ilcompiler_pack(tfm, rid):
+def ilcompiler_pack(tfm, rid, *, bands):
     """Returns the ILCompiler pack that compiles IL to native code.
 
     Keyed by the *host* runtime identifier, not the target: ilc runs on the
@@ -285,6 +302,8 @@ def ilcompiler_pack(tfm, rid):
     Args:
       tfm: The target framework.
       rid: The runtime identifier of the machine ilc will run on.
+      bands: The bands to take versions from: `PACK_BANDS` where only which
+        packs exist matters.
 
     Returns:
       A (package id, version) tuple, or None if there is no ILCompiler pack.
@@ -294,10 +313,10 @@ def ilcompiler_pack(tfm, rid):
 
     return (
         "runtime.{}.Microsoft.DotNet.ILCompiler".format(rid),
-        PACK_BANDS[tfm]["ilcompiler"],
+        bands[tfm]["ilcompiler"],
     )
 
-def nativeaot_pack(tfm, rid):
+def nativeaot_pack(tfm, rid, *, bands):
     """Returns the runtime pack a NativeAOT publish compiles and links against.
 
     Distinct from the JIT runtime pack: the assemblies are built for AOT, and
@@ -307,6 +326,8 @@ def nativeaot_pack(tfm, rid):
     Args:
       tfm: The target framework.
       rid: The runtime identifier being published for.
+      bands: The bands to take versions from: `PACK_BANDS` where only which
+        packs exist matters.
 
     Returns:
       A (package id, version) tuple, or None if there is no NativeAOT pack.
@@ -316,7 +337,7 @@ def nativeaot_pack(tfm, rid):
 
     return (
         _app_pack_id(tfm, False, "Runtime.NativeAOT." + rid),
-        PACK_BANDS[tfm]["ilcompiler"],
+        bands[tfm]["ilcompiler"],
     )
 
 def runtime_pack_rids(tfm, project_sdk = DEFAULT_SDK):
@@ -429,8 +450,8 @@ def host_tool_tfms(pack):
     """The target frameworks a host tool shipped for on at least one host.
 
     Args:
-      pack: Returns the (id, version) of the tool's pack for a tfm and host
-        rid, or None where the tool did not ship for that combination.
+      pack: Returns the (id, version) of the tool's pack for a tfm, host rid
+        and bands, or None where the tool did not ship for that combination.
 
     Returns:
       A list of target frameworks, oldest band first.
@@ -438,7 +459,7 @@ def host_tool_tfms(pack):
     return [
         tfm
         for tfm in runtime_pack_tfms()
-        if any([pack(tfm, rid) != None for rid in _HOST_RIDS])
+        if any([pack(tfm, rid, bands = PACK_BANDS) != None for rid in _HOST_RIDS])
     ]
 
 RUNTIME_PACK_LOOKUP_TABLE = {
@@ -467,23 +488,3 @@ NATIVEAOT_PACK_LOOKUP_TABLE = {
     }
     for tfm in aot_pack_tfms()
 }
-
-def band_is_movable(tfm):
-    """Returns whether a band's packs can all be moved to one version.
-
-    A band whose packs already resolve to more than one version cannot be
-    moved wholesale, so it stays where the table puts it.
-
-    Args:
-      tfm: The target framework whose band to check.
-
-    Returns:
-      True if every pack in the band resolves to the same version.
-    """
-    band = PACK_BANDS.get(tfm)
-    if band == None:
-        return False
-
-    versions = {band[key]: None for key in ["ref", "web_ref", "runtime"] if key in band}
-
-    return len(versions) == 1

@@ -7,8 +7,8 @@ a build setting only for the portable RIDs and folds the rest onto their nearest
 portable ancestor with `to_portable_rid`.
 
 That is safe as long as the portable set is closed under compatibility and every
-version-qualified RID has a portable ancestor. `rids.bzl` is regenerated from
-upstream, so both properties are asserted in
+version-qualified RID has a portable ancestor. `rids.bzl` is a copy of the
+upstream graph, so both properties are asserted in
 `//dotnet/private/tests/portable_rids`.
 
 The full graph is still used where the result is not a Bazel configuration:

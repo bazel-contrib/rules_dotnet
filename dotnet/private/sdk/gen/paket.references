@@ -1,5 +1,0 @@
-group sdk_gen_dependencies
-    FSharp.Core
-    NuGet.Packaging
-    NuGet.Protocol
-    System.Text.Json

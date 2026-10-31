@@ -1,6 +1,6 @@
 """Tests for the portable runtime identifier subset.
 
-`rids.bzl` is regenerated from upstream, so the two properties that make
+`rids.bzl` is a copy of the upstream graph, so the two properties that make
 configuring on the portable RIDs alone safe are checked rather than assumed.
 """
 
