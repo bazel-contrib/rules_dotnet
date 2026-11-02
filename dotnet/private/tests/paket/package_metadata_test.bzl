@@ -1,8 +1,11 @@
 """Tests for reading the metadata files that ship inside a `.nupkg`."""
 
+load("@bazel_skylib//lib:sets.bzl", "sets")
 load("@bazel_skylib//lib:unittest.bzl", "asserts", "unittest")
 load(
     "//dotnet/private:common.bzl",
+    "FRAMEWORK_COMPATIBILITY",
+    "TRANSITIVE_FRAMEWORK_COMPATIBILITY",
     "get_nearest_compatible_target_framework",
     "nuget_framework_to_tfm",
 )
@@ -135,6 +138,10 @@ _NUNITLITE_DEPS = {
     "netstandard1.6": [],
     "netstandard2.0": ["NUnit", "NETStandard.Library"],
     "netstandard2.1": ["NUnit", "NETStandard.Library"],
+} | {
+    # Declared ahead of their release, they take the newest group too.
+    "net{}.0".format(major): ["NUnit"]
+    for major in range(11, 21)
 }
 
 _TFMS = {
@@ -206,27 +213,78 @@ def _parse_nuspec_test_impl(ctx):
 
 _parse_nuspec_test = unittest.make(_parse_nuspec_test_impl)
 
+def _selected(env, deps, tfm):
+    """What a select over `deps` gives a configuration for `tfm`, as Bazel picks it.
+
+    A `tfm_*` condition holds where every framework it is compatible with is,
+    and of the conditions that hold, the one whose frameworks include all the
+    others' wins. Any other outcome is an ambiguous select, which fails.
+    """
+    compatible = TRANSITIVE_FRAMEWORK_COMPATIBILITY[tfm]
+    holding = [
+        condition.split(":tfm_")[1]
+        for condition in deps
+        if ":tfm_" in condition and sets.is_subset(TRANSITIVE_FRAMEWORK_COMPATIBILITY[condition.split(":tfm_")[1]], compatible)
+    ]
+    if not holding:
+        return deps["//conditions:default"]
+
+    winners = [
+        framework
+        for framework in holding
+        if all([sets.is_subset(TRANSITIVE_FRAMEWORK_COMPATIBILITY[other], TRANSITIVE_FRAMEWORK_COMPATIBILITY[framework]) for other in holding])
+    ]
+    asserts.equals(env, 1, len(winners), "one branch wins for {} among {}".format(tfm, holding))
+
+    return deps["@rules_dotnet//dotnet:tfm_{}".format(winners[0])]
+
 def _deps_by_tfm_test_impl(ctx):
     env = unittest.begin(ctx)
     packages = {"netstandard.library": "netstandard.library", "nunit": "nunit"}
 
     actual = deps_by_tfm(parse_nuspec(_NUSPEC).dependency_groups, packages)
 
+    # Every framework gets what its nearest group says, though most have no
+    # branch of their own.
+    for (tfm, ids) in _NUNITLITE_DEPS.items():
+        asserts.equals(env, ["//{}".format(id.lower()) for id in ids], _selected(env, actual, tfm), tfm)
+
     asserts.equals(
         env,
-        {
-            "@rules_dotnet//dotnet:tfm_{}".format(tfm): [
-                "//{}".format(id.lower())
-                for id in ids
-            ]
-            for (tfm, ids) in _NUNITLITE_DEPS.items()
-        },
-        {
-            condition: labels
-            for (condition, labels) in actual.items()
-            if condition != "//conditions:default"
-        },
+        sorted([
+            # The first of a family, and those bridging to .NET Standard.
+            "net11",
+            "net451",
+            "net46",
+            "net461",
+            "netcoreapp2.0",
+            "netcoreapp3.0",
+            "netstandard",
+            # Where the nearest group changes.
+            "net35",
+            "net45",
+            "netcoreapp3.1",
+            "netstandard2.0",
+        ]),
+        sorted([condition.split(":tfm_")[1] for condition in actual if ":tfm_" in condition]),
+        "the frameworks that resolve unlike their only predecessor",
     )
+
+    # Groups that change along the line, and frameworks that resolve to
+    # nothing in between, keep their branches.
+    shifting = deps_by_tfm(
+        {
+            "net462": [],
+            "net6.0": ["A"],
+            "net8.0": ["A", "B"],
+            "netstandard2.0": ["C"],
+        },
+        {"a": "a", "b": "b", "c": "c"},
+    )
+    for tfm in FRAMEWORK_COMPATIBILITY:
+        nearest = get_nearest_compatible_target_framework(tfm, ["net462", "net6.0", "net8.0", "netstandard2.0"])
+        expected = {None: [], "net462": [], "net6.0": ["//a"], "net8.0": ["//a", "//b"], "netstandard2.0": ["//c"]}[nearest]
+        asserts.equals(env, expected, _selected(env, shifting, tfm), tfm)
 
     asserts.equals(
         env,

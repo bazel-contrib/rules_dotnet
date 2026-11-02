@@ -22,14 +22,17 @@ ICU_VERSION_VARIABLES = ["DOTNET_ICU_VERSION_OVERRIDE", "CLR_ICU_VERSION_OVERRID
 
 _ICUUC_PREFIX = "libicuuc.so."
 
-def _icu_library(toolchain):
-    """The `libicuuc.so.<version>` of the ICU the build carries, or None.
+def _icu_library(icu):
+    """The `libicuuc.so.<version>` of an ICU the build carries, or None.
 
     The runtime looks that one up first, by the version in its name, and takes
     `libicui18n` and `libicudata` from beside it, so it stands for the set.
+
+    Args:
+        icu: The toolchain's `icu` or `exec_icu`.
     """
 
-    for file in icu_files(toolchain).to_list():
+    for file in icu[DefaultInfo].files.to_list():
         if file.basename.startswith(_ICUUC_PREFIX):
             return file
     return None
@@ -41,6 +44,10 @@ def _icu_version(library):
 
 def icu_files(toolchain):
     """The shared libraries of the ICU `//dotnet/settings:icu` names.
+
+    They are built for the platform the toolchain's binaries run on. The
+    compilers run on the execution platform instead, and take theirs from
+    `globalization_env` and `icu_wrapper_arguments`.
 
     Args:
         toolchain: The resolved .Net toolchain, which carries the flag.
@@ -57,7 +64,8 @@ def globalization_env(toolchain):
     An action runs with the environment the rules give it rather than the
     client's, so `--action_env` cannot carry these. Without the ICU version the
     runtime takes the highest it finds, which could be the machine's rather than
-    the one the build carries.
+    the one the build carries. An action runs on the execution platform, so the
+    version is that of the ICU built for it.
 
     Args:
         toolchain: The resolved .Net toolchain, which carries the settings.
@@ -70,7 +78,7 @@ def globalization_env(toolchain):
     if toolchain.invariant_globalization[BuildSettingInfo].value:
         env[INVARIANT_GLOBALIZATION_VARIABLE] = "1"
 
-    library = _icu_library(toolchain)
+    library = _icu_library(toolchain.exec_icu)
     if library != None:
         for variable in ICU_VERSION_VARIABLES:
             env[variable] = _icu_version(library)
@@ -80,8 +88,9 @@ def globalization_env(toolchain):
 def icu_wrapper_arguments(actions, toolchain):
     """The leading arguments and tools that tell the compiler wrapper about the ICU.
 
-    An `Args` rather than a plain string, so that path mapping rewrites the
-    path along with the rest of the compile. See docs/README.md#path-mapping.
+    The ICU is the one built for the execution platform, where the compiler
+    runs. An `Args` rather than a plain string, so that path mapping rewrites
+    the path along with the rest of the compile. See docs/README.md#path-mapping.
 
     Args:
         actions: The rule's `actions`.
@@ -91,13 +100,13 @@ def icu_wrapper_arguments(actions, toolchain):
         An (arguments, tools) pair, both empty when the build carries no ICU.
     """
 
-    library = _icu_library(toolchain)
+    library = _icu_library(toolchain.exec_icu)
     if library == None:
         return [], []
 
     arguments = actions.args()
     arguments.add(library, format = "--icu=%s")
-    return [arguments], [icu_files(toolchain)]
+    return [arguments], [toolchain.exec_icu[DefaultInfo].files]
 
 def icu_launcher_environment(ctx, toolchain, is_windows):
     """The lines a launcher runs before the runtime, applying the globalization settings.
@@ -124,7 +133,7 @@ def icu_launcher_environment(ctx, toolchain, is_windows):
         else:
             lines.append('export {v}="${{{v}:-1}}"'.format(v = INVARIANT_GLOBALIZATION_VARIABLE))
 
-    library = None if is_windows else _icu_library(toolchain)
+    library = None if is_windows else _icu_library(toolchain.icu)
     if library != None:
         lines.append('export LD_LIBRARY_PATH="$(dirname "$(rlocation {})")${{LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}}"'.format(
             to_rlocation_path(ctx, library),

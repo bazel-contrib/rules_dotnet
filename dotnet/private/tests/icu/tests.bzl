@@ -4,6 +4,7 @@ Linux only, as the platform whose runtime loads ICU from shared libraries. The
 flag has to reach the compile actions, the launchers and the runtime.
 """
 
+load("@bazel_skylib//lib:dicts.bzl", "dicts")
 load("@bazel_skylib//lib:unittest.bzl", "analysistest", "asserts")
 load("//dotnet/private/icu:settings.bzl", "ICU_VERSION_VARIABLES")
 load("//dotnet/private/icu:sources.bzl", "ICU_MAJOR_VERSION")
@@ -48,6 +49,52 @@ def _launcher_test_impl(ctx):
 
 launcher_test = analysistest.make(
     _launcher_test_impl,
+    config_settings = _HERMETIC_ICU,
+)
+
+def _compile_icu_test_impl(ctx):
+    env = analysistest.begin(ctx)
+
+    # The compiler runs on the execution platform, which the target platform
+    # need not be. Path mapping hides the configuration in the arguments, so
+    # it is read off the input.
+    compile = only_action(env, "CSharpCompile")
+    libraries = [file.path for file in compile.inputs.to_list() if file.basename.startswith("libicuuc.so.")]
+    asserts.true(
+        env,
+        len(libraries) == 1 and "-exec" in libraries[0],
+        "The compile does not take the one ICU built for the execution platform: {}".format(libraries),
+    )
+    asserts.true(
+        env,
+        "--icu=" in " ".join(compile.argv),
+        "The compile does not tell the wrapper about the ICU: {}".format(compile.argv),
+    )
+    return analysistest.end(env)
+
+# The persistent worker is a tool, whose launcher carries the ICU of the
+# platform it runs on like any other; the wrapper is told which one to load.
+compile_icu_test = analysistest.make(
+    _compile_icu_test_impl,
+    config_settings = dicts.add(_HERMETIC_ICU, {str(Label("//dotnet/settings:use_compiler_worker")): False}),
+)
+
+def _one_build_test_impl(ctx):
+    env = analysistest.begin(ctx)
+
+    # Compiling ICU takes minutes, and nothing about it depends on the framework.
+    runfiles = analysistest.target_under_test(env)[DefaultInfo].default_runfiles.files.to_list()
+    libraries = sorted([file.path for file in runfiles if file.basename.startswith("libicuuc.so.")])
+    asserts.equals(
+        env,
+        1,
+        len(libraries),
+        "Binaries of different frameworks carry different builds of ICU: {}".format(libraries),
+    )
+    return analysistest.end(env)
+
+one_build_test = analysistest.make(
+    _one_build_test_impl,
     config_settings = _HERMETIC_ICU,
 )
 

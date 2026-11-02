@@ -1,0 +1,32 @@
+load("@rules_dotnet//dotnet:defs.bzl", "csharp_binary", "publish_binary")
+load("@rules_shell//shell:sh_test.bzl", "sh_test")
+
+# .NET 11 ships `blazor.webassembly.js` in the application's own
+# `Microsoft.AspNetCore.Components.WebAssembly` package, as a static web asset
+# served from the root, rather than in a pack of the SDK's.
+csharp_binary(
+    name = "app",
+    srcs = [
+        "App.razor",
+        "Program.cs",
+        "_Imports.razor",
+    ],
+    project_sdk = "blazorwasm",
+    root_namespace = "BlazorApp",
+    static_web_assets = glob(["wwwroot/**"]),
+    target_frameworks = ["net11.0"],
+    deps = ["@paket.blazor_wasm//microsoft.aspnetcore.components.webassembly"],
+)
+
+publish_binary(
+    name = "publish",
+    binary = ":app",
+    target_framework = "net11.0",
+    wasm = True,
+)
+
+sh_test(
+    name = "publish_test",
+    srcs = ["test.sh"],
+    data = [":publish"],
+)

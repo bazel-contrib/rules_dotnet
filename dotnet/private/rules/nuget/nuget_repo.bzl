@@ -26,6 +26,7 @@ load(
     "@{archive}//:package_info.bzl",
     "DEPENDENCY_GROUPS",
     "FRAMEWORK_LIST",
+    "STATIC_WEB_ASSETS_BASE_PATH",
     "TARGETING_PACK_OVERRIDES",
     "TOOLS",
 )
@@ -43,6 +44,7 @@ nuget_package(
     framework_list = FRAMEWORK_LIST,
     targeting_pack_overrides = TARGETING_PACK_OVERRIDES,
     tools = TOOLS,
+    static_web_assets_base_path = STATIC_WEB_ASSETS_BASE_PATH,
 )
 """
 

@@ -24,6 +24,19 @@ More information on these flags can be found here:
 
 Various examples of how each rule can be used are in the [examples](../examples) folder.
 
+### Choosing the .NET SDK
+
+Register the SDK to build with in `MODULE.bazel`:
+
+```starlark
+dotnet = use_extension("@rules_dotnet//dotnet:extensions.bzl", "dotnet")
+dotnet.toolchain(dotnet_version = "10.0.401")
+use_repo(dotnet, "dotnet_toolchains")
+
+register_toolchains("@dotnet_toolchains//:all")
+```
+
+
 ## Design
 
 ### Dependency resolution

@@ -1,7 +1,7 @@
 "Tests for `//dotnet/settings:icu` set to the ICU the rules build, on the platform that loads it."
 
 load("//dotnet:defs.bzl", "csharp_binary")
-load(":tests.bzl", "compile_env_test", "launcher_test", "runs_with_hermetic_icu_test")
+load(":tests.bzl", "compile_env_test", "compile_icu_test", "launcher_test", "one_build_test", "runs_with_hermetic_icu_test")
 
 _LINUX = ["@platforms//os:linux"]
 
@@ -19,6 +19,12 @@ compile_env_test(
     target_under_test = ":reports_icu",
 )
 
+compile_icu_test(
+    name = "compile_icu_test",
+    target_compatible_with = _LINUX,
+    target_under_test = ":reports_icu",
+)
+
 launcher_test(
     name = "launcher_test",
     target_compatible_with = _LINUX,
@@ -29,4 +35,27 @@ runs_with_hermetic_icu_test(
     name = "runs_with_hermetic_icu_test",
     binary = ":reports_icu",
     target_compatible_with = _LINUX,
+)
+
+# The same program on another framework, so that the two would be configured apart.
+csharp_binary(
+    name = "reports_icu_net9.0",
+    srcs = ["Program.cs"],
+    target_compatible_with = _LINUX,
+    target_frameworks = ["net9.0"],
+)
+
+filegroup(
+    name = "two_frameworks",
+    data = [
+        ":reports_icu",
+        ":reports_icu_net9.0",
+    ],
+    target_compatible_with = _LINUX,
+)
+
+one_build_test(
+    name = "one_build_test",
+    target_compatible_with = _LINUX,
+    target_under_test = ":two_frameworks",
 )

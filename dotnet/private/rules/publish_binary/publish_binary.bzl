@@ -41,7 +41,9 @@ load(
     "ready_to_run_references",
 )
 load("//dotnet/private/sdk:packs.bzl", "WASM_RID")
+load("//dotnet/private/transitions:native_transition.bzl", "native_transition")
 load("//dotnet/private/transitions:tfm_transition.bzl", "publish_binary_transition", "tfm_transition")
+load(":cc_link_toolchain.bzl", "CcLinkToolchainInfo")
 
 # How many sources one `cp` invocation takes. A self-contained publish copies
 # several hundred files into one directory, and the point of batching is lost if
@@ -324,7 +326,7 @@ def _ilc_compile(ctx, dll, closure, aot):
 
 def _ilc_link(ctx, compiled, aot):
     """Links the compiled object into a native executable."""
-    toolchain = ctx.toolchains["@bazel_tools//tools/cpp:toolchain_type"]
+    toolchain = ctx.attr._cc_link_toolchain[0][CcLinkToolchainInfo].toolchain
 
     if toolchain == None:
         fail("NativeAOT needs a C/C++ toolchain to link with, but none is registered")
@@ -808,8 +810,8 @@ def _create_shim_exe(ctx, apphost_pack_info, dll, runtime_identifier):
 
     return output
 
-def _generate_runtimeconfig(ctx, output, target_framework, project_sdk, is_self_contained, roll_forward_behavior, runtime_pack_info):
-    runtimeconfig_struct = generate_runtimeconfig(target_framework, project_sdk, is_self_contained, roll_forward_behavior, runtime_pack_info)
+def _generate_runtimeconfig(ctx, output, target_framework, project_sdk, is_self_contained, roll_forward_behavior, runtime_pack_info, framework_version):
+    runtimeconfig_struct = generate_runtimeconfig(target_framework, project_sdk, is_self_contained, roll_forward_behavior, runtime_pack_info, framework_version)
 
     ctx.actions.write(
         output = output,
@@ -919,6 +921,7 @@ def _publish_binary_impl(ctx):
         is_self_contained,
         roll_forward_behavior,
         runtime_pack_info,
+        binary_info.framework_version,
     )
 
     assembly_files = collect_assembly_files(assembly_runtime_info, transitive_runtime_deps, depsjson_struct)
@@ -1060,13 +1063,15 @@ C/C++ toolchain to link with.""",
             cfg = "exec",
         ),
         "_windows_constraint": attr.label(default = "@platforms//os:windows"),
+        # In the configuration native libraries are built in, rather than the
+        # framework's: see cc_link_toolchain.bzl.
+        "_cc_link_toolchain": attr.label(
+            default = "//dotnet/private/rules/publish_binary:cc_link_toolchain",
+            providers = [CcLinkToolchainInfo],
+            cfg = native_transition,
+        ),
     },
-    toolchains = [
-        "//dotnet:toolchain_type",
-        # Only a NativeAOT publish links native code, so a build that never
-        # asks for one does not need a C/C++ toolchain registered.
-        config_common.toolchain_type("@bazel_tools//tools/cpp:toolchain_type", mandatory = False),
-    ],
+    toolchains = ["//dotnet:toolchain_type"],
     executable = True,
     cfg = tfm_transition,
 )

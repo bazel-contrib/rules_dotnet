@@ -17,9 +17,9 @@ csharp_binary(
     target_frameworks = ["net10.0"],
     visibility = ["//dotnet/private/tests/nuget_pack:__subpackages__"],
     deps = [
-        "@paket.sdk_gen_dependencies//nuget.common",
-        "@paket.sdk_gen_dependencies//nuget.frameworks",
-        "@paket.sdk_gen_dependencies//nuget.packaging",
-        "@paket.sdk_gen_dependencies//nuget.versioning",
+        "@paket.rules_dotnet_nuget_pack_tests//nuget.common",
+        "@paket.rules_dotnet_nuget_pack_tests//nuget.frameworks",
+        "@paket.rules_dotnet_nuget_pack_tests//nuget.packaging",
+        "@paket.rules_dotnet_nuget_pack_tests//nuget.versioning",
     ],
 )

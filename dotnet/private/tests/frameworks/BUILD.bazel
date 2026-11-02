@@ -1,0 +1,3 @@
+load(":frameworks_test.bzl", "frameworks_test_suite")
+
+frameworks_test_suite(name = "frameworks_test")

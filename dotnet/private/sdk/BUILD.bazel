@@ -7,15 +7,10 @@ bzl_library(
 )
 
 bzl_library(
-    name = "versions",
-    srcs = ["versions.bzl"],
-    visibility = ["//dotnet:__subpackages__"],
-)
-
-bzl_library(
     name = "pack_bands",
     srcs = ["pack_bands.bzl"],
     visibility = ["//dotnet:__subpackages__"],
+    deps = [":frameworks"],
 )
 
 bzl_library(
@@ -30,9 +25,9 @@ bzl_library(
     srcs = ["pack_repos.bzl"],
     visibility = ["//dotnet:__subpackages__"],
     deps = [
+        ":pack_bands",
         ":packs",
-        ":versions",
-        "//dotnet/private:semver",
+        ":releases",
         "//dotnet/private/paket:feed",
         "//dotnet/private/rules/nuget:nuget_repo",
         "@bazel_skylib//lib:collections",
@@ -40,14 +35,35 @@ bzl_library(
 )
 
 bzl_library(
+    name = "sdk_too_old",
+    srcs = ["sdk_too_old.bzl"],
+    visibility = ["//dotnet:__subpackages__"],
+    deps = [":releases"],
+)
+
+bzl_library(
     name = "tool_pack",
     srcs = ["tool_pack.bzl"],
     visibility = ["//dotnet:__subpackages__"],
-    deps = ["//dotnet/private:providers"],
+    deps = [
+        ":packs",
+        "//dotnet/private:providers",
+    ],
 )
 
 bzl_library(
     name = "frameworks",
     srcs = ["frameworks.bzl"],
     visibility = ["//dotnet:__subpackages__"],
+)
+
+bzl_library(
+    name = "releases",
+    srcs = ["releases.bzl"],
+    visibility = ["//dotnet:__subpackages__"],
+    deps = [
+        ":frameworks",
+        "//dotnet/private:semver",
+        "//dotnet/private:toolchains_repo",
+    ],
 )

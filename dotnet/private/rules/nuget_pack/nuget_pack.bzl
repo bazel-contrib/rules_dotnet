@@ -142,6 +142,7 @@ def _pack_tool(ctx, tfm, target, compile_info, runtime_info):
         project_sdk = compile_info.project_sdk,
         is_self_contained = False,
         roll_forward_behavior = ctx.attr.roll_forward_behavior,
+        framework_version = binary_info.framework_version,
     )))
 
     assembly_files = collect_assembly_files(runtime_info, transitive, depsjson_struct)

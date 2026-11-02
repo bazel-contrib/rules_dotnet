@@ -1,5 +1,6 @@
 load("@bazel_lib//:bzl_library.bzl", "bzl_library")
 load("@bazel_skylib//rules:common_settings.bzl", "bool_setting", "string_setting")
+load(":cc_link_toolchain.bzl", "cc_link_toolchain")
 load(":native_tools.bzl", "native_tools")
 
 # True only on the edge from a publish to its binary, so that the binary can
@@ -64,6 +65,17 @@ native_tools(
     tags = ["manual"],
 )
 
+cc_link_toolchain(
+    name = "cc_link_toolchain",
+    visibility = ["//dotnet:__subpackages__"],
+)
+
+bzl_library(
+    name = "cc_link_toolchain_bzl",
+    srcs = ["cc_link_toolchain.bzl"],
+    visibility = ["//dotnet:__subpackages__"],
+)
+
 bzl_library(
     name = "native_tools_bzl",
     srcs = ["native_tools.bzl"],
@@ -81,12 +93,14 @@ bzl_library(
         "//dotnet:__subpackages__",
     ],
     deps = [
+        ":cc_link_toolchain_bzl",
         "//dotnet/private:providers",
         "//dotnet/private/rules/blazor:blazor_wasm_publish",
         "//dotnet/private/rules/common:publish_layout",
         "//dotnet/private/rules/ready_to_run",
         "//dotnet/private/sdk/runtime_packs:runtime_pack_transition",
         "//dotnet/private/transitions:default_transition",
+        "//dotnet/private/transitions:native_transition",
         "//dotnet/private/transitions:tfm_transition",
         "@bazel_skylib//lib:paths",
         "@bazel_skylib//lib:shell",

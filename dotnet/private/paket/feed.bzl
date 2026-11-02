@@ -286,24 +286,25 @@ def resolve_integrity(module_ctx, source, packages, netrc_entries, indexes):
 
     return integrity
 
-def package_versions(module_ctx, source, id, netrc_entries, indexes):
-    """Returns the versions of a package a feed publishes.
+def package_versions(module_ctx, source, ids, netrc_entries, indexes):
+    """Returns the versions of packages a feed publishes.
 
     Args:
       module_ctx: The module extension context.
       source: The feed to query. Must be a V3 service index.
-      id: The package id.
+      ids: The package ids, looked up concurrently.
       netrc_entries: Parsed netrc entries, from `read_netrc_entries`.
       indexes: A cache of service index lookups, which this call adds to.
 
     Returns:
-      A list of versions, or None if the feed did not answer.
+      A dict of lower case id to a list of versions, leaving out a package the
+      feed gave no list for, or None if the feed itself did not answer.
     """
     resources = _service_index(module_ctx, source, _auth(netrc_entries, [source]), indexes, required = False)
     if resources == None:
         return None
 
-    return _served_versions(module_ctx, resources, [id], netrc_entries).get(id.lower())
+    return _served_versions(module_ctx, resources, ids, netrc_entries)
 
 def resolve_integrity_cached(module_ctx, sources, packages, netrc_entries, resolved, indexes):
     """Fills `resolved` with each package's integrity, keyed for `facts`.

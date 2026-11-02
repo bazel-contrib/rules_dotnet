@@ -29,7 +29,9 @@ def deps_by_tfm(dependency_groups, packages):
         to the label it is addressed by.
 
     Returns:
-      A dict suitable for `select()`, mapping a TFM config setting to labels.
+      A dict suitable for `select()`, mapping a TFM config setting to labels,
+      with no branch for a framework that resolves as its only predecessor
+      does.
     """
     frameworks = [
         framework
@@ -48,22 +50,24 @@ def deps_by_tfm(dependency_groups, packages):
         for (framework, ids) in dependency_groups.items()
     }
 
-    deps = {}
-    resolved_any = False
-
+    labels_by_tfm = {}
     for tfm in FRAMEWORK_COMPATIBILITY:
         nearest = get_nearest_compatible_target_framework(tfm, frameworks)
-        labels = labels_by_group[nearest] if nearest != None else labels_by_group.get(ANY_FRAMEWORK, [])
-        if labels:
-            resolved_any = True
-        deps["@rules_dotnet//dotnet:tfm_{}".format(tfm)] = labels
+        labels_by_tfm[tfm] = labels_by_group[nearest] if nearest != None else labels_by_group.get(ANY_FRAMEWORK, [])
 
-    if not resolved_any:
+    if not any(labels_by_tfm.values()):
         return {"//conditions:default": []}
 
-    # A framework that resolves to no dependencies still needs its own branch:
-    # without it a more general framework's branch would match and wrongly
-    # apply that framework's dependencies.
+    # A configuration matches the branch of every framework its own is
+    # compatible with, and the select takes the most specific. A framework that
+    # resolves to no dependencies therefore still needs a branch, or a more
+    # general framework's would apply. One whose only predecessor resolves the
+    # same needs none: the most specific branch left resolves as it does.
+    deps = {
+        "@rules_dotnet//dotnet:tfm_{}".format(tfm): labels
+        for (tfm, labels) in labels_by_tfm.items()
+        if len(FRAMEWORK_COMPATIBILITY[tfm]) != 1 or labels != labels_by_tfm[FRAMEWORK_COMPATIBILITY[tfm][0]]
+    }
     deps["//conditions:default"] = []
 
     return deps
@@ -81,6 +85,7 @@ def nuget_package(
         framework_list = {},
         targeting_pack_overrides = {},
         tools = {},
+        static_web_assets_base_path = "",
         tags = []):
     """Declares the targets for one version of one NuGet package.
 
@@ -99,6 +104,8 @@ def nuget_package(
       framework_list: Assembly versions shipped by a targeting pack.
       targeting_pack_overrides: Package versions superseded by a targeting pack.
       tools: Dotnet tool entrypoints, keyed by tool name and target framework.
+      static_web_assets_base_path: Where the package's manifest says its static
+        web assets are served from, or empty for MSBuild's default.
       tags: Tags for the package target.
     """
     import_library(
@@ -116,6 +123,7 @@ def nuget_package(
         refs = ["{}:refs".format(archive)],
         resource_assemblies = ["{}:resource_assemblies".format(archive)],
         static_web_assets = ["{}:static_web_assets".format(archive)],
+        static_web_assets_base_path = static_web_assets_base_path,
         typeproviders = ["{}:typeproviders".format(archive)],
         sha512 = sha512,
         targeting_pack_overrides = targeting_pack_overrides,

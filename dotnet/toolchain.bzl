@@ -2,6 +2,8 @@
 Rules to configure the .NET toolchain of rules_dotnet.
 """
 
+load("//dotnet/private/transitions:icu_transition.bzl", "icu_transition")
+
 DotnetInfo = provider(
     doc = "Information about the dotnet toolchain",
     fields = {
@@ -138,7 +140,8 @@ def _dotnet_toolchain_impl(ctx):
         msbuild_dlls = ctx.attr.msbuild_dlls,
         strict_deps = ctx.attr._strict_deps,
         invariant_globalization = ctx.attr._invariant_globalization,
-        icu = ctx.attr._icu,
+        icu = ctx.attr._icu[0],
+        exec_icu = ctx.attr._exec_icu,
     )
     return [
         default,
@@ -261,6 +264,12 @@ rather than the target framework, as it does under MSBuild.""",
         "_icu": attr.label(
             doc = "The ICU shared libraries the runtime loads in place of the machine's, if any",
             default = "//dotnet/settings:icu",
+            cfg = icu_transition,
+        ),
+        "_exec_icu": attr.label(
+            doc = "The same ICU for the platform the compilers run on",
+            default = "//dotnet/settings:icu",
+            cfg = "exec",
         ),
     },
     doc = """Defines a dotnet compiler/runtime toolchain.

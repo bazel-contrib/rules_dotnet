@@ -97,7 +97,8 @@ def _import_library(ctx):
         dotnet_assembly_compile_info,
         dotnet_assembly_runtime_info,
         # A packed Razor class library serves its files from
-        # `_content/<package id>`, the same base path a library target uses.
+        # `_content/<package id>`, the same base path a library target uses,
+        # unless its manifest says otherwise.
         collect_static_web_assets(
             label = ctx.label,
             assembly_name = ctx.attr.library_name,
@@ -105,6 +106,7 @@ def _import_library(ctx):
             deps = ctx.attr.deps,
             is_application = False,
             content_root = PACKAGE_CONTENT_ROOT,
+            declared_base_path = ctx.attr.static_web_assets_base_path,
         ),
         nuget_info,
     ]
@@ -131,6 +133,12 @@ import_library = rule(
             allow_files = True,
             allow_empty = True,
             default = [],
+        ),
+        "static_web_assets_base_path": attr.string(
+            doc = """Where `static_web_assets` are served from, as the package's manifest declares it.
+
+`/` is the root, which is where .NET 11 serves a framework's own scripts from.
+Empty for `_content/<library_name>`, MSBuild's default.""",
         ),
         "libs": attr.label_list(
             doc = "Static runtime DLLs",
