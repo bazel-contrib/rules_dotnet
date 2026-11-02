@@ -150,10 +150,7 @@ works under `bazel run` with no further setup.
 Assets that arrive inside a NuGet package are picked up too. A packed Razor
 class library ships them in a `staticwebassets` folder, and they are served from
 `_content/<package id>` just like a library target's `wwwroot`, so referencing
-the package is all that is needed. A package whose manifest names another base
-path is served from that instead, as .NET 11's
-`Microsoft.AspNetCore.Components.WebAssembly` serves `blazor.webassembly.js`
-from the root.
+the package is all that is needed.
 
 ## Blazor WebAssembly
 
@@ -381,9 +378,8 @@ build --@rules_dotnet//dotnet/settings:icu=@rules_dotnet//dotnet/settings:hermet
 ```
 
 It needs a C++ toolchain, the auto-configured one or a hermetic one, and the first build spends a few minutes
-compiling ICU: once for the platform the binaries and tests run on, and once for the execution platform the
-compilers and tools run on, whatever frameworks and runtime identifiers the build covers. The flag has no
-effect on macOS and Windows, whose runtime uses the ICU the operating system ships.
+compiling ICU. The flag has no effect on macOS and Windows, whose runtime uses the ICU the operating system
+ships.
 
 A published application do not carry this ICU. This is purely for the build and test environment within Bazel.
 
