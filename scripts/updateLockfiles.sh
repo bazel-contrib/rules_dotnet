@@ -6,6 +6,13 @@ REPO_ROOT=$( cd -- "$SCRIPT_DIR/.." &> /dev/null && pwd )
 
 cd "$REPO_ROOT"
 
+# `paket install` restores the projects it updates, and their
+# `.paket/Paket.Restore.targets` runs Paket again. It reads the Paket to run from
+# this property, so that is this Paket rather than one installed on the machine.
+bazel build @rules_dotnet//tools/paket
+PaketExePath="$(bazel info execution_root)/$(bazel cquery --output=files @rules_dotnet//tools/paket 2> /dev/null)"
+export PaketExePath
+
 while IFS= read -r -d '' dependencies; do
   dir=$( cd -- "$( dirname "$dependencies" )" &> /dev/null && pwd )
   echo "==> ${dir#"$REPO_ROOT"/}"
