@@ -2,9 +2,8 @@
 
 load("@bazel_skylib//lib:collections.bzl", "collections")
 load("//dotnet/private:toolchains_repo.bzl", "BOOTSTRAP_TOOLCHAIN_TYPE")
-load("//dotnet/private/sdk:frameworks.bzl", "SDK_NETCOREAPP_FRAMEWORKS")
 load("//dotnet/private/sdk:pack_repos.bzl", "declare_pack_repos")
-load("//dotnet/private/sdk:releases.bzl", "channel_tfm", "resolve_sdk", "sdk_channel", "sdk_fact_key")
+load("//dotnet/private/sdk:releases.bzl", "resolve_sdk", "sdk_fact_key")
 load(":repositories.bzl", "dotnet_sdk_repositories", "dotnet_toolchains_repo")
 
 _SDK_NAME = "dotnet"
@@ -24,20 +23,6 @@ after which builds no longer need the metadata.""",
         mandatory = True,
     ),
 }
-
-def _resolve(module_ctx, version, releases):
-    # Its runtime's framework is what tools run on and what the SDK's own pack
-    # band is, so one rules_dotnet does not know cannot work. Checked before
-    # anything is downloaded, which also catches a mistyped version early.
-    tfm = channel_tfm(sdk_channel(version))
-    if tfm not in SDK_NETCOREAPP_FRAMEWORKS:
-        fail(".NET SDK {} would be for {}, which is not one of the frameworks this version of rules_dotnet declares, up to {}.".format(
-            version,
-            tfm,
-            SDK_NETCOREAPP_FRAMEWORKS[-1],
-        ))
-
-    return resolve_sdk(module_ctx, version, releases)
 
 def _toolchain_extension(module_ctx):
     sdk_version = None
@@ -74,7 +59,7 @@ def _toolchain_extension(module_ctx):
     # identical action keys.
     sdks = {}
     for version in collections.uniq([sdk_version, bootstrap_version]):
-        sdks[version] = _resolve(module_ctx, version, releases)
+        sdks[version] = resolve_sdk(module_ctx, version, releases)
         dotnet_sdk_repositories(sdks[version])
 
     dotnet_toolchains_repo(

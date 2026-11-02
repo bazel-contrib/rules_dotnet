@@ -36,26 +36,6 @@ use_repo(dotnet, "dotnet_toolchains")
 register_toolchains("@dotnet_toolchains//:all")
 ```
 
-Any SDK Microsoft has released can be used as soon as it is out, from .NET 6
-on, and previews from .NET 10 on. That includes the SDKs of .NET releases newer than
-`rules_dotnet` itself: their frameworks are declared ahead of time, so a new
-release needs no new version of `rules_dotnet`. A target can build for any
-framework up to the SDK's own; building for a newer one fails saying which SDK
-it needs, as it does under MSBuild. The version is looked up in
-[Microsoft's release metadata](https://builds.dotnet.microsoft.com/dotnet/release-metadata/releases-index.json)
-rather than in a list kept by `rules_dotnet`, and what is read there (the
-archive for each platform, its SHA-512, and the pack versions the SDK uses) is
-recorded as facts in `MODULE.bazel.lock`, next to the hashes of the NuGet
-packages. Check the lock file in: a build with it reads neither the release
-metadata nor NuGet's again, and every download is verified against the hash
-recorded the first time. The metadata is downloaded like anything else, so
-`--downloader_config` can point it at a mirror.
-
-The SDK also decides which patch of each framework's targeting, runtime and
-apphost packs is used, much as it decides which packs it bundles: its own
-framework is at the runtime it ships with, and every other framework at the
-newest patch the release metadata dates on or before the SDK's release. Moving
-to a newer SDK moves them all forward.
 
 ## Design
 

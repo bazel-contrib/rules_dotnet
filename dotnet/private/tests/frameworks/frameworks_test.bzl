@@ -1,7 +1,7 @@
-"""Tests for the framework tables derived from the hand-maintained lists.
+"""Tests for the framework tables derived from the framework lists.
 
-Adding a .NET release is meant to be a one-line change to the lists, so the
-derivations have to give a new framework what the SDK would.
+Frameworks are declared ahead of their release, so the derivations have to give
+each what the SDK will.
 """
 
 load("@bazel_skylib//lib:unittest.bzl", "asserts", "unittest")

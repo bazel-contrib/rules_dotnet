@@ -61,5 +61,9 @@ bzl_library(
     name = "releases",
     srcs = ["releases.bzl"],
     visibility = ["//dotnet:__subpackages__"],
-    deps = ["//dotnet/private:toolchains_repo"],
+    deps = [
+        ":frameworks",
+        "//dotnet/private:semver",
+        "//dotnet/private:toolchains_repo",
+    ],
 )

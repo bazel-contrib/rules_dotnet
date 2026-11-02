@@ -27,6 +27,15 @@ A newly released SDK needs no change here: `rules_dotnet` looks SDKs up in
 Microsoft's release metadata when a build first asks for one. Supporting a new
 .NET release is described in [dotnet/private/sdk](dotnet/private/sdk/README.md).
 
+## Updating Paket
+
+Paket is pinned by the `paket_cli` group in `paket.dependencies` and by every
+`dotnet-tools.json`, which must agree. The project files in this repository
+exist for IDE support only and restore through `.paket/Paket.Restore.targets`,
+which is format-versioned against Paket: an older Paket writes resolved lines
+with fewer fields than the targets read, so restore silently produces a
+`project.assets.json` with no libraries at all.
+
 ## Using this as a development dependency of other rules
 
 You'll commonly find that you develop in another WORKSPACE, such as

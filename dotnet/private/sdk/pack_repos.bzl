@@ -471,9 +471,10 @@ def _band_versions(module_ctx, sdk, netrc_entries, indexes, releases, published,
     shipped[sdk.channel] = sdk.runtime_version
 
     # Looked up together, so that the feed is asked once.
+    references = {tfm: _reference_packs(tfm) for tfm in pending}
     _published_versions(
         module_ctx,
-        collections.uniq([id for tfm in pending for id in _reference_packs(tfm)]),
+        collections.uniq([id for ids in references.values() for id in ids]),
         netrc_entries,
         indexes,
         published,
@@ -483,7 +484,7 @@ def _band_versions(module_ctx, sdk, netrc_entries, indexes, releases, published,
         channel = channels[tfm]
         first = channel + ".0"
         target = shipped.get(channel) or first
-        lists = _published_versions(module_ctx, _reference_packs(tfm), netrc_entries, indexes, published)
+        lists = _published_versions(module_ctx, references[tfm], netrc_entries, indexes, published)
 
         if None in lists:
             # No fact, so that a feed that did not answer does not pin the
@@ -498,7 +499,7 @@ def _band_versions(module_ctx, sdk, netrc_entries, indexes, releases, published,
             fail("NuGet has no version of {} at or before {} that is in all of {}, which .NET SDK {} needs.".format(
                 tfm,
                 target,
-                ", ".join(_reference_packs(tfm)),
+                ", ".join(references[tfm]),
                 sdk.version,
             ))
 

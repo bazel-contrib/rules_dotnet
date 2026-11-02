@@ -59,14 +59,10 @@ def deps_by_tfm(dependency_groups, packages):
         return {"//conditions:default": []}
 
     # A configuration matches the branch of every framework its own is
-    # compatible with, and the select takes the most specific: its own. A
-    # framework that resolves to no dependencies therefore still needs a branch,
-    # or a more general framework's would apply. One that is compatible with a
-    # single other framework and resolves as it does needs none, though: the
-    # most specific branch left is that framework's, or one further down the
-    # same line that resolves the same. That leaves most frameworks without a
-    # branch of their own, those declared ahead of their release among them,
-    # and so every package with fewer settings to configure.
+    # compatible with, and the select takes the most specific. A framework that
+    # resolves to no dependencies therefore still needs a branch, or a more
+    # general framework's would apply. One whose only predecessor resolves the
+    # same needs none: the most specific branch left resolves as it does.
     deps = {
         "@rules_dotnet//dotnet:tfm_{}".format(tfm): labels
         for (tfm, labels) in labels_by_tfm.items()

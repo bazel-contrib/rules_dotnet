@@ -15,6 +15,7 @@ has shipped, and nor does which runtime of a channel had shipped by a given day.
 
 load("//dotnet/private:semver.bzl", "semver")
 load("//dotnet/private:toolchains_repo.bzl", "PLATFORMS")
+load("//dotnet/private/sdk:frameworks.bzl", "SDK_NETCOREAPP_FRAMEWORKS")
 
 _RELEASE_METADATA = "https://builds.dotnet.microsoft.com/dotnet/release-metadata"
 
@@ -294,6 +295,16 @@ def resolve_sdk(module_ctx, version, cache):
             _OLDEST_SUPPORTED_MAJOR,
         ))
 
+    # Its runtime's framework is what tools run on and what the SDK's own pack
+    # band is, so it has to be one rules_dotnet declares.
+    tfm = channel_tfm(channel)
+    if tfm not in SDK_NETCOREAPP_FRAMEWORKS:
+        fail(".NET SDK {} would be for {}, which is not one of the frameworks this version of rules_dotnet declares, up to {}.".format(
+            version,
+            tfm,
+            SDK_NETCOREAPP_FRAMEWORKS[-1],
+        ))
+
     fact = getattr(module_ctx, "facts", {}).get(sdk_fact_key(version))
     if not _is_sdk_fact(fact):
         fact = _read_sdk(module_ctx, cache, channel, version)
@@ -301,7 +312,7 @@ def resolve_sdk(module_ctx, version, cache):
     return struct(
         version = version,
         channel = channel,
-        tfm = channel_tfm(channel),
+        tfm = tfm,
         runtime_version = fact["runtime_version"],
         csharp_version = fact["csharp_version"],
         fsharp_version = fact["fsharp_version"],

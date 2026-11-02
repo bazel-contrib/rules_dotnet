@@ -1,8 +1,7 @@
 """The .NET release band that each target framework's packs come from.
 
-Maintained by hand. A band is what one .NET release shipped: its packs, keyed by
-the field holding each one's version, and the runtime identifiers it shipped
-them for.
+A band is what one .NET release shipped: its packs, keyed by the field holding
+each one's version, and the runtime identifiers it shipped them for.
 
 Bands up to .NET 5 are frozen history with irregularities of their own, so they
 are spelled out with the versions they were last serviced at. From .NET 6

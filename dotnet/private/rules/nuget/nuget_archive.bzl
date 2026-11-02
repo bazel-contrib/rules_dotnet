@@ -707,9 +707,6 @@ def _nuget_archive_impl(ctx):
     # Then get the auth dict for the package base urls
     auth = _get_auth_dict(ctx, urls)
 
-    # The package is kept under its own name rather than linked to: a symlink
-    # would point into this output base, and the repository could not be
-    # shared through the repository contents cache.
     nupkg_name = "%s.%s.nupkg" % (ctx.attr.id, ctx.attr.version)
 
     ctx.download(urls, output = nupkg_name, integrity = ctx.attr.sha512, auth = auth)

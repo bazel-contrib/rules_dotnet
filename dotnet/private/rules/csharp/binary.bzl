@@ -89,12 +89,10 @@ def _tool_runtime(ctx):
     if user == None or user.runtime == None:
         return bootstrap
 
-    newer = user.dotnetinfo.runtime_tfm != bootstrap.dotnetinfo.runtime_tfm and is_greater_or_equal_framework(
-        user.dotnetinfo.runtime_tfm,
-        bootstrap.dotnetinfo.runtime_tfm,
-    )
+    if is_greater_or_equal_framework(bootstrap.dotnetinfo.runtime_tfm, user.dotnetinfo.runtime_tfm):
+        return bootstrap
 
-    return user if newer else bootstrap
+    return user
 
 def _bootstrap_binary_impl(ctx):
     return build_binary(ctx, _compile_action, ctx.toolchains[BOOTSTRAP_TOOLCHAIN_TYPE], _tool_runtime(ctx))
@@ -150,8 +148,9 @@ _BOOTSTRAP_ATTRS = dicts.add(
 )
 
 # A tool is built for the exec configuration, but `cfg = "exec"` is not enough
-# on its own: the TFM/RID graph has to be reset to the defaults as well, so that
-# the depending target's target framework does not infect the tool's build.
+# on its own: the TFM/RID graph has to be pinned to the tool's own framework as
+# well, so that the depending target's target framework does not infect the
+# tool's build.
 bootstrap_tool_binary = rule(
     _bootstrap_binary_impl,
     doc = """Compile a C# exe that is part of rules_dotnet itself.""",

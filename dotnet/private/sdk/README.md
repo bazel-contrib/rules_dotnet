@@ -1,8 +1,7 @@
 # The .NET SDK and its packs
 
-Nothing in this directory is generated. What changes with every .NET release is
-looked up when a build needs it; what changes once a year at most is kept here
-by hand.
+What changes with every .NET release is looked up when a build needs it; what
+changes once a year at most is kept here.
 
 | File | What it holds | Changes |
 |---|---|---|
@@ -28,9 +27,8 @@ mean downloading the whole SDK to evaluate the extension.
 
 The SDK's details and its band versions are handed back to Bazel as module
 extension facts, keyed by the SDK version, alongside the hashes of the packs
-themselves. They land in
-`MODULE.bazel.lock`, and an evaluation that finds them there reads neither the
-release metadata nor NuGet's. That only holds because a fact's key alone
+themselves. They land in `MODULE.bazel.lock`, and an evaluation that finds them
+there reads neither the release metadata nor NuGet's. That only holds because a fact's key alone
 decides its value: an SDK's archives never change once released, and nor does
 what had shipped by a given day. Do not add a fact that a later release could
 change, such as the newest patch of a band. That is also why an SDK whose
@@ -72,15 +70,6 @@ Only these need a release of rules_dotnet:
 
 Moving `rules_dotnet` itself onto a newer SDK is just a matter of changing
 `dotnet_version` in `MODULE.bazel`, and in `examples/` and `e2e/` as wanted.
-
-## The Paket CLI
-
-The `paket_cli` group in `paket.dependencies` and `dotnet-tools.json` pin Paket
-in two places, which must agree. The project files in this repository exist for
-IDE support only and restore through `.paket/Paket.Restore.targets`, which is
-format-versioned against Paket: an older Paket writes resolved lines with fewer
-fields than the targets read, so every `PackageReference` condition is false
-and restore silently produces a `project.assets.json` with no libraries at all.
 
 ## References
 
