@@ -401,8 +401,9 @@ build --@rules_dotnet//dotnet/settings:icu=@rules_dotnet//dotnet/settings:hermet
 ```
 
 It needs a C++ toolchain, the auto-configured one or a hermetic one, and the first build spends a few minutes
-compiling ICU. The flag has no effect on macOS and Windows, whose runtime uses the ICU the operating system
-ships.
+compiling ICU: once for the platform the binaries and tests run on, and once for the execution platform the
+compilers and tools run on, whatever frameworks and runtime identifiers the build covers. The flag has no
+effect on macOS and Windows, whose runtime uses the ICU the operating system ships.
 
 A published application do not carry this ICU. This is purely for the build and test environment within Bazel.
 

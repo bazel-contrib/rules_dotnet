@@ -71,3 +71,14 @@ bzl_library(
         "@bazel_skylib//lib:dicts",
     ],
 )
+
+bzl_library(
+    name = "icu_transition",
+    srcs = ["icu_transition.bzl"],
+    visibility = ["//dotnet:__subpackages__"],
+    deps = [
+        ":common",
+        ":default_transition",
+        "@bazel_skylib//lib:dicts",
+    ],
+)

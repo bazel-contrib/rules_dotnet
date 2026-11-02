@@ -99,4 +99,5 @@ bzl_library(
     name = "toolchain",
     srcs = ["toolchain.bzl"],
     visibility = ["//visibility:public"],
+    deps = ["//dotnet/private/transitions:icu_transition"],
 )
