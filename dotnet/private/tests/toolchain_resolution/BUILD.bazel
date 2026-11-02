@@ -1,6 +1,7 @@
 """These tests are for asserting that the dotnet toolchain can be resolved and used using template variables.
 """
 
+load("@bazel_lib//lib:diff_test.bzl", "diff_test")
 load("@bazel_lib//lib:testing.bzl", "assert_contains")
 
 genrule(
@@ -57,56 +58,51 @@ assert_contains(
     expected = "Microsoft (R) F# Compiler version",
 )
 
-genrule(
-    name = "dotnet_sdk_version",
-    outs = ["dotnet_sdk_version.txt"],
-    cmd = "echo \"$(DOTNET_SDK_VERSION)\" > $@",
-    toolchains = [
-        "//dotnet:resolved_toolchain",
-    ],
-    tools = [
-        "//dotnet:resolved_toolchain",
-    ],
-)
+# The versions the toolchain reports, against those the SDK itself does, so
+# that they hold for whichever SDK is registered.
+_SDK_REPORTS = {
+    "sdk_version": "\"$(DOTNET_BIN)\" --version",
+    "runtime_version": "\"$(DOTNET_BIN)\" --list-runtimes | grep '^Microsoft.NETCore.App ' | cut -d' ' -f2",
+    # The framework the runtime is: net, then its major and minor version.
+    "runtime_tfm": "echo net$$(\"$(DOTNET_BIN)\" --list-runtimes | grep '^Microsoft.NETCore.App ' | cut -d' ' -f2 | cut -d. -f1-2)",
+}
 
-assert_contains(
-    name = "check_dotnet_sdk_version_output",
-    actual = ":dotnet_sdk_version",
-    expected = "10.0.401",
-)
+[
+    genrule(
+        name = "{}_reported".format(name),
+        outs = ["{}_reported.txt".format(name)],
+        cmd = "export DOTNET_CLI_HOME=\"$$(pwd)/$$(dirname $(DOTNET_BIN))\"; ({}) | tr -d '\\r' > $@".format(command),
+        toolchains = [
+            "//dotnet:resolved_toolchain",
+        ],
+        tools = [
+            "//dotnet:resolved_toolchain",
+        ],
+    )
+    for (name, command) in _SDK_REPORTS.items()
+]
 
-genrule(
-    name = "dotnet_runtime_version",
-    outs = ["dotnet_runtime_version.txt"],
-    cmd = "echo \"$(DOTNET_RUNTIME_VERSION)\" > $@",
-    toolchains = [
-        "//dotnet:resolved_toolchain",
-    ],
-    tools = [
-        "//dotnet:resolved_toolchain",
-    ],
-)
+[
+    genrule(
+        name = "{}_toolchain".format(name),
+        outs = ["{}_toolchain.txt".format(name)],
+        cmd = "echo \"$({})\" > $@".format(variable),
+        toolchains = [
+            "//dotnet:resolved_toolchain",
+        ],
+    )
+    for (name, variable) in {
+        "sdk_version": "DOTNET_SDK_VERSION",
+        "runtime_version": "DOTNET_RUNTIME_VERSION",
+        "runtime_tfm": "DOTNET_RUNTIME_TFM",
+    }.items()
+]
 
-assert_contains(
-    name = "check_dotnet_runtime_version_output",
-    actual = ":dotnet_runtime_version",
-    expected = "10.0.12",
-)
-
-genrule(
-    name = "dotnet_runtime_tfm",
-    outs = ["dotnet_runtime_tfm.txt"],
-    cmd = "echo \"$(DOTNET_RUNTIME_TFM)\" > $@",
-    toolchains = [
-        "//dotnet:resolved_toolchain",
-    ],
-    tools = [
-        "//dotnet:resolved_toolchain",
-    ],
-)
-
-assert_contains(
-    name = "check_dotnet_runtime_tfm_output",
-    actual = ":dotnet_runtime_tfm",
-    expected = "net10.0",
-)
+[
+    diff_test(
+        name = "check_dotnet_{}".format(name),
+        file1 = ":{}_toolchain".format(name),
+        file2 = ":{}_reported".format(name),
+    )
+    for name in _SDK_REPORTS
+]

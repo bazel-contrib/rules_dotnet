@@ -114,6 +114,14 @@ import_dll(
     dll = "sdk/{sdk_version}/Microsoft.Build.Utilities.Core.dll",
 )
 
+# What Microsoft.Build.Framework loads to work out an item's well-known
+# metadata, such as its full path.
+import_dll(
+    name = "msbuild_string_tools",
+    version = "{runtime_version}",
+    dll = "sdk/{sdk_version}/Microsoft.NET.StringTools.dll",
+)
+
 # The tasks that implement scoped CSS, and the CSS parser they use. The net472
 # copies are for MSBuild.exe on .NET Framework; ours run on the .NET host.
 filegroup(
@@ -167,7 +175,7 @@ dotnet_toolchain(
     host_model = ":host_model",
     razor_source_generators = ":razor_source_generators",
     static_web_assets_tasks = ":static_web_assets_tasks",
-    msbuild_dlls = [":msbuild_framework", ":msbuild_utilities"],
+    msbuild_dlls = [":msbuild_framework", ":msbuild_utilities", ":msbuild_string_tools"],
     os = "{os}",
     sdk_version = "{sdk_version}",
     runtime_version = "{runtime_version}",

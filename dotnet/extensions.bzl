@@ -31,7 +31,11 @@ def _resolve(module_ctx, version, releases):
     # anything is downloaded, which also catches a mistyped version early.
     tfm = channel_tfm(sdk_channel(version))
     if tfm not in SDK_NETCOREAPP_FRAMEWORKS:
-        fail(".NET SDK {} would be for {}, which this version of rules_dotnet does not know.".format(version, tfm))
+        fail(".NET SDK {} would be for {}, which is not one of the frameworks this version of rules_dotnet declares, up to {}.".format(
+            version,
+            tfm,
+            SDK_NETCOREAPP_FRAMEWORKS[-1],
+        ))
 
     return resolve_sdk(module_ctx, version, releases)
 

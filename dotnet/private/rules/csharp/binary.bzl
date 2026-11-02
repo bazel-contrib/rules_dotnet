@@ -11,9 +11,10 @@ load(
     "get_csharp_compiler_worker",
     "get_toolchain",
     "is_debug",
+    "is_greater_or_equal_framework",
     "targets_windows",
 )
-load("//dotnet/private:toolchains_repo.bzl", "BOOTSTRAP_TOOLCHAIN_TYPE")
+load("//dotnet/private:toolchains_repo.bzl", "BOOTSTRAP_TOOLCHAIN_TYPE", "DOTNET_TOOLCHAIN_TYPE")
 load("//dotnet/private/rules/common:attrs.bzl", "CSHARP_BINARY_COMMON_ATTRS")
 load("//dotnet/private/rules/common:binary.bzl", "build_binary")
 load("//dotnet/private/rules/csharp/actions:csharp_assembly.bzl", "AssemblyAction")
@@ -74,8 +75,35 @@ def _compile_action(ctx, tfm, toolchain):
 def _binary_impl(ctx):
     return build_binary(ctx, _compile_action, get_toolchain(ctx))
 
+def _tool_runtime(ctx):
+    """The toolchain whose runtime a tool of ours runs on.
+
+    The bootstrap SDK's, unless the user's SDK is of a newer release. Some tools
+    load assemblies from the user's SDK, which are built for that SDK's runtime
+    and will not load on an older one, so a tool rolls forward onto the newer
+    runtime instead.
+    """
+    bootstrap = ctx.toolchains[BOOTSTRAP_TOOLCHAIN_TYPE]
+    user = ctx.toolchains[DOTNET_TOOLCHAIN_TYPE]
+
+    if user == None or user.runtime == None:
+        return bootstrap
+
+    newer = user.dotnetinfo.runtime_tfm != bootstrap.dotnetinfo.runtime_tfm and is_greater_or_equal_framework(
+        user.dotnetinfo.runtime_tfm,
+        bootstrap.dotnetinfo.runtime_tfm,
+    )
+
+    return user if newer else bootstrap
+
 def _bootstrap_binary_impl(ctx):
-    return build_binary(ctx, _compile_action, ctx.toolchains[BOOTSTRAP_TOOLCHAIN_TYPE])
+    return build_binary(ctx, _compile_action, ctx.toolchains[BOOTSTRAP_TOOLCHAIN_TYPE], _tool_runtime(ctx))
+
+# The user's toolchain is only looked at for the runtime a tool runs on.
+_BOOTSTRAP_TOOLCHAINS = [
+    BOOTSTRAP_TOOLCHAIN_TYPE,
+    config_common.toolchain_type(DOTNET_TOOLCHAIN_TYPE, mandatory = False),
+]
 
 _BINARY_ATTRS = dicts.add(
     CSHARP_BINARY_COMMON_ATTRS,
@@ -107,13 +135,17 @@ csharp_binary = rule(
 # packs are what they compile against. The attributes pointing at rules_dotnet's
 # own tools are stubbed out rather than dropped - a tool cannot depend on
 # itself, and nothing these rules compile has Razor sources or web assets, so
-# neither tool is ever invoked.
+# neither tool is ever invoked. Nor is a tool ever published, so it takes none
+# of the packs a publish needs, which only the user's SDK has, and only for the
+# frameworks it knows.
 _BOOTSTRAP_ATTRS = dicts.add(
     _BINARY_ATTRS,
     {
         "_pack_set": attr.string(default = BOOTSTRAP_PACKS),
         "_scoped_css_tool": attr.label(default = "//dotnet/private:no_tool", cfg = "exec"),
         "_static_web_assets_tool": attr.label(default = "//dotnet/private:no_tool", cfg = "exec"),
+        "_apphost_pack": attr.label_list(default = []),
+        "_runtime_pack": attr.label_list(default = []),
     },
 )
 
@@ -125,9 +157,7 @@ bootstrap_tool_binary = rule(
     doc = """Compile a C# exe that is part of rules_dotnet itself.""",
     attrs = _BOOTSTRAP_ATTRS,
     executable = True,
-    toolchains = [
-        BOOTSTRAP_TOOLCHAIN_TYPE,
-    ],
+    toolchains = _BOOTSTRAP_TOOLCHAINS,
     cfg = bootstrap_tool_transition,
 )
 
@@ -144,8 +174,6 @@ compiler_worker_binary = rule(
     doc = """Compile a persistent compiler worker C# exe.""",
     attrs = _COMPILER_WORKER_ATTRS,
     executable = True,
-    toolchains = [
-        BOOTSTRAP_TOOLCHAIN_TYPE,
-    ],
+    toolchains = _BOOTSTRAP_TOOLCHAINS,
     cfg = bootstrap_tool_transition,
 )

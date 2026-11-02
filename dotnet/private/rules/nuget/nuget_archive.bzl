@@ -485,9 +485,28 @@ FRAMEWORK_LIST = {framework_list}
 TARGETING_PACK_OVERRIDES = {targeting_pack_overrides}
 
 TOOLS = {tools}
+
+STATIC_WEB_ASSETS_BASE_PATH = {static_web_assets_base_path}
 """
 
-def _write_package_info(ctx, all_files, tool_files, prefix):
+def _static_web_assets_base_path(manifest):
+    """The base path a package's static web asset manifest serves it from.
+
+    MSBuild gives every asset of a project the same base path, so any asset
+    speaks for all of them.
+
+    Args:
+      manifest: The content of the manifest.
+
+    Returns:
+      The base path, `/` for the root, or empty if the manifest lists nothing.
+    """
+    for asset in json.decode(manifest).get("Assets", {}).values():
+        return asset.get("BasePath", "")
+
+    return ""
+
+def _write_package_info(ctx, id, all_files, tool_files, prefix):
     """Extracts the package metadata that the hub repository needs.
 
     Reading it here keeps the work lazy: a package nothing depends on is never
@@ -496,6 +515,12 @@ def _write_package_info(ctx, all_files, tool_files, prefix):
     nuspec = None
     framework_list = {}
     targeting_pack_overrides = {}
+
+    # From .NET 11, a package lists its static web assets in a manifest of
+    # their own, which says where they are served from. One built by an older
+    # SDK serves them from MSBuild's default.
+    static_web_assets_manifest = "build/{}.packageassets.json".format(id.lower())
+    static_web_assets_base_path = ""
 
     for file in all_files:
         file = _sanitize_path(file)
@@ -507,6 +532,8 @@ def _write_package_info(ctx, all_files, tool_files, prefix):
             framework_list = parse_framework_list(ctx.read(prefix + file))
         elif lower == "data/packageoverrides.txt":
             targeting_pack_overrides = parse_package_overrides(ctx.read(prefix + file))
+        elif lower == static_web_assets_manifest:
+            static_web_assets_base_path = _static_web_assets_base_path(ctx.read(prefix + file))
 
     dependency_groups = {}
     is_dotnet_tool = False
@@ -537,6 +564,7 @@ def _write_package_info(ctx, all_files, tool_files, prefix):
         framework_list = json.encode(framework_list),
         targeting_pack_overrides = json.encode(targeting_pack_overrides),
         tools = json.encode(tools),
+        static_web_assets_base_path = json.encode(static_web_assets_base_path),
     ))
 
 # Assemblies under `build` resolve through their own select and are unioned
@@ -570,9 +598,10 @@ def _group_package_files(id, all_files):
         "contentFiles": {
             "any": [],
         },
-        # Files the package serves, at their paths below the `_content/<id>`
-        # base path. See the `build/Microsoft.AspNetCore.StaticWebAssets.props`
-        # a Razor class library ships.
+        # Files the package serves, at their paths below its base path:
+        # `_content/<id>` unless its manifest says otherwise. See the
+        # `build/Microsoft.AspNetCore.StaticWebAssets.props` a Razor class
+        # library ships.
         "staticwebassets": [],
         # Format: lib/<TFM>/<assembly>.dll
         "lib": {},
@@ -707,7 +736,7 @@ def _write_repository(ctx, id, nupkg_name, all_files, prefix = ""):
     """
     groups = _group_package_files(id, all_files)
 
-    _write_package_info(ctx, all_files, groups.tools, prefix)
+    _write_package_info(ctx, id, all_files, groups.tools, prefix)
 
     ctx.file(prefix + "BUILD.bazel", r"""package(default_visibility = ["//visibility:public"])
 exports_files(glob(["**"]))

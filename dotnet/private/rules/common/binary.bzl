@@ -11,6 +11,7 @@ load(
     "generate_runtimeconfig",
     "is_core_framework",
     "is_standard_framework",
+    "shared_framework_version",
     "to_rlocation_path",
 )
 load("//dotnet/private:providers.bzl", "DotnetApphostPackInfo", "DotnetAssemblyRuntimeInfo", "DotnetBinaryInfo", "DotnetNativeToolsInfo", "DotnetRuntimePackInfo")
@@ -79,7 +80,7 @@ def _native_tools(ctx, native_tools):
 
     return [DefaultInfo(executable = executable), native_tools]
 
-def build_binary(ctx, compile_action, toolchain):
+def build_binary(ctx, compile_action, toolchain, runtime_toolchain = None):
     """Builds a .Net binary from a compilation action
 
     Args:
@@ -88,9 +89,12 @@ def build_binary(ctx, compile_action, toolchain):
             and returns a (DotnetAssemblyCompileInfo, DotnetAssemblyRuntimeInfo,
             generated static web assets) tuple.
         toolchain: The .Net toolchain to build with.
+        runtime_toolchain: The .Net toolchain whose runtime the binary runs on,
+            if not `toolchain`'s.
     Returns:
         A collection of the references, runfiles and native dlls.
     """
+    runtime_toolchain = runtime_toolchain or toolchain
     if DotnetNativeToolsInfo in ctx.attr._native_tools:
         return _native_tools(ctx, ctx.attr._native_tools[DotnetNativeToolsInfo])
 
@@ -105,21 +109,24 @@ def build_binary(ctx, compile_action, toolchain):
     appsetting_files = runtime_provider.appsetting_files.to_list()
     default_info_files = [dll] + runtime_provider.xml_docs + appsetting_files
 
-    launcher = _create_launcher(ctx, dll, toolchain)
+    launcher = _create_launcher(ctx, dll, runtime_toolchain)
 
     additional_runfiles = list(appsetting_files)
 
     runtimeconfig = None
     depsjson = None
+    framework_version = None
     transitive_runtime_deps = runtime_provider.deps.to_list()
 
     if is_core_framework(tfm):
+        framework_version = shared_framework_version(tfm, toolchain.dotnetinfo.runtime_version)
         runtimeconfig = ctx.actions.declare_file("%s/%s/%s.runtimeconfig.json" % (ctx.label.name, tfm, ctx.attr.out or ctx.attr.name))
         runtimeconfig_struct = generate_runtimeconfig(
             target_framework = tfm,
             project_sdk = ctx.attr.project_sdk,
             is_self_contained = False,
             roll_forward_behavior = ctx.attr.roll_forward_behavior,
+            framework_version = framework_version,
         )
 
         # Add additional lookup paths so that we can avoid copying all DLLs
@@ -163,8 +170,8 @@ def build_binary(ctx, compile_action, toolchain):
         ctx.runfiles(
             files = additional_runfiles,
             transitive_files = depset(transitive = [
-                toolchain.dotnetinfo.runtime_files,
-                icu_files(toolchain),
+                runtime_toolchain.dotnetinfo.runtime_files,
+                icu_files(runtime_toolchain),
             ]),
         ),
     )
@@ -258,8 +265,10 @@ def build_binary(ctx, compile_action, toolchain):
         dll = dll,
         static_web_files = static_web_files,
         transitive_runtime_deps = transitive_runtime_deps,
-        apphost_pack_info = ctx.attr._apphost_pack[0][DotnetApphostPackInfo],
-        runtime_pack_info = ctx.attr._runtime_pack[0][DotnetRuntimePackInfo],
+        # None for rules_dotnet's own tools, which are never published.
+        apphost_pack_info = ctx.attr._apphost_pack[0][DotnetApphostPackInfo] if ctx.attr._apphost_pack else None,
+        runtime_pack_info = ctx.attr._runtime_pack[0][DotnetRuntimePackInfo] if ctx.attr._runtime_pack else None,
+        framework_version = framework_version,
     )
 
     return [default_info, dotnet_binary_info, compile_provider, runtime_provider, static_web_assets_info, RunEnvironmentInfo(environment = {key: expand_variables(ctx, expand_locations(ctx, value, ctx.attr.data)) for key, value in ctx.attr.envs.items()}, inherited_environment = ctx.attr.env_inherit)]

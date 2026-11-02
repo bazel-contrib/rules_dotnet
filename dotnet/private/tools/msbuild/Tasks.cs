@@ -97,6 +97,11 @@ internal static class Tasks
         info.SetValue(task, value);
     }
 
+    /// For a property only some releases of a task have, such as one a later
+    /// release dropped.
+    public static void SetIfDeclared(ITask task, string property, object value) =>
+        task.GetType().GetProperty(property)?.SetValue(task, value);
+
     public static T Get<T>(ITask task, string property)
     {
         var info = task.GetType().GetProperty(property)

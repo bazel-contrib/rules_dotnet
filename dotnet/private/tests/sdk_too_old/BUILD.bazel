@@ -1,0 +1,39 @@
+load("//dotnet:defs.bzl", "csharp_binary", "csharp_library")
+load(":tests.bzl", "sdk_too_old_test")
+
+# The newest release rules_dotnet declares, which no SDK ships yet. Manual,
+# since these only build to fail.
+csharp_library(
+    name = "too_new",
+    srcs = ["Lib.cs"],
+    tags = ["manual"],
+    target_frameworks = ["net20.0"],
+)
+
+sdk_too_old_test(
+    name = "library_test",
+    expected_message_fragments = [
+        "net20.0 is .NET 20, which .NET SDK ",
+        "Building for it needs a .NET 20 SDK or newer",
+    ],
+    target_under_test = ":too_new",
+)
+
+# A target picks the newest framework it lists, so listing one the SDK does not
+# know fails too, as it does under the SDK, rather than quietly building for
+# an older one.
+csharp_binary(
+    name = "also_too_new",
+    srcs = ["Lib.cs"],
+    tags = ["manual"],
+    target_frameworks = [
+        "net10.0",
+        "net20.0",
+    ],
+)
+
+sdk_too_old_test(
+    name = "multi_targeted_binary_test",
+    expected_message_fragments = ["needs a .NET 20 SDK or newer"],
+    target_under_test = ":also_too_new",
+)

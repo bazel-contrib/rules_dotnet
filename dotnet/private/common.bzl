@@ -40,23 +40,9 @@ DEFAULT_RID = "base"
 # Re-exported so the many modules that read it keep loading it from here.
 FRAMEWORK_COMPATIBILITY = _FRAMEWORK_COMPATIBILITY
 
+# The PE subsystem version each framework that needs one asks for: .NET
+# Framework from 4.5 on. Every other framework leaves it to the compiler.
 _subsystem_version = {
-    "netstandard": None,
-    "netstandard1.0": None,
-    "netstandard1.1": None,
-    "netstandard1.2": None,
-    "netstandard1.3": None,
-    "netstandard1.4": None,
-    "netstandard1.5": None,
-    "netstandard1.6": None,
-    "netstandard2.0": None,
-    "netstandard2.1": None,
-    "net11": None,
-    "net20": None,
-    "net30": None,
-    "net35": None,
-    "net40": None,
-    "net403": None,
     "net45": "6.00",
     "net451": "6.00",
     "net452": "6.00",
@@ -68,19 +54,6 @@ _subsystem_version = {
     "net472": "6.00",
     "net48": "6.00",
     "net481": "6.00",
-    "netcoreapp1.0": None,
-    "netcoreapp1.1": None,
-    "netcoreapp2.0": None,
-    "netcoreapp2.1": None,
-    "netcoreapp2.2": None,
-    "netcoreapp3.0": None,
-    "netcoreapp3.1": None,
-    "net5.0": None,
-    "net6.0": None,
-    "net7.0": None,
-    "net8.0": None,
-    "net9.0": None,
-    "net10.0": None,
 }
 
 _net = FRAMEWORK_COMPATIBILITY.keys().index("net11")
@@ -467,7 +440,7 @@ def collect_transitive_runfiles(ctx, assembly_runtime_info, deps):
     return runfiles.merge_all(transitive_runfiles)
 
 def get_framework_version_info(tfm):
-    return _subsystem_version[tfm]
+    return _subsystem_version.get(tfm)
 
 def get_highest_compatible_target_framework(incoming_tfm, tfms):
     """Returns the highest compatible framework version for the incoming_tfm.
@@ -1071,8 +1044,28 @@ def generate_depsjson(
 
     return base
 
+def shared_framework_version(target_framework, runtime_version):
+    """The version of the shared frameworks a framework-dependent app asks for.
+
+    That is the release's first, `x.0.0`, which the host rolls forward from. A
+    preview of the release sorts before it, though, and so could never satisfy
+    it: an app built for the release a preview SDK ships asks for that preview
+    instead, as it does under the SDK. Since .NET 10 every shared framework of
+    a release shares its version.
+
+    Args:
+        target_framework: The framework the app is built for.
+        runtime_version: The version of the runtime the SDK ships.
+
+    Returns:
+        The version.
+    """
+    version = tfm_to_semver(target_framework)
+
+    return runtime_version if runtime_version.startswith(version + "-") else version
+
 # For runtimeconfig.json spec see https://github.com/dotnet/sdk/blob/main/documentation/specs/runtime-configuration-file.md
-def generate_runtimeconfig(target_framework, project_sdk, is_self_contained, roll_forward_behavior, runtime_pack_info = None):
+def generate_runtimeconfig(target_framework, project_sdk, is_self_contained, roll_forward_behavior, runtime_pack_info = None, framework_version = None):
     """Generates a runtimeconfig.json file.
 
     Args:
@@ -1081,6 +1074,8 @@ def generate_runtimeconfig(target_framework, project_sdk, is_self_contained, rol
         is_self_contained: If the target is a self-contained publish.
         roll_forward_behavior: The roll forward behavior to use.
         runtime_pack_info: The DotnetRuntimePackInfo of the runtime pack that is used for a self contained publish.
+        framework_version: The version of the shared frameworks to ask for when
+            not self-contained, from `shared_framework_version`.
     Returns:
         The runtimeconfig.json file as a struct.
     """
@@ -1098,12 +1093,11 @@ def generate_runtimeconfig(target_framework, project_sdk, is_self_contained, rol
             frameworks.append({"name": assembly_runtime_info.name, "version": assembly_runtime_info.version})
         base["runtimeOptions"]["includedFrameworks"] = frameworks
     else:
-        runtime_version = tfm_to_semver(target_framework)
         frameworks = [
-            {"name": "Microsoft.NETCore.App", "version": runtime_version},
+            {"name": "Microsoft.NETCore.App", "version": framework_version},
         ]
         if normalize_project_sdk(project_sdk) == WEB_SDK:
-            frameworks.append({"name": "Microsoft.AspNetCore.App", "version": runtime_version})
+            frameworks.append({"name": "Microsoft.AspNetCore.App", "version": framework_version})
 
         base["runtimeOptions"]["frameworks"] = frameworks
     return base

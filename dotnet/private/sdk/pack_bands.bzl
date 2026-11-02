@@ -10,6 +10,11 @@ onwards a release ships all of its packs, for every runtime identifier, at
 every patch, so those bands follow from SDK_NETCOREAPP_FRAMEWORKS, and which
 patch a band is at is left to the SDK in use, the way the SDK picks the packs it
 bundles. See `pack_bands`.
+
+That includes the releases declared ahead of time, which are taken to need what
+the newest release in `_PACKS_SINCE` and `_PACKS_DROPPED` does. An SDK only knows
+the bands up to its own, so the others have no version until an SDK that knows
+them is registered.
 """
 
 load("//dotnet/private/sdk:frameworks.bzl", "SDK_NETCOREAPP_FRAMEWORKS")
@@ -73,6 +78,14 @@ _PACKS_SINCE = [
     (10, ["wasm", "wasm_sdk", "illink", "internal_assets", "devserver"]),
 ]
 
+# The packs a band from .NET 6 onwards no longer needs, by the major release
+# that stopped needing them.
+_PACKS_DROPPED = [
+    # .NET 11 serves `blazor.webassembly.js` from the application's own
+    # Microsoft.AspNetCore.Components.WebAssembly package.
+    (11, ["internal_assets"]),
+]
+
 def _major(tfm):
     return int(tfm[len("net"):].split(".")[0])
 
@@ -83,6 +96,20 @@ SDK_BAND_TFMS = [
     if not tfm.startswith("netcoreapp") and _major(tfm) >= 6
 ]
 
+def sdk_band_tfms(sdk_tfm):
+    """The bands an SDK picks the version of: those up to its own.
+
+    A release after the SDK's had not shipped when the SDK did, so the SDK
+    cannot build for it.
+
+    Args:
+      sdk_tfm: The target framework the SDK's runtime is.
+
+    Returns:
+      A list of target frameworks, oldest first.
+    """
+    return [tfm for tfm in SDK_BAND_TFMS if _major(tfm) <= _major(sdk_tfm)]
+
 def _sdk_band(tfm, version):
     band = {"rids": _ALL_RIDS}
 
@@ -91,6 +118,11 @@ def _sdk_band(tfm, version):
             for pack in packs:
                 band[pack] = version
 
+    for (major, packs) in _PACKS_DROPPED:
+        if _major(tfm) >= major:
+            for pack in packs:
+                band.pop(pack)
+
     return band
 
 def pack_bands(versions = {}):
@@ -98,8 +130,9 @@ def pack_bands(versions = {}):
 
     Args:
       versions: The version of each band in `SDK_BAND_TFMS`, by target
-        framework. A band left out has a version of None, which only does for
-        tables of which packs exist rather than of what to download.
+        framework. A band left out has a version of None: one the SDK does not
+        know, or one of the tables of which packs exist rather than of what to
+        download.
 
     Returns:
       A dict of target framework to band, oldest first.

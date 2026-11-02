@@ -1,19 +1,23 @@
-"""The target frameworks rules_dotnet knows about. Maintained by hand.
+"""The target frameworks rules_dotnet knows about.
 
 The framework lists mirror the Supported*TargetFramework item groups in the
 SDK's Microsoft.NET.SupportedTargetFrameworks.props, which is what its
 GenerateNETCompatibleDefineConstants target consumes. A framework absent from
 these lists never gets an *_OR_GREATER symbol.
 
+.NET ships a major release a year, each one a framework like the last, so the
+.NET frameworks are declared ahead of their release rather than as they ship.
+An SDK for a new release then works the day it ships, without a release of
+rules_dotnet: what can actually be built for is up to the SDK registered, whose
+packs reach no further than its own release. See `pack_bands.bzl`.
+
 Everything else here is derived from the lists, as are the pack bands in
-`pack_bands.bzl`, so supporting a new .NET release is a matter of appending it
-to SDK_NETCOREAPP_FRAMEWORKS and moving DEFAULT_TARGET_FRAMEWORK onto it. Do so
-only once the release is generally available: before that its packs are not
-published as stable versions, and DEFAULT_TARGET_FRAMEWORK is what every
-target in every downstream repository builds for.
+`pack_bands.bzl`.
 """
 
-DEFAULT_TARGET_FRAMEWORK = "net10.0"
+# The newest .NET release declared ahead of time, due in November 2035.
+# Moving it on is all the releases after it need.
+_NEWEST_DECLARED_MAJOR = 20
 
 SDK_NETSTANDARD_FRAMEWORKS = [
     "netstandard1.0",
@@ -53,13 +57,12 @@ SDK_NETCOREAPP_FRAMEWORKS = [
     "netcoreapp2.2",
     "netcoreapp3.0",
     "netcoreapp3.1",
-    "net5.0",
-    "net6.0",
-    "net7.0",
-    "net8.0",
-    "net9.0",
-    "net10.0",
-]
+] + ["net{}.0".format(major) for major in range(5, _NEWEST_DECLARED_MAJOR + 1)]
+
+# What a configuration that no transition has touched is in, and so what a
+# target builds for at most unless something asks for less. The newest declared
+# framework, so that nothing but the SDK limits what a target can build for.
+DEFAULT_TARGET_FRAMEWORK = SDK_NETCOREAPP_FRAMEWORKS[-1]
 
 def _dotted_version(tfm, prefix):
     return [int(part) for part in tfm[len(prefix):].split(".")]

@@ -9,6 +9,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Reflection;
 using System.Threading.Tasks;
 
@@ -30,13 +31,18 @@ internal static class Webcil
         var wrap = type.GetProperty("WrapInWebAssembly")!;
         var convert = type.GetMethod("ConvertToWebcil", BindingFlags.Public | BindingFlags.Instance)!;
 
+        // Past the input and output paths, a release adds only optional
+        // parameters, such as .NET 11's Webcil version, and their defaults are
+        // what the SDK passes for the Mono runtime.
+        var optional = create.GetParameters().Skip(2).Select(parameter => parameter.DefaultValue).ToArray();
+
         Parallel.ForEach(assemblies, assembly =>
         {
             Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(assembly.Output))!);
 
             var converter = create.Invoke(
                 null,
-                new object[] { Path.GetFullPath(assembly.Source), Path.GetFullPath(assembly.Output) })!;
+                new object?[] { Path.GetFullPath(assembly.Source), Path.GetFullPath(assembly.Output) }.Concat(optional).ToArray())!;
 
             // Wrapping is what makes the result a WebAssembly module rather
             // than a bare Webcil payload, which is what the browser loads.

@@ -9,7 +9,8 @@ public sealed class Tests
     {
         Assert.AreEqual("not_templated", Environment.GetEnvironmentVariable("NOT_TEMPLATED"));
         Assert.AreEqual("dotnet/private/tests/binary_envs/test.txt", Environment.GetEnvironmentVariable("TEMPLATED_FILE"));
-        Assert.AreEqual("10.0.401", Environment.GetEnvironmentVariable("TEMPLATED_VARIABLE"));
+        // Whichever SDK is registered: the one whose runtime this runs on.
+        Assert.That(Environment.GetEnvironmentVariable("TEMPLATED_VARIABLE"), Does.Match($@"^{Environment.Version.Major}\.\d+\.\d+"));
     }
 }
 

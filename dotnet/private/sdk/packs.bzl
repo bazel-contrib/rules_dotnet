@@ -218,6 +218,17 @@ def wasm_tool_packs(tfm, *, bands):
         if name in band
     ]
 
+def wasm_tool_pack_names(tfm):
+    """Returns which tool packs a Blazor WebAssembly publish runs.
+
+    Args:
+      tfm: The target framework.
+
+    Returns:
+      A list of names, as `wasm_tool_packs` gives them.
+    """
+    return [name for (name, _) in wasm_tool_packs(tfm, bands = PACK_BANDS)]
+
 def apphost_pack(tfm, rid, *, bands):
     """Returns the apphost pack that produces a native executable.
 
@@ -402,6 +413,11 @@ ILCOMPILER_PACK_REPO = "dotnet.ilcompiler_packs"
 NATIVEAOT_PACK_REPO = "dotnet.nativeaot_packs"
 
 WASM_PACK_REPO = "dotnet.wasm_packs"
+
+# The package of the tool pack repositories that holds the newest band the SDK
+# knows, which is its own: the tools to run on its runtime whatever the
+# framework, and those for a framework older than every band.
+NEWEST_BAND = "newest"
 
 TARGETING_PACK_LOOKUP_TABLE = {
     pack_set: {

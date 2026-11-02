@@ -1,0 +1,13 @@
+startup --windows_enable_symlinks
+common --enable_runfiles
+common --incompatible_strict_action_env
+
+# Enable C# persistent workers
+build --@rules_dotnet//dotnet/settings:use_compiler_worker=true
+
+# Give one cache key to a compilation reached through several configurations.
+# Per platform because path mapping requires a sandbox and Bazel has none on
+# Windows, where it would fail every compile. See ../../docs/README.md#path-mapping.
+common --enable_platform_specific_config
+common:linux --experimental_output_paths=strip
+common:macos --experimental_output_paths=strip

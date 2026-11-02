@@ -1,8 +1,8 @@
 // The boot configuration: what the runtime fetches, and its hashes.
 //
 // This is a contract with the runtime rather than a format of ours, so it is
-// produced by the SDK's own `GenerateWasmBootJson` task. In .NET 10 the result
-// is merged into `dotnet.js` rather than written as a separate
+// produced by the SDK's own `GenerateWasmBootJson` task. From .NET 10 the
+// result is merged into `dotnet.js` rather than written as a separate
 // `blazor.boot.json`.
 
 using System;
@@ -16,6 +16,10 @@ using Microsoft.Build.Utilities;
 internal static class BootConfig
 {
     private const string TaskType = "Microsoft.NET.Sdk.WebAssembly.GenerateWasmBootJson";
+
+    /// From .NET 11 the configuration records how big each Webcil module's
+    /// payload is, which the SDK reads off the modules in a task of its own.
+    private const string SizesTaskType = "Microsoft.NET.Sdk.WebAssembly.AttachWebcilSizes";
 
     public static void Write(
         Request request,
@@ -59,6 +63,30 @@ internal static class BootConfig
             endpoints.Add(endpoint);
         }
 
+        if (tasks.GetType(SizesTaskType) != null)
+        {
+            // That task reads each module at its `OriginalItemSpec`, which
+            // under MSBuild is the module itself rather than the assembly name
+            // the configuration is written from.
+            var candidates = resources.Select(resource =>
+            {
+                var candidate = new TaskItem(resource);
+                candidate.SetMetadata("OriginalItemSpec", resource.ItemSpec);
+                return (ITaskItem)candidate;
+            }).ToArray();
+
+            var sizes = Tasks.Create(tasks, engine, SizesTaskType);
+            Tasks.Set(sizes, "Candidates", candidates);
+            Tasks.Run(sizes, "AttachWebcilSizes");
+
+            var sized = Tasks.Get<ITaskItem[]>(sizes, "CandidatesWithSizes");
+            for (var i = 0; i < resources.Count; i++)
+            {
+                resources[i].SetMetadata("PayloadSize", sized[i].GetMetadata("PayloadSize"));
+                resources[i].SetMetadata("TableSize", sized[i].GetMetadata("TableSize"));
+            }
+        }
+
         Tasks.Set(task, "AssemblyPath", Path.GetFullPath(request.AppAssembly));
         Tasks.Set(task, "TargetFrameworkVersion", request.TargetFrameworkVersion);
         Tasks.Set(task, "Resources", resources.ToArray());
@@ -67,9 +95,10 @@ internal static class BootConfig
         Tasks.Set(task, "InvariantGlobalization", request.InvariantGlobalization.ToString().ToLowerInvariant());
         // A development build says debugging is available - the task turns that
         // into the `debugLevel` the runtime reads - and admits that nothing was
-        // trimmed. Caching boot resources would defeat the point of rebuilding.
+        // trimmed, where the release still records that. Caching boot resources
+        // would defeat the point of rebuilding.
         Tasks.Set(task, "DebugBuild", request.Debug);
-        Tasks.Set(task, "LinkerEnabled", !request.Debug);
+        Tasks.SetIfDeclared(task, "LinkerEnabled", !request.Debug);
         Tasks.Set(task, "CacheBootResources", !request.Debug);
 
         // Plain routes, so the configuration does not depend on hashes that are

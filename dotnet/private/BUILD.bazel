@@ -3,11 +3,14 @@ load(
     "//dotnet/private/sdk:packs.bzl",
     "CROSSGEN2_PACK_REPO",
     "ILCOMPILER_PACK_REPO",
+    "NEWEST_BAND",
+    "WASM_PACK_REPO",
     "WASM_RID",
     "crossgen2_pack",
     "host_tool_tfms",
     "ilcompiler_pack",
     "wasm_pack_tfms",
+    "wasm_tool_pack_names",
 )
 load("//dotnet/private/sdk:tool_pack.bzl", "host_tool_pack", "host_tool_pack_band")
 
@@ -171,29 +174,54 @@ filegroup(
     visibility = ["//dotnet:__subpackages__"],
 )
 
-# The runtime pack a Blazor WebAssembly application runs on, and the tools that
+# What a framework's band leaves out of the packs below.
+filegroup(
+    name = "no_pack",
+    visibility = ["//dotnet:__subpackages__"],
+)
+
+# The runtime pack a Blazor WebAssembly application runs on, and the packs that
 # publish it, for the framework being published. Behind aliases because a rule
 # attribute default cannot itself be a select, and generated from the band table
 # so that a new framework needs no edit here.
+#
+# Manual, like everything below that picks a band by framework: they only
+# resolve in a configuration the framework was set for, rather than in the
+# default one, whose framework is the newest declared.
 [
     alias(
         name = name,
         actual = select(
             {
-                "//dotnet:tfm_" + tfm: "@dotnet.wasm_packs//{}:{}".format(tfm, target)
+                "//dotnet:tfm_" + tfm: (
+                    "@{}//{}:{}".format(WASM_PACK_REPO, tfm, target) if target == WASM_RID or target in wasm_tool_pack_names(tfm) else ":no_pack"
+                )
                 for tfm in wasm_pack_tfms()
             },
-            no_match_error = "Blazor WebAssembly needs one of " + ", ".join(sorted(wasm_pack_tfms())),
+            no_match_error = "Blazor WebAssembly needs {} or newer".format(wasm_pack_tfms()[0]),
         ),
+        tags = ["manual"],
         visibility = ["//dotnet:__subpackages__"],
     )
     for (name, target) in {
         "wasm_pack": WASM_RID,
         "wasm_sdk": "wasm_sdk",
-        "illink": "illink",
-        "devserver": "devserver",
         "internal_assets": "internal_assets",
     }.items()
+]
+
+# The tools that run on the SDK's runtime, whatever the framework, so from its
+# own band, as the SDK bundles them.
+[
+    alias(
+        name = name,
+        actual = "@{}//{}:{}".format(WASM_PACK_REPO, NEWEST_BAND, name),
+        visibility = ["//dotnet:__subpackages__"],
+    )
+    for name in [
+        "illink",
+        "devserver",
+    ]
 ]
 
 # The crossgen2 pack of the target framework's band, for the machine the build
@@ -204,6 +232,7 @@ host_tool_pack(
         CROSSGEN2_PACK_REPO,
         host_tool_tfms(crossgen2_pack),
     ),
+    tags = ["manual"],
     visibility = ["//visibility:public"],
 )
 
@@ -214,5 +243,6 @@ host_tool_pack(
         ILCOMPILER_PACK_REPO,
         host_tool_tfms(ilcompiler_pack),
     ),
+    tags = ["manual"],
     visibility = ["//visibility:public"],
 )

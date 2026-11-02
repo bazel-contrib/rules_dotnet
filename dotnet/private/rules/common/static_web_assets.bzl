@@ -115,7 +115,8 @@ def collect_static_web_assets(
         deps,
         is_application,
         generated = [],
-        content_root = WEB_ROOT):
+        content_root = WEB_ROOT,
+        declared_base_path = ""):
     """Builds the `StaticWebAssetsInfo` for a target.
 
     Args:
@@ -131,11 +132,14 @@ def collect_static_web_assets(
         relative to.
       content_root: The directory `files` are served relative to. A NuGet
         package puts them under `staticwebassets` rather than `wwwroot`.
+      declared_base_path: The base path the target declares for itself, `/`
+        for the root, or empty for the one its assembly name gives it. A NuGet
+        package declares one in its static web asset manifest.
 
     Returns:
       A `StaticWebAssetsInfo`.
     """
-    prefix = base_path(assembly_name, is_application)
+    prefix = declared_base_path.strip("/") if declared_base_path else base_path(assembly_name, is_application)
 
     def serving_path(subpath):
         return "{}/{}".format(prefix, subpath) if prefix else subpath

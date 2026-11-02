@@ -34,6 +34,9 @@ _PUBLISHED_NATIVE = [
 
 _BOOT_HOST = "dotnet.js"
 
+# What the page loads, and what starts the runtime.
+_STARTER = "_framework/blazor.webassembly.js"
+
 def _is_published_native(basename):
     return basename in _PUBLISHED_NATIVE or (
         basename.startswith("icudt") and basename.endswith(".dat")
@@ -132,25 +135,43 @@ def _tool_file(files, basename, tfm):
     # for the framework being published; older packs spell that `tools/net`.
     return only(files, basename, "a %s application" % tfm, ["/tools/%s/" % tfm, "/tools/net/"])
 
-def _application_assets(binary):
-    """The application's own servable files, with the route each takes.
+def _application_assets(ctx, binary, tfm):
+    """The application's servable files, with the route each takes.
+
+    Those are the application's own and its dependencies', plus the starter
+    script. From .NET 11 the application's `Microsoft.AspNetCore.Components.WebAssembly`
+    package serves that like any other asset. Before, the package kept it out of
+    the assets, so it is taken from the internal assets pack, which ships the
+    same script.
 
     Args:
+      ctx: The rule context.
       binary: The application target.
+      tfm: The target framework, for diagnostics.
 
     Returns:
       A struct of `routes` (source/route structs) and `files`.
     """
-    if StaticWebAssetsInfo not in binary:
-        return struct(routes = [], files = [])
+    assets = binary[StaticWebAssetsInfo].assets.to_list() if StaticWebAssetsInfo in binary else []
+    routes = {asset.serving_path: asset.file for asset in assets}
 
-    assets = binary[StaticWebAssetsInfo].assets.to_list()
+    if _STARTER not in routes:
+        starter = [file for file in ctx.files._internal_assets if file.basename == "blazor.webassembly.js"]
+        if not starter:
+            fail(
+                "%s serves no %s, which starts a %s application.\n" % (binary.label, _STARTER, tfm) +
+                "From .NET 11 it comes from the application's Microsoft.AspNetCore.Components.WebAssembly package, " +
+                "which the application has to depend on.",
+            )
+
+        routes[_STARTER] = starter[0]
+
     return struct(
         routes = [
-            struct(source = asset.file.path, route = asset.serving_path)
-            for asset in assets
+            struct(source = file.path, route = route)
+            for (route, file) in routes.items()
         ],
-        files = [asset.file for asset in assets],
+        files = routes.values(),
     )
 
 def _application_symbols(runtime_info):
@@ -189,10 +210,9 @@ def _assemble_action(ctx, binary, tfm, output, trimmed = None, trim_mode = "full
     assemblies = _managed_assemblies(runtime_info, pack)
     runtime = _runtime_files(pack, tfm)
 
-    starter = only(ctx.files._internal_assets, "blazor.webassembly.js", "a %s application" % tfm)
     webcil = _tool_file(ctx.files._wasm_sdk, "Microsoft.NET.WebAssembly.Webcil.dll", tfm)
     tasks = _tool_file(ctx.files._wasm_sdk, "Microsoft.NET.Sdk.WebAssembly.Pack.Tasks.dll", tfm)
-    assets = _application_assets(binary)
+    assets = _application_assets(ctx, binary, tfm)
 
     illink = _tool_file(ctx.files._illink, "illink.dll", tfm) if trimmed else None
     illink_tasks = _tool_file(ctx.files._illink, "ILLink.Tasks.dll", tfm) if trimmed else None
@@ -225,7 +245,6 @@ def _assemble_action(ctx, binary, tfm, output, trimmed = None, trim_mode = "full
             applicationEnvironment = ctx.attr.application_environment,
             invariantGlobalization = ctx.attr.invariant_globalization,
             native = [file.path for file in runtime.served],
-            starter = starter.path,
             dotnetJs = runtime.boot_host.path,
             assets = assets.routes,
         )),
@@ -236,7 +255,7 @@ def _assemble_action(ctx, binary, tfm, output, trimmed = None, trim_mode = "full
 
     transitive = [
         depset(assemblies.values()),
-        ctx.attr._wasm_sdk.files,
+        ctx.attr._wasm_sdk[0].files,
     ]
     if trimmed:
         transitive.append(ctx.attr._illink.files)
@@ -251,7 +270,7 @@ def _assemble_action(ctx, binary, tfm, output, trimmed = None, trim_mode = "full
         executable = ctx.attr._blazor_wasm_tool.files_to_run,
         arguments = [args],
         inputs = depset(
-            direct = runtime.served + [runtime.boot_host, starter, request] + assets.files + symbols,
+            direct = runtime.served + [runtime.boot_host, request] + assets.files + symbols,
             transitive = transitive,
         ),
         outputs = [output] + ([trimmed] if trimmed else []),
@@ -293,7 +312,7 @@ def assemble_site(ctx, tfm, verb, trimmed = None, trim_mode = "full", debug = Fa
         fail(
             "%s cannot %s for %r.\n" % (ctx.label, verb, tfm) +
             "Blazor WebAssembly needs a framework whose whole toolchain ships as packages, " +
-            "which is %s." % ", ".join(sorted(wasm_pack_tfms())),
+            "which is %s or newer." % wasm_pack_tfms()[0],
         )
 
     binary = ctx.attr.binary[0]
@@ -348,15 +367,18 @@ ASSEMBLE_ATTRS = dicts.add(STATIC_WEB_ASSETS_ATTRS, {
         default = "//dotnet/private:wasm_pack",
         cfg = wasm_pack_transition,
     ),
+    # Platform-independent files of the framework's band, which the browser
+    # transition picks.
     "_wasm_sdk": attr.label(
         default = "//dotnet/private:wasm_sdk",
         allow_files = True,
-        cfg = "exec",
+        cfg = wasm_pack_transition,
     ),
+    # Where the starter script comes from before .NET 11.
     "_internal_assets": attr.label(
         default = "//dotnet/private:internal_assets",
         allow_files = True,
-        cfg = "exec",
+        cfg = wasm_pack_transition,
     ),
     "_blazor_wasm_tool": attr.label(
         default = "//dotnet/private/tools/blazor_wasm",

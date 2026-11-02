@@ -5,7 +5,7 @@ frameworks and runtime identifiers they resolve must not change.
 """
 
 load("@bazel_skylib//lib:unittest.bzl", "asserts", "unittest")
-load("//dotnet/private/sdk:pack_bands.bzl", "PACK_BANDS", "SDK_BAND_TFMS", "pack_bands")
+load("//dotnet/private/sdk:pack_bands.bzl", "PACK_BANDS", "SDK_BAND_TFMS", "pack_bands", "sdk_band_tfms")
 load(
     "//dotnet/private/sdk:packs.bzl",
     "DEFAULT_SDK",
@@ -22,6 +22,7 @@ load(
     "targeting_packs",
     "wasm_pack_tfms",
     "wasm_runtime_pack",
+    "wasm_tool_pack_names",
     "wasm_tool_packs",
 )
 
@@ -58,6 +59,10 @@ _PRE_NET6_RIDS = [
     "win-arm64",
     "win-x64",
 ]
+
+# The releases after the newest these tables spell out, declared ahead of their
+# release. Each ships what the newest spelled out does.
+_DECLARED_AHEAD = SDK_BAND_TFMS[SDK_BAND_TFMS.index("net10.0") + 1:]
 
 _BAND_TFMS = {
     "default": [
@@ -116,6 +121,12 @@ def _targeting_table_test_impl(ctx):
             sorted([tfm for tfm in targeting_pack_tfms(project_sdk) if tfm in bands]),
             "bands with a targeting pack for the {} SDK".format(project_sdk),
         )
+        asserts.equals(
+            env,
+            _DECLARED_AHEAD,
+            targeting_pack_tfms(project_sdk)[-len(_DECLARED_AHEAD):],
+            "releases declared ahead with a targeting pack for the {} SDK".format(project_sdk),
+        )
 
         for tfm in targeting_pack_tfms(project_sdk):
             asserts.true(
@@ -131,11 +142,11 @@ _targeting_table_test = unittest.make(_targeting_table_test_impl)
 def _runtime_table_test_impl(ctx):
     env = unittest.begin(ctx)
 
-    asserts.equals(env, sorted(_RUNTIME_PACK_RIDS.keys()), sorted(runtime_pack_tfms()))
+    asserts.equals(env, sorted(_RUNTIME_PACK_RIDS.keys() + _DECLARED_AHEAD), sorted(runtime_pack_tfms()))
 
     for project_sdk in PROJECT_SDKS:
         for tfm in runtime_pack_tfms():
-            expected = _RUNTIME_PACK_RIDS[tfm]
+            expected = _RUNTIME_PACK_RIDS.get(tfm, _ALL_RIDS)
             if project_sdk == WEB_SDK:
                 expected = _WEB_RUNTIME_PACK_RIDS.get(tfm, expected)
             asserts.equals(
@@ -181,7 +192,7 @@ def _crossgen2_table_test_impl(ctx):
     for tfm in runtime_pack_tfms():
         asserts.equals(
             env,
-            _CROSSGEN2_RIDS.get(tfm, _RUNTIME_PACK_RIDS[tfm]),
+            _CROSSGEN2_RIDS.get(tfm, _RUNTIME_PACK_RIDS.get(tfm, _ALL_RIDS)),
             [rid for rid in _ALL_RIDS if crossgen2_pack(tfm, rid, bands = PACK_BANDS) != None],
             "crossgen2 pack RIDs for {}".format(tfm),
         )
@@ -291,6 +302,9 @@ def _wasm_test_impl(ctx):
         wasm_tool_packs("net10.0", bands = _BANDS),
     )
 
+    # .NET 11 serves the starter script from the application's own package.
+    asserts.equals(env, ["wasm_sdk", "illink", "devserver"], wasm_tool_pack_names("net11.0"))
+
     for tfm in ["netcoreapp3.1", "net5.0", "net9.0"]:
         asserts.equals(
             env,
@@ -314,8 +328,24 @@ def _sdk_bands_test_impl(ctx):
     env = unittest.begin(ctx)
 
     # The bands whose version the SDK picks are every framework from .NET 6
-    # on, so a new release needs no band of its own.
-    asserts.equals(env, ["net6.0", "net7.0", "net8.0", "net9.0", "net10.0"], SDK_BAND_TFMS)
+    # on, those declared ahead included, so a new release needs no band of its
+    # own.
+    asserts.equals(env, ["net{}.0".format(major) for major in range(6, 21)], SDK_BAND_TFMS)
+
+    # An SDK only knows the releases up to its own.
+    asserts.equals(env, ["net6.0", "net7.0", "net8.0", "net9.0", "net10.0"], sdk_band_tfms("net10.0"))
+    asserts.equals(env, "net11.0", sdk_band_tfms("net11.0")[-1])
+    asserts.equals(env, SDK_BAND_TFMS, sdk_band_tfms(SDK_BAND_TFMS[-1]))
+
+    # A release declared ahead ships the packs the newest spelled out does:
+    # .NET 10's, less the internal assets .NET 11 no longer needs.
+    for tfm in _DECLARED_AHEAD:
+        asserts.equals(
+            env,
+            sorted([field for field in PACK_BANDS["net10.0"] if field != "internal_assets"]),
+            sorted(PACK_BANDS[tfm].keys()),
+            tfm,
+        )
 
     bands = pack_bands({tfm: "{}.7".format(tfm[len("net"):]) for tfm in SDK_BAND_TFMS})
     for tfm in SDK_BAND_TFMS:

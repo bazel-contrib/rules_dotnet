@@ -1,15 +1,12 @@
 """Incoming transition for the rules that build rules_dotnet's own tools.
 
-A tool is always built for the exec platform, so it is pinned to the default TFM
-and the host platform's RID rather than inheriting the TFM and RID of whatever
-target depends on it.
+A tool is always built for the exec platform, so it is pinned to the one
+framework it names and the host platform's RID rather than inheriting the TFM
+and RID of whatever target depends on it. That framework has to be one the
+bootstrap SDK knows, which need not be the newest the user's SDK does.
 """
 
 load("@bazel_skylib//lib:dicts.bzl", "dicts")
-load(
-    "//dotnet/private:common.bzl",
-    "DEFAULT_TFM",
-)
 load(
     "//dotnet/private/transitions:common.bzl",
     "FRAMEWORK_COMPATABILITY_TRANSITION_OUTPUTS",
@@ -19,8 +16,11 @@ load(
     "rid_compatability_transition_outputs",
 )
 
-def _impl(_settings, _attr):
-    tfm = DEFAULT_TFM
+def _impl(_settings, attr):
+    if len(attr.target_frameworks) != 1:
+        fail("{} is a tool of rules_dotnet's, so its `target_frameworks` names the one framework it builds for".format(attr.name))
+
+    tfm = attr.target_frameworks[0]
     rid = platform_to_rid()
     return dicts.add(
         {"//dotnet:target_framework": tfm, "//dotnet:rid": rid},

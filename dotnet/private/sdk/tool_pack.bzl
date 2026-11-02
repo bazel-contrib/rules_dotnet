@@ -2,6 +2,7 @@
 
 load("//dotnet/private:common.bzl", "copy_files_to_dir")
 load("//dotnet/private:providers.bzl", "DotnetToolPackInfo")
+load("//dotnet/private/sdk:packs.bzl", "NEWEST_BAND")
 
 def tool_pack_rule(tool_name):
     """Returns a rule that extracts one native tool from its nuget package.
@@ -83,7 +84,8 @@ def host_tool_pack_band(repo, tfms):
     """
     bands = {"//dotnet:tfm_" + tfm: "@{}//{}:host".format(repo, tfm) for tfm in tfms}
 
-    # A framework older than every band, such as netstandard2.0, gets the newest.
-    bands["//conditions:default"] = "@{}//{}:host".format(repo, tfms[-1])
+    # A framework older than every band, such as netstandard2.0, gets the newest
+    # the SDK knows.
+    bands["//conditions:default"] = "@{}//{}:host".format(repo, NEWEST_BAND)
 
     return select(bands)

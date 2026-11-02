@@ -1,0 +1,16 @@
+load("@rules_dotnet//dotnet:defs.bzl", "csharp_library")
+
+# Scoped CSS runs the SDK's own tasks in one of rules_dotnet's tools, so this
+# needs the tool on the SDK's runtime.
+csharp_library(
+    name = "lib",
+    srcs = [
+        "Widget.razor",
+        "Widget.razor.css",
+        "_Imports.razor",
+    ],
+    project_sdk = "razor",
+    root_namespace = "Scoped.Lib",
+    target_frameworks = ["net11.0"],
+    visibility = ["//scoped_css:__subpackages__"],
+)

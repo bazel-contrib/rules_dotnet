@@ -5,6 +5,7 @@ derivations have to give a new framework what the SDK would.
 """
 
 load("@bazel_skylib//lib:unittest.bzl", "asserts", "unittest")
+load("//dotnet/private:common.bzl", "shared_framework_version")
 load(
     "//dotnet/private/sdk:frameworks.bzl",
     "DEFAULT_TARGET_FRAMEWORK",
@@ -28,6 +29,9 @@ def _lang_versions_test_impl(ctx):
         "net5.0": "9.0",
         "net8.0": "12.0",
         "net10.0": "14.0",
+        # Declared ahead of their release.
+        "net11.0": "15.0",
+        "net20.0": "24.0",
         "netstandard2.0": "7.3",
         "netstandard2.1": "8.0",
     }.items():
@@ -73,15 +77,37 @@ def _compatibility_test_impl(ctx):
     asserts.equals(env, keys.index("net481") + 1, keys.index("netcoreapp1.0"))
     asserts.equals(env, SDK_NETCOREAPP_FRAMEWORKS[-1], keys[-1])
 
-    asserts.true(env, DEFAULT_TARGET_FRAMEWORK in SDK_NETCOREAPP_FRAMEWORKS)
+    # Releases are declared ahead, a decade on, and nothing but the SDK limits
+    # which of them a target builds for.
+    asserts.equals(env, "net20.0", SDK_NETCOREAPP_FRAMEWORKS[-1])
+    asserts.equals(env, ["net10.0"], FRAMEWORK_COMPATIBILITY["net11.0"])
+    asserts.equals(env, SDK_NETCOREAPP_FRAMEWORKS[-1], DEFAULT_TARGET_FRAMEWORK)
 
     return unittest.end(env)
 
 _compatibility_test = unittest.make(_compatibility_test_impl)
+
+def _shared_framework_version_test_impl(ctx):
+    env = unittest.begin(ctx)
+
+    # The release's first, which the host rolls forward from.
+    asserts.equals(env, "10.0.0", shared_framework_version("net10.0", "10.0.12"))
+    asserts.equals(env, "8.0.0", shared_framework_version("net8.0", "11.0.0-rc.3.26522.148"))
+
+    # A preview sorts before the release, so an app for the release a preview
+    # SDK ships asks for the preview.
+    asserts.equals(env, "11.0.0-rc.3.26522.148", shared_framework_version("net11.0", "11.0.0-rc.3.26522.148"))
+    asserts.equals(env, "11.0.0", shared_framework_version("net11.0", "11.0.0"))
+    asserts.equals(env, "11.0.0", shared_framework_version("net11.0", "12.0.0-preview.1.27101.1"))
+
+    return unittest.end(env)
+
+_shared_framework_version_test = unittest.make(_shared_framework_version_test_impl)
 
 def frameworks_test_suite(name):
     unittest.suite(
         name,
         _compatibility_test,
         _lang_versions_test,
+        _shared_framework_version_test,
     )

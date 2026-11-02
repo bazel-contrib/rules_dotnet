@@ -71,16 +71,14 @@ internal sealed class Request
     /// knows to fetch them.
     public List<string> Native { get; set; } = new();
 
-    /// `blazor.webassembly.js`. The page loads it directly and it is what starts
-    /// the runtime, so the boot configuration says nothing about it.
-    public string Starter { get; set; } = "";
-
     /// `dotnet.js` from the runtime pack. The copy written into the output
     /// carries the boot configuration.
     public string DotnetJs { get; set; } = "";
 
-    /// The application's own static web assets, with the route each is served
-    /// at.
+    /// The application's static web assets, with the route each is served at.
+    /// `_framework/blazor.webassembly.js` among them: the page loads it directly
+    /// and it is what starts the runtime, so the boot configuration says nothing
+    /// about it.
     public List<ServedFile> Assets { get; set; } = new();
 }
 
@@ -130,13 +128,12 @@ internal static class Program
         Webcil.ConvertAll(request.WebcilConverter, assemblies);
 
         var native = Copy(request.Native, framework);
-        File.Copy(request.Starter, Path.Combine(framework, Path.GetFileName(request.Starter)), overwrite: true);
 
         // Symbols sit beside the assemblies they belong to, under the name the
         // runtime derives from the assembly's own.
         var symbols = Copy(request.Symbols, framework);
 
-        // The application's own files keep the routes they were given.
+        // Served files keep the routes they were given.
         foreach (var asset in request.Assets)
         {
             var output = Path.Combine(request.OutputDirectory, asset.Route);

@@ -14,4 +14,8 @@ type Tests() =
             Environment.GetEnvironmentVariable("TEMPLATED_FILE")
         )
 
-        Assert.AreEqual("10.0.401", Environment.GetEnvironmentVariable("TEMPLATED_VARIABLE"))
+        // Whichever SDK is registered: the one whose runtime this runs on.
+        Assert.That(
+            Environment.GetEnvironmentVariable("TEMPLATED_VARIABLE"),
+            Does.Match(sprintf @"^%d\.\d+\.\d+" Environment.Version.Major)
+        )

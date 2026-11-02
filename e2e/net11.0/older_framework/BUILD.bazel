@@ -1,0 +1,9 @@
+load("@rules_dotnet//dotnet:defs.bzl", "csharp_test")
+
+# Built for an older framework than the SDK's, and run on the SDK's runtime,
+# which is all the SDK carries.
+csharp_test(
+    name = "older_framework",
+    srcs = ["Program.cs"],
+    target_frameworks = ["net10.0"],
+)

@@ -37,7 +37,11 @@ register_toolchains("@dotnet_toolchains//:all")
 ```
 
 Any SDK Microsoft has released can be used as soon as it is out, from .NET 6
-up to the newest framework `rules_dotnet` supports. The version is looked up in
+on, and previews from .NET 10 on. That includes the SDKs of .NET releases newer than
+`rules_dotnet` itself: their frameworks are declared ahead of time, so a new
+release needs no new version of `rules_dotnet`. A target can build for any
+framework up to the SDK's own; building for a newer one fails saying which SDK
+it needs, as it does under MSBuild. The version is looked up in
 [Microsoft's release metadata](https://builds.dotnet.microsoft.com/dotnet/release-metadata/releases-index.json)
 rather than in a list kept by `rules_dotnet`, and what is read there (the
 archive for each platform, its SHA-512, and the pack versions the SDK uses) is
@@ -166,7 +170,10 @@ works under `bazel run` with no further setup.
 Assets that arrive inside a NuGet package are picked up too. A packed Razor
 class library ships them in a `staticwebassets` folder, and they are served from
 `_content/<package id>` just like a library target's `wwwroot`, so referencing
-the package is all that is needed.
+the package is all that is needed. A package whose manifest names another base
+path is served from that instead, as .NET 11's
+`Microsoft.AspNetCore.Components.WebAssembly` serves `blazor.webassembly.js`
+from the root.
 
 ## Blazor WebAssembly
 
