@@ -737,8 +737,8 @@ def _write_repository(ctx, id, nupkg_name, all_files, prefix = ""):
 
     ctx.file(prefix + "BUILD.bazel", r"""package(default_visibility = ["//visibility:public"])
 exports_files(glob(["**"]))
-load("@rules_dotnet//dotnet/private/rules/nuget:nuget_archive.bzl", "tfm_filegroup", "rid_tfm_filegroup", "ref_tfm_filegroup", "rid_filegroup", "tool_filegroup", "unsupported_frameworks")
-""" + "\n".join([
+load("%s", "tfm_filegroup", "rid_tfm_filegroup", "ref_tfm_filegroup", "rid_filegroup", "tool_filegroup", "unsupported_frameworks")
+""" % str(Label("//dotnet/private/rules/nuget:nuget_archive.bzl")) + "\n".join([
         _create_group(
             "libs",
             _create_rid_tfm_select("libs_package", groups.libs, groups.rid_libs),
@@ -816,7 +816,7 @@ def _tfm_alias(name, targets_by_tfm, default_target):
         native.alias(
             name = "%s_std" % name,
             actual = select(
-                {"@rules_dotnet//dotnet:tfm_%s" % tfm: target for (tfm, target) in std} |
+                {str(Label("//dotnet:tfm_" + tfm)): target for (tfm, target) in std} |
                 {"//conditions:default": default_target},
             ),
             visibility = ["//visibility:public"],
@@ -826,7 +826,7 @@ def _tfm_alias(name, targets_by_tfm, default_target):
             native.alias(
                 name = "%s_net" % name,
                 actual = select(
-                    {"@rules_dotnet//dotnet:tfm_%s" % tfm: target for (tfm, target) in net} |
+                    {str(Label("//dotnet:tfm_" + tfm)): target for (tfm, target) in net} |
                     {"//conditions:default": ":%s_std" % name},
                 ),
                 visibility = ["//visibility:public"],
@@ -836,7 +836,7 @@ def _tfm_alias(name, targets_by_tfm, default_target):
             native.alias(
                 name = "%s_cor" % name,
                 actual = select(
-                    {"@rules_dotnet//dotnet:tfm_%s" % tfm: target for (tfm, target) in cor} |
+                    {str(Label("//dotnet:tfm_" + tfm)): target for (tfm, target) in cor} |
                     {"//conditions:default": ":%s_std" % name},
                 ),
                 visibility = ["//visibility:public"],
@@ -846,9 +846,9 @@ def _tfm_alias(name, targets_by_tfm, default_target):
             name = name,
             actual = select({
                 # targeting net(core)
-                "@rules_dotnet//dotnet:tfm_netcoreapp1.0": (":%s_cor" % name) if cor else (":%s_std" % name),
+                str(Label("//dotnet:tfm_netcoreapp1.0")): (":%s_cor" % name) if cor else (":%s_std" % name),
                 # targeting netframework
-                "@rules_dotnet//dotnet:tfm_net11": (":%s_net" % name) if net else (":%s_std" % name),
+                str(Label("//dotnet:tfm_net11")): (":%s_net" % name) if net else (":%s_std" % name),
                 # targeting netstandard
                 "//conditions:default": (":%s_std" % name),
             }),
@@ -858,7 +858,7 @@ def _tfm_alias(name, targets_by_tfm, default_target):
     return native.alias(
         name = name,
         actual = select(
-            {"@rules_dotnet//dotnet:tfm_%s" % tfm: target for (tfm, target) in targets_by_tfm.items()} |
+            {str(Label("//dotnet:tfm_" + tfm)): target for (tfm, target) in targets_by_tfm.items()} |
             {"//conditions:default": default_target},
         ),
         visibility = ["//visibility:public"],
@@ -910,7 +910,7 @@ def _rid_chain(name, targets_by_rid, fallback):
         native.alias(
             name = alias_name,
             actual = select({
-                "@rules_dotnet//dotnet:rid_%s" % ordered[index]: targets_by_rid[ordered[index]],
+                str(Label("//dotnet:rid_" + ordered[index])): targets_by_rid[ordered[index]],
                 "//conditions:default": target,
             }),
             visibility = ["//visibility:public"],
