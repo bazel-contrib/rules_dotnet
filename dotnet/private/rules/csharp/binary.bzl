@@ -163,6 +163,7 @@ _BOOTSTRAP_ATTRS = dicts.add(
     _BINARY_ATTRS,
     {
         "_pack_set": attr.string(default = BOOTSTRAP_PACKS),
+        "_netfx_config_tool": attr.label(default = "//dotnet/private:no_tool", cfg = "exec"),
         "_scoped_css_tool": attr.label(default = "//dotnet/private:no_tool", cfg = "exec"),
         "_xaml_tool": attr.label(default = "//dotnet/private:no_tool", cfg = "exec"),
         "_resx_tool": attr.label(default = "//dotnet/private:no_tool", cfg = "exec"),

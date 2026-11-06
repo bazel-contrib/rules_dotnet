@@ -1,0 +1,14 @@
+load(
+    "//dotnet/private/rules/csharp:binary.bzl",
+    "bootstrap_tool_binary",
+)
+
+# Generates a .NET Framework `<exe>.config` file with `<bindingRedirect>`
+# entries for all strong-named assemblies staged alongside the executable.
+bootstrap_tool_binary(
+    name = "netfx_config",
+    srcs = ["Program.cs"],
+    nullable = "enable",
+    target_frameworks = ["net10.0"],
+    visibility = ["//visibility:public"],
+)

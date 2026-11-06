@@ -258,7 +258,7 @@ def AssemblyAction(
         srcs = [assembly_info_fs] + srcs
 
     out_dir = target_name + "/" + target_framework
-    out_ext = "dll"
+    out_ext = "dll" if (target == "library" or is_core_framework(target_framework)) else "exe"
     out_dll = actions.declare_file("%s/%s.%s" % (out_dir, assembly_name, out_ext))
     out_iref = None
     out_ref = actions.declare_file("%s/ref/%s.%s" % (out_dir, assembly_name, out_ext)) if _should_output_ref_assembly(toolchain) else None

@@ -53,6 +53,8 @@ set DOTNET_CLI_TELEMETRY_OPTOUT="1"
 rem Bazel leaves windir out of test and action environments, and WPF fails to
 rem start without it.
 if not defined windir if defined SystemRoot set "windir=!SystemRoot!"
+if not defined USERPROFILE if defined TEST_TMPDIR set USERPROFILE=%TEST_TMPDIR%
+if not defined LOCALAPPDATA if defined TEST_TMPDIR set LOCALAPPDATA=%TEST_TMPDIR%
 TEMPLATED_environment
 
 set dotnet_executable="TEMPLATED_dotnet"
@@ -77,4 +79,8 @@ set probing_option=
 if defined probing_path set probing_option=--additionalprobingpath "!probing_path!"
 
 set args=%*
-"!dotnet_executable!" exec !probing_option! "!run_script!" !args!
+if /i "!run_script:~-4!"==".exe" (
+  "!run_script!" !args!
+) else (
+  "!dotnet_executable!" exec !probing_option! "!run_script!" !args!
+)
