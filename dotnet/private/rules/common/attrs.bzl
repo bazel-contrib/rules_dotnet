@@ -231,6 +231,11 @@ BINARY_COMMON_ATTRS = dicts.add(STATIC_WEB_ASSETS_ATTRS, {
 Resolves to nothing unless a publish asked, so that no other build analyses the packs.""",
         default = "//dotnet/private/rules/publish_binary:native_tools",
     ),
+    "_netfx_config_tool": attr.label(
+        doc = "Generates `<exe>.config` binding redirects for .NET Framework executables.",
+        default = "//dotnet/private/tools/netfx_config",
+        cfg = "exec",
+    ),
 })
 
 # These are attributes that are common across all the binary/library/test C# rules

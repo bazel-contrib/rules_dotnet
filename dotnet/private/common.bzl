@@ -1279,8 +1279,8 @@ def _resource_arg_format(file, target_label, out_dll, language):
     else:
         fail("Unsupported language: {}".format(language))
 
-    # We can only determine the embedded resource's name if we have a DLL to embed it in.
-    if out_dll == None or not out_dll.endswith(".dll"):
+    # We can only determine the embedded resource's name if we have a DLL or EXE to embed it in.
+    if out_dll == None or not (out_dll.endswith(".dll") or out_dll.endswith(".exe")):
         return base_resource_fmt
 
     # When the file is not within a project directory, MSBuild falls back to

@@ -1,0 +1,117 @@
+load(
+    "//dotnet:defs.bzl",
+    "csharp_binary",
+    "csharp_library",
+    "csharp_nunit_test",
+    "csharp_test",
+    "fsharp_binary",
+    "import_library",
+)
+
+csharp_binary(
+    name = "keygen",
+    srcs = ["KeyGen.cs"],
+    nullable = "enable",
+    target_frameworks = ["net8.0"],
+)
+
+genrule(
+    name = "generate_snk",
+    outs = ["test.snk"],
+    cmd = "$(execpath :keygen) $@",
+    tools = [":keygen"],
+)
+
+csharp_library(
+    name = "shared_dep_v1",
+    srcs = ["SharedDep.cs"],
+    out = "SharedDep",
+    keyfile = ":test.snk",
+    target_frameworks = ["net48"],
+    version = "1.0.0",
+)
+
+csharp_library(
+    name = "shared_dep_v2",
+    srcs = ["SharedDep.cs"],
+    out = "SharedDep",
+    keyfile = ":test.snk",
+    target_frameworks = ["net48"],
+    version = "2.0.0",
+)
+
+# Compiled against SharedDep 1.0.0.0, but paired at runtime with SharedDep 2.0.0.0
+# so the .NET Framework CLR requires a <bindingRedirect> in <exe>.config.
+csharp_library(
+    name = "consumer_compiled",
+    srcs = ["Consumer.cs"],
+    out = "Consumer",
+    generate_documentation_file = False,
+    target_frameworks = ["net48"],
+    deps = [":shared_dep_v1"],
+)
+
+import_library(
+    name = "consumer",
+    library_name = "Consumer",
+    libs = [":consumer_compiled"],
+    refs = [":consumer_compiled"],
+    version = "1.0.0",
+    deps = [":shared_dep_v2"],
+)
+
+csharp_library(
+    name = "unsigned_dep",
+    srcs = ["UnsignedDep.cs"],
+    target_frameworks = ["net48"],
+    version = "1.5.0",
+)
+
+csharp_binary(
+    name = "app",
+    srcs = ["Program.cs"],
+    resources = ["resource.txt"],
+    target_frameworks = ["net48"],
+    deps = [
+        ":consumer",
+        ":unsigned_dep",
+    ],
+)
+
+fsharp_binary(
+    name = "fsharp_app",
+    srcs = ["FSharpApp.fs"],
+    target_frameworks = ["net48"],
+    deps = [
+        "@paket.rules_dotnet_dev_nuget_packages//fsharp.core",
+    ],
+)
+
+csharp_nunit_test(
+    name = "netfx_output_test",
+    size = "small",
+    srcs = ["NetFxOutputTests.cs"],
+    data = [
+        ":app",
+        ":fsharp_app",
+    ],
+    envs = {
+        "CSHARP_APP_FILES": "$(rootpaths :app)",
+        "FSHARP_APP_FILES": "$(rootpaths :fsharp_app)",
+    },
+    nullable = "enable",
+    target_frameworks = ["net8.0"],
+)
+
+csharp_test(
+    name = "net48_runtime_test",
+    size = "small",
+    srcs = ["Program.cs"],
+    resources = ["resource.txt"],
+    target_compatible_with = ["@platforms//os:windows"],
+    target_frameworks = ["net48"],
+    deps = [
+        ":consumer",
+        ":unsigned_dep",
+    ],
+)
