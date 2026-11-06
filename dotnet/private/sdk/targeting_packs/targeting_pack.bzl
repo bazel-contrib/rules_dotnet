@@ -39,7 +39,7 @@ def _targeting_pack_impl(ctx):
             targeting_pack_overrides[override_name] = override_version
 
         for dll_name, dll_version in nuget_info.framework_list.items():
-            framework_list[dll_name] = {"version": dll_version, "file": refs_by_name.get(dll_name)}
+            framework_list.setdefault(dll_name, {"version": dll_version, "file": refs_by_name.get(dll_name)})
 
         if len(nuget_info.framework_list) == 0:
             framework_files.extend(compile_info.irefs)

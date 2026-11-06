@@ -38,7 +38,7 @@ def _compile_action(ctx, tfm, toolchain):
         appsetting_files = ctx.files.appsetting_files,
         compile_data = ctx.files.compile_data,
         out = ctx.attr.out,
-        target = "exe",
+        target = "winexe" if ctx.attr.winexe else "exe",
         target_name = ctx.attr.name,
         target_framework = tfm,
         version = ctx.attr.version,

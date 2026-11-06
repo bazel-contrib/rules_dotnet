@@ -55,12 +55,16 @@ filegroup(
         "@bazel_tools//src/conditions:windows": ["dotnet.exe"],
         "//conditions:default": ["dotnet"],
     }}),
-    data = glob([
-        "host/**/*",
-        "sdk/**/*",
-        "shared/Microsoft.AspNetCore.App/**/*",
-        "shared/Microsoft.NETCore.App/**/*",
-    ]),
+    data = glob(
+        [
+            "host/**/*",
+            "sdk/**/*",
+            "shared/Microsoft.AspNetCore.App/**/*",
+            "shared/Microsoft.NETCore.App/**/*",
+            "shared/Microsoft.WindowsDesktop.App/**/*",
+        ],
+        allow_empty = True,
+    ),
     visibility = ["//visibility:public"],
 )
 

@@ -20,11 +20,12 @@ DEFAULT_SDK = "default"
 WEB_SDK = "web"
 RAZOR_SDK = "razor"
 BLAZORWASM_SDK = "blazorwasm"
+WINDOWSDESKTOP_SDK = "windowsdesktop"
 
 # The SDKs that have a pack set of their own. `razor` and `blazorwasm` resolve
 # the same packs as `web`, so they have no set of their own and are normalized
 # away before lookup.
-PROJECT_SDKS = [DEFAULT_SDK, WEB_SDK]
+PROJECT_SDKS = [DEFAULT_SDK, WEB_SDK, WINDOWSDESKTOP_SDK]
 
 # What a user may write in `project_sdk`.
 USER_PROJECT_SDKS = PROJECT_SDKS + [RAZOR_SDK, BLAZORWASM_SDK]
@@ -116,12 +117,24 @@ def targeting_packs(tfm, project_sdk = DEFAULT_SDK, *, bands):
         if tfm in _NETFRAMEWORK_TFMS:
             return [("Microsoft.NETFramework.ReferenceAssemblies." + tfm, _NETFRAMEWORK_PACK_VERSION)]
 
+    if project_sdk == WINDOWSDESKTOP_SDK and tfm in _NETFRAMEWORK_TFMS:
+        return [("Microsoft.NETFramework.ReferenceAssemblies." + tfm, _NETFRAMEWORK_PACK_VERSION)]
+
     band = bands.get(tfm)
     if band == None:
         return []
 
     if project_sdk == DEFAULT_SDK:
         return [(_app_pack_id(tfm, False), band["ref"])]
+
+    if project_sdk == WINDOWSDESKTOP_SDK:
+        if "runtime" not in band:
+            return []
+
+        return [
+            ("Microsoft.WindowsDesktop.App.Ref", band["ref"]),
+            (_app_pack_id(tfm, False), band["ref"]),
+        ]
 
     if "web_ref" not in band:
         return []
@@ -137,7 +150,7 @@ def runtime_packs(tfm, rid, project_sdk = DEFAULT_SDK, *, bands):
     Args:
       tfm: The target framework.
       rid: The runtime identifier.
-      project_sdk: The project SDK, `default` or `web`.
+      project_sdk: The project SDK, `default`, `web`, or `windowsdesktop`.
       bands: The bands to take versions from: `PACK_BANDS` where only which
         packs exist matters.
 
@@ -154,6 +167,8 @@ def runtime_packs(tfm, rid, project_sdk = DEFAULT_SDK, *, bands):
 
     if project_sdk == WEB_SDK:
         packs.insert(0, (_app_pack_id(tfm, True, "Runtime." + rid), band["runtime"]))
+    elif project_sdk == WINDOWSDESKTOP_SDK:
+        packs.insert(0, ("Microsoft.WindowsDesktop.App.Runtime." + rid, band["runtime"]))
 
     return packs
 
@@ -371,19 +386,27 @@ def runtime_pack_rids(tfm, project_sdk = DEFAULT_SDK):
     if project_sdk == WEB_SDK:
         return band.get("web_rids", band["rids"])
 
+    if project_sdk == WINDOWSDESKTOP_SDK:
+        if tfm in ["netcoreapp3.0", "netcoreapp3.1"]:
+            return ["win-x64"]
+        return [rid for rid in band["rids"] if rid.startswith("win-")]
+
     return band["rids"]
 
 def targeting_pack_tfms(project_sdk = DEFAULT_SDK):
     """Returns the target frameworks that have a targeting pack.
 
     Args:
-      project_sdk: The project SDK, `default` or `web`.
+      project_sdk: The project SDK, `default`, `web`, or `windowsdesktop`.
 
     Returns:
       A list of target frameworks.
     """
     if project_sdk == WEB_SDK:
         return [tfm for tfm in PACK_BANDS if "web_ref" in PACK_BANDS[tfm]]
+
+    if project_sdk == WINDOWSDESKTOP_SDK:
+        return _NETFRAMEWORK_TFMS + [tfm for tfm in PACK_BANDS if "runtime" in PACK_BANDS[tfm]]
 
     if project_sdk not in PROJECT_SDKS:
         return []

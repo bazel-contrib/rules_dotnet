@@ -1,7 +1,7 @@
 "A transition that transitions between compatible target frameworks"
 
 load("@bazel_skylib//lib:dicts.bzl", "dicts")
-load("//dotnet/private:common.bzl", "get_highest_compatible_runtime_identifier")
+load("//dotnet/private:common.bzl", "get_highest_compatible_runtime_identifier", "is_core_framework")
 load("//dotnet/private/sdk:packs.bzl", "RUNTIME_PACK_LOOKUP_TABLE", "normalize_project_sdk")
 load("//dotnet/private/transitions:common.bzl", "NO_READY_TO_RUN")
 
@@ -9,6 +9,9 @@ def _impl(settings, attr):
     project_sdk = normalize_project_sdk(attr.project_sdk)
     incoming_target_framework = settings["//dotnet:target_framework"]
     incoming_rid = settings["//dotnet:rid"]
+
+    if not is_core_framework(incoming_target_framework):
+        return dicts.add({"//dotnet/private/sdk/runtime_packs:runtime_pack": "//dotnet/private/sdk/runtime_packs:empty_pack"}, NO_READY_TO_RUN)
 
     supported_tfms = RUNTIME_PACK_LOOKUP_TABLE.get(project_sdk)
     if supported_tfms:
@@ -18,6 +21,12 @@ def _impl(settings, attr):
             runtime_pack = supported_rids.get(highest_compatible_rid)
             if runtime_pack:
                 return dicts.add({"//dotnet/private/sdk/runtime_packs:runtime_pack": runtime_pack}, NO_READY_TO_RUN)
+
+            # A Windows-only SDK (such as windowsdesktop) can still compile its
+            # managed assembly on Linux/macOS against the reference targeting
+            # pack; only a self-contained publish for a non-Windows RID needs a
+            # runtime pack, which publish_binary checks.
+            return dicts.add({"//dotnet/private/sdk/runtime_packs:runtime_pack": "//dotnet/private/sdk/runtime_packs:empty_pack"}, NO_READY_TO_RUN)
 
     fail("No runtime pack found for project SDK/target framework: {}/{}".format(project_sdk, incoming_target_framework))
 

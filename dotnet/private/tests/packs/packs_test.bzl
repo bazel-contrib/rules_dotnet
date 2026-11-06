@@ -11,6 +11,7 @@ load(
     "DEFAULT_SDK",
     "PROJECT_SDKS",
     "WEB_SDK",
+    "WINDOWSDESKTOP_SDK",
     "apphost_pack",
     "crossgen2_pack",
     "ilcompiler_pack",
@@ -92,6 +93,16 @@ _BAND_TFMS = {
         "netcoreapp3.0",
         "netcoreapp3.1",
     ],
+    "windowsdesktop": [
+        "net10.0",
+        "net5.0",
+        "net6.0",
+        "net7.0",
+        "net8.0",
+        "net9.0",
+        "netcoreapp3.0",
+        "netcoreapp3.1",
+    ],
 }
 
 _RUNTIME_PACK_RIDS = {
@@ -108,6 +119,17 @@ _RUNTIME_PACK_RIDS = {
 # ASP.NET Core did not ship a win-arm64 runtime pack for 3.0.
 _WEB_RUNTIME_PACK_RIDS = {
     "netcoreapp3.0": [rid for rid in _PRE_NET6_RIDS if rid != "win-arm64"],
+}
+
+_WINDOWSDESKTOP_RUNTIME_PACK_RIDS = {
+    "net10.0": ["win-arm64", "win-x64"],
+    "net5.0": ["win-arm64", "win-x64"],
+    "net6.0": ["win-arm64", "win-x64"],
+    "net7.0": ["win-arm64", "win-x64"],
+    "net8.0": ["win-arm64", "win-x64"],
+    "net9.0": ["win-arm64", "win-x64"],
+    "netcoreapp3.0": ["win-x64"],
+    "netcoreapp3.1": ["win-x64"],
 }
 
 def _targeting_table_test_impl(ctx):
@@ -149,6 +171,8 @@ def _runtime_table_test_impl(ctx):
             expected = _RUNTIME_PACK_RIDS.get(tfm, _ALL_RIDS)
             if project_sdk == WEB_SDK:
                 expected = _WEB_RUNTIME_PACK_RIDS.get(tfm, expected)
+            elif project_sdk == WINDOWSDESKTOP_SDK:
+                expected = _WINDOWSDESKTOP_RUNTIME_PACK_RIDS.get(tfm, ["win-arm64", "win-x64"])
             asserts.equals(
                 env,
                 expected,
@@ -226,6 +250,11 @@ _TARGETING_PACKS = [
         ("Microsoft.AspNetCore.App.Ref", "3.1.10"),
         ("Microsoft.NETCore.App.Ref", "3.1.0"),
     ]),
+    (("net48", WINDOWSDESKTOP_SDK), [("Microsoft.NETFramework.ReferenceAssemblies.net48", "1.0.3")]),
+    (("net10.0", WINDOWSDESKTOP_SDK), [
+        ("Microsoft.WindowsDesktop.App.Ref", "10.0.14"),
+        ("Microsoft.NETCore.App.Ref", "10.0.14"),
+    ]),
     (("net10.0", "nonsense"), []),
 ]
 
@@ -234,6 +263,10 @@ _RUNTIME_PACKS = [
     (("net10.0", "win-arm64", WEB_SDK), [
         ("Microsoft.AspNetCore.App.Runtime.win-arm64", "10.0.14"),
         ("Microsoft.NETCore.App.Runtime.win-arm64", "10.0.14"),
+    ]),
+    (("net10.0", "win-x64", WINDOWSDESKTOP_SDK), [
+        ("Microsoft.WindowsDesktop.App.Runtime.win-x64", "10.0.14"),
+        ("Microsoft.NETCore.App.Runtime.win-x64", "10.0.14"),
     ]),
 ]
 
