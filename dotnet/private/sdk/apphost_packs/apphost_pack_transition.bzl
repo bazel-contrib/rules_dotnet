@@ -1,13 +1,16 @@
 "A transition that transitions between compatible target frameworks"
 
 load("@bazel_skylib//lib:dicts.bzl", "dicts")
-load("//dotnet/private:common.bzl", "get_highest_compatible_runtime_identifier")
+load("//dotnet/private:common.bzl", "get_highest_compatible_runtime_identifier", "is_core_framework")
 load("//dotnet/private/sdk:packs.bzl", "APPHOST_PACK_LOOKUP_TABLE")
 load("//dotnet/private/transitions:common.bzl", "NO_READY_TO_RUN")
 
 def _impl(settings, _attr):
     incoming_target_framework = settings["//dotnet:target_framework"]
     incoming_rid = settings["//dotnet:rid"]
+
+    if not is_core_framework(incoming_target_framework):
+        return dicts.add({"//dotnet/private/sdk/apphost_packs:apphost_pack": "//dotnet/private/sdk/apphost_packs:empty_pack"}, NO_READY_TO_RUN)
 
     supported_rids = APPHOST_PACK_LOOKUP_TABLE.get(incoming_target_framework)
     if supported_rids:

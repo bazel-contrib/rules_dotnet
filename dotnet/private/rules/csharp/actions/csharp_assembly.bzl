@@ -389,7 +389,7 @@ def AssemblyAction(
     defines = framework_preprocessor_symbols(target_framework) + defines
 
     out_dir = target_name + "/" + target_framework
-    out_ext = "dll"
+    out_ext = "dll" if (target == "library" or is_core_framework(target_framework)) else "exe"
 
     # `.razor` and `.cshtml` are inputs to a source generator, not to the
     # compiler, so they travel as additional files rather than sources.
