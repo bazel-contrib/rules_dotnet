@@ -1,0 +1,3 @@
+load(":tests.bzl", "windowsdesktop_tests")
+
+windowsdesktop_tests()

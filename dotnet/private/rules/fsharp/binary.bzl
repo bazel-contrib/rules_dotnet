@@ -40,7 +40,7 @@ def _compile_action(ctx, tfm, toolchain):
         content_file_mappings = resolve_content_file_mappings(ctx.attr.content_files, ctx.label.package),
         compile_data = ctx.files.compile_data,
         out = ctx.attr.out,
-        target = "exe",
+        target = "winexe" if ctx.attr.winexe else "exe",
         target_name = ctx.attr.name,
         target_framework = tfm,
         version = ctx.attr.version,
