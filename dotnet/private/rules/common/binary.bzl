@@ -332,6 +332,7 @@ def build_binary(ctx, compile_action, toolchain, runtime_toolchain = None):
         apphost_pack_info = ctx.attr._apphost_pack[0][DotnetApphostPackInfo] if ctx.attr._apphost_pack else None,
         runtime_pack_info = ctx.attr._runtime_pack[0][DotnetRuntimePackInfo] if ctx.attr._runtime_pack else None,
         framework_version = framework_version,
+        winexe = getattr(ctx.attr, "winexe", False),
     )
 
     # The same two files, for a `filegroup` to select: they are runfiles, not
