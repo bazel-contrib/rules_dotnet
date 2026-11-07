@@ -123,7 +123,7 @@ csharp_binary = rule(
     attrs = _BINARY_ATTRS,
     executable = True,
     toolchains = [
-        "//dotnet:toolchain_type",
+        "//dotnet/toolchain:toolchain_type",
     ],
     cfg = tfm_transition,
 )

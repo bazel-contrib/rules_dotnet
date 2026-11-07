@@ -9,16 +9,17 @@ load(
     "register_tfms",
 )
 
-toolchain_type(
+# The toolchain types live in //dotnet/toolchain so that registering the
+# toolchains does not load this package and its TFM and RID settings.
+alias(
     name = "toolchain_type",
+    actual = "//dotnet/toolchain:toolchain_type",
     visibility = ["//visibility:public"],
 )
 
-# The SDK rules_dotnet builds its own tools with: the apphost shimmer and the
-# C# compiler worker. Kept apart from `toolchain_type` so the SDK the user
-# registers cannot decide what those are built with, or against.
-toolchain_type(
+alias(
     name = "bootstrap_toolchain_type",
+    actual = "//dotnet/toolchain:bootstrap_toolchain_type",
     visibility = ["//visibility:public"],
 )
 

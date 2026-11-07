@@ -1,0 +1,12 @@
+toolchain_type(
+    name = "toolchain_type",
+    visibility = ["//visibility:public"],
+)
+
+# The SDK rules_dotnet builds its own tools with: the apphost shimmer and the
+# C# compiler worker. Kept apart from `toolchain_type` so the SDK the user
+# registers cannot decide what those are built with, or against.
+toolchain_type(
+    name = "bootstrap_toolchain_type",
+    visibility = ["//visibility:public"],
+)

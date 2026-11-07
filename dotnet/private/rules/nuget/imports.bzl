@@ -207,7 +207,7 @@ Empty for `_content/<library_name>`, MSBuild's default.""",
         ),
     }),
     toolchains = [
-        "//dotnet:toolchain_type",
+        "//dotnet/toolchain:toolchain_type",
     ],
     executable = False,
 )
