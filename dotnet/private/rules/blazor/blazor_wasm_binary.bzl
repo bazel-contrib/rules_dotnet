@@ -82,5 +82,5 @@ blazor_wasm_binary = rule(
             default = "Development",
         ),
     }),
-    toolchains = ["//dotnet:toolchain_type"],
+    toolchains = ["//dotnet/toolchain:toolchain_type"],
 )

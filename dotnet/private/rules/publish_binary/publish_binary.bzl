@@ -1071,7 +1071,7 @@ C/C++ toolchain to link with.""",
             cfg = native_transition,
         ),
     },
-    toolchains = ["//dotnet:toolchain_type"],
+    toolchains = ["//dotnet/toolchain:toolchain_type"],
     executable = True,
     cfg = tfm_transition,
 )

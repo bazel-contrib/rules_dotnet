@@ -106,3 +106,20 @@ _SDK_REPORTS = {
     )
     for name in _SDK_REPORTS
 ]
+
+# Registering the toolchains loads the package of their toolchain type. Keep
+# that package free of the TFM and RID settings in //dotnet.
+genquery(
+    name = "toolchain_type_buildfiles",
+    expression = "buildfiles(//dotnet/toolchain:all)",
+    scope = [
+        "//dotnet/toolchain:bootstrap_toolchain_type",
+        "//dotnet/toolchain:toolchain_type",
+    ],
+)
+
+diff_test(
+    name = "toolchain_type_buildfiles_test",
+    file1 = ":toolchain_type_buildfiles",
+    file2 = "toolchain_type_buildfiles.txt",
+)

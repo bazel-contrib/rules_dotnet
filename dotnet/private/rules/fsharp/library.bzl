@@ -64,6 +64,6 @@ fsharp_library = rule(
     doc = "Compile a F# DLL",
     attrs = FSHARP_LIBRARY_COMMON_ATTRS,
     executable = False,
-    toolchains = ["//dotnet:toolchain_type"],
+    toolchains = ["//dotnet/toolchain:toolchain_type"],
     cfg = tfm_transition,
 )

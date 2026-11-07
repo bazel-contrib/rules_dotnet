@@ -68,7 +68,7 @@ platform.""",
     },
     # Picks the execution platform the way the rules running the tool do, so
     # that the pack is the one for the machine their actions run on.
-    toolchains = ["//dotnet:toolchain_type"],
+    toolchains = ["//dotnet/toolchain:toolchain_type"],
     provides = [DotnetToolPackInfo],
 )
 

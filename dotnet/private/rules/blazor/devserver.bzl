@@ -131,5 +131,5 @@ blazor_devserver(
         providers = [BlazorWasmSiteInfo],
         mandatory = True,
     )),
-    toolchains = ["//dotnet:toolchain_type"],
+    toolchains = ["//dotnet/toolchain:toolchain_type"],
 )

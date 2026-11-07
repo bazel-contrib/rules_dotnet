@@ -20,8 +20,8 @@ with only the toolchain attribute pointing into the platform-specific repositori
 # The toolchain type an SDK registers for: `DOTNET_TOOLCHAIN_TYPE` for the SDK
 # the user builds with, `BOOTSTRAP_TOOLCHAIN_TYPE` for the one rules_dotnet
 # builds its own tools with.
-DOTNET_TOOLCHAIN_TYPE = "@rules_dotnet//dotnet:toolchain_type"
-BOOTSTRAP_TOOLCHAIN_TYPE = "@rules_dotnet//dotnet:bootstrap_toolchain_type"
+DOTNET_TOOLCHAIN_TYPE = "@rules_dotnet//dotnet/toolchain:toolchain_type"
+BOOTSTRAP_TOOLCHAIN_TYPE = "@rules_dotnet//dotnet/toolchain:bootstrap_toolchain_type"
 
 # Add more platforms as needed to mirror all the binaries
 # published by the upstream project. `rid` names the platform's SDK archive in
