@@ -406,6 +406,43 @@ csharp_library(
     target_frameworks = ["net9.0"],
 )
 
+# `files` and `content_files` are keyed by label, which a split transition
+# cannot be attached to, so they are built in the package's configuration.
+nuget_pack(
+    name = "extras_pack",
+    authors = ["rules_dotnet"],
+    content_files = {
+        "README.md": "any/net9.0/docs/README.md",
+    },
+    description = "Ships a buildTransitive folder and content files.",
+    files = {
+        ":net9_only": "buildTransitive/",
+        "Simple.cs": "buildTransitive/Simple.cs",
+    },
+    library = ":net9_only",
+    package_id = "RulesDotnet.Tests.Extras",
+    target_frameworks = ["net9.0"],
+    version = "1.0.0",
+)
+
+nuget_pack_test(
+    name = "extras_pack_test",
+    contents = {
+        "expected/extras_pack.nuspec": "RulesDotnet.Tests.Extras.nuspec",
+    },
+    files = [
+        "buildTransitive/Simple.cs",
+        "buildTransitive/net9_only.dll",
+        "buildTransitive/net9_only.xml",
+        "contentFiles/any/net9.0/docs/README.md",
+        "lib/net9.0/net9_only.dll",
+        "lib/net9.0/net9_only.xml",
+        "ref/net9.0/net9_only.dll",
+    ],
+    package = ":extras_pack",
+    warnings = ["NU5131"],
+)
+
 # Asks for net10.0, which the library resolves to its net9.0 build.
 nuget_pack(
     name = "wrong_framework",

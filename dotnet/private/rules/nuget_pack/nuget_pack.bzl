@@ -573,7 +573,6 @@ travel with it, so only the packages listed in `deps` are declared.
             analyzer that needs an assembly out of a NuGet package ships it this way,
             under `analyzers/dotnet/cs/`.""",
             allow_files = True,
-            cfg = default_transition,
         ),
         "content_files": attr.label_keyed_string_dict(
             doc = """Files a consuming project gets, keyed by target and valued by their
@@ -581,7 +580,6 @@ travel with it, so only the packages listed in `deps` are declared.
             `any/any/settings.json`. The path may end in `/` like in `files`. The
             `content_files_*` attributes say what a consumer does with them.""",
             allow_files = True,
-            cfg = default_transition,
         ),
         "content_files_build_action": attr.string(
             doc = "The build action a consuming project gives the content files.",

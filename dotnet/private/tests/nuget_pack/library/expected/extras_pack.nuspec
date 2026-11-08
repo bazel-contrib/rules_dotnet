@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<package xmlns="http://schemas.microsoft.com/packaging/2013/05/nuspec.xsd">
+  <metadata>
+    <id>RulesDotnet.Tests.Extras</id>
+    <version>1.0.0</version>
+    <authors>rules_dotnet</authors>
+    <requireLicenseAcceptance>false</requireLicenseAcceptance>
+    <description>Ships a buildTransitive folder and content files.</description>
+    <dependencies>
+      <group targetFramework="net9.0" />
+    </dependencies>
+    <contentFiles>
+      <files include="any/net9.0/docs/README.md" buildAction="Content" copyToOutput="false" flatten="false" />
+    </contentFiles>
+  </metadata>
+</package>
