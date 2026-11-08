@@ -1,0 +1,17 @@
+load("//dotnet/private/rules/csharp:binary.bzl", "csharp_binary")
+
+# resourcegen compiles `.resx` files into binary `.resources` blobs so that
+# `csharp_library`/`csharp_binary`/`fsharp_*` targets can embed resources and support
+# localization. It is consumed by the `resx_resource` rule as an exec tool and uses only
+# base class library types (no NuGet dependencies).
+#
+# It targets net8.0, the lowest supported LTS. Reference and runtime packs are fetched
+# per-target-framework, so any registered SDK net8.0 or newer can build it.
+csharp_binary(
+    name = "resourcegen",
+    srcs = ["Program.cs"],
+    out = "resourcegen",
+    nullable = "enable",
+    target_frameworks = ["net8.0"],
+    visibility = ["//visibility:public"],
+)
