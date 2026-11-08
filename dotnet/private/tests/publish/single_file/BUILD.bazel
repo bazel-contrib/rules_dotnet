@@ -1,0 +1,45 @@
+load("@rules_pkg//pkg:tar.bzl", "pkg_tar")
+load("@rules_shell//shell:sh_test.bzl", "sh_test")
+load(
+    "//dotnet:defs.bzl",
+    "publish_binary",
+)
+load(":tests.bzl", "single_file_test_suite")
+
+single_file_test_suite()
+
+publish_binary(
+    name = "single_file",
+    binary = "//dotnet/private/tests/publish/app_to_publish",
+    enable_compression_in_single_file = True,
+    include_native_libraries_for_self_extract = True,
+    self_contained = True,
+    single_file = True,
+    target_framework = "net10.0",
+)
+
+pkg_tar(
+    name = "tar",
+    srcs = [":single_file"],
+    include_runfiles = True,
+    mode = "0755",
+    package_dir = "/",
+    strip_prefix = select(
+        {
+            "//dotnet/private:linux-x64": "single_file/publish/linux-x64",
+            "//dotnet/private:linux-arm64": "single_file/publish/linux-arm64",
+            "//dotnet/private:osx-x64": "single_file/publish/osx-x64",
+            "//dotnet/private:osx-arm64": "single_file/publish/osx-arm64",
+            "//dotnet/private:windows-x64": "single_file/publish/win-x64",
+            "//dotnet/private:windows-arm64": "single_file/publish/win-arm64",
+        },
+    ),
+)
+
+sh_test(
+    name = "single_file_test",
+    srcs = [
+        "test.sh",
+    ],
+    data = [":tar"],
+)

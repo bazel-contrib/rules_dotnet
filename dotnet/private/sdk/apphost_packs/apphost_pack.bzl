@@ -8,17 +8,22 @@ def _apphost_pack_impl(ctx):
     # so we create a default target with `pack` set as None.
     if ctx.label.name == "empty_pack":
         apphost_file = None
+        singlefilehost_file = None
     else:
         apphost_file = None
+        singlefilehost_file = None
         for f in ctx.attr.pack[0][DotnetAssemblyRuntimeInfo].native:
             if f.basename == "apphost" or f.basename == "apphost.exe":
                 apphost_file = f
+            elif f.basename == "singlefilehost" or f.basename == "singlefilehost.exe":
+                singlefilehost_file = f
 
         if apphost_file == None:
             fail("Apphost file not found in apphost pack")
 
     return [DotnetApphostPackInfo(
         apphost = apphost_file,
+        singlefilehost = singlefilehost_file,
     )]
 
 apphost_pack = rule(
