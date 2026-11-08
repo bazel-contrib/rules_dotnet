@@ -10,6 +10,7 @@ ACTION_ARGS_TEST_ARGS = {
     "expected_partial_args": attr.string_list(),
     "expected_nonexistent_partial_args": attr.string_list(),
     "expected_args_containing": attr.string_list(),
+    "expected_args_not_containing": attr.string_list(),
 }
 
 # We also expose the implementation so that it can be used for testing
@@ -55,6 +56,11 @@ def action_args_test_impl(ctx):
 
         if found_arg == None:
             fail("No arg containing substring: {}. Available args: {}".format(needle, action_under_test.argv))
+
+    for needle in ctx.attr.expected_args_not_containing:
+        for actual_arg in action_under_test.argv:
+            if needle in actual_arg:
+                fail("Expected no arg containing substring: {}. Offending arg: {}".format(needle, actual_arg))
 
     return analysistest.end(env)
 
