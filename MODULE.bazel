@@ -30,7 +30,7 @@ use_repo(paket, "paket.paket_cli", "paket.rules_dotnet_nuget_packages")
 
 bazel_dep(name = "bazel_skylib", version = "1.8.1")
 bazel_dep(name = "platforms", version = "1.0.0")
-bazel_dep(name = "bazel_lib", version = "3.0.0")
+bazel_dep(name = "bazel_lib", version = "3.5.0")
 bazel_dep(name = "rules_shell", version = "0.5.0")
 
 # `publish_binary` links a NativeAOT publish with the cc toolchain APIs.
@@ -80,6 +80,15 @@ bazel_dep(name = "dotnet_test_resources_other_repo", version = "", dev_dependenc
 local_path_override(
     module_name = "dotnet_test_resources_other_repo",
     path = "dotnet/private/tests/resources/other_repo",
+)
+
+bazel_lib_toolchains = use_extension("@bazel_lib//lib:extensions.bzl", "toolchains", dev_dependency = True)
+bazel_lib_toolchains.spawn_binary()
+use_repo(bazel_lib_toolchains, "spawn_binary_toolchains")
+
+register_toolchains(
+    "@spawn_binary_toolchains//:all",
+    dev_dependency = True,
 )
 
 dev_paket = use_extension("@rules_dotnet//dotnet:paket.bzl", "paket", dev_dependency = True)

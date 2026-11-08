@@ -20,6 +20,10 @@ load(
     _dotnet_content_files = "dotnet_content_files",
 )
 load(
+    "//dotnet/private/rules/common:resx.bzl",
+    _resx_resource = "resx_resource",
+)
+load(
     "//dotnet/private/rules/csharp:binary.bzl",
     _csharp_binary = "csharp_binary",
 )
@@ -175,3 +179,4 @@ dotnet_tool = _dotnet_tool
 dotnet_content_files = _dotnet_content_files
 nuget_pack = _nuget_pack
 nuget_push = _nuget_push
+resx_resource = _resx_resource

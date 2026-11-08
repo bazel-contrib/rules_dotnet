@@ -1,0 +1,4 @@
+neutral: Hello
+fr: Bonjour
+messages neutral: BaseHello
+messages fr: BaseBonjour
