@@ -17,6 +17,7 @@ load(
 load("//dotnet/private:toolchains_repo.bzl", "BOOTSTRAP_TOOLCHAIN_TYPE", "DOTNET_TOOLCHAIN_TYPE")
 load("//dotnet/private/rules/common:attrs.bzl", "CSHARP_BINARY_COMMON_ATTRS")
 load("//dotnet/private/rules/common:binary.bzl", "build_binary")
+load("//dotnet/private/rules/content_files:content_files.bzl", "resolve_content_file_mappings")
 load("//dotnet/private/rules/csharp/actions:csharp_assembly.bzl", "AssemblyAction")
 load("//dotnet/private/sdk:packs.bzl", "BOOTSTRAP_PACKS")
 load("//dotnet/private/transitions:bootstrap_tool_transition.bzl", "bootstrap_tool_transition")
@@ -42,6 +43,7 @@ def _compile_action(ctx, tfm, toolchain):
         srcs = ctx.files.srcs,
         data = ctx.files.data,
         appsetting_files = ctx.files.appsetting_files,
+        content_file_mappings = resolve_content_file_mappings(ctx.attr.content_files, ctx.label.package),
         compile_data = ctx.files.compile_data,
         out = ctx.attr.out,
         target = "exe",

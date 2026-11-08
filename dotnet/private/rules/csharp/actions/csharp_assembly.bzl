@@ -7,7 +7,8 @@ load(
     "//dotnet/private:common.bzl",
     "add_resource_args",
     "collect_compile_info",
-    "copy_files_to_dir",
+    "copy_appsettings_to_dir",
+    "copy_content_to_dir",
     "format_ref_arg",
     "framework_preprocessor_symbols",
     "generate_warning_args",
@@ -131,6 +132,7 @@ def AssemblyAction(
         srcs,
         data,
         appsetting_files,
+        content_file_mappings,
         compile_data,
         out,
         target,
@@ -182,6 +184,7 @@ def AssemblyAction(
         srcs: The source files that are processed to create the assembly.
         data: List of files that are a direct runtime dependency
         appsetting_files: List of appsettings files to include in the output.
+        content_file_mappings: List of `struct(src = File, dest = string)` describing content files to copy next to the assembly, where `dest` is the path relative to the output directory.
         compile_data: List of files that are a direct compile time dependency
         target_name: A unique name for this target.
         out: Specifies the output file name.
@@ -338,8 +341,9 @@ def AssemblyAction(
     out_pdb = actions.declare_file("%s/%s.pdb" % (out_dir, assembly_name))
     out_xml = actions.declare_file("%s/%s.xml" % (out_dir, assembly_name)) if generate_documentation_file else None
 
-    # Appsettings
-    out_appsettings = copy_files_to_dir(target_name, actions, is_windows, appsetting_files, out_dir)
+    # Stage appsettings and content files next to the assembly.
+    out_appsetting_files = copy_appsettings_to_dir(target_name, actions, is_windows, appsetting_files, out_dir)
+    out_content_files = copy_content_to_dir(target_name, actions, is_windows, content_file_mappings, out_dir)
 
     if len(internals_visible_to) == 0 or is_analyzer:
         _compile(
@@ -506,7 +510,8 @@ def AssemblyAction(
         pdbs = [out_pdb] if out_pdb else [],
         xml_docs = [out_xml] if out_xml else [],
         data = data,
-        appsetting_files = depset(out_appsettings),
+        appsetting_files = depset(out_appsetting_files),
+        content_files = out_content_files,
         native = [],
         # `compile_deps` rather than `deps`: an assembly pulled in from the
         # toolchain has to be resolvable at run time too, which is what puts it

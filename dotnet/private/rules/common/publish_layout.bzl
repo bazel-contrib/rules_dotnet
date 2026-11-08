@@ -29,6 +29,11 @@ def publish_layout(runtime_identifier, binary_info, assembly_files, runtime_pack
     for file in assembly_files.libs + assembly_files.appsetting_files:
         layout.append((file.basename, file))
 
+    # Content files carry their destination path relative to the assembly
+    # directory, preserving any subdirectory structure under the publish root.
+    for entry in assembly_files.content_files:
+        layout.append((entry.dest, entry.file))
+
     # Resource assemblies go in a folder named after their locale, so that a
     # German one lands at `de/MyAssembly.resources.dll`.
     for file in assembly_files.resource_assemblies:
@@ -97,8 +102,8 @@ def collect_assembly_files(assembly_info, transitive_runtime_deps, deps_json_str
         dependency's files the runtime will load.
 
     Returns:
-      A struct of `libs`, `resource_assemblies`, `native`, `data` and
-      `appsetting_files` lists.
+      A struct of `libs`, `resource_assemblies`, `native`, `data`,
+      `appsetting_files` and `content_files` lists.
     """
     libs = list(assembly_info.libs)
     resource_assemblies = list(assembly_info.resource_assemblies)
@@ -135,4 +140,5 @@ def collect_assembly_files(assembly_info, transitive_runtime_deps, deps_json_str
         native = native_files,
         data = data,
         appsetting_files = assembly_info.appsetting_files.to_list(),
+        content_files = list(assembly_info.content_files),
     )
