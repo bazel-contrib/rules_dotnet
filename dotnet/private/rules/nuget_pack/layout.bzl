@@ -174,16 +174,18 @@ def plan_library_contents(root, packages_by_assembly, dep_packages, first_party_
                 # Shipped by a package in `deps`, which owns everything below it.
                 pack = packages_by_assembly[name]
                 dependencies[pack.package_id.lower()] = _dependency(pack.package_id, pack.version, pack.version_file)
+            elif not dep.libs:
+                # Nothing under `lib/` means an analyzer or source generator the
+                # library was compiled with. It ran in the compiler and nothing
+                # loads it at run time, so a consumer needs none of it, as
+                # `dotnet pack` leaves out an analyzer referenced with
+                # PrivateAssets. One that consumers should run too is its own
+                # package, listed in `deps` and declared above.
+                continue
             elif first_party_deps == FIRST_PARTY_REFERENCE:
                 # Its own `nuget_pack` would default to this id and version.
                 dependencies[name.lower()] = _dependency(name, nuget_version.normalize(dep.version))
             elif first_party_deps == FIRST_PARTY_BUNDLE:
-                if not dep.libs:
-                    # Nothing under `lib/` means an analyzer, whose assemblies
-                    # belong under `analyzers/` in a package of its own.
-                    fail(("{}: {} (a dependency of {}) ships no assembly to copy into this " +
-                          "package. An analyzer or source generator is its own package; list " +
-                          "its nuget_pack in `deps`.").format(label, name, current.name))
                 bundled[name] = dep
                 stack.append(dep)
             else:

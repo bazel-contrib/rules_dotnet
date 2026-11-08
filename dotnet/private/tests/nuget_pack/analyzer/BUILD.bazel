@@ -101,34 +101,56 @@ nuget_pack_test(
     warnings = ["NU5128"],
 )
 
-# --- Failures ----------------------------------------------------------------
+# A library compiled with a first-party generator it does not ship: the generator
+# ran in the compiler, so the package neither declares nor bundles it, whether
+# its other first-party dependencies are referenced or bundled.
 
 csharp_library(
     name = "generated",
     srcs = ["Generated.cs"],
     target_frameworks = ["netstandard2.0"],
+    version = "1.0.0",
     deps = [":generator"],
 )
 
-nuget_pack(
-    name = "bundled_analyzer",
-    authors = ["rules_dotnet"],
-    description = "d",
-    first_party_deps = "bundle",
-    library = ":generated",
-    tags = ["manual"],
-    target_frameworks = ["netstandard2.0"],
-)
+[
+    nuget_pack(
+        name = "generated_" + first_party_deps,
+        authors = ["rules_dotnet"],
+        description = "A library compiled with a source generator it does not ship.",
+        first_party_deps = first_party_deps,
+        library = ":generated",
+        package_id = "RulesDotnet.Tests.Generated",
+        target_frameworks = ["netstandard2.0"],
+    )
+    for first_party_deps in [
+        "reference",
+        "bundle",
+    ]
+]
 
-fails_with_test(
-    name = "bundled_analyzer_test",
-    size = "small",
-    expected_message_fragments = [
-        "generator (a dependency of generated) ships no assembly to copy into this package",
-        "list its nuget_pack in `deps`",
-    ],
-    target_under_test = ":bundled_analyzer",
-)
+[
+    nuget_pack_test(
+        name = "generated_{}_test".format(first_party_deps),
+        contents = {
+            "expected/generated.nuspec": "RulesDotnet.Tests.Generated.nuspec",
+        },
+        files = [
+            "lib/netstandard2.0/generated.dll",
+            "lib/netstandard2.0/generated.xml",
+            "ref/netstandard2.0/generated.dll",
+        ],
+        package = ":generated_" + first_party_deps,
+        # As for every package with a `ref/` folder.
+        warnings = ["NU5131"],
+    )
+    for first_party_deps in [
+        "reference",
+        "bundle",
+    ]
+]
+
+# --- Failures ----------------------------------------------------------------
 
 nuget_pack(
     name = "analyzer_with_rids",
