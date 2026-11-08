@@ -102,8 +102,18 @@ def _with_empty_entries(tfms, extra):
     result = dict(tfms)
 
     for tfm in extra:
-        if tfm not in result:
-            result[tfm] = []
+        if tfm in result:
+            continue
+
+        # NuGet picks compile and runtime assets from `lib`/`ref` independently
+        # of `build`. A framework the package covers only with MSBuild assets
+        # must not shadow a `lib` folder that framework can already consume:
+        # Microsoft.Bcl.AsyncInterfaces ships `buildTransitive/netcoreapp2.0`
+        # next to `lib/netstandard2.1`, and net8.0+ must land on the latter.
+        if get_nearest_compatible_target_framework(tfm, tfms.keys()) != None:
+            continue
+
+        result[tfm] = []
 
     return result
 

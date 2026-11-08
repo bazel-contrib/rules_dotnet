@@ -251,6 +251,28 @@ TESTS = [
         expected_refs = ["build/net8.0/ref/R.dll", "lib/netstandard2.0/A.dll"],
     ),
     nuget_resolution_test(
+        name = "msbuild_only_frameworks_do_not_shadow_a_compatible_lib",
+        # What `Microsoft.Bcl.AsyncInterfaces` ships. The `netcoreapp2.0`
+        # targets only warn, and NuGet still compiles against the
+        # `netstandard2.1` assembly.
+        files = [
+            "buildTransitive/net461/fixture.msbuild_only_frameworks_do_not_shadow_a_compatible_lib.targets",
+            "buildTransitive/netcoreapp2.0/fixture.msbuild_only_frameworks_do_not_shadow_a_compatible_lib.targets",
+            "lib/net462/A.dll",
+            "lib/netstandard2.0/A.dll",
+            "lib/netstandard2.1/A.dll",
+        ],
+        expected_libs = ["lib/netstandard2.1/A.dll"],
+        expected_refs = ["lib/netstandard2.1/A.dll"],
+    ),
+    nuget_resolution_test(
+        name = "msbuild_only_frameworks_still_make_a_package_compatible",
+        files = [
+            "build/netcoreapp2.0/fixture.msbuild_only_frameworks_still_make_a_package_compatible.targets",
+            "lib/net462/A.dll",
+        ],
+    ),
+    nuget_resolution_test(
         name = "analyzers_are_split_by_language",
         files = [
             "lib/netstandard2.0/A.dll",
