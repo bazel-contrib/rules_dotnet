@@ -35,6 +35,7 @@ def _import_library(ctx):
         _compile_data,
         _framework_files,
         _exports,
+        _export_infos,
     ) = collect_compile_info(
         ctx.label.name,
         ctx.attr.deps,
@@ -63,6 +64,7 @@ def _import_library(ctx):
         analyzers_vb = ctx.files.analyzers_vb,
         compile_data = ctx.files.typeproviders,
         exports = [],
+        export_infos = [],
         transitive_compile_data = depset([]),
         transitive_refs = prefs,
         transitive_analyzers = analyzers,
@@ -226,6 +228,7 @@ def _import_dll(ctx):
         analyzers_vb = [],
         compile_data = [],
         exports = [],
+        export_infos = [],
         transitive_compile_data = depset([]),
         transitive_refs = depset([]),
         transitive_analyzers = depset([]),

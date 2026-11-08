@@ -9,5 +9,6 @@ public class ConsumerTest
     public void SeesTheInternalsOfSecrets()
     {
         Assert.That(Secrets.Secret + Chain.Value, Is.EqualTo(43));
+        Assert.That(ExportedSecrets.ExportedSecret, Is.EqualTo(10));
     }
 }

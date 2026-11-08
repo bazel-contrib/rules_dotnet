@@ -357,9 +357,16 @@ def collect_compile_info(name, deps, targeting_pack, exports, strict_deps):
             direct_analyzers_vb.extend(assembly.analyzers_vb)
             direct_compile_data.extend(assembly.compile_data)
 
-        # We take all the exports of each dependency and add them
-        # to the direct refs.
-        direct_iref.extend(assembly.exports)
+        # We take all the exports of each dependency and add them to the direct
+        # refs. For each exported assembly, forward its internals-inclusive
+        # reference (irefs) when the assembly being compiled (`name`) is named in
+        # that exported assembly's internals_visible_to; otherwise its public
+        # refs. This gives InternalsVisibleTo parity with MSBuild across a single
+        # `exports` hop (e.g. a srcs-less aggregation library re-exporting a set
+        # of implementation assemblies), which plain `exports` -- public refs
+        # only -- would silently drop, yielding CS0122 on those internals.
+        for export_info in assembly.export_infos:
+            direct_iref.extend(export_info.irefs if name in export_info.internals_visible_to else export_info.refs)
 
         # This is not a complete solution since we are not comparing assembly versions
         # Transitive dependency resolution is very complicated.
@@ -401,9 +408,15 @@ def collect_compile_info(name, deps, targeting_pack, exports, strict_deps):
                 narrowed_files.append(file["file"])
         framework_files = depset(narrowed_files)
 
+    export_infos = []
     for export in exports:
         assembly = export[DotnetAssemblyCompileInfo]
         exports_files.extend(assembly.refs)
+        export_infos.append(struct(
+            refs = assembly.refs,
+            irefs = assembly.irefs,
+            internals_visible_to = assembly.internals_visible_to,
+        ))
 
     return (
         # Filtered and flat: the compiler's reference arguments.
@@ -417,6 +430,7 @@ def collect_compile_info(name, deps, targeting_pack, exports, strict_deps):
         depset(direct = direct_compile_data, transitive = transitive_compile_data),
         framework_files,
         exports_files,
+        export_infos,
     )
 
 def collect_transitive_runfiles(ctx, assembly_runtime_info, deps):

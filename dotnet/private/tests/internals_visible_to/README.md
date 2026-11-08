@@ -21,3 +21,8 @@ builds that compile otherwise. `secrets` is compiled with `code_block_analyzer`,
 a diagnostic analyzer built against Roslyn's NuGet packages. Were those packages
 handed to the compiler as analyzers beside it, Roslyn's own compiler diagnostic
 analyzer would run too and crash the `/refonly` compile.
+
+`aggregator` has no sources of its own and re-exports `exported_secrets`, which
+also grants its internals to `consumer`. `collect_compile_info` must forward the
+exported assembly's internals-carrying reference assembly (`irefs`) across
+`exports` when the consumer is named in its `internals_visible_to`.
