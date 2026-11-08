@@ -1,0 +1,39 @@
+load("//dotnet:defs.bzl", "csharp_nunit_test", "dotnet_content_files")
+load(":tests.bzl", "content_files_test_suite")
+
+# Analysis tests: assert that content_files preserve their package-relative
+# directory structure in the target's default outputs.
+content_files_test_suite(name = "content_files_test_suite")
+
+# End-to-end runtime test: build a real test binary with nested content_files and
+# assert at runtime that they were copied next to the assembly with their directory
+# structure intact (resolvable relative to AppContext.BaseDirectory).
+csharp_nunit_test(
+    name = "content_files_runtime_test",
+    srcs = ["ContentFilesTest.cs"],
+    content_files = [
+        "content/settings.json",
+        "content/nested/data.txt",
+    ],
+    target_frameworks = ["net6.0"],
+)
+
+# End-to-end runtime test for dotnet_content_files: the rule strips the `content/` prefix
+# and re-roots the tree under `config/`; assert at runtime that the remapped files are
+# copied next to the assembly at the new paths.
+dotnet_content_files(
+    name = "runtime_remapped_content",
+    srcs = [
+        "content/nested/data.txt",
+        "content/settings.json",
+    ],
+    prefix = "config",
+    strip_prefix = "content",
+)
+
+csharp_nunit_test(
+    name = "content_files_rule_runtime_test",
+    srcs = ["ContentFilesRuleTest.cs"],
+    content_files = [":runtime_remapped_content"],
+    target_frameworks = ["net6.0"],
+)

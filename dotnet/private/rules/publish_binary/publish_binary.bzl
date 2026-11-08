@@ -236,6 +236,7 @@ def _aot_closure(assembly_info, transitive_runtime_deps):
         native = [file for part in parts for file in part.native],
         data = [file for part in parts for file in part.data],
         appsetting_files = assembly_info.appsetting_files.to_list(),
+        content_files = list(assembly_info.content_files),
     )
 
 def _aot_link_libraries(link_inputs):
@@ -1020,6 +1021,9 @@ def _publish_binary_impl(ctx):
         # A NativeAOT publish keeps nothing managed, but it still serves the
         # same files, so the tree travels with the executable.
         beside = [(file.basename, file) for file in closure.native + closure.appsetting_files] + [
+            (entry.dest, entry.file)
+            for entry in closure.content_files
+        ] + [
             (entry.publish_path, entry.file)
             for entry in binary_info.static_web_files
         ]

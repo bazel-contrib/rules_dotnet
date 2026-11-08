@@ -1,0 +1,4 @@
+exports_files(
+    ["assets/ext.json"],
+    visibility = ["//dotnet/private/tests/content_files:__pkg__"],
+)

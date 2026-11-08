@@ -107,11 +107,13 @@ def build_binary(ctx, compile_action, toolchain, runtime_toolchain = None):
     runtime_provider = with_ready_to_run_images(ctx, runtime_provider)
     dll = runtime_provider.libs[0]
     appsetting_files = runtime_provider.appsetting_files.to_list()
-    default_info_files = [dll] + runtime_provider.xml_docs + appsetting_files
+    out_content_files = [entry.file for entry in runtime_provider.content_files]
+    default_info_files = [dll] + runtime_provider.xml_docs + appsetting_files + out_content_files
 
     launcher = _create_launcher(ctx, dll, runtime_toolchain)
 
-    additional_runfiles = list(appsetting_files)
+    # Staged appsettings and content files must be in runfiles (not just DefaultInfo) so they're present when the target runs from an isolated runfiles tree (RBE/sandbox).
+    additional_runfiles = list(appsetting_files) + out_content_files
 
     runtimeconfig = None
     depsjson = None
