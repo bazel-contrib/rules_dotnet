@@ -19,10 +19,25 @@ csharp_library(
 )
 
 csharp_library(
+    name = "code_block_analyzer",
+    srcs = ["CodeBlockAnalyzer.cs"],
+    is_analyzer = True,
+    is_language_specific_analyzer = True,
+    target_frameworks = ["netstandard2.0"],
+    deps = [
+        "@paket.rules_dotnet_dev_nuget_packages//microsoft.codeanalysis.common",
+        "@paket.rules_dotnet_dev_nuget_packages//microsoft.codeanalysis.csharp",
+        "@paket.rules_dotnet_dev_nuget_packages//system.collections.immutable",
+        "@paket.rules_dotnet_dev_nuget_packages//system.memory",
+    ],
+)
+
+csharp_library(
     name = "secrets",
     srcs = ["Secrets.cs"],
     internals_visible_to = ["consumer"],
     target_frameworks = ["net9.0"],
+    deps = [":code_block_analyzer"],
 )
 
 # The order of `deps` is what this test is about. See README.md.

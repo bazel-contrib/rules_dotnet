@@ -469,7 +469,13 @@ def AssemblyAction(
             allow_unsafe_blocks,
             nullable,
             run_analyzers,
-            compiler_options,
+            # The ref-only compile emits metadata only; Roslyn calls PromiseNotToEnqueue on the
+            # compilation event queue, so any diagnostic analyzer that registers a method-body
+            # action fail-fasts the process. /skipanalyzers+ skips diagnostic analyzers but still
+            # runs source generators, which this pass needs: a [GeneratedRegex] or [LoggerMessage]
+            # partial method has no body without them (CS8795). The main compile above already
+            # runs every analyzer and reports every diagnostic.
+            compiler_options + ["/skipanalyzers+"],
             interceptors_namespaces,
             razor,
             out_dll = None,
