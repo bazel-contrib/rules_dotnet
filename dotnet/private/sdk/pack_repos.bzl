@@ -45,7 +45,6 @@ load(
     "aot_pack_tfms",
     "apphost_pack",
     "crossgen2_pack",
-    "host_platform_setting",
     "host_rids",
     "host_tool_tfms",
     "ilcompiler_pack",
@@ -293,11 +292,11 @@ def _apphost(sdk):
     return struct(build_files = build_files, packages = collections.uniq(packages))
 
 def _host_tool(kind, pack, sdk):
-    """One package per band, each holding the band's pack for every host.
+    """One target per host runtime identifier, selecting its pack by framework.
 
-    `host_tool_pack` selects the band in the target configuration, and the
-    band's `host` alias, reached through the exec transition, selects the pack
-    for the execution platform.
+    The tool is picked by the machine the build runs on, through the toolchains
+    in `@dotnet_toolchains`, while the framework comes from the target
+    configuration the toolchain is analyzed in.
 
     Args:
       kind: The pack rule's name, which also names the `.bzl` file it lives in.
@@ -309,53 +308,56 @@ def _host_tool(kind, pack, sdk):
       A struct of build files and the packages they reference.
     """
     packages = []
-    targets_by_band = {}
-    build_files = {}
+    targets = []
+    too_old = []
+    newest_known = None
 
     for tfm in host_tool_tfms(pack):
-        found = [(rid, pack(tfm, rid, bands = sdk.bands)) for rid in host_rids()]
-        found = [(rid, tool) for (rid, tool) in found if tool != None]
+        found = [pack(tfm, rid, bands = sdk.bands) for rid in host_rids()]
+        found = [tool for tool in found if tool != None]
+        if _unknown(found):
+            too_old.append(_too_new(tfm, tfm, sdk.version))
+        elif found:
+            newest_known = tfm
 
-        if _unknown([tool for (_, tool) in found]):
-            build_files["{}/BUILD.bazel".format(tfm)] = _build_file([_too_new("host", tfm, sdk.version)])
+    for rid in host_rids():
+        by_tfm = {}
+        fallback = None
+
+        for tfm in host_tool_tfms(pack):
+            found = pack(tfm, rid, bands = sdk.bands)
+            if found == None:
+                continue
+
+            if _unknown([found]):
+                by_tfm["@rules_dotnet//dotnet:tfm_{}".format(tfm)] = ":{}".format(tfm)
+                continue
+
+            (id, version) = found
+            packages.append((id, version))
+            label = "@{}//:files".format(nuget_archive_name(id, version))
+            by_tfm["@rules_dotnet//dotnet:tfm_{}".format(tfm)] = label
+            fallback = label
+
+        if not by_tfm:
             continue
 
-        packages += [tool for (_, tool) in found]
+        # Nothing sets a target framework outside a tfm transition, and a
+        # framework or host that an older band did not ship the tool for gets
+        # the newest known band's.
+        by_tfm["//conditions:default"] = fallback or ":{}".format(newest_known or host_tool_tfms(pack)[0])
 
-        # The tool is a native executable with its JIT libraries beside it,
-        # none of which the package rules classify, so the pack reads the
-        # archive's file list directly.
-        targets_by_band[tfm] = [
-            ("{}_pack".format(kind), {
-                "name": rid,
-                "pack_files": "@{}//:files".format(nuget_archive_name(id, version)),
-            })
-            for (rid, (id, version)) in found
-        ]
+        targets.append(("{}_pack".format(kind), {
+            "name": rid,
+            "pack_files": by_tfm,
+            "rid": rid,
+        }))
 
-    # Bands come oldest first. A host that an older band did not ship the tool
-    # for gets the newest band's.
-    newest = targets_by_band.keys()[-1] if targets_by_band else None
-
-    for (tfm, targets) in targets_by_band.items():
-        hosts = {host_platform_setting(attrs["name"]): ":" + attrs["name"] for (_, attrs) in targets}
-
-        if tfm != newest:
-            hosts["//conditions:default"] = "//{}:host".format(newest)
-
-        build_files["{}/BUILD.bazel".format(tfm)] = _build_file(targets, aliases = {"host": hosts})
-
-    if newest:
-        build_files["{}/BUILD.bazel".format(NEWEST_BAND)] = _build_file([], aliases = {
-            "host": "//{}:host".format(newest),
-        })
-    else:
-        # An SDK older than every band, which only the first band would do for.
-        build_files["{}/BUILD.bazel".format(NEWEST_BAND)] = _build_file([
-            _too_new("host", host_tool_tfms(pack)[0], sdk.version),
-        ])
-
-    return struct(build_files = build_files, packages = collections.uniq(packages))
+    return struct(
+        # Not the root BUILD: the hub writes its own there.
+        build_files = {"tool/BUILD.bazel": _build_file(too_old + targets)},
+        packages = collections.uniq(packages),
+    )
 
 def _nativeaot(sdk):
     """One target per runtime identifier a framework can publish AOT for.

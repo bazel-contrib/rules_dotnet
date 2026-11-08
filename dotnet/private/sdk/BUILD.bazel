@@ -47,7 +47,9 @@ bzl_library(
     visibility = ["//dotnet:__subpackages__"],
     deps = [
         ":packs",
+        "//dotnet/private:common",
         "//dotnet/private:providers",
+        "@bazel_skylib//rules:common_settings",
     ],
 )
 

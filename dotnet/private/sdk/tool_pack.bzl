@@ -1,5 +1,6 @@
 "The SDK packs that ship a native tool"
 
+load("@bazel_skylib//rules:common_settings.bzl", "BuildSettingInfo")
 load("//dotnet/private:common.bzl", "copy_files_to_dir")
 load("//dotnet/private:providers.bzl", "DotnetToolPackInfo")
 load("//dotnet/private/sdk:packs.bzl", "NEWEST_BAND")
@@ -11,23 +12,26 @@ def tool_pack_rule(tool_name):
       tool_name: The tool's basename, without the Windows `.exe` suffix.
 
     Returns:
-      A rule producing `DotnetToolPackInfo`.
+      A rule producing `DotnetToolPackInfo`, and the `ToolchainInfo` that
+      carries it as `pack`.
     """
     basenames = [tool_name, tool_name + ".exe"]
 
     def _impl(ctx):
-        is_windows = ctx.target_platform_has_constraint(
-            ctx.attr._windows_constraint[platform_common.ConstraintValueInfo],
-        )
+        # A toolchain is configured for the target, while the tool runs on the
+        # execution platform its runtime identifier names.
+        is_windows = ctx.attr.rid.startswith("win-")
+        tfm = ctx.attr._target_framework[BuildSettingInfo].value or NEWEST_BAND
+        out_dir = "{}/{}".format(tfm, ctx.label.name)
 
         # The tool loads its JIT libraries from its own directory, so the whole
         # tools directory moves together.
         files = copy_files_to_dir(
-            ctx.label.name,
+            out_dir,
             ctx.actions,
             is_windows,
             [f for f in ctx.attr.pack_files.files.to_list() if "/tools/" in f.path],
-            ctx.label.name,
+            out_dir,
             executables = basenames,
         )
         tools = [f for f in files if f.basename in basenames]
@@ -35,7 +39,9 @@ def tool_pack_rule(tool_name):
         if not tools:
             fail("{} executable not found in its pack".format(tool_name))
 
-        return [DotnetToolPackInfo(tool = tools[0], files = depset(files))]
+        pack = DotnetToolPackInfo(tool = tools[0], files = depset(files))
+
+        return [pack, platform_common.ToolchainInfo(pack = pack)]
 
     return rule(
         _impl,
@@ -44,48 +50,13 @@ def tool_pack_rule(tool_name):
             "pack_files": attr.label(
                 doc = "Every file in the {} nuget package".format(tool_name),
             ),
-            "_windows_constraint": attr.label(default = "@platforms//os:windows"),
+            "rid": attr.string(
+                doc = "The runtime identifier of the machine the tool runs on.",
+                mandatory = True,
+            ),
+            "_target_framework": attr.label(
+                default = Label("//dotnet:target_framework"),
+                providers = [BuildSettingInfo],
+            ),
         },
     )
-
-def _host_tool_pack_impl(ctx):
-    return [ctx.attr.pack[DotnetToolPackInfo]]
-
-host_tool_pack = rule(
-    _host_tool_pack_impl,
-    doc = """A native tool for the machine the build runs on, from the band of the target framework.
-
-`pack` selects the band in the target configuration, and past its exec
-transition the band's `host` alias selects the pack for the execution
-platform.""",
-    attrs = {
-        "pack": attr.label(
-            doc = "The band's `host` alias, selected by target framework.",
-            cfg = "exec",
-            mandatory = True,
-            providers = [DotnetToolPackInfo],
-        ),
-    },
-    # Picks the execution platform the way the rules running the tool do, so
-    # that the pack is the one for the machine their actions run on.
-    toolchains = ["//dotnet:toolchain_type"],
-    provides = [DotnetToolPackInfo],
-)
-
-def host_tool_pack_band(repo, tfms):
-    """Selects a tool pack's band by the target framework of the configuration.
-
-    Args:
-      repo: The repository holding a package per band.
-      tfms: The bands the tool shipped for, oldest first.
-
-    Returns:
-      A select of each band's `host` alias.
-    """
-    bands = {"//dotnet:tfm_" + tfm: "@{}//{}:host".format(repo, tfm) for tfm in tfms}
-
-    # A framework older than every band, such as netstandard2.0, gets the newest
-    # the SDK knows.
-    bands["//conditions:default"] = "@{}//{}:host".format(repo, NEWEST_BAND)
-
-    return select(bands)

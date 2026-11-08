@@ -9,7 +9,7 @@ that framework that ships it.
 
 load("@bazel_skylib//lib:dicts.bzl", "dicts")
 load("//dotnet/private:common.bzl", "FRAMEWORK_COMPATIBILITY", "get_highest_compatible_runtime_identifier")
-load("//dotnet/private:providers.bzl", "DotnetAssemblyRuntimeInfo", "DotnetRuntimePackInfo", "DotnetToolPackInfo")
+load("//dotnet/private:providers.bzl", "DotnetAssemblyRuntimeInfo", "DotnetRuntimePackInfo")
 load("//dotnet/private/sdk:packs.bzl", "RUNTIME_PACK_LOOKUP_TABLE")
 load(
     "//dotnet/private/transitions:common.bzl",
@@ -294,9 +294,11 @@ _runtime_pack_transition = transition(
     outputs = ["//dotnet/private/sdk/runtime_packs:runtime_pack"] + NO_READY_TO_RUN.keys(),
 )
 
+_CROSSGEN2_TOOLCHAIN_TYPE = Label("//dotnet/private/sdk/crossgen2_packs:toolchain_type")
+
 def _ready_to_run_tools_impl(ctx):
     return [DotnetReadyToRunToolsInfo(
-        crossgen2 = ctx.attr._crossgen2_pack[DotnetToolPackInfo],
+        crossgen2 = ctx.toolchains[_CROSSGEN2_TOOLCHAIN_TYPE].pack,
         framework = ready_to_run_framework(ctx.attr._runtime_pack[0][DotnetRuntimePackInfo]),
     )]
 
@@ -311,11 +313,8 @@ The target framework and project SDK are the published binary's.""",
             cfg = _runtime_pack_transition,
             providers = [DotnetRuntimePackInfo],
         ),
-        "_crossgen2_pack": attr.label(
-            default = Label("//dotnet/private:crossgen2_pack"),
-            providers = [DotnetToolPackInfo],
-        ),
     },
+    toolchains = [_CROSSGEN2_TOOLCHAIN_TYPE],
     provides = [DotnetReadyToRunToolsInfo],
     cfg = _pin_framework,
 )

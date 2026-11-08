@@ -431,9 +431,8 @@ TARGETING_PACK_LOOKUP_TABLE = {
 }
 
 # The runtime identifiers a build can run on, and so the ones the tool packs
-# are fetched for. Each has a platform `config_setting` the tool packs' `host`
-# aliases select over; a musl host is not distinguishable as a Bazel platform
-# here.
+# declare toolchains for. Only the execution platform's pack is fetched; a musl
+# host is not distinguishable as a Bazel platform here.
 _HOST_RIDS = [
     "linux-arm64",
     "linux-x64",
@@ -450,17 +449,6 @@ def host_rids():
       A list of runtime identifiers.
     """
     return _HOST_RIDS
-
-def host_platform_setting(rid):
-    """The `config_setting` that matches the platform of a host runtime identifier.
-
-    Args:
-      rid: One of `host_rids()`.
-
-    Returns:
-      The label of the `config_setting`.
-    """
-    return "@rules_dotnet//dotnet/private:" + rid.replace("win-", "windows-")
 
 def host_tool_tfms(pack):
     """The target frameworks a host tool shipped for on at least one host.

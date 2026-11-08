@@ -54,13 +54,13 @@ filegroup(
 # Manual: they only resolve in a binary whose publish asked for them.
 native_tools(
     name = "crossgen2_tools",
-    crossgen2 = "//dotnet/private:crossgen2_pack",
+    compiler = "crossgen2",
     tags = ["manual"],
 )
 
 native_tools(
     name = "ilcompiler_tools",
-    ilcompiler = "//dotnet/private:ilcompiler_pack",
+    compiler = "ilcompiler",
     nativeaot_pack = "//dotnet/private/sdk/nativeaot_packs:nativeaot_pack",
     tags = ["manual"],
 )

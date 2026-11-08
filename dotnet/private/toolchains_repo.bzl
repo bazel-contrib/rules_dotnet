@@ -22,6 +22,8 @@ with only the toolchain attribute pointing into the platform-specific repositori
 # builds its own tools with.
 DOTNET_TOOLCHAIN_TYPE = "@rules_dotnet//dotnet:toolchain_type"
 BOOTSTRAP_TOOLCHAIN_TYPE = "@rules_dotnet//dotnet:bootstrap_toolchain_type"
+CROSSGEN2_TOOLCHAIN_TYPE = "@rules_dotnet//dotnet/private/sdk/crossgen2_packs:toolchain_type"
+ILCOMPILER_TOOLCHAIN_TYPE = "@rules_dotnet//dotnet/private/sdk/ilcompiler_packs:toolchain_type"
 
 # Add more platforms as needed to mirror all the binaries
 # published by the upstream project. `rid` names the platform's SDK archive in
@@ -100,6 +102,29 @@ toolchain(
             compatible_with = meta.compatible_with,
             toolchain_type = repository_ctx.attr.toolchain_type,
         )
+
+        if repository_ctx.attr.toolchain_type == DOTNET_TOOLCHAIN_TYPE:
+            build_content += """
+toolchain(
+    name = "{platform}_crossgen2_toolchain",
+    exec_compatible_with = {compatible_with},
+    toolchain = "@dotnet.crossgen2_packs//tool:{rid}",
+    toolchain_type = "{crossgen2_toolchain_type}",
+)
+
+toolchain(
+    name = "{platform}_ilcompiler_toolchain",
+    exec_compatible_with = {compatible_with},
+    toolchain = "@dotnet.ilcompiler_packs//tool:{rid}",
+    toolchain_type = "{ilcompiler_toolchain_type}",
+)
+""".format(
+                platform = platform,
+                rid = meta.rid,
+                compatible_with = meta.compatible_with,
+                crossgen2_toolchain_type = CROSSGEN2_TOOLCHAIN_TYPE,
+                ilcompiler_toolchain_type = ILCOMPILER_TOOLCHAIN_TYPE,
+            )
 
     # Base BUILD file for this repository
     repository_ctx.file("BUILD.bazel", build_content)
