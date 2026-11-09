@@ -28,6 +28,7 @@ load(
     "razor_compile_inputs",
 )
 load("//dotnet/private/rules/csharp/actions:scoped_css.bzl", "scoped_css_action")
+load("//dotnet/private/rules/csharp/actions:sdk_analyzers.bzl", "sdk_analyzer_compile_inputs")
 load("//dotnet/private/sdk:packs.bzl", "uses_razor")
 
 def _write_internals_visible_to_csharp(actions, label_name, dll_name, others):
@@ -173,6 +174,9 @@ def AssemblyAction(
         allow_unsafe_blocks,
         nullable,
         run_analyzers,
+        enable_net_analyzers,
+        enforce_code_style_in_build,
+        analysis_mode,
         is_analyzer,
         is_language_specific_analyzer,
         analyzer_configs,
@@ -225,6 +229,9 @@ def AssemblyAction(
         allow_unsafe_blocks: Compiles the target with /unsafe
         nullable: Enable nullable context, or nullable warnings.
         run_analyzers: Enable analyzers.
+        enable_net_analyzers: Run the .NET SDK's built-in code quality analyzers (`CAxxxx`).
+        enforce_code_style_in_build: Run the .NET SDK's built-in C# code style analyzers (`IDExxxx`).
+        analysis_mode: Rule severity preset for the .NET SDK's built-in analyzers.
         is_analyzer: Whether or not the target is an analyzer.
         is_language_specific_analyzer: Whether or not the target is a language specific analyzer.
         analyzer_configs: List of analyzer configuration files.
@@ -269,6 +276,24 @@ def AssemblyAction(
 
     if analyzer_runtime_deps and not (is_analyzer or is_language_specific_analyzer):
         fail("{}: `analyzer_runtime_deps` is only for an analyzer or source generator. List these in `deps`.".format(label))
+
+    if run_analyzers and (enable_net_analyzers or enforce_code_style_in_build):
+        sdk_analyzers = sdk_analyzer_compile_inputs(
+            toolchain = toolchain,
+            target_framework = target_framework,
+            project_sdk = project_sdk,
+            enable_net_analyzers = enable_net_analyzers,
+            enforce_code_style_in_build = enforce_code_style_in_build,
+            analysis_mode = analysis_mode,
+        )
+        compile_analyzers_csharp = depset(sdk_analyzers.analyzers, transitive = [analyzers_csharp])
+
+        # The SDK's built-in `.globalconfig` files come before user-supplied
+        # `analyzer_configs`, so user settings override the preset severities.
+        compile_analyzer_configs = sdk_analyzers.analyzer_configs + analyzer_configs
+    else:
+        compile_analyzers_csharp = analyzers_csharp
+        compile_analyzer_configs = analyzer_configs
 
     # TODO: Ensure that all the analyzer DLLs also target netstandard2.0.
     analyzer_dlls = _collect_analyzer_dependencies(compile_deps, analyzer_runtime_deps) if (is_analyzer or is_language_specific_analyzer) else []
@@ -375,8 +400,8 @@ def AssemblyAction(
             label,
             additionalfiles,
             analyzers,
-            analyzers_csharp,
-            analyzer_configs,
+            compile_analyzers_csharp,
+            compile_analyzer_configs,
             debug,
             embed_sources,
             defines,
@@ -428,8 +453,8 @@ def AssemblyAction(
             label,
             additionalfiles,
             analyzers,
-            analyzers_csharp,
-            analyzer_configs,
+            compile_analyzers_csharp,
+            compile_analyzer_configs,
             debug,
             embed_sources,
             defines,

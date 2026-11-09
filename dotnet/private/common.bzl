@@ -4,6 +4,7 @@ Rules for compatability resolution of dependencies for .NET frameworks.
 
 load("@bazel_skylib//lib:sets.bzl", "sets")
 load("@bazel_skylib//lib:shell.bzl", "shell")
+load("@bazel_skylib//rules:common_settings.bzl", "BuildSettingInfo")
 load(
     "//dotnet/private:providers.bzl",
     "DotnetAssemblyCompileInfo",
@@ -212,6 +213,18 @@ def get_fsharp_compiler_worker(ctx):
     """
 
     return _worker_executable(ctx.attr._fsharp_compiler_worker)
+
+def resolve_enable_net_analyzers(ctx):
+    """Whether the target runs the .NET SDK's built-in `CAxxxx` analyzers."""
+    if ctx.attr.enable_net_analyzers == -1:
+        return ctx.attr._enable_net_analyzers[BuildSettingInfo].value
+    return ctx.attr.enable_net_analyzers == 1
+
+def resolve_enforce_code_style_in_build(ctx):
+    """Whether the target runs the .NET SDK's built-in `IDExxxx` code style analyzers."""
+    if ctx.attr.enforce_code_style_in_build == -1:
+        return ctx.attr._enforce_code_style_in_build[BuildSettingInfo].value
+    return ctx.attr.enforce_code_style_in_build == 1
 
 def _format_ref_with_overrides(assembly):
     # See https://github.com/bazel-contrib/rules_dotnet/issues/405

@@ -276,6 +276,27 @@ CSHARP_COMMON_ATTRS = dicts.add(
             mandatory = False,
             default = True,
         ),
+        "enable_net_analyzers": attr.int(
+            doc = """Run the .NET SDK's built-in code quality analyzers (`CAxxxx`), matching MSBuild's `EnableNETAnalyzers`.
+
+            `-1` inherits `//dotnet/settings:enable_net_analyzers` (false by default), `1` enables them for this target, and `0` disables them.""",
+            default = -1,
+            values = [-1, 0, 1],
+        ),
+        "enforce_code_style_in_build": attr.int(
+            doc = """Run the .NET SDK's built-in C# code style analyzers (`IDExxxx`), matching MSBuild's `EnforceCodeStyleInBuild`.
+
+            `-1` inherits `//dotnet/settings:enforce_code_style_in_build` (false by default), `1` enables them for this target, and `0` disables them.""",
+            default = -1,
+            values = [-1, 0, 1],
+        ),
+        "analysis_mode": attr.string(
+            doc = """Rule severity preset for the .NET SDK's built-in analyzers, matching MSBuild's `AnalysisMode`.
+
+            Selects the SDK's `analysislevel_<version>_<mode>.globalconfig` and `analysislevelstyle_<mode>.globalconfig` files.""",
+            default = "default",
+            values = ["default", "none", "minimum", "recommended", "all"],
+        ),
         "nowarn": attr.string_list(
             doc = "List of warnings that should be ignored",
             mandatory = False,
@@ -293,6 +314,14 @@ CSHARP_COMMON_ATTRS = dicts.add(
             doc = "Rewrites `.razor.css` by running the SDK's own scoped CSS tasks.",
             default = "//dotnet/private/tools/scoped_css",
             cfg = "exec",
+        ),
+        "_enable_net_analyzers": attr.label(
+            doc = "Whether the compile action runs the .NET SDK's built-in analyzers by default.",
+            default = "//dotnet/settings:enable_net_analyzers",
+        ),
+        "_enforce_code_style_in_build": attr.label(
+            doc = "Whether the compile action runs the .NET SDK's built-in code style analyzers by default.",
+            default = "//dotnet/settings:enforce_code_style_in_build",
         ),
         "_csharp_compiler_worker": attr.label(
             doc = """The persistent worker that runs the C# compiler, keeping Roslyn's build server alive between compilations.
