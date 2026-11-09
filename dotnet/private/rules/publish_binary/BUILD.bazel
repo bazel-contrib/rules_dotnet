@@ -60,6 +60,7 @@ native_tools(
 
 native_tools(
     name = "ilcompiler_tools",
+    cc_link_toolchain = ":cc_link_toolchain",
     ilcompiler = "//dotnet/private:ilcompiler_pack",
     nativeaot_pack = "//dotnet/private/sdk/nativeaot_packs:nativeaot_pack",
     tags = ["manual"],
@@ -81,8 +82,10 @@ bzl_library(
     srcs = ["native_tools.bzl"],
     visibility = ["//dotnet:__subpackages__"],
     deps = [
+        ":cc_link_toolchain_bzl",
         "//dotnet/private:providers",
         "//dotnet/private/sdk/nativeaot_packs:nativeaot_pack_transition",
+        "//dotnet/private/transitions:native_transition",
     ],
 )
 
@@ -93,14 +96,12 @@ bzl_library(
         "//dotnet:__subpackages__",
     ],
     deps = [
-        ":cc_link_toolchain_bzl",
         "//dotnet/private:providers",
         "//dotnet/private/rules/blazor:blazor_wasm_publish",
         "//dotnet/private/rules/common:publish_layout",
         "//dotnet/private/rules/ready_to_run",
         "//dotnet/private/sdk/runtime_packs:runtime_pack_transition",
         "//dotnet/private/transitions:default_transition",
-        "//dotnet/private/transitions:native_transition",
         "//dotnet/private/transitions:tfm_transition",
         "@bazel_skylib//lib:paths",
         "@bazel_skylib//lib:shell",
