@@ -145,6 +145,66 @@ filegroup(
     visibility = ["//visibility:public"],
 )
 
+# The `.NET` analyzers `Microsoft.NET.Sdk` puts into `@(Analyzer)` when
+# `EnableNETAnalyzers` is enabled, and their built-in global configs.
+filegroup(
+    name = "csharp_net_analyzers",
+    srcs = glob(
+        [
+            "sdk/{sdk_version}/Sdks/Microsoft.NET.Sdk/analyzers/Microsoft.CodeAnalysis.NetAnalyzers.dll",
+            "sdk/{sdk_version}/Sdks/Microsoft.NET.Sdk/analyzers/Microsoft.CodeAnalysis.CSharp.NetAnalyzers.dll",
+        ],
+        allow_empty = True,
+    ),
+    visibility = ["//visibility:public"],
+)
+
+filegroup(
+    name = "net_analyzer_configs",
+    srcs = glob(
+        ["sdk/{sdk_version}/Sdks/Microsoft.NET.Sdk/analyzers/build/config/*.globalconfig"],
+        allow_empty = True,
+    ),
+    visibility = ["//visibility:public"],
+)
+
+# The C# code style analyzers (`IDExxxx`) `Microsoft.NET.Sdk` puts into
+# `@(Analyzer)` when `EnforceCodeStyleInBuild` is enabled, and their configs.
+filegroup(
+    name = "csharp_codestyle_analyzers",
+    srcs = glob(
+        [
+            "sdk/{sdk_version}/Sdks/Microsoft.NET.Sdk/codestyle/cs/Microsoft.CodeAnalysis.CodeStyle.dll",
+            "sdk/{sdk_version}/Sdks/Microsoft.NET.Sdk/codestyle/cs/Microsoft.CodeAnalysis.CSharp.CodeStyle.dll",
+        ],
+        allow_empty = True,
+    ),
+    visibility = ["//visibility:public"],
+)
+
+filegroup(
+    name = "csharp_codestyle_configs",
+    srcs = glob(
+        ["sdk/{sdk_version}/Sdks/Microsoft.NET.Sdk/codestyle/cs/build/config/*.globalconfig"],
+        allow_empty = True,
+    ),
+    visibility = ["//visibility:public"],
+)
+
+# The ASP.NET Core and MVC analyzers `Microsoft.NET.Sdk.Web` puts into
+# `@(Analyzer)` for web projects.
+filegroup(
+    name = "web_sdk_analyzers",
+    srcs = glob(
+        [
+            "sdk/{sdk_version}/Sdks/Microsoft.NET.Sdk.Web/analyzers/cs/Microsoft.AspNetCore.Analyzers.dll",
+            "sdk/{sdk_version}/Sdks/Microsoft.NET.Sdk.Web/analyzers/cs/Microsoft.AspNetCore.Mvc.Analyzers.dll",
+        ],
+        allow_empty = True,
+    ),
+    visibility = ["//visibility:public"],
+)
+
 filegroup(
     name = "fsc_binary",
     # We glob both fsc.dll and fsc.exe for backwards compatibility
@@ -174,6 +234,11 @@ dotnet_toolchain(
     fsharp_compiler = ":fsc_binary",
     host_model = ":host_model",
     razor_source_generators = ":razor_source_generators",
+    csharp_net_analyzers = ":csharp_net_analyzers",
+    net_analyzer_configs = ":net_analyzer_configs",
+    csharp_codestyle_analyzers = ":csharp_codestyle_analyzers",
+    csharp_codestyle_configs = ":csharp_codestyle_configs",
+    web_sdk_analyzers = ":web_sdk_analyzers",
     static_web_assets_tasks = ":static_web_assets_tasks",
     msbuild_dlls = [":msbuild_framework", ":msbuild_utilities", ":msbuild_string_tools"],
     os = "{os}",

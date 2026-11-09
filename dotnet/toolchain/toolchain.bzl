@@ -136,6 +136,11 @@ def _dotnet_toolchain_impl(ctx):
         fsharp_compiler = ctx.attr.fsharp_compiler,
         host_model = ctx.attr.host_model,
         razor_source_generators = ctx.attr.razor_source_generators,
+        csharp_net_analyzers = ctx.attr.csharp_net_analyzers,
+        net_analyzer_configs = ctx.attr.net_analyzer_configs,
+        csharp_codestyle_analyzers = ctx.attr.csharp_codestyle_analyzers,
+        csharp_codestyle_configs = ctx.attr.csharp_codestyle_configs,
+        web_sdk_analyzers = ctx.attr.web_sdk_analyzers,
         static_web_assets_tasks = ctx.attr.static_web_assets_tasks,
         msbuild_dlls = ctx.attr.msbuild_dlls,
         strict_deps = ctx.attr._strict_deps,
@@ -224,6 +229,36 @@ Carries the scoped CSS implementation: `ComputeCssScope`, `RewriteCss` and
 Passed to `csc` with `/analyzer:` whenever a target has `.razor` or `.cshtml`
 sources. They ship inside the SDK, so their version follows the toolchain
 rather than the target framework, as it does under MSBuild.""",
+            mandatory = False,
+            allow_files = True,
+            cfg = "exec",
+        ),
+        "csharp_net_analyzers": attr.label(
+            doc = """The C# .NET analyzer assemblies (`CAxxxx`) shipped in the SDK (`Sdks/Microsoft.NET.Sdk/analyzers`).""",
+            mandatory = False,
+            allow_files = True,
+            cfg = "exec",
+        ),
+        "net_analyzer_configs": attr.label(
+            doc = """The built-in `.globalconfig` files for the SDK's .NET analyzers (`Sdks/Microsoft.NET.Sdk/analyzers/build/config`).""",
+            mandatory = False,
+            allow_files = True,
+            cfg = "exec",
+        ),
+        "csharp_codestyle_analyzers": attr.label(
+            doc = """The C# code style analyzer assemblies (`IDExxxx`) shipped in the SDK (`Sdks/Microsoft.NET.Sdk/codestyle/cs`).""",
+            mandatory = False,
+            allow_files = True,
+            cfg = "exec",
+        ),
+        "csharp_codestyle_configs": attr.label(
+            doc = """The built-in `.globalconfig` files for the SDK's C# code style analyzers (`Sdks/Microsoft.NET.Sdk/codestyle/cs/build/config`).""",
+            mandatory = False,
+            allow_files = True,
+            cfg = "exec",
+        ),
+        "web_sdk_analyzers": attr.label(
+            doc = """The ASP.NET Core and MVC analyzer assemblies shipped in `Sdks/Microsoft.NET.Sdk.Web/analyzers/cs`.""",
             mandatory = False,
             allow_files = True,
             cfg = "exec",
