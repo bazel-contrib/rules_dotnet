@@ -1,5 +1,21 @@
 load("@bazel_lib//:bzl_library.bzl", "bzl_library")
 
+# The `host` alias of the band a host tool is taken from, which `host_tool_pack`
+# sets from the target framework. Not scoped to the target, as it has to
+# survive the exec transition to the pack.
+label_setting(
+    name = "host_tool_band",
+    build_setting_default = ":no_host_tool",
+    visibility = ["//dotnet:__subpackages__"],
+)
+
+# The label setting needs a default, and `host_tool_pack` always transitions
+# away from it.
+filegroup(
+    name = "no_host_tool",
+    visibility = ["//dotnet:__subpackages__"],
+)
+
 bzl_library(
     name = "rids",
     srcs = ["rids.bzl"],

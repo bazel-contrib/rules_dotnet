@@ -48,44 +48,44 @@ def tool_pack_rule(tool_name):
         },
     )
 
+_HOST_TOOL_BAND = "//dotnet/private/sdk:host_tool_band"
+
+def _host_tool_band_impl(settings, attr):
+    bands = attr.bands
+
+    return {_HOST_TOOL_BAND: bands.get(settings["//dotnet:target_framework"]) or bands[NEWEST_BAND]}
+
+# A label setting rather than a select, as for the other packs, so that an
+# unconfigured query sees only the setting's default and fetches no tool pack.
+_host_tool_band = transition(
+    implementation = _host_tool_band_impl,
+    inputs = ["//dotnet:target_framework"],
+    outputs = [_HOST_TOOL_BAND],
+)
+
 def _host_tool_pack_impl(ctx):
-    return [ctx.attr.pack[DotnetToolPackInfo]]
+    return [ctx.attr._pack[DotnetToolPackInfo]]
 
 host_tool_pack = rule(
     _host_tool_pack_impl,
     doc = """A native tool for the machine the build runs on, from the band of the target framework.
 
-`pack` selects the band in the target configuration, and past its exec
-transition the band's `host` alias selects the pack for the execution
-platform.""",
+The band's `host` alias is picked in the target configuration, and past the
+exec transition selects the pack for the execution platform.""",
     attrs = {
-        "pack": attr.label(
-            doc = "The band's `host` alias, selected by target framework.",
-            cfg = "exec",
+        "bands": attr.string_dict(
+            doc = "The `host` alias of each band, by target framework, and the newest band's under `NEWEST_BAND`.",
             mandatory = True,
+        ),
+        "_pack": attr.label(
+            default = Label(_HOST_TOOL_BAND),
+            cfg = "exec",
             providers = [DotnetToolPackInfo],
         ),
     },
+    cfg = _host_tool_band,
     # Picks the execution platform the way the rules running the tool do, so
     # that the pack is the one for the machine their actions run on.
     toolchains = ["//dotnet:toolchain_type"],
     provides = [DotnetToolPackInfo],
 )
-
-def host_tool_pack_band(repo, tfms):
-    """Selects a tool pack's band by the target framework of the configuration.
-
-    Args:
-      repo: The repository holding a package per band.
-      tfms: The bands the tool shipped for, oldest first.
-
-    Returns:
-      A select of each band's `host` alias.
-    """
-    bands = {"//dotnet:tfm_" + tfm: "@{}//{}:host".format(repo, tfm) for tfm in tfms}
-
-    # A framework older than every band, such as netstandard2.0, gets the newest
-    # the SDK knows.
-    bands["//conditions:default"] = "@{}//{}:host".format(repo, NEWEST_BAND)
-
-    return select(bands)
