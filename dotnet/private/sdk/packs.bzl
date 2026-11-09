@@ -478,6 +478,21 @@ def host_tool_tfms(pack):
         if any([pack(tfm, rid, bands = PACK_BANDS) != None for rid in _HOST_RIDS])
     ]
 
+def _host_tool_bands(repo, pack):
+    bands = {tfm: "@{}//{}:host".format(repo, tfm) for tfm in host_tool_tfms(pack)}
+
+    # A framework older than every band, such as netstandard2.0, gets the newest
+    # the SDK knows.
+    bands[NEWEST_BAND] = "@{}//{}:host".format(repo, NEWEST_BAND)
+
+    return bands
+
+# The `host` alias of each band a host tool shipped for, by target framework,
+# and that of the newest band the SDK knows under `NEWEST_BAND`.
+CROSSGEN2_PACK_LOOKUP_TABLE = _host_tool_bands(CROSSGEN2_PACK_REPO, crossgen2_pack)
+
+ILCOMPILER_PACK_LOOKUP_TABLE = _host_tool_bands(ILCOMPILER_PACK_REPO, ilcompiler_pack)
+
 RUNTIME_PACK_LOOKUP_TABLE = {
     project_sdk: {
         tfm: {
