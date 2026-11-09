@@ -7,12 +7,23 @@ bzl_library(
     deps = [
         ":razor",
         ":scoped_css",
+        ":sdk_analyzers",
         "//dotnet/private:common",
         "//dotnet/private:nuget_version",
         "//dotnet/private:providers",
         "//dotnet/private/icu:settings",
         "//dotnet/private/sdk:packs",
         "@bazel_skylib//lib:dicts",
+    ],
+)
+
+bzl_library(
+    name = "sdk_analyzers",
+    srcs = ["sdk_analyzers.bzl"],
+    visibility = ["//dotnet:__subpackages__"],
+    deps = [
+        "//dotnet/private:common",
+        "//dotnet/private/sdk:packs",
     ],
 )
 
