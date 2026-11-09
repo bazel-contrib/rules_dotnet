@@ -3,19 +3,11 @@ load("@rules_pkg//pkg:tar.bzl", "pkg_tar")
 load("@rules_shell//shell:sh_test.bzl", "sh_test")
 load("//dotnet:defs.bzl", "publish_binary")
 
-# The native link needs a C/C++ toolchain for the target platform, and Windows
-# goes through MSVC rather than the Unix driver these rules support.
-_NOT_WINDOWS = select({
-    "@platforms//os:windows": ["@platforms//:incompatible"],
-    "//conditions:default": [],
-})
-
 publish_binary(
     name = "native_aot",
     binary = "//dotnet/private/tests/publish/app_to_publish",
     native_aot = True,
     self_contained = True,
-    target_compatible_with = _NOT_WINDOWS,
     target_framework = "net10.0",
 )
 
@@ -32,8 +24,9 @@ pkg_tar(
         "//dotnet/private:linux-x64": "native_aot/aot/linux-x64",
         "//dotnet/private:osx-arm64": "native_aot/aot/osx-arm64",
         "//dotnet/private:osx-x64": "native_aot/aot/osx-x64",
+        "//dotnet/private:windows-arm64": "native_aot/aot/win-arm64",
+        "//dotnet/private:windows-x64": "native_aot/aot/win-x64",
     }),
-    target_compatible_with = _NOT_WINDOWS,
 )
 
 sh_test(
@@ -41,7 +34,6 @@ sh_test(
     size = "small",
     srcs = ["test.sh"],
     data = [":tar"],
-    target_compatible_with = _NOT_WINDOWS,
 )
 
 # Cross-compiling proves the two halves are configured independently: ilc runs
@@ -76,6 +68,10 @@ sh_test(
         ":transitioned_linux_x86_64",
         "@bazel_tools//tools/bash/runfiles",
     ],
-    # `file` and `readlink -f`, which the test script uses, need a POSIX host.
-    target_compatible_with = _NOT_WINDOWS,
+    # Cross-linking to Linux needs the hermetic LLVM toolchain, and `file` and
+    # `readlink -f`, which the test script uses, need a POSIX host.
+    target_compatible_with = select({
+        "@platforms//os:windows": ["@platforms//:incompatible"],
+        "//conditions:default": [],
+    }),
 )

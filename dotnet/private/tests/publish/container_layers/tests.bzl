@@ -11,12 +11,6 @@ LAYERS = ["runtime", "third_party", "first_party", "app"]
 
 _APP = "//dotnet/private/tests/publish/app_to_publish"
 
-# The linker for NativeAOT only drives Unix toolchains.
-_NOT_WINDOWS = select({
-    "@platforms//os:windows": ["@platforms//:incompatible"],
-    "//conditions:default": [],
-})
-
 # The actions that fill the publish directory itself.
 _PUBLISH_COPIES = ["DotnetPublishCopy", "DotnetCopySidecars"]
 
@@ -317,7 +311,6 @@ def _native_aot_test(name):
         _native_aot_test_impl,
         native_aot = True,
         self_contained = True,
-        target_compatible_with = _NOT_WINDOWS,
     )
 
 def _native_aot_test_impl(env, target):
@@ -391,7 +384,6 @@ def _native_aot_needs_net10_test(name):
         native_aot = True,
         self_contained = True,
         tags = ["manual"],
-        target_compatible_with = _NOT_WINDOWS,
         target_framework = "net10.0",
     )
 
@@ -410,7 +402,7 @@ def _native_aot_needs_net10_test_impl(env, target):
 def _binary_dependency_test(name):
     for (suffix, kwargs) in [
         ("_ready_to_run", {"ready_to_run": True}),
-        ("_native_aot", {"native_aot": True, "target_compatible_with": _NOT_WINDOWS}),
+        ("_native_aot", {"native_aot": True}),
     ]:
         publish_binary(
             name = name + suffix,
