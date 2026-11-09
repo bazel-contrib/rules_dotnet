@@ -16,6 +16,10 @@ load(
     _embed_sources_or_flag = "embed_sources_or_flag",
 )
 load(
+    "//dotnet/private/rules/content_files:content_files.bzl",
+    _dotnet_content_files = "dotnet_content_files",
+)
+load(
     "//dotnet/private/rules/csharp:binary.bzl",
     _csharp_binary = "csharp_binary",
 )
@@ -168,5 +172,6 @@ import_dll = _import_dll
 nuget_repo = _nuget_repo
 nuget_archive = _nuget_archive
 dotnet_tool = _dotnet_tool
+dotnet_content_files = _dotnet_content_files
 nuget_pack = _nuget_pack
 nuget_push = _nuget_push

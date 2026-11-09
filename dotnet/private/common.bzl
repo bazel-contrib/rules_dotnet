@@ -1136,6 +1136,73 @@ def to_rlocation_path(ctx, file):
     else:
         return ctx.workspace_name + "/" + file.short_path
 
+def package_relative_path(file, package):
+    """Re-roots `file`'s path to be relative to `package`.
+
+    Args:
+        file: The `File` to re-root.
+        package: The Bazel package to make the path relative to (typically `ctx.label.package`).
+
+    Returns:
+        `file`'s path relative to `package`, or `file.basename` if `file` lies outside `package`
+        (for example a file from an external repository or an unrelated package).
+    """
+    if not file.short_path.startswith("../"):
+        prefix = package + "/" if package else ""
+        if file.short_path.startswith(prefix):
+            return file.short_path[len(prefix):]
+    return file.basename
+
+def _copy_files_to_dir(actions, is_windows, file_mappings, out_dir, script_name, executables = []):
+    """Copies files into `out_dir` using a single generated script.
+
+    Args:
+        actions: The actions object
+        is_windows: If the OS is Windows
+        file_mappings: A list of `(src_File, rel_path)` tuples. Each `src_File` is copied to
+            `out_dir/rel_path`.
+        out_dir: The directory to copy the files to
+        script_name: Base name for the generated copy script; must be unique within the target.
+        executables: Basenames to mark executable on Unix.
+
+    Returns:
+        A list of `struct(file, dest)` in the same order as `file_mappings`, where `file` is the
+        copied `File` and `dest` is its `rel_path` relative to `out_dir`.
+    """
+    script_body = ["@echo off"] if is_windows else ["#! /usr/bin/env bash", "set -eou pipefail"]
+
+    inputs = []
+    outputs = []
+    for src, rel in file_mappings:
+        dst = actions.declare_file("%s/%s" % (out_dir, rel))
+        inputs.append(src)
+        outputs.append(struct(file = dst, dest = rel))
+        if is_windows:
+            script_body.append("if not exist \"{dir}\" @mkdir \"{dir}\" >NUL".format(dir = dst.dirname.replace("/", "\\")))
+            script_body.append("@copy /Y \"{src}\" \"{dst}\" >NUL".format(src = src.path.replace("/", "\\"), dst = dst.path.replace("/", "\\")))
+        else:
+            script_body.append("mkdir -p {dir} && cp -f {src} {dst}".format(dir = shell.quote(dst.dirname), src = shell.quote(src.path), dst = shell.quote(dst.path)))
+
+            if src.basename in executables:
+                script_body.append("chmod +x {dst}".format(dst = shell.quote(dst.path)))
+
+    if len(outputs) > 0:
+        copy_script = actions.declare_file(script_name + (".bat" if is_windows else ".sh"))
+        actions.write(
+            output = copy_script,
+            content = "\r\n".join(script_body) if is_windows else "\n".join(script_body),
+            is_executable = True,
+        )
+        actions.run(
+            mnemonic = "DotnetCopyFiles",
+            progress_message = "Copying %d file(s) into %s" % (len(outputs), out_dir),
+            outputs = [entry.file for entry in outputs],
+            inputs = depset(inputs),
+            executable = copy_script,
+            tools = [copy_script],
+        )
+    return outputs
+
 def copy_files_to_dir(target_name, actions, is_windows, files, out_dir, executables = []):
     """Copies files to a specific location.
 
@@ -1152,40 +1219,60 @@ def copy_files_to_dir(target_name, actions, is_windows, files, out_dir, executab
     Returns:
         A list of the copied files in the out_dir
     """
+    outputs = _copy_files_to_dir(
+        actions,
+        is_windows,
+        [(f, f.basename) for f in files],
+        out_dir,
+        target_name + ".copy",
+        executables = executables,
+    )
+    return [entry.file for entry in outputs]
 
-    script_body = ["@echo off"] if is_windows else ["#! /usr/bin/env bash", "set -eou pipefail"]
+def copy_appsettings_to_dir(target_name, actions, is_windows, appsetting_files, out_dir):
+    """Stages appsettings files next to the assembly, flattened to their basename.
 
-    inputs = []
-    outputs = []
-    for src in files:
-        dst = actions.declare_file("%s/%s" % (out_dir, src.basename))
-        inputs.append(src)
-        outputs.append(dst)
-        if is_windows:
-            script_body.append("if not exist \"{dir}\" @mkdir \"{dir}\" >NUL".format(dir = dst.dirname.replace("/", "\\")))
-            script_body.append("@copy /Y \"{src}\" \"{dst}\" >NUL".format(src = src.path.replace("/", "\\"), dst = dst.path.replace("/", "\\")))
-        else:
-            script_body.append("mkdir -p {dir} && cp -f {src} {dst}".format(dir = shell.quote(dst.dirname), src = shell.quote(src.path), dst = shell.quote(dst.path)))
+    Args:
+        target_name: The name of the executing target.
+        actions: The actions object.
+        is_windows: If the OS is Windows.
+        appsetting_files: The appsettings `File`s to stage.
+        out_dir: The assembly output directory to stage into.
 
-            if src.basename in executables:
-                script_body.append("chmod +x {dst}".format(dst = shell.quote(dst.path)))
+    Returns:
+        A list of the staged `File`s.
+    """
+    outputs = _copy_files_to_dir(
+        actions,
+        is_windows,
+        [(f, f.basename) for f in appsetting_files],
+        out_dir,
+        target_name + ".appsettings.copy",
+    )
+    return [entry.file for entry in outputs]
 
-    if len(outputs) > 0:
-        copy_script = actions.declare_file(target_name + ".copy.bat" if is_windows else target_name + ".copy.sh")
-        actions.write(
-            output = copy_script,
-            content = "\r\n".join(script_body) if is_windows else "\n".join(script_body),
-            is_executable = True,
-        )
-        actions.run(
-            mnemonic = "DotnetCopyFiles",
-            progress_message = "Copying %d file(s) into %s" % (len(outputs), out_dir),
-            outputs = outputs,
-            inputs = depset(inputs),
-            executable = copy_script,
-            tools = [copy_script],
-        )
-    return outputs
+def copy_content_to_dir(target_name, actions, is_windows, content_file_mappings, out_dir):
+    """Stages content files next to the assembly at their mapped destination paths.
+
+    Args:
+        target_name: The name of the executing target.
+        actions: The actions object.
+        is_windows: If the OS is Windows.
+        content_file_mappings: A list of `struct(src = File, dest = string)`; each `src` is staged
+            at `dest` relative to `out_dir`.
+        out_dir: The assembly output directory to stage into.
+
+    Returns:
+        A list of `struct(file, dest)`, where `file` is the staged `File` and `dest` is its path
+        relative to `out_dir`.
+    """
+    return _copy_files_to_dir(
+        actions,
+        is_windows,
+        [(m.src, m.dest) for m in content_file_mappings],
+        out_dir,
+        target_name + ".content.copy",
+    )
 
 _RESOURCE_TEMPLATE_CSHARP = "/resource:%s"
 _RESOURCE_TEMPLATE_FSHARP = "--resource:%s"
