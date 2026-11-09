@@ -1,9 +1,9 @@
 load("//dotnet:defs.bzl", "csharp_library", "fsharp_library")
+load("//dotnet/private/tests:utils.bzl", "action_args_test")
 
 csharp_library(
     name = "csharp_file_path_api_tests_with_spaces",
     srcs = ["api tests/test.cs"],
-    tags = ["manual"],
     target_frameworks = ["net10.0"],
 )
 
@@ -11,7 +11,6 @@ csharp_library(
     name = "csharp_resource_with_spaces",
     srcs = ["api tests/test.cs"],
     resources = ["res dir/data file.txt"],
-    tags = ["manual"],
     target_frameworks = ["net10.0"],
 )
 
@@ -35,6 +34,44 @@ csharp_library(
     tags = ["manual"],
     target_frameworks = ["net10.0"],
     deps = [":reflib with spaces"],
+)
+
+action_args_test(
+    name = "csharp_source_with_spaces_quoted_test",
+    action_mnemonic = "CSharpCompile",
+    expected_args_containing = ["\"dotnet/private/tests/file_path_with_spaces/api tests/test.cs\""],
+    target_under_test = ":csharp_file_path_api_tests_with_spaces",
+)
+
+action_args_test(
+    name = "csharp_resource_with_spaces_quoted_test",
+    action_mnemonic = "CSharpCompile",
+    expected_args_containing = [
+        "/resource:\"dotnet/private/tests/file_path_with_spaces/res dir/data file.txt\",\"csharp_resource_with_spaces.res dir.data file.txt\"",
+    ],
+    target_under_test = ":csharp_resource_with_spaces",
+)
+
+action_args_test(
+    name = "csharp_output_with_spaces_quoted_test",
+    action_mnemonic = "CSharpCompile",
+    expected_args_containing = [
+        "/out:\"bazel-out/",
+        "csharp output with spaces.dll\"",
+        "/refout:\"bazel-out/",
+        "/pdb:\"bazel-out/",
+    ],
+    target_under_test = ":csharp output with spaces",
+)
+
+action_args_test(
+    name = "csharp_reference_with_spaces_quoted_test",
+    action_mnemonic = "CSharpCompile",
+    expected_args_containing = [
+        "-r:\"bazel-out/",
+        "ref/reflib with spaces.dll\"",
+    ],
+    target_under_test = ":csharp_reference_with_spaces",
 )
 
 fsharp_library(

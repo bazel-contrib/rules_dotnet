@@ -229,17 +229,22 @@ def _format_ref_with_overrides(assembly):
         return None
     return "-r:" + assembly.path
 
-def format_ref_arg(args, refs):
+def _format_quoted_ref_with_overrides(assembly):
+    ref = _format_ref_with_overrides(assembly)
+    return None if ref == None else "-r:\"" + assembly.path + "\""
+
+def format_ref_arg(args, refs, quote = False):
     """Takes
 
     Args:
         args: The args object that will be sent into the compilation action
         refs: List of all references that are being sent into the compilation action
+        quote: Quote each path, for compilers whose response file splits on whitespace
     Returns:
         The updated args object
     """
 
-    args.add_all(refs, map_each = _format_ref_with_overrides)
+    args.add_all(refs, map_each = _format_quoted_ref_with_overrides if quote else _format_ref_with_overrides)
 
     return args
 
@@ -1187,7 +1192,7 @@ def copy_files_to_dir(target_name, actions, is_windows, files, out_dir, executab
         )
     return outputs
 
-_RESOURCE_TEMPLATE_CSHARP = "/resource:%s"
+_RESOURCE_TEMPLATE_CSHARP = "/resource:\"%s\""
 _RESOURCE_TEMPLATE_FSHARP = "--resource:%s"
 
 def add_resource_args(args, resources, target_label, out_dll, language):
@@ -1202,6 +1207,12 @@ def add_resource_args(args, resources, target_label, out_dll, language):
     """
     for resource in resources:
         args.add(resource, format = _resource_arg_format(resource, target_label, out_dll, language))
+
+def _quote_resource_name(name, language):
+    # `%` is the escape character in an Args format string. csc splits response
+    # file lines on whitespace, so its names are quoted like its paths.
+    name = name.replace("%", "%%")
+    return "\"" + name + "\"" if language == "csharp" else name
 
 def _resource_arg_format(file, target_label, out_dll, language):
     """The Args format string that turns a resource file into a compiler argument.
@@ -1250,4 +1261,4 @@ def _resource_arg_format(file, target_label, out_dll, language):
 
     # `%` is the escape character in an Args format string, so a resource whose
     # name contains one has to double it to come out literal.
-    return base_resource_fmt + "," + resource_name.replace("%", "%%")
+    return base_resource_fmt + "," + _quote_resource_name(resource_name, language)
