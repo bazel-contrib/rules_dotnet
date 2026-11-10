@@ -257,6 +257,30 @@ publishes NativeAOT — Xcode's command line tools on macOS, clang or gcc on
 Linux — and it cannot cross-compile, because a host toolchain only targets its
 own platform.
 
+## Single-file executables
+
+`publish_binary(single_file = True)` bundles a self-contained publish into one
+executable, as `dotnet publish -p:PublishSingleFile=true` does:
+
+```python
+publish_binary(
+    name = "publish",
+    binary = ":app",
+    self_contained = True,
+    single_file = True,
+    target_framework = "net10.0",
+)
+```
+
+Two attributes mirror the MSBuild properties of the same name:
+
+- `include_native_libraries_for_self_extract` bundles the native libraries as
+  well.
+- `enable_compression_in_single_file` compresses what is bundled.
+
+`single_file` needs `self_contained`, and cannot be combined with `native_aot`,
+which produces a single executable already.
+
 ## Container images
 
 The output from `publish_binary` can easily be used to build container images.

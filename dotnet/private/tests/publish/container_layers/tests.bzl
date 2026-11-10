@@ -336,6 +336,26 @@ def _native_aot_test_impl(env, target):
     env.expect.that_collection(_owners(layers["first_party"])).contains_exactly([Label(_APP + ":native")])
     env.expect.that_collection(layers["third_party"]).has_size(1)
 
+def _single_file_test(name):
+    _publish_test(name, _single_file_test_impl, self_contained = True, single_file = True)
+
+def _single_file_test_impl(env, target):
+    _expect_layers_cover_the_publish(env, target)
+    _expect_layers_independent_of_the_publish_copy(env, target)
+
+    # As for NativeAOT, the runtime and every assembly are in the executable,
+    # bundled rather than compiled in; only the native libraries it loads and
+    # the data it reads at run time are left to layer.
+    layers = _layers(target)
+    env.expect.that_collection(layers["runtime"]).has_size(0)
+    env.expect.that_collection(_basenames(layers["app"])).contains_exactly([
+        target[DefaultInfo].files_to_run.executable.basename,
+        "data-file",
+        _repo_mapping(target).basename,
+    ])
+    env.expect.that_collection(_owners(layers["first_party"])).contains_exactly([Label(_APP + ":native")])
+    env.expect.that_collection(layers["third_party"]).has_size(1)
+
 def _native_compiler_other_framework_test(name):
     for (suffix, kwargs) in [
         ("_ready_to_run_composite", {"ready_to_run": True, "ready_to_run_composite": True}),
@@ -427,6 +447,7 @@ def container_layers_test_suite(name):
             _ready_to_run_other_framework_test,
             _ready_to_run_composite_test,
             _native_aot_test,
+            _single_file_test,
             _native_compiler_other_framework_test,
             _binary_dependency_test,
             _data_test,

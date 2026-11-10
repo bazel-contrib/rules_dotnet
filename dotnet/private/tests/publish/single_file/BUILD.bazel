@@ -6,7 +6,7 @@ load(
 )
 load(":tests.bzl", "single_file_test_suite")
 
-single_file_test_suite()
+single_file_test_suite(name = "single_file_test_suite")
 
 publish_binary(
     name = "single_file",
