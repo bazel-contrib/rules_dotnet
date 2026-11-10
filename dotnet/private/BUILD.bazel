@@ -1,18 +1,15 @@
 load("@bazel_lib//:bzl_library.bzl", "bzl_library")
 load(
     "//dotnet/private/sdk:packs.bzl",
-    "CROSSGEN2_PACK_REPO",
-    "ILCOMPILER_PACK_REPO",
+    "CROSSGEN2_PACK_LOOKUP_TABLE",
+    "ILCOMPILER_PACK_LOOKUP_TABLE",
     "NEWEST_BAND",
     "WASM_PACK_REPO",
     "WASM_RID",
-    "crossgen2_pack",
-    "host_tool_tfms",
-    "ilcompiler_pack",
     "wasm_pack_tfms",
     "wasm_tool_pack_names",
 )
-load("//dotnet/private/sdk:tool_pack.bzl", "host_tool_pack", "host_tool_pack_band")
+load("//dotnet/private/sdk:tool_pack.bzl", "host_tool_pack")
 
 exports_files(
     [
@@ -228,10 +225,7 @@ filegroup(
 # runs on.
 host_tool_pack(
     name = "crossgen2_pack",
-    pack = host_tool_pack_band(
-        CROSSGEN2_PACK_REPO,
-        host_tool_tfms(crossgen2_pack),
-    ),
+    bands = CROSSGEN2_PACK_LOOKUP_TABLE,
     tags = ["manual"],
     visibility = ["//visibility:public"],
 )
@@ -239,10 +233,7 @@ host_tool_pack(
 # The ILCompiler pack, chosen the same way as crossgen2 above.
 host_tool_pack(
     name = "ilcompiler_pack",
-    pack = host_tool_pack_band(
-        ILCOMPILER_PACK_REPO,
-        host_tool_tfms(ilcompiler_pack),
-    ),
+    bands = ILCOMPILER_PACK_LOOKUP_TABLE,
     tags = ["manual"],
     visibility = ["//visibility:public"],
 )

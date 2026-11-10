@@ -3,6 +3,7 @@ load(
     "csharp_binary",
     "csharp_library",
     "csharp_nunit_test",
+    "publish_binary",
 )
 
 # bazel run //examples:hello
@@ -13,6 +14,16 @@ csharp_binary(
     deps = [
         ":lib",
     ],
+)
+
+# ReadyToRun on an SDK that knows no ILCompiler band, so that publishing never
+# resolves ilc, which only a NativeAOT publish needs.
+publish_binary(
+    name = "hello_ready_to_run",
+    binary = ":hello",
+    ready_to_run = True,
+    self_contained = True,
+    target_framework = "net8.0",
 )
 
 csharp_nunit_test(

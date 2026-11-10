@@ -1,9 +1,11 @@
 """The C/C++ toolchain a NativeAOT publish links with.
 
-A publish is configured for the framework it publishes, but the toolchain reads
-no .NET setting. Resolved through this target in the configuration native code
-is built in, it is analysed once per runtime identifier, beside any native
-library the application ships, rather than once for every framework published.
+Only the native tools of a NativeAOT publish reach it, so no other build needs
+a C/C++ toolchain registered. Those are configured for the binary's framework,
+but the toolchain reads no .NET setting. Resolved through this target in the
+configuration native code is built in, it is analysed once per runtime
+identifier, beside any native library the application ships, rather than once
+for every framework published.
 """
 
 _CC_TOOLCHAIN_TYPE = "@bazel_tools//tools/cpp:toolchain_type"
