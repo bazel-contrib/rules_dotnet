@@ -8,6 +8,7 @@ bootstrap_tool_binary(
     srcs = [
         "AppHostShellShimMaker.cs",
         "Program.cs",
+        "SingleFileBundler.cs",
     ],
     include_host_model_dll = True,
     target_frameworks = ["net10.0"],

@@ -187,5 +187,6 @@ DotnetApphostPackInfo = provider(
     doc = "Information about a .Net runtime pack.",
     fields = {
         "apphost": "File: The apphost file",
+        "singlefilehost": "File: The singlefilehost file",
     },
 )

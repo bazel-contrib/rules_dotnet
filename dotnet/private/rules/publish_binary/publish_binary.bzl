@@ -7,7 +7,7 @@ load("@bazel_skylib//lib:paths.bzl", "paths")
 load("@bazel_skylib//lib:shell.bzl", "shell")
 load("@rules_cc//cc:action_names.bzl", "CPP_LINK_EXECUTABLE_ACTION_NAME")
 load("@rules_cc//cc/common:cc_common.bzl", "cc_common")
-load("//dotnet/private:common.bzl", "generate_depsjson", "generate_runtimeconfig", "get_toolchain", "is_from_nuget_package", "to_rlocation_path")
+load("//dotnet/private:common.bzl", "generate_depsjson", "generate_runtimeconfig", "get_toolchain", "is_from_nuget_package", "tfm_to_semver", "to_rlocation_path")
 load(
     "//dotnet/private:providers.bzl",
     "DotnetAssemblyCompileInfo",
@@ -451,6 +451,7 @@ def _runtime_pack_files(runtime_pack_info, deps_json_struct):
         target = targets.get("runtimepack.{}/{}".format(pack.name, pack.version)) or {}
 
         packs.append(struct(
+            name = pack.name,
             libs = [file for file in pack.libs if file.basename in target.get("runtime", {})],
             native = [file for file in pack.native if file.basename in target.get("native", {})],
             data = pack.data,
@@ -787,26 +788,169 @@ def _copy_to_publish(ctx, runtime_identifier, entries, binary_info):
 
     return (ctx.actions.declare_file("{}/{}".format(root, binary_info.dll.basename)), outputs)
 
-def _create_shim_exe(ctx, apphost_pack_info, dll, runtime_identifier):
-    windows_constraint = ctx.attr._windows_constraint[platform_common.ConstraintValueInfo]
+def _executable_name(dll, runtime_identifier):
+    """The name of the executable that starts `dll` on `runtime_identifier`."""
+    return paths.replace_extension(dll.basename, ".exe" if runtime_identifier.startswith("win") else "")
 
-    apphost = apphost_pack_info.apphost
-    output = ctx.actions.declare_file(paths.replace_extension(dll.basename, ".exe" if ctx.target_platform_has_constraint(windows_constraint) else ""), sibling = dll)
+def _stamp_host(ctx, host, dll, output, runtime_identifier, mnemonic, progress_message):
+    """Copies a host from its pack to `output`, set to start `dll` from beside it.
 
+    Args:
+        ctx: The rule context.
+        host: The host to copy: `apphost` or `singlefilehost`.
+        dll: The assembly the host starts.
+        output: The File to write the host to.
+        runtime_identifier: The runtime identifier published for.
+        mnemonic: The action's mnemonic.
+        progress_message: The action's progress message.
+    """
     ctx.actions.run(
-        mnemonic = "DotnetApphostShim",
-        progress_message = "Creating apphost shim for %{label}",
+        mnemonic = mnemonic,
+        progress_message = progress_message,
         executable = ctx.attr._apphost_shimmer.files_to_run,
-        arguments = [apphost.path, dll.path, output.path, runtime_identifier],
-        # The shim only records the assembly's path relative to itself.
-        # Depending on the assembly would tie the shim, and so the app layer,
+        arguments = [host.path, dll.basename, output.path, runtime_identifier],
+        # The host only records the assembly's name, as it sits beside it.
+        # Depending on the assembly would tie the host, and so the app layer,
         # to the action copying the whole publish.
-        inputs = depset([apphost], transitive = [ctx.attr._apphost_shimmer.default_runfiles.files]),
+        inputs = depset([host], transitive = [ctx.attr._apphost_shimmer.default_runfiles.files]),
         tools = [ctx.attr._apphost_shimmer.files, ctx.attr._apphost_shimmer.default_runfiles.files],
         outputs = [output],
     )
 
+def _create_shim_exe(ctx, apphost_pack_info, dll, runtime_identifier):
+    output = ctx.actions.declare_file(_executable_name(dll, runtime_identifier), sibling = dll)
+
+    _stamp_host(
+        ctx,
+        apphost_pack_info.apphost,
+        dll,
+        output,
+        runtime_identifier,
+        "DotnetApphostShim",
+        "Creating apphost shim for %{label}",
+    )
+
     return output
+
+def _bundle_spec(entry):
+    (path, file) = entry
+    return "{}={}".format(path, file.path)
+
+def _create_single_file(ctx, apphost_pack_info, dll, runtime_identifier, runtime_pack_info, target_framework, bundle):
+    """Bundles files into a copy of `singlefilehost` that starts `dll`.
+
+    Args:
+        ctx: The rule context.
+        apphost_pack_info: The DotnetApphostPackInfo holding `singlefilehost`.
+        dll: The assembly the executable starts.
+        runtime_identifier: The runtime identifier published for.
+        runtime_pack_info: The DotnetRuntimePackInfo of the runtime the
+            executable carries.
+        target_framework: The framework the binary runs on, which decides the
+            bundle's format.
+        bundle: The File to bundle at each path.
+
+    Returns:
+        The executable.
+    """
+    singlefilehost = apphost_pack_info.singlefilehost
+
+    if singlefilehost == None:
+        fail("The apphost pack for {} has no singlefilehost".format(runtime_identifier))
+
+    name = _executable_name(dll, runtime_identifier)
+
+    # Stamped where the bundler does not write, since it copies the host to
+    # the executable's path before appending the bundle.
+    host = ctx.actions.declare_file("{}/bundle/{}/{}".format(ctx.label.name, runtime_identifier, name))
+    _stamp_host(
+        ctx,
+        singlefilehost,
+        dll,
+        host,
+        runtime_identifier,
+        "DotnetSingleFileHost",
+        "Creating single-file host for %{label}",
+    )
+
+    executable = ctx.actions.declare_file("{}/publish/{}/{}".format(ctx.label.name, runtime_identifier, name))
+
+    # The runtime pack's identifier is portable, so it names the operating
+    # system plainly where the publish's may name a distribution.
+    (target_os, target_arch) = native_target(runtime_pack_info.runtime_identifier)
+
+    options = [
+        option
+        for (option, enabled) in [
+            ("BundleNativeBinaries", ctx.attr.include_native_libraries_for_self_extract),
+            ("EnableCompression", ctx.attr.enable_compression_in_single_file),
+        ]
+        if enabled
+    ]
+
+    args = ctx.actions.args()
+    args.add("--bundle")
+    args.add(host)
+    args.add(executable)
+    args.add(target_os)
+    args.add(target_arch)
+    args.add(tfm_to_semver(target_framework))
+    args.add(dll.basename.removesuffix(".dll"))
+    args.add(", ".join(options) or "None")
+    args.add_all(sorted(bundle.items()), map_each = _bundle_spec)
+    args.set_param_file_format("multiline")
+    args.use_param_file("@%s", use_always = True)
+
+    ctx.actions.run(
+        mnemonic = "DotnetSingleFileBundle",
+        progress_message = "Bundling %{label} into a single file",
+        executable = ctx.attr._apphost_shimmer.files_to_run,
+        arguments = [args],
+        inputs = depset([host] + bundle.values(), transitive = [ctx.attr._apphost_shimmer.default_runfiles.files]),
+        tools = [ctx.attr._apphost_shimmer.files, ctx.attr._apphost_shimmer.default_runfiles.files],
+        outputs = [executable],
+    )
+
+    return executable
+
+def _executable_publish(ctx, executable, beside, data, dependency_layers):
+    """A publish that is one executable with files copied beside it.
+
+    NativeAOT and single-file publishes, whose assemblies are compiled or
+    bundled into the executable.
+
+    Args:
+        ctx: The rule context.
+        executable: The executable.
+        beside: The (path, file) pairs to copy beside it.
+        data: The data files, which travel as runfiles.
+        dependency_layers: The layer of each dependency, from `_dependency_layers`.
+
+    Returns:
+        The DefaultInfo and OutputGroupInfo of the publish.
+    """
+    sidecars = _copy_beside(ctx, executable, beside)
+
+    # The sidecars are runfiles too, and the layers copy them from their
+    # sources rather than from beside the executable.
+    output_groups = _publish_layers(
+        ctx,
+        dicts.add(
+            _publish_entries(beside),
+            {executable.basename: executable},
+            _runfiles_entries(ctx, executable, data, beside = beside),
+        ),
+        dependency_layers,
+    )
+
+    return [
+        DefaultInfo(
+            executable = executable,
+            files = depset([executable] + sidecars),
+            runfiles = ctx.runfiles(files = sidecars + data),
+        ),
+        OutputGroupInfo(**output_groups),
+    ]
 
 def _generate_runtimeconfig(ctx, output, target_framework, project_sdk, is_self_contained, roll_forward_behavior, runtime_pack_info, framework_version):
     runtimeconfig_struct = generate_runtimeconfig(target_framework, project_sdk, is_self_contained, roll_forward_behavior, runtime_pack_info, framework_version)
@@ -847,6 +991,15 @@ def _publish_binary_impl(ctx):
     if ctx.attr.native_aot and ctx.attr.ready_to_run:
         fail("native_aot cannot be combined with ready_to_run: it compiles ahead of time already")
 
+    if ctx.attr.single_file and not is_self_contained:
+        fail("single_file requires self_contained")
+
+    if ctx.attr.single_file and ctx.attr.native_aot:
+        fail("single_file cannot be combined with native_aot: NativeAOT produces a single native binary already")
+
+    if (ctx.attr.include_native_libraries_for_self_extract or ctx.attr.enable_compression_in_single_file) and not ctx.attr.single_file:
+        fail("include_native_libraries_for_self_extract and enable_compression_in_single_file require single_file")
+
     assembly_name = assembly_runtime_info.name
     runtime_pack_info = binary_info.runtime_pack_info if is_self_contained else None
     runtime_identifier = ctx.attr.runtime_identifier if ctx.attr.runtime_identifier else binary_info.runtime_pack_info.runtime_identifier
@@ -866,35 +1019,22 @@ def _publish_binary_impl(ctx):
 
         # A NativeAOT publish keeps nothing managed, but it still serves the
         # same files, so the tree travels with the executable.
-        layout = [(file.basename, file) for file in closure.native + closure.appsetting_files] + [
+        beside = [(file.basename, file) for file in closure.native + closure.appsetting_files] + [
             (entry.publish_path, entry.file)
             for entry in binary_info.static_web_files
         ]
-        sidecars = _copy_beside(ctx, executable, layout)
 
         # The runtime is compiled into the executable, so that layer is empty.
-        # The sidecars are runfiles too, and the layers copy them from their
-        # sources rather than from beside the executable.
-        output_groups = _publish_layers(
+        return _executable_publish(
             ctx,
-            dicts.add(
-                _publish_entries(layout),
-                {executable.basename: executable},
-                _runfiles_entries(ctx, executable, closure.data, beside = layout),
-            ),
+            executable,
+            beside,
+            closure.data,
             _dependency_layers(transitive_runtime_deps, None),
         )
 
-        return [
-            DefaultInfo(
-                executable = executable,
-                files = depset([executable] + sidecars),
-                runfiles = ctx.runfiles(files = sidecars + closure.data),
-            ),
-            OutputGroupInfo(**output_groups),
-        ]
-
-    depsjson = ctx.actions.declare_file("{}/publish/{}/{}.deps.json".format(ctx.label.name, runtime_identifier, assembly_name))
+    publish_meta_dir = "bundle" if ctx.attr.single_file else "publish"
+    depsjson = ctx.actions.declare_file("{}/{}/{}/{}.deps.json".format(ctx.label.name, publish_meta_dir, runtime_identifier, assembly_name))
     depsjson_struct = _generate_depsjson(
         ctx,
         depsjson,
@@ -905,8 +1045,9 @@ def _publish_binary_impl(ctx):
         runtime_pack_info,
     )
 
-    runtimeconfig = ctx.actions.declare_file("{}/publish/{}/{}.runtimeconfig.json".format(
+    runtimeconfig = ctx.actions.declare_file("{}/{}/{}/{}.runtimeconfig.json".format(
         ctx.label.name,
+        publish_meta_dir,
         runtime_identifier,
         assembly_name,
     ))
@@ -943,8 +1084,59 @@ def _publish_binary_impl(ctx):
             runtime_identifier,
         )
 
-    entries = _publish_entries(layout, ready_to_run)
+    if ctx.attr.single_file:
+        # The runtime's own native libraries are linked into singlefilehost,
+        # which their `DropFromSingleFile` marks in the runtime pack's
+        # RuntimeList.xml say, so they are neither bundled nor published.
+        dropped = {
+            file: None
+            for pack in runtime_pack_files
+            if pack.name.startswith("Microsoft.NETCore.App.Runtime.")
+            for file in pack.native
+        }
+        managed = [binary_info.dll] + assembly_files.libs + assembly_files.resource_assemblies + [
+            lib
+            for pack in runtime_pack_files
+            for lib in pack.libs
+        ]
+        native = [
+            lib
+            for lib in assembly_files.native + [lib for pack in runtime_pack_files for lib in pack.native]
+            if lib not in dropped
+        ]
 
+        # As MSBuild does: the managed assemblies go into the bundle, and the
+        # native libraries when asked. Everything else stays beside the
+        # executable, at the path the publish gives it.
+        bundled = {
+            file: None
+            for file in managed + (native if ctx.attr.include_native_libraries_for_self_extract else [])
+        }
+
+        executable = _create_single_file(
+            ctx,
+            binary_info.apphost_pack_info,
+            binary_info.dll,
+            runtime_identifier,
+            runtime_pack_info,
+            # The binary's, as the runtime reading the bundle is the one it
+            # picked, whatever framework the publish asked for.
+            assembly_compile_info.target_framework,
+            dicts.add(
+                _publish_entries([(path, file) for (path, file) in layout if file in bundled], ready_to_run),
+                {file.basename: file for file in [runtimeconfig, depsjson]},
+            ),
+        )
+
+        return _executable_publish(
+            ctx,
+            executable,
+            [(path, file) for (path, file) in layout if file not in bundled and file not in dropped],
+            assembly_files.data,
+            _dependency_layers(transitive_runtime_deps, runtime_pack_info, ready_to_run),
+        )
+
+    entries = _publish_entries(layout, ready_to_run)
     (main_dll, outputs) = _copy_to_publish(ctx, runtime_identifier, entries, binary_info)
 
     apphost_shim = _create_shim_exe(ctx, binary_info.apphost_pack_info, main_dll, runtime_identifier)
@@ -1054,13 +1246,37 @@ the apphost shim are all absent. Implies trimming, and needs a registered
 C/C++ toolchain to link with.""",
             default = False,
         ),
+        "single_file": attr.bool(
+            doc = """Bundle the application, its managed dependencies, and the runtime into a single executable.
+
+Mirrors MSBuild's `<PublishSingleFile>true</PublishSingleFile>`. Requires
+`self_contained = True`. Managed assemblies, `deps.json`, and
+`runtimeconfig.json` are embedded into the `singlefilehost` binary;
+appsettings, static web assets, and (unless
+`include_native_libraries_for_self_extract = True`) non-runtime native
+libraries remain beside the executable.""",
+            default = False,
+        ),
+        "include_native_libraries_for_self_extract": attr.bool(
+            doc = """Embed native libraries into the single-file bundle for self-extraction at startup.
+
+Mirrors MSBuild's `<IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>`.
+Requires `single_file = True`.""",
+            default = False,
+        ),
+        "enable_compression_in_single_file": attr.bool(
+            doc = """Compress embedded files inside the single-file bundle.
+
+Mirrors MSBuild's `<EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>`.
+Requires `single_file = True`.""",
+            default = False,
+        ),
         "_apphost_shimmer": attr.label(
             providers = [DotnetAssemblyCompileInfo, DotnetAssemblyRuntimeInfo],
             executable = True,
             default = "//dotnet/private/tools/apphost_shimmer:apphost_shimmer",
             cfg = "exec",
         ),
-        "_windows_constraint": attr.label(default = "@platforms//os:windows"),
     },
     toolchains = ["//dotnet:toolchain_type"],
     executable = True,
@@ -1074,6 +1290,9 @@ _NOT_FOR_WASM = [
     "ready_to_run",
     "ready_to_run_composite",
     "native_aot",
+    "single_file",
+    "include_native_libraries_for_self_extract",
+    "enable_compression_in_single_file",
     "roll_forward_behavior",
 ]
 

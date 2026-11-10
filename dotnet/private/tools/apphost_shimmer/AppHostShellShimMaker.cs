@@ -19,16 +19,14 @@ namespace ApphostShimmer
             _apphost = apphost;
         }
 
-        public void CreateApphostShellShim(string entryPoint, string shimPath, string targetRid)
+        // `appBinaryFilePath` is the assembly the host starts, relative to the
+        // host. Both the apphost and singlefilehost are stamped this way.
+        public void CreateApphostShellShim(string appBinaryFilePath, string shimPath, string targetRid)
         {
-            var appHostDestinationFilePath = Path.GetFullPath(shimPath);
-            string entryPointFullPath = Path.GetFullPath(entryPoint);
-            var appBinaryFilePath = Path.GetRelativePath(Path.GetDirectoryName(appHostDestinationFilePath), entryPointFullPath);
-
             // by passing null to assemblyToCopyResorcesFrom, it will skip copying resources,
             // which is only supported on Windows
             HostWriter.CreateAppHost(appHostSourceFilePath: Path.GetFullPath(_apphost),
-              appHostDestinationFilePath: appHostDestinationFilePath,
+              appHostDestinationFilePath: Path.GetFullPath(shimPath),
               appBinaryFilePath: appBinaryFilePath,
               windowsGraphicalUserInterface: false,
               enableMacOSCodeSign: OperatingSystem.IsMacOS() && targetRid.StartsWith("osx"));
