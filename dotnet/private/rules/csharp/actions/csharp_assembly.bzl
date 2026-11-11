@@ -93,6 +93,22 @@ def _write_assembly_version_csharp(actions, label_name, dll_name, version):
 
     return output
 
+def _runs_only_in_the_compiler(dep):
+    """Whether a dependency is an analyzer or source generator built in this workspace.
+
+    The compiler loads one and nothing does at run time, so it is no part of the
+    runtime graph: MSBuild leaves a ProjectReference with
+    `ReferenceOutputAssembly="false"` out of deps.json and out of a pack alike.
+    A NuGet package is left alone, as a PackageReference is not.
+    """
+    compile_info = dep[DotnetAssemblyCompileInfo]
+
+    return (
+        dep[DotnetAssemblyRuntimeInfo].nuget_info == None and
+        not compile_info.refs and
+        bool(compile_info.analyzers or compile_info.analyzers_csharp)
+    )
+
 def _collect_analyzer_dependencies(deps):
     """Collect the runtime libraries of this analyzer. These will be passed to the compiler.
 
@@ -512,11 +528,15 @@ def AssemblyAction(
         # toolchain has to be resolvable at run time too, which is what puts it
         # in deps.json.
         deps = depset(
-            [dep[DotnetAssemblyRuntimeInfo] for dep in compile_deps],
+            [dep[DotnetAssemblyRuntimeInfo] for dep in compile_deps if not _runs_only_in_the_compiler(dep)],
             transitive = [dep[DotnetAssemblyRuntimeInfo].deps for dep in deps],
         ) if not (is_analyzer or is_language_specific_analyzer) else depset(),
         nuget_info = None,
-        direct_deps_depsjson_fragment = {dep[DotnetAssemblyRuntimeInfo].name: dep[DotnetAssemblyRuntimeInfo].version for dep in deps},
+        direct_deps_depsjson_fragment = {
+            dep[DotnetAssemblyRuntimeInfo].name: dep[DotnetAssemblyRuntimeInfo].version
+            for dep in deps
+            if not _runs_only_in_the_compiler(dep)
+        },
     ), generated_web_assets)
 
 def _compile(

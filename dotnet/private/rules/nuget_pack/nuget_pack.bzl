@@ -451,6 +451,8 @@ What a dependency of the library becomes:
   * a NuGet package is declared as a dependency;
   * an assembly shipped by a package in `deps` is declared as a dependency on
     that package;
+  * an analyzer or source generator built in this workspace, which ran in the
+    compiler, is left out unless a package in `deps` ships it;
   * any other library built in this workspace follows `first_party_deps`.
 
 An analyzer resolves none of these: the assemblies the compiler was handed

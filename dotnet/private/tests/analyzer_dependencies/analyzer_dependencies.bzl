@@ -1,6 +1,6 @@
 "Tests for ensuring analyzers' dependencies are correctly passed in."
 
-load("@bazel_skylib//lib:unittest.bzl", "analysistest")
+load("@bazel_skylib//lib:unittest.bzl", "analysistest", "asserts")
 load("//dotnet:defs.bzl", "csharp_library")
 load(
     "//dotnet/private:providers.bzl",
@@ -73,6 +73,32 @@ has_analyzer_test = analysistest.make(
     },
 )
 
+def _runtime_graph_test_impl(ctx):
+    env = analysistest.begin(ctx)
+    runtime_info = analysistest.target_under_test(env)[DotnetAssemblyRuntimeInfo]
+
+    runtime_deps = [dep.name for dep in runtime_info.deps.to_list()]
+    depsjson_deps = runtime_info.direct_deps_depsjson_fragment.keys()
+
+    for name in ctx.attr.present:
+        asserts.true(env, name in runtime_deps, "{} is missing from the runtime deps: {}".format(name, runtime_deps))
+        asserts.true(env, name in depsjson_deps, "{} is missing from the deps.json fragment: {}".format(name, depsjson_deps))
+
+    for name in ctx.attr.absent:
+        asserts.false(env, name in runtime_deps, "{} is in the runtime deps: {}".format(name, runtime_deps))
+        asserts.false(env, name in depsjson_deps, "{} is in the deps.json fragment: {}".format(name, depsjson_deps))
+
+    return analysistest.end(env)
+
+runtime_graph_test = analysistest.make(
+    _runtime_graph_test_impl,
+    doc = "Tests which dependencies a target carries into its runtime graph, and so into deps.json and a package.",
+    attrs = {
+        "present": attr.string_list(doc = "Assembly names the runtime graph must hold."),
+        "absent": attr.string_list(doc = "Assembly names the runtime graph must not hold."),
+    },
+)
+
 # buildifier: disable=function-docstring
 # buildifier: disable=unnamed-macro
 def test_analyzer_dependencies():
@@ -104,4 +130,14 @@ def test_analyzer_dependencies():
         target_under_test = ":user_lib",
         analyzers = [":core_lib", ":analyzer_lib"],
         target_language = "any",
+    )
+
+    # The analyzer runs in the compiler and nothing loads it at run time, so it
+    # stays out of the runtime graph, while the library it shares with
+    # `user_lib` stays in.
+    runtime_graph_test(
+        name = "analyzer_stays_out_of_the_runtime_graph",
+        target_under_test = ":user_lib",
+        present = ["core_lib"],
+        absent = ["analyzer_lib"],
     )

@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<package xmlns="http://schemas.microsoft.com/packaging/2013/05/nuspec.xsd">
+  <metadata>
+    <id>RulesDotnet.Tests.GeneratedWithGenerator</id>
+    <version>1.0.0</version>
+    <authors>rules_dotnet</authors>
+    <requireLicenseAcceptance>false</requireLicenseAcceptance>
+    <description>A library whose consumers run the source generator it was compiled with.</description>
+    <dependencies>
+      <group targetFramework=".NETStandard2.0">
+        <dependency id="RulesDotnet.Tests.Generator" version="1.0.0" exclude="Build,Analyzers" />
+      </group>
+    </dependencies>
+  </metadata>
+</package>
