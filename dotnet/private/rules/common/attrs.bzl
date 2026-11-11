@@ -335,6 +335,16 @@ CSHARP_LIBRARY_COMMON_ATTRS = dicts.add(
             doc = "Whether this library is a language specific analyzer/source generator or not. This flag is needs to be set to true if the library is a analyzer that is specific to a language or if the library is a source generator.",
             default = False,
         ),
+        "analyzer_runtime_deps": attr.label_list(
+            doc = """Only for an analyzer or source generator: the NuGet packages it loads
+            when it runs that the compiler does not bring, such as `Humanizer.Core`.
+
+            They are compiled against like `deps`, handed to the compiler beside the
+            analyzer, and packed beside it by `nuget_pack`. A listed package's own
+            dependencies are not followed, so list each one the analyzer loads.
+            Libraries built in this workspace need not be listed.""",
+            providers = [DotnetAssemblyCompileInfo, DotnetAssemblyRuntimeInfo],
+        ),
     },
 )
 

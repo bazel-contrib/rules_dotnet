@@ -14,3 +14,10 @@ walk, the compile fails with CS0117.
 
 That order is also the one buildifier sorts `deps` into, so formatting the file
 cannot quietly defeat the test. Renaming either library would.
+
+`outsider` is not named in `internals_visible_to`, so it compiles against the
+reference assembly a second, `/refonly` compile of `secrets` produces; nothing
+builds that compile otherwise. `secrets` is compiled with `code_block_analyzer`,
+a diagnostic analyzer built against Roslyn's NuGet packages. Were those packages
+handed to the compiler as analyzers beside it, Roslyn's own compiler diagnostic
+analyzer would run too and crash the `/refonly` compile.

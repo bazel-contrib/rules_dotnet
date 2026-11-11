@@ -50,9 +50,18 @@ namespace CSharpCompilerWorker
 
             int Compile(List<string> arguments, StringBuilder output)
             {
-                // Only the compiler sees the resolved references: the unused ones
-                // go back to Bazel by the paths Bazel gave.
-                var resolved = Worker.ResolveReferenceLinks(arguments, "-r:", "/r:", "-reference:", "/reference:");
+                // Only the compiler sees the resolved paths: unused references go
+                // back to Bazel by the paths it gave.
+                var resolved = Worker.ResolveInputLinks(
+                    arguments,
+                    "-r:",
+                    "/r:",
+                    "-reference:",
+                    "/reference:",
+                    "-a:",
+                    "/a:",
+                    "-analyzer:",
+                    "/analyzer:");
                 var exitCode = Worker.RunCompiler(dotnet, compiler, flags, resolved, "-pathmap:", output);
 
                 if (pruneUnusedInputs)
@@ -121,11 +130,11 @@ namespace CSharpCompilerWorker
                 var line = rawLine.Trim();
                 if (line.StartsWith("-r:", StringComparison.Ordinal))
                 {
-                    references.Add(line[3..]);
+                    references.Add(Worker.Unquote(line[3..]));
                 }
                 else if (line.StartsWith("/out:", StringComparison.Ordinal))
                 {
-                    outputAssembly = line[5..];
+                    outputAssembly = Worker.Unquote(line[5..]);
                 }
             }
 

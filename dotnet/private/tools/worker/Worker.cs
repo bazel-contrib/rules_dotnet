@@ -35,33 +35,52 @@ namespace RulesDotnet
             arguments.RemoveAll(argument => argument == flag) > 0;
 
         /// <summary>
-        /// Returns <paramref name="arguments"/> with every reference that is a
-        /// symlink -- an argument starting with one of <paramref name="prefixes"/>
-        /// -- pointed at the file behind the link.
+        /// Returns <paramref name="arguments"/> with every input that is a symlink
+        /// -- an argument starting with one of <paramref name="prefixes"/>, such as
+        /// a reference or an analyzer -- pointed at the file behind the link.
         /// </summary>
         /// <remarks>
-        /// Both compilers keep what they read from a reference for as long as its
-        /// full path and last-write time stay the same -- fsc inside the F# worker,
-        /// Roslyn inside its build server -- and on Unix that time is the link's
-        /// own, not its target's. A sandboxed worker, which path mapping always
-        /// makes it, keeps a link for as long as it points at the same output, so
-        /// a rebuilt reference keeps its old time and the next compile is handed
-        /// its old contents. The target's time moves with every rebuild, and the
-        /// outputs are the same either way: the compilers record no reference
-        /// paths in them.
+        /// A sandboxed worker is handed its inputs as links in a directory Bazel
+        /// restages for every request, and the compilers cache across requests.
+        /// fsc and Roslyn's build server key a reference by path and last-write
+        /// time, which on Unix is the link's own, so a rebuilt reference would keep
+        /// its old contents. The build server, which outlives the worker, also loads
+        /// an analyzer's dependencies through paths from earlier requests, which may
+        /// no longer exist. The files behind the links have neither problem, and
+        /// the compilers record none of these paths in their outputs.
         /// </remarks>
-        public static List<string> ResolveReferenceLinks(List<string> arguments, params string[] prefixes)
+        public static List<string> ResolveInputLinks(List<string> arguments, params string[] prefixes)
         {
             var resolved = new List<string>(arguments.Count);
             foreach (var argument in arguments)
             {
-                resolved.Add(ResolveReferenceLink(argument, prefixes));
+                resolved.Add(ResolveInputLink(argument, prefixes));
             }
 
             return resolved;
         }
 
-        private static string ResolveReferenceLink(string argument, string[] prefixes)
+        /// <summary>
+        /// <paramref name="path"/> without the quotes csc's response file needs,
+        /// since csc splits each of its lines on whitespace.
+        /// </summary>
+        public static string Unquote(string path) =>
+            path.Length >= 2 && path[0] == '"' && path[^1] == '"' ? path[1..^1] : path;
+
+        /// <summary>The full path of the file behind <paramref name="path"/>, or null when it is no link or cannot be read.</summary>
+        private static string? LinkTarget(string path)
+        {
+            try
+            {
+                return File.ResolveLinkTarget(path, returnFinalTarget: true)?.FullName;
+            }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+            {
+                return null;
+            }
+        }
+
+        private static string ResolveInputLink(string argument, string[] prefixes)
         {
             foreach (var prefix in prefixes)
             {
@@ -70,16 +89,17 @@ namespace RulesDotnet
                     continue;
                 }
 
-                try
+                var value = argument[prefix.Length..];
+                var path = Unquote(value);
+
+                // Left as given when missing, so the compiler reports it by that name.
+                var target = LinkTarget(path);
+                if (target == null)
                 {
-                    var target = File.ResolveLinkTarget(argument[prefix.Length..], returnFinalTarget: true);
-                    return target == null ? argument : prefix + target.FullName;
-                }
-                catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-                {
-                    // Missing or unreadable: the compiler reports it by the name it was given.
                     return argument;
                 }
+
+                return prefix + (path.Length == value.Length ? target : "\"" + target + "\"");
             }
 
             return argument;
@@ -154,6 +174,10 @@ namespace RulesDotnet
                 RedirectStandardError = true,
                 UseShellExecute = false,
             };
+
+            // Roslyn's build server loads the runtime from the DOTNET_ROOT it starts
+            // with and outlives this worker, whose directory Bazel restages.
+            startInfo.Environment["DOTNET_ROOT"] = Path.GetDirectoryName(LinkTarget(dotnet) ?? Path.GetFullPath(dotnet));
 
             startInfo.ArgumentList.Add(compiler);
             foreach (var flag in flags)

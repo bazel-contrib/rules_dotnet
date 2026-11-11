@@ -21,6 +21,7 @@ write_source_files(
         "//dotnet/private/tests/nuget_pack/analyzer:generated_reference_test.update",
         "//dotnet/private/tests/nuget_pack/analyzer:generated_with_generator_test.update",
         "//dotnet/private/tests/nuget_pack/analyzer:generator_pack_test.update",
+        "//dotnet/private/tests/nuget_pack/analyzer:humanizing_generator_pack_test.update",
         "//dotnet/private/tests/nuget_pack/fsharp:fs_pack_test.update",
         "//dotnet/private/tests/nuget_pack/library:deeper_pack_test.update",
         "//dotnet/private/tests/nuget_pack/library:mapped_pack_test.update",

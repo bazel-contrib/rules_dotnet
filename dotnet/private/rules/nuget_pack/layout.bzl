@@ -304,14 +304,8 @@ def analyzer_layout(compile_info, runtime_info, symbols):
     else:
         (directory, analyzers) = (_ANALYZER_DIR, compile_info.analyzers)
 
-    # Exactly the assemblies the compiler was handed, minus the ones that came
-    # out of a NuGet package: the compiler running the analyzer brings Roslyn
-    # itself. A package's files are source files, which tells the two apart.
-    files = [
-        ("{}/{}".format(directory, dll.basename), dll)
-        for dll in analyzers
-        if not dll.is_source
-    ]
+    # Exactly the assemblies the compiler is handed.
+    files = [("{}/{}".format(directory, dll.basename), dll) for dll in analyzers]
 
     (beside, apart) = _pdb_entries(directory, runtime_info.pdbs, symbols)
     return struct(files = files + beside, symbol_files = apart)

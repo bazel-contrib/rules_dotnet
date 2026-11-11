@@ -2,6 +2,7 @@ filegroup(
     name = "srcs",
     srcs = ["Worker.cs"],
     visibility = [
+        "//dotnet/private/tests/compiler_worker:__pkg__",
         "//dotnet/private/tools/csharp_compiler_worker:__pkg__",
         "//dotnet/private/tools/fsharp_compiler_worker:__pkg__",
     ],

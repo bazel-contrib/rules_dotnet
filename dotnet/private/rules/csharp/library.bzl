@@ -28,6 +28,7 @@ def _compile_action(ctx, tfm, toolchain):
         embed_sources = ctx.attr.embed_sources,
         defines = ctx.attr.defines,
         deps = ctx.attr.deps,
+        analyzer_runtime_deps = ctx.attr.analyzer_runtime_deps,
         exports = ctx.attr.exports,
         targeting_pack = ctx.attr._targeting_pack[0],
         internals_visible_to = ctx.attr.internals_visible_to,
