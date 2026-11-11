@@ -304,10 +304,7 @@ def analyzer_layout(compile_info, runtime_info, symbols):
     else:
         (directory, analyzers) = (_ANALYZER_DIR, compile_info.analyzers)
 
-    # Exactly the assemblies the compiler was handed: the analyzer, the libraries
-    # built in this workspace it depends on, and its `analyzer_runtime_deps`. Roslyn and the
-    # rest of the NuGet packages it compiles against are not among them, since the
-    # compiler running the analyzer brings its own.
+    # Exactly the assemblies the compiler is handed.
     files = [("{}/{}".format(directory, dll.basename), dll) for dll in analyzers]
 
     (beside, apart) = _pdb_entries(directory, runtime_info.pdbs, symbols)

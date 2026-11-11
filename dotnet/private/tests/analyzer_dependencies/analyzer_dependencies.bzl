@@ -191,25 +191,31 @@ def test_analyzer_dependencies():
     )
 
     csharp_library(
+        name = "wrapper_lib",
+        srcs = ["Wrapper.cs"],
+        deps = [":core_lib"],
+        target_frameworks = ["netstandard2.0"],
+        langversion = "latest",
+    )
+
+    csharp_library(
         name = "packaged_deps_analyzer",
         is_analyzer = True,
         srcs = ["Analyzer.cs"],
         deps = [
-            ":core_lib",
+            ":wrapper_lib",
             "@paket.rules_dotnet_dev_nuget_packages//microsoft.codeanalysis.csharp",
         ],
         target_frameworks = ["netstandard2.0"],
         langversion = "latest",
     )
 
-    # The compiler running the analyzer brings Roslyn, so only the assemblies
-    # built here go beside it. Roslyn's own `Microsoft.CodeAnalysis.CSharp.dll`
-    # would also load its compiler diagnostic analyzer, which crashes a
-    # `/refonly` compile.
+    # Every library built here goes beside the analyzer, `core_lib` through
+    # `wrapper_lib` included. Roslyn comes with the compiler.
     analyzer_assemblies_test(
         name = "analyzer_hands_over_no_package_assemblies",
         target_under_test = ":packaged_deps_analyzer",
-        present = ["packaged_deps_analyzer.dll", "core_lib.dll"],
+        present = ["packaged_deps_analyzer.dll", "wrapper_lib.dll", "core_lib.dll"],
     )
 
     # A source generator calling into a NuGet package the compiler does not
