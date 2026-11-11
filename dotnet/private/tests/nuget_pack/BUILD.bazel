@@ -17,6 +17,9 @@ write_source_files(
     name = "update_expected",
     additional_update_targets = [
         "//dotnet/private/tests/nuget_pack/analyzer:analyzer_pack_test.update",
+        # One of the three tests sharing `expected/generated.nuspec` is enough.
+        "//dotnet/private/tests/nuget_pack/analyzer:generated_reference_test.update",
+        "//dotnet/private/tests/nuget_pack/analyzer:generated_with_generator_test.update",
         "//dotnet/private/tests/nuget_pack/analyzer:generator_pack_test.update",
         "//dotnet/private/tests/nuget_pack/fsharp:fs_pack_test.update",
         "//dotnet/private/tests/nuget_pack/library:deeper_pack_test.update",
