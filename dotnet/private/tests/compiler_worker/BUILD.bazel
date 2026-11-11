@@ -1,0 +1,14 @@
+load("//dotnet:defs.bzl", "csharp_nunit_test")
+
+# How the compiler workers hand their inputs to the compiler. Nothing else
+# exercises it: the compiles it matters for need a build server that outlives
+# the worker directory it was first handed a path in.
+csharp_nunit_test(
+    name = "resolve_input_links",
+    size = "small",
+    srcs = [
+        "ResolveInputLinksTest.cs",
+        "//dotnet/private/tools/worker:srcs",
+    ],
+    target_frameworks = ["net10.0"],
+)

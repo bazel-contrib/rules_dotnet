@@ -35,33 +35,44 @@ namespace RulesDotnet
             arguments.RemoveAll(argument => argument == flag) > 0;
 
         /// <summary>
-        /// Returns <paramref name="arguments"/> with every reference that is a
-        /// symlink -- an argument starting with one of <paramref name="prefixes"/>
-        /// -- pointed at the file behind the link.
+        /// Returns <paramref name="arguments"/> with every input that is a symlink
+        /// -- an argument starting with one of <paramref name="prefixes"/>, such as
+        /// a reference or an analyzer -- pointed at the file behind the link.
         /// </summary>
         /// <remarks>
-        /// Both compilers keep what they read from a reference for as long as its
-        /// full path and last-write time stay the same -- fsc inside the F# worker,
-        /// Roslyn inside its build server -- and on Unix that time is the link's
-        /// own, not its target's. A sandboxed worker, which path mapping always
-        /// makes it, keeps a link for as long as it points at the same output, so
-        /// a rebuilt reference keeps its old time and the next compile is handed
-        /// its old contents. The target's time moves with every rebuild, and the
-        /// outputs are the same either way: the compilers record no reference
-        /// paths in them.
+        /// A sandboxed worker, which path mapping always makes it, is handed its
+        /// inputs as links in a directory of its own, which Bazel stages again for
+        /// every request. Neither compiler copes with that:
+        ///
+        /// Both keep what they read from a reference for as long as its full path
+        /// and last-write time stay the same -- fsc inside the F# worker, Roslyn
+        /// inside its build server -- and on Unix that time is the link's own, not
+        /// its target's. A link stays for as long as it points at the same output,
+        /// so a rebuilt reference keeps its old time and the next compile is handed
+        /// its old contents. The target's time moves with every rebuild.
+        ///
+        /// Roslyn's build server also keeps the analyzers it loaded, and finds the
+        /// assemblies an analyzer loads through the paths it was handed earlier,
+        /// whichever worker's directory they were in. Once that directory is staged
+        /// for another request, or the worker is gone, a compile loading the
+        /// analyzer from elsewhere -- another configuration's outputs -- fails to
+        /// load them. The target's path stays.
+        ///
+        /// The outputs are the same either way: the compilers record neither
+        /// reference nor analyzer paths in them.
         /// </remarks>
-        public static List<string> ResolveReferenceLinks(List<string> arguments, params string[] prefixes)
+        public static List<string> ResolveInputLinks(List<string> arguments, params string[] prefixes)
         {
             var resolved = new List<string>(arguments.Count);
             foreach (var argument in arguments)
             {
-                resolved.Add(ResolveReferenceLink(argument, prefixes));
+                resolved.Add(ResolveInputLink(argument, prefixes));
             }
 
             return resolved;
         }
 
-        private static string ResolveReferenceLink(string argument, string[] prefixes)
+        private static string ResolveInputLink(string argument, string[] prefixes)
         {
             foreach (var prefix in prefixes)
             {
@@ -70,10 +81,24 @@ namespace RulesDotnet
                     continue;
                 }
 
+                // csc splits a response file line on whitespace, so its paths come
+                // quoted, and go back quoted.
+                var path = argument[prefix.Length..];
+                var quoted = path.Length >= 2 && path[0] == '"' && path[^1] == '"';
+                if (quoted)
+                {
+                    path = path[1..^1];
+                }
+
                 try
                 {
-                    var target = File.ResolveLinkTarget(argument[prefix.Length..], returnFinalTarget: true);
-                    return target == null ? argument : prefix + target.FullName;
+                    var target = File.ResolveLinkTarget(path, returnFinalTarget: true);
+                    if (target == null)
+                    {
+                        return argument;
+                    }
+
+                    return prefix + (quoted ? "\"" + target.FullName + "\"" : target.FullName);
                 }
                 catch (Exception e) when (e is IOException or UnauthorizedAccessException)
                 {

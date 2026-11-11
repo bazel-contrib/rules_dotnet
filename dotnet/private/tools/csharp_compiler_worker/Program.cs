@@ -50,9 +50,18 @@ namespace CSharpCompilerWorker
 
             int Compile(List<string> arguments, StringBuilder output)
             {
-                // Only the compiler sees the resolved references: the unused ones
+                // Only the compiler sees the resolved paths: the unused references
                 // go back to Bazel by the paths Bazel gave.
-                var resolved = Worker.ResolveReferenceLinks(arguments, "-r:", "/r:", "-reference:", "/reference:");
+                var resolved = Worker.ResolveInputLinks(
+                    arguments,
+                    "-r:",
+                    "/r:",
+                    "-reference:",
+                    "/reference:",
+                    "-a:",
+                    "/a:",
+                    "-analyzer:",
+                    "/analyzer:");
                 var exitCode = Worker.RunCompiler(dotnet, compiler, flags, resolved, "-pathmap:", output);
 
                 if (pruneUnusedInputs)
