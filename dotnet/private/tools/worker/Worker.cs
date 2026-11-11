@@ -72,6 +72,19 @@ namespace RulesDotnet
             return resolved;
         }
 
+        /// <summary>The full path of the file behind <paramref name="path"/>, or of the path itself when it is no link.</summary>
+        private static string ResolvePath(string path)
+        {
+            try
+            {
+                return File.ResolveLinkTarget(path, returnFinalTarget: true)?.FullName ?? Path.GetFullPath(path);
+            }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+            {
+                return Path.GetFullPath(path);
+            }
+        }
+
         private static string ResolveInputLink(string argument, string[] prefixes)
         {
             foreach (var prefix in prefixes)
@@ -179,6 +192,13 @@ namespace RulesDotnet
                 RedirectStandardError = true,
                 UseShellExecute = false,
             };
+
+            // Roslyn's build server finds the runtime it loads its assemblies from
+            // through the DOTNET_ROOT it starts with, and outlives the worker that
+            // started it: under this worker's directory, which Bazel stages again
+            // or removes, that runtime goes missing for every compile it serves.
+            // The file behind the link stays.
+            startInfo.Environment["DOTNET_ROOT"] = Path.GetDirectoryName(ResolvePath(dotnet));
 
             startInfo.ArgumentList.Add(compiler);
             foreach (var flag in flags)
