@@ -89,43 +89,19 @@ def _create_rid_tfm_select(name, tfms, rid_tfms):
 
     return "rid_tfm_filegroup(\"%s\", %s, {\n%s})" % (name, _file_dict(tfms), "".join(rids))
 
-def _with_empty_entries(tfms, extra):
-    """Adds frameworks the package supports but ships no assemblies for.
-
-    Only widens a group that already has entries. A package with no `lib` or
-    `ref` folders at all -- one that ships only MSBuild assets -- has nothing to
-    be incompatible with, so it must stay a group that resolves to nothing.
-    """
-    if not tfms:
-        return tfms
-
-    result = dict(tfms)
-
-    for tfm in extra:
-        if tfm in result:
-            continue
-
-        # NuGet picks compile and runtime assets from `lib`/`ref` independently
-        # of `build`. A framework the package covers only with MSBuild assets
-        # must not shadow a `lib` folder that framework can already consume:
-        # Microsoft.Bcl.AsyncInterfaces ships `buildTransitive/netcoreapp2.0`
-        # next to `lib/netstandard2.1`, and net8.0+ must land on the latter.
-        if get_nearest_compatible_target_framework(tfm, tfms.keys()) != None:
-            continue
-
-        result[tfm] = []
-
-    return result
-
-def _create_ref_select(name, ref_tfms, lib_tfms, default_to_empty):
+def _create_ref_select(name, ref_tfms, lib_tfms, msbuild_only_tfms, default_to_empty):
+    # A package with no `lib` or `ref` folders at all -- one that ships only
+    # MSBuild assets -- has nothing to be incompatible with, so it stays a group
+    # that resolves to nothing.
     if not ref_tfms and not lib_tfms:
         return None
 
-    return "ref_tfm_filegroup(\"%s\", %s, %s, %s)" % (
+    return "ref_tfm_filegroup(\"%s\", %s, %s, %s, [%s])" % (
         name,
         default_to_empty,
         _file_dict(ref_tfms),
         _file_dict(lib_tfms),
+        ", ".join(["\"%s\"" % tfm for tfm in sorted(msbuild_only_tfms)]),
     )
 
 def _create_group(name, package, build_tfms, unsupported):
@@ -760,7 +736,8 @@ load("%s", "tfm_filegroup", "rid_tfm_filegroup", "ref_tfm_filegroup", "rid_fileg
             _create_ref_select(
                 "refs_package",
                 groups.refs,
-                _with_empty_entries(groups.libs, groups.build_compat_tfms),
+                groups.libs,
+                groups.build_compat_tfms,
                 groups.compatible_with_anything,
             ),
             groups.build_refs,
@@ -882,17 +859,20 @@ def _empty_filegroup(name):
 # This function is public because it's used by the nuget_archive repository rule.
 # buildifier: disable=function-docstring
 def tfm_filegroup(name, default_to_empty, tfms):
+    default_name = "%s_default" % name
+    default_target = (
+        _empty_filegroup(default_name) if default_to_empty else unsupported_frameworks(default_name, tfms.keys())
+    )
+
+    return _tfm_filegroup(name, tfms, default_target)
+
+def _tfm_filegroup(name, tfms, default_target):
     for (tfm, files) in tfms.items():
         native.filegroup(
             name = "%s_%s_files" % (name, tfm),
             srcs = files,
             visibility = ["//visibility:public"],
         )
-
-    default_name = "%s_default" % name
-    default_target = (
-        _empty_filegroup(default_name) if default_to_empty else unsupported_frameworks(default_name, tfms.keys())
-    )
 
     return _tfm_alias(name, {tfm: ":%s_%s_files" % (name, tfm) for tfm in tfms}, default_target)
 
@@ -987,19 +967,63 @@ def rid_tfm_filegroup(name, tfms, rid_tfms):
 
     return _tfm_alias(name, targets_by_tfm, lib_target)
 
+def _no_assembly_fallback(name, default_to_empty, provided_tfms, msbuild_only_tfms):
+    """What the compile group resolves to when no `ref` or `lib` folder fits.
+
+    NuGet picks compile assets from `ref` and `lib` independently of `build`, so
+    a framework the package covers only with MSBuild assets never competes with
+    an assembly folder: Microsoft.Bcl.AsyncInterfaces ships
+    `buildTransitive/netcoreapp2.0` next to `lib/netstandard2.1`, and net8.0
+    lands on the latter. Such a framework only decides whether a build nothing
+    else fits is an empty package or an incompatible one.
+
+    Args:
+      name: The name of the target to create.
+      default_to_empty: Whether the package is compatible with any framework.
+      provided_tfms: The frameworks the package ships assemblies for.
+      msbuild_only_tfms: The frameworks the package supports through MSBuild
+        assets.
+
+    Returns:
+      The label of the fallback.
+    """
+    if default_to_empty:
+        return _empty_filegroup(name)
+
+    unsupported = unsupported_frameworks(
+        "%s_unsupported" % name,
+        {tfm: True for tfm in provided_tfms + msbuild_only_tfms}.keys(),
+    )
+
+    if not msbuild_only_tfms:
+        return unsupported
+
+    empty = _empty_filegroup("%s_msbuild_only" % name)
+    _tfm_alias(name, {tfm: empty for tfm in msbuild_only_tfms}, unsupported)
+
+    return ":%s" % name
+
 # This function is public because it's used by the nuget_archive repository rule.
 # buildifier: disable=function-docstring
-def ref_tfm_filegroup(name, default_to_empty, ref_tfms, lib_tfms):
+def ref_tfm_filegroup(name, default_to_empty, ref_tfms, lib_tfms, msbuild_only_tfms = []):
     # `ref` is consulted as a group before `lib`, but is not the last word:
     # a package shipping only `ref/net8.0` still compiles against its
     # `lib/netstandard2.0` assembly on net6.0.
     lib_name = "%s_lib" % name
 
     if lib_tfms:
-        tfm_filegroup(lib_name, default_to_empty, lib_tfms)
-    elif default_to_empty or not ref_tfms:
+        _tfm_filegroup(lib_name, lib_tfms, _no_assembly_fallback(
+            "%s_default" % lib_name,
+            default_to_empty,
+            ref_tfms.keys() + lib_tfms.keys(),
+            msbuild_only_tfms,
+        ))
+    elif default_to_empty:
         _empty_filegroup(lib_name)
     else:
+        # Reference assemblies with no implementation next to them: whatever
+        # MSBuild assets the package ships for other frameworks are not run
+        # here, so they do not make the package usable there.
         unsupported_frameworks(lib_name, ref_tfms.keys())
 
     if not ref_tfms:
