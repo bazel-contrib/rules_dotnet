@@ -99,6 +99,31 @@ runtime_graph_test = analysistest.make(
     },
 )
 
+def _analyzer_assemblies_test_impl(ctx):
+    env = analysistest.begin(ctx)
+    compile_info = analysistest.target_under_test(env)[DotnetAssemblyCompileInfo]
+
+    handed = compile_info.analyzers + compile_info.analyzers_csharp
+    names = [dll.basename for dll in handed]
+
+    for name in ctx.attr.present:
+        asserts.true(env, name in names, "{} is not handed to the compiler: {}".format(name, names))
+
+    # A package's files are source files, which tells them apart from the ones
+    # built here.
+    from_packages = [dll.short_path for dll in handed if dll.is_source]
+    asserts.equals(env, [], from_packages, "assemblies from NuGet packages are handed to the compiler beside the analyzer")
+
+    return analysistest.end(env)
+
+analyzer_assemblies_test = analysistest.make(
+    _analyzer_assemblies_test_impl,
+    doc = "Tests which assemblies an analyzer hands the compiler beside itself.",
+    attrs = {
+        "present": attr.string_list(doc = "File names that must be handed to the compiler."),
+    },
+)
+
 # buildifier: disable=function-docstring
 # buildifier: disable=unnamed-macro
 def test_analyzer_dependencies():
@@ -140,4 +165,26 @@ def test_analyzer_dependencies():
         target_under_test = ":user_lib",
         present = ["core_lib"],
         absent = ["analyzer_lib"],
+    )
+
+    csharp_library(
+        name = "packaged_deps_analyzer",
+        is_analyzer = True,
+        srcs = ["Analyzer.cs"],
+        deps = [
+            ":core_lib",
+            "@paket.rules_dotnet_dev_nuget_packages//microsoft.codeanalysis.csharp",
+        ],
+        target_frameworks = ["netstandard2.0"],
+        langversion = "latest",
+    )
+
+    # The compiler running the analyzer brings Roslyn, so only the assemblies
+    # built here go beside it. Roslyn's own `Microsoft.CodeAnalysis.CSharp.dll`
+    # would also load its compiler diagnostic analyzer, which crashes a
+    # `/refonly` compile.
+    analyzer_assemblies_test(
+        name = "analyzer_hands_over_no_package_assemblies",
+        target_under_test = ":packaged_deps_analyzer",
+        present = ["packaged_deps_analyzer.dll", "core_lib.dll"],
     )

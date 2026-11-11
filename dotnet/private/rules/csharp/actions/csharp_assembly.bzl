@@ -110,7 +110,14 @@ def _runs_only_in_the_compiler(dep):
     )
 
 def _collect_analyzer_dependencies(deps):
-    """Collect the runtime libraries of this analyzer. These will be passed to the compiler.
+    """Collect the assemblies an analyzer loads, to hand to the compiler beside it.
+
+    Only the ones built in this workspace. An analyzer compiles against Roslyn and
+    what Roslyn depends on from NuGet, but the compiler running it brings its own:
+    MSBuild hands the compiler nothing but the analyzer of an analyzer
+    ProjectReference, and `nuget_pack` ships no NuGet assembly beside one. Handing
+    Roslyn over as well also loads its compiler diagnostic analyzer, which crashes
+    a `/refonly` compile.
 
     Args:
         deps: The list of dependencies of the analyzer.
@@ -122,6 +129,8 @@ def _collect_analyzer_dependencies(deps):
     dlls = []
     for dep in deps:
         runtime_info = dep[DotnetAssemblyRuntimeInfo]
+        if runtime_info.nuget_info != None:
+            continue
 
         # FIXME: Should this respect `not strict_deps`?
         dlls.extend(runtime_info.libs)
