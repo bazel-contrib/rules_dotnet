@@ -145,7 +145,7 @@ _ROSLYN = [
 
 # A NuGet package the compiler does not bring, unlike Roslyn and its own
 # dependencies.
-_HUMANIZER = "@paket.rules_dotnet_nuget_resource_assemblies_tests//humanizer.core"
+_HUMANIZER = "@paket.rules_dotnet_dev_nuget_packages//humanizer.core"
 
 # buildifier: disable=function-docstring
 # buildifier: disable=unnamed-macro
