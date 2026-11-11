@@ -251,6 +251,109 @@ TESTS = [
         expected_refs = ["build/net8.0/ref/R.dll", "lib/netstandard2.0/A.dll"],
     ),
     nuget_resolution_test(
+        name = "msbuild_only_frameworks_do_not_shadow_a_compatible_lib",
+        # What `Microsoft.Bcl.AsyncInterfaces` ships. The `netcoreapp2.0`
+        # targets only warn, and NuGet still compiles against the
+        # `netstandard2.1` assembly.
+        files = [
+            "buildTransitive/net461/fixture.msbuild_only_frameworks_do_not_shadow_a_compatible_lib.targets",
+            "buildTransitive/netcoreapp2.0/fixture.msbuild_only_frameworks_do_not_shadow_a_compatible_lib.targets",
+            "lib/net462/A.dll",
+            "lib/netstandard2.0/A.dll",
+            "lib/netstandard2.1/A.dll",
+        ],
+        expected_libs = ["lib/netstandard2.1/A.dll"],
+        expected_refs = ["lib/netstandard2.1/A.dll"],
+    ),
+    nuget_resolution_test(
+        name = "msbuild_only_frameworks_do_not_shadow_a_compatible_lib_on_net_framework",
+        files = [
+            "buildTransitive/net461/fixture.msbuild_only_frameworks_do_not_shadow_a_compatible_lib_on_net_framework.targets",
+            "buildTransitive/netcoreapp2.0/fixture.msbuild_only_frameworks_do_not_shadow_a_compatible_lib_on_net_framework.targets",
+            "lib/net462/A.dll",
+            "lib/netstandard2.0/A.dll",
+            "lib/netstandard2.1/A.dll",
+        ],
+        target_framework = "net461",
+        expected_libs = ["lib/netstandard2.0/A.dll"],
+        expected_refs = ["lib/netstandard2.0/A.dll"],
+    ),
+    nuget_resolution_test(
+        name = "an_msbuild_only_framework_does_not_shadow_a_lib_it_cannot_consume_itself",
+        # `netcoreapp2.0` cannot consume `netstandard2.1`, but net8.0 can, and
+        # NuGet picks the `lib` folder without looking at `build`.
+        files = [
+            "buildTransitive/netcoreapp2.0/fixture.an_msbuild_only_framework_does_not_shadow_a_lib_it_cannot_consume_itself.targets",
+            "lib/netstandard2.1/A.dll",
+        ],
+        expected_libs = ["lib/netstandard2.1/A.dll"],
+        expected_refs = ["lib/netstandard2.1/A.dll"],
+    ),
+    nuget_resolution_test(
+        name = "an_msbuild_only_net_framework_does_not_shadow_a_netstandard_lib",
+        files = [
+            "build/net45/fixture.an_msbuild_only_net_framework_does_not_shadow_a_netstandard_lib.targets",
+            "lib/netstandard2.0/A.dll",
+        ],
+        target_framework = "net472",
+        expected_libs = ["lib/netstandard2.0/A.dll"],
+        expected_refs = ["lib/netstandard2.0/A.dll"],
+    ),
+    nuget_resolution_test(
+        name = "a_netstandard_lib_still_serves_frameworks_below_the_newest_lib",
+        # What `Microsoft.Extensions.*` 10.x ships. On net6.0 NuGet compiles
+        # against `netstandard2.0`; the `netcoreapp2.0` targets only add an
+        # "unsupported framework" warning, which is not run here.
+        files = [
+            "buildTransitive/net461/fixture.a_netstandard_lib_still_serves_frameworks_below_the_newest_lib.targets",
+            "buildTransitive/net462/_._",
+            "buildTransitive/net8.0/_._",
+            "buildTransitive/netcoreapp2.0/fixture.a_netstandard_lib_still_serves_frameworks_below_the_newest_lib.targets",
+            "lib/net462/A.dll",
+            "lib/net8.0/A.dll",
+            "lib/netstandard2.0/A.dll",
+        ],
+        target_framework = "net6.0",
+        expected_libs = ["lib/netstandard2.0/A.dll"],
+        expected_refs = ["lib/netstandard2.0/A.dll"],
+    ),
+    nuget_resolution_test(
+        name = "msbuild_only_frameworks_still_make_a_package_compatible",
+        files = [
+            "build/netcoreapp2.0/fixture.msbuild_only_frameworks_still_make_a_package_compatible.targets",
+            "lib/net462/A.dll",
+        ],
+    ),
+    nuget_resolution_test(
+        name = "an_msbuild_only_framework_brings_nothing_where_no_lib_fits",
+        files = [
+            "buildTransitive/netcoreapp2.0/fixture.an_msbuild_only_framework_brings_nothing_where_no_lib_fits.targets",
+            "lib/netstandard2.1/A.dll",
+        ],
+        target_framework = "netcoreapp2.2",
+    ),
+    nuget_resolution_test(
+        name = "an_msbuild_only_framework_does_not_cover_older_frameworks",
+        files = [
+            "buildTransitive/netcoreapp2.0/fixture.an_msbuild_only_framework_does_not_cover_older_frameworks.targets",
+            "lib/netstandard2.1/A.dll",
+        ],
+        target_framework = "netcoreapp1.0",
+        expect_incompatible = True,
+    ),
+    nuget_resolution_test(
+        name = "msbuild_only_frameworks_do_not_make_a_ref_only_package_compatible",
+        # NuGet calls this compatible with nothing to reference, but the MSBuild
+        # assets that would make it usable are never run here, so it stays an
+        # error instead of a build that is silently missing the assembly.
+        files = [
+            "build/net6.0/fixture.msbuild_only_frameworks_do_not_make_a_ref_only_package_compatible.targets",
+            "ref/net8.0/A.dll",
+        ],
+        target_framework = "net6.0",
+        expect_incompatible = True,
+    ),
+    nuget_resolution_test(
         name = "analyzers_are_split_by_language",
         files = [
             "lib/netstandard2.0/A.dll",
