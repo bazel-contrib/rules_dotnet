@@ -335,6 +335,18 @@ CSHARP_LIBRARY_COMMON_ATTRS = dicts.add(
             doc = "Whether this library is a language specific analyzer/source generator or not. This flag is needs to be set to true if the library is a analyzer that is specific to a language or if the library is a source generator.",
             default = False,
         ),
+        "analyzer_runtime_deps": attr.label_list(
+            doc = """Only for an analyzer or source generator: dependencies it loads when it
+            runs that the compiler running it does not bring, such as a NuGet package
+            like `Humanizer.Core`.
+
+            They are compiled against like `deps`, handed to the compiler beside the
+            analyzer, and shipped next to it by `nuget_pack`, as MSBuild does with the
+            assemblies an analyzer project lists for its consumers. Libraries built in
+            this workspace travel with the analyzer without being listed here, and
+            Roslyn and what it depends on come with the compiler.""",
+            providers = [DotnetAssemblyCompileInfo, DotnetAssemblyRuntimeInfo],
+        ),
     },
 )
 

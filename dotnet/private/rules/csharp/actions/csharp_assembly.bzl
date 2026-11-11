@@ -109,31 +109,33 @@ def _runs_only_in_the_compiler(dep):
         bool(compile_info.analyzers or compile_info.analyzers_csharp)
     )
 
-def _collect_analyzer_dependencies(deps):
+def _collect_analyzer_dependencies(deps, analyzer_runtime_deps):
     """Collect the assemblies an analyzer loads, to hand to the compiler beside it.
 
-    Only the ones built in this workspace. An analyzer compiles against Roslyn and
-    what Roslyn depends on from NuGet, but the compiler running it brings its own:
-    MSBuild hands the compiler nothing but the analyzer of an analyzer
-    ProjectReference, and `nuget_pack` ships no NuGet assembly beside one. Handing
-    Roslyn over as well also loads its compiler diagnostic analyzer, which crashes
-    a `/refonly` compile.
+    The ones built in this workspace, and the `analyzer_runtime_deps` the analyzer lists. An
+    analyzer compiles against Roslyn and what Roslyn depends on from NuGet, but the
+    compiler running it brings its own: MSBuild hands the compiler only the analyzer
+    of an analyzer ProjectReference and the assemblies its project lists, and only
+    what an analyzer package ships under `analyzers/`. Handing Roslyn over as well
+    also loads its compiler diagnostic analyzer, which crashes a `/refonly` compile.
 
     Args:
         deps: The list of dependencies of the analyzer.
+        analyzer_runtime_deps: The dependencies the analyzer lists to travel with it.
 
     Returns:
         The list of analyzer dependencies.
     """
 
+    listed = [dep.label for dep in analyzer_runtime_deps]
     dlls = []
     for dep in deps:
         runtime_info = dep[DotnetAssemblyRuntimeInfo]
-        if runtime_info.nuget_info != None:
+        if runtime_info.nuget_info != None and dep.label not in listed:
             continue
 
         # FIXME: Should this respect `not strict_deps`?
-        dlls.extend(runtime_info.libs)
+        dlls.extend([dll for dll in runtime_info.libs if dll not in dlls])
     return dlls
 
 # buildifier: disable=unnamed-macro
@@ -183,7 +185,8 @@ def AssemblyAction(
         analyzer_configs,
         compiler_options,
         interceptors_namespaces,
-        is_windows):
+        is_windows,
+        analyzer_runtime_deps = []):
     """Creates an action that runs the CSharp compiler with the specified inputs.
 
     This macro aims to match the [C# compiler](https://docs.microsoft.com/en-us/dotnet/csharp/language-reference/compiler-options/listed-alphabetically), with the inputs mapping to compiler options.
@@ -235,6 +238,7 @@ def AssemblyAction(
         compiler_options: Additional options to pass to the compiler.
         interceptors_namespaces: Namespaces that are allowed to contain interceptors.
         is_windows: Whether or not the target is running on Windows.
+        analyzer_runtime_deps: The dependencies of an analyzer that travel with it. Also in `deps`.
     Returns:
         The compile and runtime providers, and the static web assets the compile
         generated.
@@ -269,8 +273,11 @@ def AssemblyAction(
     if (is_analyzer or is_language_specific_analyzer) and target_framework != "netstandard2.0":
         fail("Analyzers must have `target_frameworks = [\"netstandard2.0\"]`.")
 
+    if analyzer_runtime_deps and not (is_analyzer or is_language_specific_analyzer):
+        fail("{}: `analyzer_runtime_deps` is only for an analyzer or source generator. List these in `deps`.".format(label))
+
     # TODO: Ensure that all the analyzer DLLs also target netstandard2.0.
-    analyzer_dlls = _collect_analyzer_dependencies(deps) if (is_analyzer or is_language_specific_analyzer) else []
+    analyzer_dlls = _collect_analyzer_dependencies(deps, analyzer_runtime_deps) if (is_analyzer or is_language_specific_analyzer) else []
 
     defines = framework_preprocessor_symbols(target_framework) + defines
 

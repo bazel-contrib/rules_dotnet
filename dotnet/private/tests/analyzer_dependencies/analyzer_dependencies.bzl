@@ -1,7 +1,7 @@
 "Tests for ensuring analyzers' dependencies are correctly passed in."
 
 load("@bazel_skylib//lib:unittest.bzl", "analysistest", "asserts")
-load("//dotnet:defs.bzl", "csharp_library")
+load("//dotnet:defs.bzl", "csharp_library", "csharp_nunit_test")
 load(
     "//dotnet/private:providers.bzl",
     "DotnetAssemblyCompileInfo",
@@ -111,8 +111,8 @@ def _analyzer_assemblies_test_impl(ctx):
 
     # A package's files are source files, which tells them apart from the ones
     # built here.
-    from_packages = [dll.short_path for dll in handed if dll.is_source]
-    asserts.equals(env, [], from_packages, "assemblies from NuGet packages are handed to the compiler beside the analyzer")
+    from_packages = sorted([dll.basename for dll in handed if dll.is_source])
+    asserts.equals(env, sorted(ctx.attr.packages), from_packages, "the NuGet assemblies handed to the compiler beside the analyzer")
 
     return analysistest.end(env)
 
@@ -121,8 +121,31 @@ analyzer_assemblies_test = analysistest.make(
     doc = "Tests which assemblies an analyzer hands the compiler beside itself.",
     attrs = {
         "present": attr.string_list(doc = "File names that must be handed to the compiler."),
+        "packages": attr.string_list(doc = "File names of all the NuGet assemblies handed to the compiler: those of its `analyzer_runtime_deps`."),
     },
 )
+
+def _analyzer_runtime_deps_need_an_analyzer_test_impl(ctx):
+    env = analysistest.begin(ctx)
+    asserts.expect_failure(env, "`analyzer_runtime_deps` is only for an analyzer or source generator")
+    return analysistest.end(env)
+
+analyzer_runtime_deps_need_an_analyzer_test = analysistest.make(
+    _analyzer_runtime_deps_need_an_analyzer_test_impl,
+    expect_failure = True,
+    doc = "Tests that a library that is no analyzer cannot list `analyzer_runtime_deps`.",
+)
+
+_ROSLYN = [
+    "@paket.rules_dotnet_dev_nuget_packages//microsoft.codeanalysis.common",
+    "@paket.rules_dotnet_dev_nuget_packages//microsoft.codeanalysis.csharp",
+    "@paket.rules_dotnet_dev_nuget_packages//system.collections.immutable",
+    "@paket.rules_dotnet_dev_nuget_packages//system.memory",
+]
+
+# A NuGet package the compiler does not bring, unlike Roslyn and its own
+# dependencies.
+_HUMANIZER = "@paket.rules_dotnet_nuget_resource_assemblies_tests//humanizer.core"
 
 # buildifier: disable=function-docstring
 # buildifier: disable=unnamed-macro
@@ -187,4 +210,47 @@ def test_analyzer_dependencies():
         name = "analyzer_hands_over_no_package_assemblies",
         target_under_test = ":packaged_deps_analyzer",
         present = ["packaged_deps_analyzer.dll", "core_lib.dll"],
+    )
+
+    # A source generator calling into a NuGet package the compiler does not
+    # bring, which it lists to travel with it.
+    csharp_library(
+        name = "humanizing_generator",
+        srcs = ["HumanizingGenerator.cs"],
+        analyzer_runtime_deps = [_HUMANIZER],
+        is_analyzer = True,
+        is_language_specific_analyzer = True,
+        target_frameworks = ["netstandard2.0"],
+        version = "1.0.0",
+        visibility = ["//dotnet/private/tests/nuget_pack:__subpackages__"],
+        deps = _ROSLYN,
+    )
+
+    # Humanizer goes beside the generator; Roslyn and its dependencies do not.
+    analyzer_assemblies_test(
+        name = "analyzer_hands_over_its_runtime_deps",
+        target_under_test = ":humanizing_generator",
+        present = ["humanizing_generator.dll"],
+        packages = ["Humanizer.dll"],
+    )
+
+    # The generator only generates if it finds Humanizer in the compiler.
+    csharp_nunit_test(
+        name = "analyzer_runtime_deps_reach_the_compiler",
+        srcs = ["Humanized.cs"],
+        target_frameworks = ["net9.0"],
+        deps = [":humanizing_generator"],
+    )
+
+    csharp_library(
+        name = "analyzer_runtime_deps_without_an_analyzer",
+        srcs = ["Core.cs"],
+        analyzer_runtime_deps = [_HUMANIZER],
+        tags = ["manual"],
+        target_frameworks = ["net9.0"],
+    )
+
+    analyzer_runtime_deps_need_an_analyzer_test(
+        name = "analyzer_runtime_deps_need_an_analyzer",
+        target_under_test = ":analyzer_runtime_deps_without_an_analyzer",
     )

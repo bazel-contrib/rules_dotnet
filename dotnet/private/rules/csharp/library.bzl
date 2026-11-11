@@ -18,6 +18,10 @@ load("//dotnet/private/rules/csharp/actions:csharp_assembly.bzl", "AssemblyActio
 load("//dotnet/private/transitions:tfm_transition.bzl", "tfm_transition")
 
 def _compile_action(ctx, tfm, toolchain):
+    # An analyzer compiles against its runtime dependencies, as against `deps`.
+    listed = [dep.label for dep in ctx.attr.deps]
+    deps = ctx.attr.deps + [dep for dep in ctx.attr.analyzer_runtime_deps if dep.label not in listed]
+
     return AssemblyAction(
         ctx.actions,
         get_compiler_wrapper(ctx),
@@ -27,7 +31,8 @@ def _compile_action(ctx, tfm, toolchain):
         debug = is_debug(ctx),
         embed_sources = ctx.attr.embed_sources,
         defines = ctx.attr.defines,
-        deps = ctx.attr.deps,
+        deps = deps,
+        analyzer_runtime_deps = ctx.attr.analyzer_runtime_deps,
         exports = ctx.attr.exports,
         targeting_pack = ctx.attr._targeting_pack[0],
         internals_visible_to = ctx.attr.internals_visible_to,

@@ -436,7 +436,8 @@ its documentation, and a dependency group per framework. From a `binary`, a
 publish under `tools/<tfm>/any/`.
 
 A library built with `is_analyzer` packs as an analyzer package instead:
-nothing goes under `lib/`, and the analyzer and the assemblies it loads go
+nothing goes under `lib/`, and the analyzer and the assemblies it loads (the
+libraries built in this workspace it depends on, and its `analyzer_runtime_deps`) go
 under `analyzers/dotnet/`, in the language folder below it when it is
 language-specific. A Razor class library ships the files it serves under
 `staticwebassets/`, with the MSBuild file that points a consuming project at

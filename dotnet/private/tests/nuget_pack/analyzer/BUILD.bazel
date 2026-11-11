@@ -101,6 +101,32 @@ nuget_pack_test(
     warnings = ["NU5128"],
 )
 
+# A source generator that loads a NuGet package the compiler does not bring
+# ships it beside itself, as an analyzer package built by MSBuild does. Roslyn,
+# which it also compiles against, stays out.
+nuget_pack(
+    name = "humanizing_generator_pack",
+    authors = ["rules_dotnet"],
+    description = "A source generator with a runtime dependency, packed by rules_dotnet's own tests.",
+    development_dependency = True,
+    library = "//dotnet/private/tests/analyzer_dependencies:humanizing_generator",
+    package_id = "RulesDotnet.Tests.HumanizingGenerator",
+    target_frameworks = ["netstandard2.0"],
+)
+
+nuget_pack_test(
+    name = "humanizing_generator_pack_test",
+    contents = {
+        "expected/humanizing_generator_pack.nuspec": "RulesDotnet.Tests.HumanizingGenerator.nuspec",
+    },
+    files = [
+        "analyzers/dotnet/cs/Humanizer.dll",
+        "analyzers/dotnet/cs/humanizing_generator.dll",
+    ],
+    package = ":humanizing_generator_pack",
+    warnings = ["NU5128"],
+)
+
 # A library compiled with a first-party generator it does not ship: the generator
 # ran in the compiler and is no part of the library's runtime graph, so the
 # package neither declares nor bundles it, whatever `first_party_deps` says.
