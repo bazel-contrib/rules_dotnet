@@ -50,8 +50,8 @@ namespace CSharpCompilerWorker
 
             int Compile(List<string> arguments, StringBuilder output)
             {
-                // Only the compiler sees the resolved paths: the unused references
-                // go back to Bazel by the paths Bazel gave.
+                // Only the compiler sees the resolved paths: unused references go
+                // back to Bazel by the paths it gave.
                 var resolved = Worker.ResolveInputLinks(
                     arguments,
                     "-r:",
@@ -130,11 +130,11 @@ namespace CSharpCompilerWorker
                 var line = rawLine.Trim();
                 if (line.StartsWith("-r:", StringComparison.Ordinal))
                 {
-                    references.Add(line[3..]);
+                    references.Add(Worker.Unquote(line[3..]));
                 }
                 else if (line.StartsWith("/out:", StringComparison.Ordinal))
                 {
-                    outputAssembly = line[5..];
+                    outputAssembly = Worker.Unquote(line[5..]);
                 }
             }
 

@@ -40,26 +40,14 @@ namespace RulesDotnet
         /// a reference or an analyzer -- pointed at the file behind the link.
         /// </summary>
         /// <remarks>
-        /// A sandboxed worker, which path mapping always makes it, is handed its
-        /// inputs as links in a directory of its own, which Bazel stages again for
-        /// every request. Neither compiler copes with that:
-        ///
-        /// Both keep what they read from a reference for as long as its full path
-        /// and last-write time stay the same -- fsc inside the F# worker, Roslyn
-        /// inside its build server -- and on Unix that time is the link's own, not
-        /// its target's. A link stays for as long as it points at the same output,
-        /// so a rebuilt reference keeps its old time and the next compile is handed
-        /// its old contents. The target's time moves with every rebuild.
-        ///
-        /// Roslyn's build server also keeps the analyzers it loaded, and finds the
-        /// assemblies an analyzer loads through the paths it was handed earlier,
-        /// whichever worker's directory they were in. Once that directory is staged
-        /// for another request, or the worker is gone, a compile loading the
-        /// analyzer from elsewhere -- another configuration's outputs -- fails to
-        /// load them. The target's path stays.
-        ///
-        /// The outputs are the same either way: the compilers record neither
-        /// reference nor analyzer paths in them.
+        /// A sandboxed worker is handed its inputs as links in a directory Bazel
+        /// restages for every request, and the compilers cache across requests.
+        /// fsc and Roslyn's build server key a reference by path and last-write
+        /// time, which on Unix is the link's own, so a rebuilt reference would keep
+        /// its old contents. The build server, which outlives the worker, also loads
+        /// an analyzer's dependencies through paths from earlier requests, which may
+        /// no longer exist. The files behind the links have neither problem, and
+        /// the compilers record none of these paths in their outputs.
         /// </remarks>
         public static List<string> ResolveInputLinks(List<string> arguments, params string[] prefixes)
         {
@@ -72,16 +60,23 @@ namespace RulesDotnet
             return resolved;
         }
 
-        /// <summary>The full path of the file behind <paramref name="path"/>, or of the path itself when it is no link.</summary>
-        private static string ResolvePath(string path)
+        /// <summary>
+        /// <paramref name="path"/> without the quotes csc's response file needs,
+        /// since csc splits each of its lines on whitespace.
+        /// </summary>
+        public static string Unquote(string path) =>
+            path.Length >= 2 && path[0] == '"' && path[^1] == '"' ? path[1..^1] : path;
+
+        /// <summary>The full path of the file behind <paramref name="path"/>, or null when it is no link or cannot be read.</summary>
+        private static string? LinkTarget(string path)
         {
             try
             {
-                return File.ResolveLinkTarget(path, returnFinalTarget: true)?.FullName ?? Path.GetFullPath(path);
+                return File.ResolveLinkTarget(path, returnFinalTarget: true)?.FullName;
             }
             catch (Exception e) when (e is IOException or UnauthorizedAccessException)
             {
-                return Path.GetFullPath(path);
+                return null;
             }
         }
 
@@ -94,30 +89,17 @@ namespace RulesDotnet
                     continue;
                 }
 
-                // csc splits a response file line on whitespace, so its paths come
-                // quoted, and go back quoted.
-                var path = argument[prefix.Length..];
-                var quoted = path.Length >= 2 && path[0] == '"' && path[^1] == '"';
-                if (quoted)
-                {
-                    path = path[1..^1];
-                }
+                var value = argument[prefix.Length..];
+                var path = Unquote(value);
 
-                try
+                // Left as given when missing, so the compiler reports it by that name.
+                var target = LinkTarget(path);
+                if (target == null)
                 {
-                    var target = File.ResolveLinkTarget(path, returnFinalTarget: true);
-                    if (target == null)
-                    {
-                        return argument;
-                    }
-
-                    return prefix + (quoted ? "\"" + target.FullName + "\"" : target.FullName);
-                }
-                catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-                {
-                    // Missing or unreadable: the compiler reports it by the name it was given.
                     return argument;
                 }
+
+                return prefix + (path.Length == value.Length ? target : "\"" + target + "\"");
             }
 
             return argument;
@@ -193,12 +175,9 @@ namespace RulesDotnet
                 UseShellExecute = false,
             };
 
-            // Roslyn's build server finds the runtime it loads its assemblies from
-            // through the DOTNET_ROOT it starts with, and outlives the worker that
-            // started it: under this worker's directory, which Bazel stages again
-            // or removes, that runtime goes missing for every compile it serves.
-            // The file behind the link stays.
-            startInfo.Environment["DOTNET_ROOT"] = Path.GetDirectoryName(ResolvePath(dotnet));
+            // Roslyn's build server loads the runtime from the DOTNET_ROOT it starts
+            // with and outlives this worker, whose directory Bazel restages.
+            startInfo.Environment["DOTNET_ROOT"] = Path.GetDirectoryName(LinkTarget(dotnet) ?? Path.GetFullPath(dotnet));
 
             startInfo.ArgumentList.Add(compiler);
             foreach (var flag in flags)
