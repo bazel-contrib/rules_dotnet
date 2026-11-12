@@ -44,6 +44,10 @@ expect_file "$framework/dotnet.runtime.js"
 expect_file "$framework/app.wasm"
 expect_file "$framework/System.Private.CoreLib.wasm"
 
+# Nothing refers to it in code, so only partial trimming, the SDK's default for
+# Blazor WebAssembly, keeps it.
+expect_file "$framework/reflected.wasm"
+
 # A browser will only load these if they really are WebAssembly modules, which
 # is the whole reason for the Webcil conversion.
 for module in "$framework/app.wasm" "$framework/System.Private.CoreLib.wasm"; do

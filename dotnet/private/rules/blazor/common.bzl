@@ -192,7 +192,7 @@ def _application_symbols(runtime_info):
 
     return symbols
 
-def _assemble_action(ctx, binary, tfm, output, trimmed = None, trim_mode = "full", debug = False):
+def _assemble_action(ctx, binary, tfm, output, trimmed = None, trim_mode = "partial", debug = False):
     """Assembles the directory a Blazor WebAssembly application boots from.
 
     Args:
@@ -287,13 +287,17 @@ saves the ICU payload at the cost of correct formatting and comparison."""
 
 TRIM_MODE_DOC = """How much of the application the trimmer removes.
 
-`full` is what `dotnet publish` uses and what a production application wants.
-`copyused` keeps every member of every assembly that is used at all, which is
-worth trying if a trimmed application misbehaves."""
+`partial` is what `dotnet publish` uses for a Blazor WebAssembly application:
+it trims the framework and the assemblies that declare themselves trimmable,
+and keeps every other assembly whole. `full` trims every assembly, which is
+smaller but removes code reached only through reflection, and like the SDK the
+trimmer reports no warnings about it. `copyused` keeps every member of every
+assembly that is used at all, which is worth trying if a trimmed application
+misbehaves."""
 
 TRIM_MODES = ["full", "partial", "copyused", "copy"]
 
-def assemble_site(ctx, tfm, verb, trimmed = None, trim_mode = "full", debug = False, compress = True):
+def assemble_site(ctx, tfm, verb, trimmed = None, trim_mode = "partial", debug = False, compress = True):
     """Assembles an application and describes the directory it is served from.
 
     Args:

@@ -48,6 +48,8 @@ internal static class Trimming
 
         // An assembly the trimmer cannot resolve is a reference the application
         // never takes at run time; failing on it would reject working apps.
+        // Trim analysis warnings are off because the Blazor WebAssembly SDK
+        // turns them off too (SuppressTrimAnalysisWarnings).
         Tasks.Set(task, "ExtraArgs", "--skip-unresolved true --notrimwarn");
         Tasks.Set(task, "SingleWarn", true);
 
