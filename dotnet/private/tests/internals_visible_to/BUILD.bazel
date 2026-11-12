@@ -38,6 +38,7 @@ csharp_library(
     srcs = ["Secrets.cs"],
     internals_visible_to = [
         "consumer",
+        "export_consumer",
         "transitive_consumer",
     ],
     target_frameworks = ["net9.0"],
@@ -64,14 +65,28 @@ csharp_nunit_test(
     deps = [":secrets"],
 )
 
-# Only built with strict deps off: strict deps never hand a target the
-# dependencies of its dependencies, so these cannot see `secrets` at all
-# otherwise. See README.md.
+csharp_library(
+    name = "exporter",
+    srcs = ["Relay.cs"],
+    target_frameworks = ["net9.0"],
+    exports = [":secrets"],
+    deps = [":secrets"],
+)
+
+# Reaches `secrets` through the `exports` of `exporter`. See README.md.
+csharp_library(
+    name = "export_consumer",
+    srcs = ["ExportConsumer.cs"],
+    target_frameworks = ["net9.0"],
+    deps = [":exporter"],
+)
+
 config_setting(
     name = "strict_deps_off",
     flag_values = {"//dotnet/settings:strict_deps": "False"},
 )
 
+# Strict deps never hand a target the dependencies of its dependencies.
 NON_STRICT_DEPS_ONLY = select({
     ":strict_deps_off": [],
     "//conditions:default": ["@platforms//:incompatible"],
@@ -84,7 +99,7 @@ csharp_library(
     deps = [":secrets"],
 )
 
-# Reaches `secrets` only through `relay`. See README.md.
+# Reaches `secrets` only through `relay`.
 csharp_nunit_test(
     name = "transitive_consumer",
     srcs = ["TransitiveConsumer.cs"],
@@ -93,8 +108,6 @@ csharp_nunit_test(
     deps = [":relay"],
 )
 
-# The F# targets are compile-only: what they test is whether fsc accepts the
-# access to an internal member. See README.md.
 fsharp_library(
     name = "fsharp_secrets",
     srcs = ["FSharpSecrets.fs"],
@@ -112,8 +125,7 @@ fsharp_library(
     deps = [":fsharp_secrets"],
 )
 
-# Reaches `fsharp_secrets` directly and, with strict deps off, through
-# `fsharp_relay` too. See README.md.
+# See README.md.
 fsharp_library(
     name = "fsharp_consumer",
     srcs = ["FSharpConsumer.fs"],
