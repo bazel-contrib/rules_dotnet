@@ -4,7 +4,6 @@ Rules for compatability resolution of dependencies for .NET frameworks.
 
 load("@bazel_skylib//lib:sets.bzl", "sets")
 load("@bazel_skylib//lib:shell.bzl", "shell")
-load("@bazel_skylib//rules:common_settings.bzl", "BuildSettingInfo")
 load(
     "//dotnet/private:providers.bzl",
     "DotnetAssemblyCompileInfo",
@@ -185,11 +184,9 @@ def get_csharp_compiler_worker(ctx):
         ctx: The rule context.
 
     Returns:
-        A struct with an `executable` and a `prune_unused_references` flag, or
-        None when the compile should use the wrapper script instead.
+        A struct with an `executable`, or None when the compile should use the
+        wrapper script instead.
     """
-
-    prune_unused_references = ctx.attr._prune_unused_references[BuildSettingInfo].value
 
     # compiler_worker_binary drops the attribute: the workers are the targets
     # that cannot be compiled by the worker.
@@ -199,15 +196,9 @@ def get_csharp_compiler_worker(ctx):
     executable = _worker_executable(ctx.attr._csharp_compiler_worker)
 
     if executable == None:
-        if prune_unused_references:
-            fail("//dotnet/settings:prune_unused_references needs //dotnet/settings:use_compiler_worker, " +
-                 "because it is the worker that reads the compiled output to work out which references went unused.")
         return None
 
-    return struct(
-        executable = executable,
-        prune_unused_references = prune_unused_references,
-    )
+    return struct(executable = executable)
 
 def get_fsharp_compiler_worker(ctx):
     """The persistent worker to compile F# with, if it is enabled.

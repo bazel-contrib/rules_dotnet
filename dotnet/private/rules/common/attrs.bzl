@@ -294,10 +294,6 @@ CSHARP_COMMON_ATTRS = dicts.add(
             default = "//dotnet/private/tools/scoped_css",
             cfg = "exec",
         ),
-        "_prune_unused_references": attr.label(
-            doc = "Whether the compile action reports the references it did not use.",
-            default = "//dotnet/settings:prune_unused_references",
-        ),
         "_csharp_compiler_worker": attr.label(
             doc = """The persistent worker that runs the C# compiler, keeping Roslyn's build server alive between compilations.
 
