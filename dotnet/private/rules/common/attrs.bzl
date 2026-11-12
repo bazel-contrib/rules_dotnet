@@ -121,7 +121,6 @@ COMMON_ATTRS = {
     "warning_level": attr.int(
         doc = "The warning level that should be used by the compiler.",
         mandatory = False,
-        values = [0, 1, 2, 3, 4, 5],
         default = 3,
     ),
     "generate_documentation_file": attr.bool(
