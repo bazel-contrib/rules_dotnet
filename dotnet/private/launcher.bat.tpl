@@ -50,6 +50,9 @@ set RUNFILES_MANIFEST_ONLY=1
 set DOTNET_MULTILEVEL_LOOKUP="false"
 set DOTNET_NOLOGO="1"
 set DOTNET_CLI_TELEMETRY_OPTOUT="1"
+if not defined WINDIR if defined SystemRoot set WINDIR=%SystemRoot%
+if not defined USERPROFILE if defined TEST_TMPDIR set USERPROFILE=%TEST_TMPDIR%
+if not defined LOCALAPPDATA if defined TEST_TMPDIR set LOCALAPPDATA=%TEST_TMPDIR%
 TEMPLATED_environment
 
 set dotnet_executable="TEMPLATED_dotnet"
@@ -63,4 +66,8 @@ if defined args (
   set args=!args:\=\\\\!
   set args=!args:"=\"!
 )
-"!dotnet_executable!" exec "!run_script!" !args!
+if /i "!run_script:~-4!"==".exe" (
+  "!run_script!" !args!
+) else (
+  "!dotnet_executable!" exec "!run_script!" !args!
+)

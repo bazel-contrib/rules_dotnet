@@ -159,6 +159,65 @@ def build_binary(ctx, compile_action, toolchain, runtime_toolchain = None):
             output = depsjson,
             content = json.encode(depsjson_struct),
         )
+    else:
+        # .NET Framework has no deps.json or additionalProbingPaths, so the CLR
+        # resolves referenced assemblies from the executable's own directory.
+        out_dir = "{}/{}".format(ctx.label.name, tfm)
+        seen_basenames = {dll.basename.lower(): True}
+        for f in appsetting_files:
+            if f.dirname.endswith(out_dir):
+                seen_basenames[f.basename.lower()] = True
+        seen_resource_paths = {}
+        source_libs = []
+        for dep in transitive_runtime_deps:
+            for lib in dep.libs:
+                key = lib.basename.lower()
+                if key in seen_basenames:
+                    continue
+                seen_basenames[key] = True
+                source_libs.append(lib)
+                staged = ctx.actions.declare_file("{}/{}".format(out_dir, lib.basename))
+                ctx.actions.symlink(output = staged, target_file = lib)
+                default_info_files.append(staged)
+                additional_runfiles.append(staged)
+            for native in dep.native:
+                key = native.basename.lower()
+                if key in seen_basenames:
+                    continue
+                seen_basenames[key] = True
+                staged_native = ctx.actions.declare_file("{}/{}".format(out_dir, native.basename))
+                ctx.actions.symlink(output = staged_native, target_file = native)
+                default_info_files.append(staged_native)
+                additional_runfiles.append(staged_native)
+            for res in dep.resource_assemblies:
+                locale = res.dirname.split("/")[-1]
+                rel_key = "{}/{}".format(locale.lower(), res.basename.lower())
+                if rel_key in seen_resource_paths:
+                    continue
+                seen_resource_paths[rel_key] = True
+                staged_res = ctx.actions.declare_file("{}/{}/{}".format(out_dir, locale, res.basename))
+                ctx.actions.symlink(output = staged_res, target_file = res)
+                default_info_files.append(staged_res)
+                additional_runfiles.append(staged_res)
+
+        config_name = "{}.config".format(dll.basename)
+        if config_name.lower() not in seen_basenames:
+            appconfig = ctx.actions.declare_file("{}/{}".format(out_dir, config_name))
+            config_args = ctx.actions.args()
+            config_args.add(appconfig)
+            config_args.add_all(source_libs)
+            config_args.set_param_file_format("multiline")
+            config_args.use_param_file("@%s", use_always = True)
+            ctx.actions.run(
+                mnemonic = "DotnetNetFxConfig",
+                progress_message = "Generating {} for %{{label}}".format(config_name),
+                executable = ctx.attr._netfx_config_tool.files_to_run,
+                arguments = [config_args],
+                inputs = source_libs,
+                outputs = [appconfig],
+            )
+            default_info_files.append(appconfig)
+            additional_runfiles.append(appconfig)
 
     if runtimeconfig != None:
         additional_runfiles.append(runtimeconfig)

@@ -12,6 +12,7 @@ load(
     "framework_preprocessor_symbols",
     "generate_warning_args",
     "get_framework_version_info",
+    "is_core_framework",
     "use_highentropyva",
 )
 load("//dotnet/private:nuget_version.bzl", "DEFAULT_ASSEMBLY_VERSION", "nuget_version")
@@ -276,7 +277,7 @@ def AssemblyAction(
     defines = framework_preprocessor_symbols(target_framework) + defines
 
     out_dir = target_name + "/" + target_framework
-    out_ext = "dll"
+    out_ext = "dll" if (target == "library" or is_core_framework(target_framework)) else "exe"
 
     # `.razor` and `.cshtml` are inputs to a source generator, not to the
     # compiler, so they travel as additional files rather than sources.
