@@ -487,10 +487,14 @@ def _band_versions(module_ctx, sdk, netrc_entries, indexes, releases, published,
         lists = _published_versions(module_ctx, references[tfm], netrc_entries, indexes, published)
 
         if None in lists:
-            # No fact, so that a feed that did not answer does not pin the
-            # band for every later evaluation.
-            versions[tfm] = target
-            continue
+            # Guessing would decide the packs a build compiles against from
+            # whether the feed was reachable, so the evaluation fails instead.
+            fail(("nuget.org did not list the versions of {}, which .NET SDK {} needs to pick the " +
+                  "packs it compiles against for {}. " + _RETRY).format(
+                ", ".join([id for (id, versions) in zip(references[tfm], lists) if versions == None]),
+                sdk.version,
+                tfm,
+            ))
 
         # A preview SDK of a released channel falls back to the release where
         # the preview's packs do not share a version.
@@ -508,6 +512,16 @@ def _band_versions(module_ctx, sdk, netrc_entries, indexes, releases, published,
             facts[band_fact_key(sdk.version, tfm)] = version
 
     return versions
+
+# How many packs a failure names before it only counts the rest.
+_LISTED_PACKS = 5
+
+# A running server keeps a failed evaluation and repeats it without asking the
+# feed again, so retrying takes a restart.
+_RETRY = (
+    "This is usually a network problem or a nuget.org outage. Once nuget.org answers again, " +
+    "run `bazel shutdown` and retry: the running Bazel server repeats this failure until it restarts."
+)
 
 def declare_pack_repos(module_ctx, sdk, bootstrap, releases):
     """Declares the repositories holding the SDK's packs.
@@ -575,13 +589,30 @@ def declare_pack_repos(module_ctx, sdk, bootstrap, releases):
         indexes,
     )
 
+    # nuget.org publishes a hash for every package, so a missing one means a
+    # lookup that failed. Declaring the pack without one would download it
+    # unverified, and the extension's result, unverified pins and all, would be
+    # reused by every later build.
+    unverified = sorted([
+        "{} {}".format(id, version)
+        for (id, version) in packages
+        if not resolved.get(integrity_fact_key(id, version))
+    ])
+    if unverified:
+        fail(("Could not look up the SHA-512 of {} of the .NET SDK's packs on nuget.org, so they " +
+              "cannot be downloaded verified: {}{}. " + _RETRY).format(
+            len(unverified),
+            ", ".join(unverified[:_LISTED_PACKS]),
+            " and {} more".format(len(unverified) - _LISTED_PACKS) if len(unverified) > _LISTED_PACKS else "",
+        ))
+
     declared = {}
     for (repo, kind) in kinds:
         hub = [
             {
                 "id": id,
                 "name": "{}.v{}".format(id.lower(), version),
-                "sha512": resolved.get(integrity_fact_key(id, version), ""),
+                "sha512": resolved[integrity_fact_key(id, version)],
                 "sources": [NUGET_ORG],
                 "version": version,
             }
