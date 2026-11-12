@@ -19,7 +19,9 @@ def build_library(ctx, compile_action, toolchain):
     """
     tfm = ctx.attr._target_framework[BuildSettingInfo].value
 
-    (compile_provider, runtime_provider, generated_assets) = compile_action(ctx, tfm, toolchain)
+    compiled = compile_action(ctx, tfm, toolchain)
+    (compile_provider, runtime_provider, generated_assets) = compiled[:3]
+    extra_providers = list(compiled[3:])
     runtime_provider = with_ready_to_run_images(ctx, runtime_provider)
 
     return [
@@ -44,4 +46,4 @@ def build_library(ctx, compile_action, toolchain):
                 ctx.attr.deps,
             ),
         ),
-    ]
+    ] + extra_providers

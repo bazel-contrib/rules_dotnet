@@ -62,3 +62,14 @@ bzl_library(
         ":test",
     ],
 )
+
+bzl_library(
+    name = "analyze",
+    srcs = ["analyze.bzl"],
+    visibility = [
+        "//dotnet:__subpackages__",
+    ],
+    deps = [
+        "//dotnet/private:providers",
+    ],
+)

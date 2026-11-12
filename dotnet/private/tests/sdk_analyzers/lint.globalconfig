@@ -1,0 +1,5 @@
+is_global = true
+dotnet_diagnostic.IDE0055.severity = warning
+dotnet_diagnostic.CA1822.severity = warning
+indent_style = space
+indent_size = 4

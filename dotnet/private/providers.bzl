@@ -1,4 +1,11 @@
 "Providers"
+DotnetCSharpAnalyzerInfo = provider(
+    doc = """The resolved C# compilation inputs of a target, for running a Roslyn analyzer SARIF action from an aspect (such as `rules_lint`).""",
+    fields = {
+        "compile": "callable: A function launched by `analyze_csharp_target` to run `csc` with `/errorlog:<sarif>,version=2.1`.",
+    },
+)
+
 DotnetAssemblyCompileInfo = provider(
     doc = "Compilation information for a .Net assembly.",
     fields = {

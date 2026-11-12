@@ -63,6 +63,25 @@ config_setting(
     visibility = ["//visibility:public"],
 )
 
+# Whether the C# compiler runs the .NET SDK's built-in analyzers (`CAxxxx`) by
+# default. Individual targets can override this with `enable_net_analyzers`.
+bool_flag(
+    name = "enable_net_analyzers",
+    build_setting_default = False,
+    scope = "universal",
+    visibility = ["//visibility:public"],
+)
+
+# Whether the C# compiler runs the .NET SDK's built-in code style analyzers
+# (`IDExxxx`) by default. Individual targets can override this with
+# `enforce_code_style_in_build`.
+bool_flag(
+    name = "enforce_code_style_in_build",
+    build_setting_default = False,
+    scope = "universal",
+    visibility = ["//visibility:public"],
+)
+
 # Whether every .NET process the rules start runs in globalization-invariant mode.
 bool_flag(
     name = "invariant_globalization",

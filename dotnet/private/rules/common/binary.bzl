@@ -103,7 +103,9 @@ def build_binary(ctx, compile_action, toolchain, runtime_toolchain = None):
     if is_standard_framework(tfm):
         fail("It doesn't make sense to build an executable for " + tfm)
 
-    (compile_provider, runtime_provider, generated_assets) = compile_action(ctx, tfm, toolchain)
+    compiled = compile_action(ctx, tfm, toolchain)
+    (compile_provider, runtime_provider, generated_assets) = compiled[:3]
+    extra_providers = list(compiled[3:])
     runtime_provider = with_ready_to_run_images(ctx, runtime_provider)
     dll = runtime_provider.libs[0]
     appsetting_files = runtime_provider.appsetting_files.to_list()
@@ -271,4 +273,4 @@ def build_binary(ctx, compile_action, toolchain, runtime_toolchain = None):
         framework_version = framework_version,
     )
 
-    return [default_info, dotnet_binary_info, compile_provider, runtime_provider, static_web_assets_info, RunEnvironmentInfo(environment = {key: expand_variables(ctx, expand_locations(ctx, value, ctx.attr.data)) for key, value in ctx.attr.envs.items()}, inherited_environment = ctx.attr.env_inherit)]
+    return [default_info, dotnet_binary_info, compile_provider, runtime_provider, static_web_assets_info, RunEnvironmentInfo(environment = {key: expand_variables(ctx, expand_locations(ctx, value, ctx.attr.data)) for key, value in ctx.attr.envs.items()}, inherited_environment = ctx.attr.env_inherit)] + extra_providers

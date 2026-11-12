@@ -19,6 +19,7 @@ load(
     "//dotnet/private:providers.bzl",
     "DotnetAssemblyCompileInfo",
     "DotnetAssemblyRuntimeInfo",
+    "DotnetCSharpAnalyzerInfo",
     "StaticWebAssetsInfo",
 )
 load("//dotnet/private/icu:settings.bzl", "globalization_env", "icu_wrapper_arguments")
@@ -28,6 +29,7 @@ load(
     "razor_compile_inputs",
 )
 load("//dotnet/private/rules/csharp/actions:scoped_css.bzl", "scoped_css_action")
+load("//dotnet/private/rules/csharp/actions:sdk_analyzers.bzl", "sdk_analyzer_compile_inputs")
 load("//dotnet/private/sdk:packs.bzl", "uses_razor")
 
 def _write_internals_visible_to_csharp(actions, label_name, dll_name, others):
@@ -173,6 +175,9 @@ def AssemblyAction(
         allow_unsafe_blocks,
         nullable,
         run_analyzers,
+        enable_net_analyzers,
+        enforce_code_style_in_build,
+        analysis_mode,
         is_analyzer,
         is_language_specific_analyzer,
         analyzer_configs,
@@ -225,6 +230,9 @@ def AssemblyAction(
         allow_unsafe_blocks: Compiles the target with /unsafe
         nullable: Enable nullable context, or nullable warnings.
         run_analyzers: Enable analyzers.
+        enable_net_analyzers: Run the .NET SDK's built-in code quality analyzers (`CAxxxx`).
+        enforce_code_style_in_build: Run the .NET SDK's built-in C# code style analyzers (`IDExxxx`).
+        analysis_mode: Rule severity preset for the .NET SDK's built-in analyzers.
         is_analyzer: Whether or not the target is an analyzer.
         is_language_specific_analyzer: Whether or not the target is a language specific analyzer.
         analyzer_configs: List of analyzer configuration files.
@@ -269,6 +277,24 @@ def AssemblyAction(
 
     if analyzer_runtime_deps and not (is_analyzer or is_language_specific_analyzer):
         fail("{}: `analyzer_runtime_deps` is only for an analyzer or source generator. List these in `deps`.".format(label))
+
+    if run_analyzers and (enable_net_analyzers or enforce_code_style_in_build):
+        sdk_analyzers = sdk_analyzer_compile_inputs(
+            toolchain = toolchain,
+            target_framework = target_framework,
+            project_sdk = project_sdk,
+            enable_net_analyzers = enable_net_analyzers,
+            enforce_code_style_in_build = enforce_code_style_in_build,
+            analysis_mode = analysis_mode,
+        )
+        compile_analyzers_csharp = depset(sdk_analyzers.analyzers, transitive = [analyzers_csharp])
+
+        # The SDK's built-in `.globalconfig` files come before user-supplied
+        # `analyzer_configs`, so user settings override the preset severities.
+        compile_analyzer_configs = sdk_analyzers.analyzer_configs + analyzer_configs
+    else:
+        compile_analyzers_csharp = analyzers_csharp
+        compile_analyzer_configs = analyzer_configs
 
     # TODO: Ensure that all the analyzer DLLs also target netstandard2.0.
     analyzer_dlls = _collect_analyzer_dependencies(compile_deps, analyzer_runtime_deps) if (is_analyzer or is_language_specific_analyzer) else []
@@ -375,8 +401,8 @@ def AssemblyAction(
             label,
             additionalfiles,
             analyzers,
-            analyzers_csharp,
-            analyzer_configs,
+            compile_analyzers_csharp,
+            compile_analyzer_configs,
             debug,
             embed_sources,
             defines,
@@ -428,8 +454,8 @@ def AssemblyAction(
             label,
             additionalfiles,
             analyzers,
-            analyzers_csharp,
-            analyzer_configs,
+            compile_analyzers_csharp,
+            compile_analyzer_configs,
             debug,
             embed_sources,
             defines,
@@ -504,6 +530,75 @@ def AssemblyAction(
             out_xml = None,
         )
 
+    def _analyze(
+            actions,
+            output_sarif,
+            *,
+            enable_net_analyzers = True,
+            enforce_code_style = True,
+            analysis_mode = "default",
+            extra_analyzers = [],
+            extra_analyzer_configs = [],
+            extra_additionalfiles = [],
+            treat_warnings_as_errors = False):
+        analyze_sdk = sdk_analyzer_compile_inputs(
+            toolchain = toolchain,
+            target_framework = target_framework,
+            project_sdk = project_sdk,
+            enable_net_analyzers = enable_net_analyzers,
+            enforce_code_style_in_build = enforce_code_style,
+            analysis_mode = analysis_mode,
+        )
+        analyze_analyzers_csharp = depset(
+            analyze_sdk.analyzers + extra_analyzers,
+            transitive = [analyzers_csharp],
+        )
+        analyze_configs = analyze_sdk.analyzer_configs + analyzer_configs + extra_analyzer_configs
+        analyze_out_dll = actions.declare_file(output_sarif.basename + ".analyze.dll", sibling = output_sarif)
+
+        _compile(
+            actions,
+            compiler_wrapper,
+            compiler_worker,
+            label,
+            additionalfiles + extra_additionalfiles,
+            analyzers,
+            analyze_analyzers_csharp,
+            analyze_configs,
+            False,
+            False,
+            defines,
+            keyfile,
+            langversion,
+            irefs,
+            framework_files,
+            resources,
+            srcs,
+            depset(compile_data, transitive = [transitive_compile_data]),
+            subsystem_version,
+            target,
+            target_name,
+            target_framework,
+            toolchain,
+            treat_warnings_as_errors,
+            warnings_as_errors if treat_warnings_as_errors else [],
+            warnings_not_as_errors,
+            warning_level,
+            nowarn,
+            allow_unsafe_blocks,
+            nullable,
+            True,
+            compiler_options,
+            interceptors_namespaces,
+            razor,
+            out_dll = analyze_out_dll,
+            out_ref = None,
+            out_pdb = None,
+            out_xml = None,
+            errorlog_sarif = output_sarif,
+            progress_message = "Analyzing " + target_name,
+        )
+
     return (DotnetAssemblyCompileInfo(
         name = assembly_name,
         version = version or DEFAULT_ASSEMBLY_VERSION,
@@ -548,7 +643,7 @@ def AssemblyAction(
             for dep in deps
             if not _runs_only_in_the_compiler(dep)
         },
-    ), generated_web_assets)
+    ), generated_web_assets, DotnetCSharpAnalyzerInfo(compile = _analyze))
 
 def _compile(
         actions,
@@ -588,7 +683,9 @@ def _compile(
         out_dll = None,
         out_ref = None,
         out_pdb = None,
-        out_xml = None):
+        out_xml = None,
+        errorlog_sarif = None,
+        progress_message = None):
     # Our goal is to match msbuild as much as reasonable
     # https://docs.microsoft.com/en-us/dotnet/csharp/language-reference/compiler-options/listed-alphabetically
     args = actions.args()
@@ -638,13 +735,14 @@ def _compile(
         args.add("/optimize-")
         args.add("/define:TRACE")
         args.add("/define:DEBUG")
+        args.add("/debug:portable")
     else:
         args.add("/debug-")
         args.add("/optimize+")
         args.add("/define:TRACE")
         args.add("/define:RELEASE")
-
-    args.add("/debug:portable")
+        if out_pdb != None:
+            args.add("/debug:portable")
 
     # A PDB records execroot-relative document paths, which resolve to nothing
     # once the build is over. `/embed` puts the sources in the symbols instead.
@@ -655,9 +753,13 @@ def _compile(
     # outputs
     if out_dll != None:
         args.add(out_dll, format = "/out:\"%s\"")
-        args.add(out_ref, format = "/refout:\"%s\"")
-        args.add(out_pdb, format = "/pdb:\"%s\"")
-        outputs = [out_dll, out_ref, out_pdb]
+        outputs = [out_dll]
+        if out_ref != None:
+            args.add(out_ref, format = "/refout:\"%s\"")
+            outputs.append(out_ref)
+        if out_pdb != None:
+            args.add(out_pdb, format = "/pdb:\"%s\"")
+            outputs.append(out_pdb)
     else:
         args.add("/refonly")
         args.add(out_ref, format = "/out:\"%s\"")
@@ -666,6 +768,10 @@ def _compile(
     if out_xml != None:
         args.add(out_xml, format = "/doc:\"%s\"")
         outputs.append(out_xml)
+
+    if errorlog_sarif != None:
+        args.add(errorlog_sarif, format = "/errorlog:\"%s\",version=2.1")
+        outputs.append(errorlog_sarif)
 
     # assembly references
     # csc resolves a duplicate assembly identity by order, so refs must come
@@ -743,7 +849,7 @@ def _compile(
     # https://learn.microsoft.com/en-us/dotnet/csharp/language-reference/compiler-options/
     actions.run(
         mnemonic = "CSharpCompile",
-        progress_message = "Compiling " + target_name + (" (internals ref-only dll)" if out_dll == None else ""),
+        progress_message = progress_message or ("Compiling " + target_name + (" (internals ref-only dll)" if out_dll == None else "")),
         inputs = depset(
             direct = direct_inputs,
             transitive = [framework_files, refs, analyzer_assemblies, analyzer_assemblies_csharp, compile_data],
