@@ -1,9 +1,6 @@
 # Razor class library packages, and the Razor failures.
 #
-# NU5129 is a known bug: `nuget_pack` ships no `build/<package id>.props`, the
-# only one NuGet imports, so a project built with MSBuild never sees
-# `build/Microsoft.AspNetCore.StaticWebAssets.props`. The SDK writes one that
-# imports it. NU5131 is as for every package with a `ref/` folder.
+# NU5131 is as for every package with a `ref/` folder.
 
 load("//dotnet:defs.bzl", "csharp_library", "nuget_pack")
 load("//dotnet/private/tests/nuget_pack:nuget_pack_test.bzl", "fails_with_test", "nuget_pack_test")
@@ -38,15 +35,23 @@ nuget_pack(
 )
 
 # Its consumers compile against the shared framework too, and the props file
-# names every file it serves, under the package id.
+# names every file it serves, under the package id. NuGet only imports
+# `build/<package id>.props` by itself, so that one imports the props file, and
+# the multi-targeting and transitive ones chain to it.
 nuget_pack_test(
     name = "components_pack_test",
     contents = {
         "expected/components_pack.nuspec": "RulesDotnet.Tests.Components.nuspec",
         "expected/components_pack.StaticWebAssets.props": "build/Microsoft.AspNetCore.StaticWebAssets.props",
+        "expected/components_pack.build.props": "build/RulesDotnet.Tests.Components.props",
+        "expected/components_pack.buildMultiTargeting.props": "buildMultiTargeting/RulesDotnet.Tests.Components.props",
+        "expected/components_pack.buildTransitive.props": "buildTransitive/RulesDotnet.Tests.Components.props",
     },
     files = [
         "build/Microsoft.AspNetCore.StaticWebAssets.props",
+        "build/RulesDotnet.Tests.Components.props",
+        "buildMultiTargeting/RulesDotnet.Tests.Components.props",
+        "buildTransitive/RulesDotnet.Tests.Components.props",
         "lib/net10.0/RulesDotnet.Tests.Components.dll",
         "lib/net10.0/RulesDotnet.Tests.Components.xml",
         "ref/net10.0/RulesDotnet.Tests.Components.dll",
@@ -55,10 +60,7 @@ nuget_pack_test(
         "staticwebassets/widget.js",
     ],
     package = ":components_pack",
-    warnings = [
-        "NU5129",
-        "NU5131",
-    ],
+    warnings = ["NU5131"],
 )
 
 # Serves files of its own and uses a library that serves its own: its package
@@ -96,16 +98,16 @@ nuget_pack_test(
     },
     files = [
         "build/Microsoft.AspNetCore.StaticWebAssets.props",
+        "build/RulesDotnet.Tests.Panel.props",
+        "buildMultiTargeting/RulesDotnet.Tests.Panel.props",
+        "buildTransitive/RulesDotnet.Tests.Panel.props",
         "lib/net10.0/RulesDotnet.Tests.Panel.dll",
         "lib/net10.0/RulesDotnet.Tests.Panel.xml",
         "ref/net10.0/RulesDotnet.Tests.Panel.dll",
         "staticwebassets/RulesDotnet.Tests.Panel.bundle.scp.css",
     ],
     package = ":panel_pack",
-    warnings = [
-        "NU5129",
-        "NU5131",
-    ],
+    warnings = ["NU5131"],
 )
 
 # --- Failures ----------------------------------------------------------------

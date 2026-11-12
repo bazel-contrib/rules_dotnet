@@ -38,6 +38,7 @@ load(
     "plan_library_contents",
     "reject_placed_conflicts",
     "static_web_assets_layout",
+    "static_web_assets_package_props",
     "static_web_assets_props",
     "tool_directory",
     "tool_layout",
@@ -199,8 +200,14 @@ def _pack_static_web_assets(ctx, target, assembly_name, package_id, copied_names
 
     props = ctx.actions.declare_file("{}/{}".format(ctx.label.name, STATIC_WEB_ASSETS_PROPS))
     ctx.actions.write(props, static_web_assets_props(package_id, layout.paths))
+    entries = layout.files + [(STATIC_WEB_ASSETS_PROPS, props)]
 
-    return layout.files + [(STATIC_WEB_ASSETS_PROPS, props)]
+    for (path, content) in static_web_assets_package_props(package_id).items():
+        file = ctx.actions.declare_file("{}/{}".format(ctx.label.name, path))
+        ctx.actions.write(file, content)
+        entries.append((path, file))
+
+    return entries
 
 def _metadata(ctx, package_id, version):
     license = None

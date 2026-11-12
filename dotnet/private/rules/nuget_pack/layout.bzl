@@ -394,6 +394,32 @@ def static_web_assets_props(package_id, paths):
     lines.extend(["  </ItemGroup>", "</Project>", ""])
     return "\n".join(lines)
 
+def static_web_assets_package_props(package_id):
+    """The files that make a consuming project import `STATIC_WEB_ASSETS_PROPS`.
+
+    NuGet only imports a package's `build/<package id>.props` on its own, so
+    that file imports the static web assets props, and the
+    `buildMultiTargeting` and `buildTransitive` ones chain to it, the way
+    `dotnet pack` writes them for a Razor class library.
+
+    Args:
+      package_id: The package id, which names the files.
+
+    Returns:
+      A dict of each file's contents by its path in the package.
+    """
+    build = "build/{}.props".format(package_id)
+    multi_targeting = "buildMultiTargeting/{}.props".format(package_id)
+
+    return {
+        build: _import_project(STATIC_WEB_ASSETS_PROPS.removeprefix("build/")),
+        multi_targeting: _import_project("../" + build),
+        "buildTransitive/{}.props".format(package_id): _import_project("../" + multi_targeting),
+    }
+
+def _import_project(project):
+    return "<Project>\n  <Import Project=\"{}\" />\n</Project>\n".format(_xml_escape(project))
+
 def tool_directory(tfm):
     """The in-package folder a tool's files take for a framework, without a trailing slash.
 
