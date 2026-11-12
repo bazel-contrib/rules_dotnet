@@ -1,4 +1,5 @@
-load("//dotnet:defs.bzl", "csharp_nunit_test")
+load("//dotnet:defs.bzl", "csharp_binary", "csharp_nunit_test")
+load(":tests.bzl", "runs_with_pruning_test")
 
 # The compiles link resolution matters for need a build server that outlives a
 # worker directory, so only this exercises it.
@@ -10,4 +11,17 @@ csharp_nunit_test(
         "//dotnet/private/tools/worker:srcs",
     ],
     target_frameworks = ["net10.0"],
+)
+
+csharp_binary(
+    name = "minimal",
+    srcs = ["Program.cs"],
+    target_frameworks = ["net10.0"],
+)
+
+# Compiling with pruning on reads the quoted paths of csc's response file.
+runs_with_pruning_test(
+    name = "compiles_with_pruning",
+    size = "small",
+    binary = ":minimal",
 )

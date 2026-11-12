@@ -423,6 +423,19 @@ build --worker_max_instances=CSharpCompile=HOST_CPUS
 build --worker_max_instances=FSharpCompile=HOST_CPUS
 ```
 
+### Pruning unused references
+
+When using the compiler worker an additional optimization becomes possible for C#: pruning unused references.
+What this does is track which references are actually used by the compiler and if they are unused
+they will be ignored by Bazel in subsequent builds. This can lead to better cache reuse.
+
+To enable this optimization, set the following flags:
+
+```
+build --@rules_dotnet//dotnet/settings:use_compiler_worker=true
+build --@rules_dotnet//dotnet/settings:prune_unused_references=true
+```
+
 ## Path mapping
 
 The rules_dotnet compile actions support

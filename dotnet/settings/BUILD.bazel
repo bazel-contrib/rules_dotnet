@@ -48,6 +48,17 @@ filegroup(
     visibility = ["//visibility:public"],
 )
 
+# Whether a compile reports the references it did not use, so that Bazel stops
+# re-running it when only those change. Needs use_compiler_worker, because it is
+# the worker that reads the compiled output.
+# See docs/README.md#pruning-unused-references.
+bool_flag(
+    name = "prune_unused_references",
+    build_setting_default = False,
+    scope = "universal",
+    visibility = ["//visibility:public"],
+)
+
 # Whether the compilers embed their sources in the PDB.
 # See docs/README.md#embedded-sources.
 bool_flag(
