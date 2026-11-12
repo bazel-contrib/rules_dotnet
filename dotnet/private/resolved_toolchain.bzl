@@ -9,7 +9,7 @@ Workaround for https://github.com/bazel-contrib/bazel/issues/14009
 
 # Forward all the providers
 def _resolved_toolchain_impl(ctx):
-    toolchain_info = ctx.toolchains["//dotnet:toolchain_type"]
+    toolchain_info = ctx.toolchains["//dotnet/toolchain:toolchain_type"]
     return [
         toolchain_info,
         toolchain_info.default,
@@ -21,6 +21,6 @@ def _resolved_toolchain_impl(ctx):
 # https://cs.opensource.google/bazel/bazel/+/master:tools/jdk/java_toolchain_alias.bzl
 resolved_toolchain = rule(
     implementation = _resolved_toolchain_impl,
-    toolchains = ["//dotnet:toolchain_type"],
+    toolchains = ["//dotnet/toolchain:toolchain_type"],
     doc = DOC,
 )

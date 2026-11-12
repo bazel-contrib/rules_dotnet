@@ -133,5 +133,5 @@ dependency group is exposed automatically as `@<group>//<package>/tools:<tool>`.
         "_bash_runfiles": attr.label(default = "@rules_shell//shell/runfiles"),
         "_windows_constraint": attr.label(default = "@platforms//os:windows"),
     },
-    toolchains = ["//dotnet:toolchain_type"],
+    toolchains = ["//dotnet/toolchain:toolchain_type"],
 )

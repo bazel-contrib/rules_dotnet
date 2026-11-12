@@ -1,0 +1,22 @@
+# Registering the toolchains makes Bazel load this package, in every build and
+# not only in ones with .NET targets. Keep it free of `load()`s and of anything
+# but the toolchain types: the TFM and RID settings in //dotnet are what this
+# package was split out to avoid.
+# //dotnet/private/tests/toolchain_resolution:registered_toolchains_buildfiles_test
+# checks this.
+
+toolchain_type(
+    name = "toolchain_type",
+    visibility = ["//visibility:public"],
+)
+
+# The SDK rules_dotnet builds its own tools with: the apphost shimmer and the
+# C# compiler worker. Kept apart from `toolchain_type` so the SDK the user
+# registers cannot decide what those are built with, or against.
+toolchain_type(
+    name = "bootstrap_toolchain_type",
+    visibility = ["//visibility:public"],
+)
+
+# Its bzl_library is //dotnet:toolchain, so that this file needs no `load()`.
+exports_files(["toolchain.bzl"])

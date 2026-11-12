@@ -168,7 +168,7 @@ resolved_package = rule(
         ),
     },
     toolchains = [
-        "//dotnet:toolchain_type",
+        "//dotnet/toolchain:toolchain_type",
     ],
     executable = False,
 )

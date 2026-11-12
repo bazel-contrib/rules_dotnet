@@ -3,6 +3,7 @@
 
 load("@bazel_lib//lib:diff_test.bzl", "diff_test")
 load("@bazel_lib//lib:testing.bzl", "assert_contains")
+load("//dotnet/private:toolchains_repo.bzl", "PLATFORMS")
 
 genrule(
     name = "dotnet_bin",
@@ -106,3 +107,29 @@ _SDK_REPORTS = {
     )
     for name in _SDK_REPORTS
 ]
+
+# Every BUILD and .bzl file that registering the toolchains makes Bazel load,
+# other than @platforms and the generated toolchain repositories. Must stay the
+# one package with the toolchain types: see //dotnet/toolchain.
+_REGISTERED_TOOLCHAINS = [
+    "@%s//:%s_toolchain" % (repo, platform)
+    for repo in [
+        "dotnet_toolchains",
+        "dotnet_bootstrap_toolchains",
+    ]
+    for platform in PLATFORMS
+]
+
+_REGISTERED_BUILDFILES = "buildfiles(deps(set(%s)))" % " ".join(_REGISTERED_TOOLCHAINS)
+
+genquery(
+    name = "registered_toolchains_buildfiles",
+    expression = "{0} except filter('@platforms//|dotnet_toolchains//|dotnet_bootstrap_toolchains//', {0})".format(_REGISTERED_BUILDFILES),
+    scope = _REGISTERED_TOOLCHAINS,
+)
+
+diff_test(
+    name = "registered_toolchains_buildfiles_test",
+    file1 = ":registered_toolchains_buildfiles",
+    file2 = "registered_toolchains_buildfiles.txt",
+)

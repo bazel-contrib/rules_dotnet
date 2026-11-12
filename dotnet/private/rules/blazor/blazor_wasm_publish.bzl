@@ -75,5 +75,5 @@ blazor_wasm_publish = rule(
             cfg = "exec",
         ),
     }),
-    toolchains = ["//dotnet:toolchain_type"],
+    toolchains = ["//dotnet/toolchain:toolchain_type"],
 )
