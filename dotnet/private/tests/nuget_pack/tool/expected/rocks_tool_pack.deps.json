@@ -1,0 +1,80 @@
+{
+  "compilationOptions": {},
+  "libraries": {
+    "RocksDB/10.2.1.58549": {
+      "hashPath": "rocksdb.10.2.1.58549.nupkg.sha512",
+      "path": "rocksdb/10.2.1.58549",
+      "serviceable": true,
+      "sha512": "sha512-ccGgq9s7Mt7uoMQ8ly4WvNpDTLSbllineqZjOSkEDoqc67nyxktmJN9w1XMhJ0Auzr53H7U1PtGoPXOdcnG+lQ==",
+      "type": "package"
+    },
+    "rocks_tool/0.3.0": {
+      "serviceable": false,
+      "sha512": "",
+      "type": "project"
+    }
+  },
+  "runtimeTarget": {
+    "name": ".NETCoreApp,Version=v9.0.0",
+    "signature": ""
+  },
+  "targets": {
+    ".NETCoreApp,Version=v9.0.0": {
+      "RocksDB/10.2.1.58549": {
+        "dependencies": {},
+        "resources": {},
+        "runtime": {
+          "RocksDbSharp.dll": {
+            "assemblyVersion": "10.2.1.58549.0"
+          }
+        },
+        "runtimeTargets": {
+          "runtimes/linux-arm64/native/librocksdb-musl.so": {
+            "assetType": "native",
+            "rid": "linux-arm64"
+          },
+          "runtimes/linux-arm64/native/librocksdb.so": {
+            "assetType": "native",
+            "rid": "linux-arm64"
+          },
+          "runtimes/linux-x64/native/librocksdb-jemalloc.so": {
+            "assetType": "native",
+            "rid": "linux-x64"
+          },
+          "runtimes/linux-x64/native/librocksdb-musl.so": {
+            "assetType": "native",
+            "rid": "linux-x64"
+          },
+          "runtimes/linux-x64/native/librocksdb.so": {
+            "assetType": "native",
+            "rid": "linux-x64"
+          },
+          "runtimes/osx-arm64/native/librocksdb.dylib": {
+            "assetType": "native",
+            "rid": "osx-arm64"
+          },
+          "runtimes/osx-x64/native/librocksdb.dylib": {
+            "assetType": "native",
+            "rid": "osx-x64"
+          },
+          "runtimes/win-x64/native/rocksdb.dll": {
+            "assetType": "native",
+            "rid": "win-x64"
+          }
+        }
+      },
+      "rocks_tool/0.3.0": {
+        "dependencies": {
+          "RocksDB": "10.2.1.58549"
+        },
+        "native": {},
+        "resources": {},
+        "runtime": {
+          "rocks_tool.dll": {
+            "assemblyVersion": "0.3.0.0"
+          }
+        }
+      }
+    }
+  }
+}

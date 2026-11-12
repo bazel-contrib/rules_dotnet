@@ -37,6 +37,7 @@ load(
     "library_layout",
     "plan_library_contents",
     "reject_placed_conflicts",
+    "reject_runtime_specific_natives",
     "static_web_assets_layout",
     "static_web_assets_props",
     "tool_directory",
@@ -124,6 +125,11 @@ def _pack_tool(ctx, tfm, target, compile_info, runtime_info):
     transitive = binary_info.transitive_runtime_deps
     name = runtime_info.name
 
+    # `dotnet tool install` puts the package on any operating system, so it
+    # carries what a RID-less publish would: every runtime's assets of the NuGet
+    # packages, for the host to pick from.
+    reject_runtime_specific_natives(runtime_info, transitive, ctx.label)
+
     # The binary's own deps.json and runtimeconfig.json describe the runfiles
     # tree it runs from under Bazel. A tool runs from its package folder, so it
     # gets the ones a publish would.
@@ -133,6 +139,7 @@ def _pack_tool(ctx, tfm, target, compile_info, runtime_info):
         is_self_contained = False,
         target_assembly_runtime_info = runtime_info,
         transitive_runtime_deps = transitive,
+        portable = True,
     )
     depsjson = ctx.actions.declare_file("{}/{}/{}.deps.json".format(ctx.label.name, tfm, name))
     ctx.actions.write(depsjson, json.encode(depsjson_struct))
@@ -146,14 +153,13 @@ def _pack_tool(ctx, tfm, target, compile_info, runtime_info):
         framework_version = binary_info.framework_version,
     )))
 
-    assembly_files = collect_assembly_files(runtime_info, transitive, depsjson_struct)
+    assembly_files = collect_assembly_files(runtime_info, transitive, depsjson_struct, portable = True)
 
     return tool_layout(
         tfm,
         binary_info,
         runtime_info,
         assembly_files,
-        binary_info.runtime_pack_info.runtime_identifier,
         depsjson,
         runtimeconfig,
     )
@@ -438,6 +444,13 @@ framework in `target_frameworks`, its reference assembly under `ref/<tfm>/`,
 its documentation, and a dependency group per framework. From a `binary`, a
 .NET tool package (`dotnet tool install`) with the binary's framework-dependent
 publish under `tools/<tfm>/any/`.
+
+A tool installs on any operating system, so its publish is portable, as
+`dotnet pack` makes it: the NuGet packages it uses bring their RID-agnostic
+assemblies and every runtime's native libraries and assemblies, under
+`runtimes/<rid>/`, for the host to pick the ones for the machine it runs on.
+A native library built in this workspace exists for the runtime being built
+alone, so a tool that depends on one fails to pack.
 
 A library built with `is_analyzer` packs as an analyzer package instead:
 nothing goes under `lib/`, and the analyzer goes under `analyzers/dotnet/` with

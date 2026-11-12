@@ -650,4 +650,122 @@ TESTS = [
         default_configuration = True,
         expected_libs = ["lib/netstandard2.0/A.dll"],
     ),
+    # An app that runs on any runtime - a .NET tool package - takes the
+    # RID-agnostic assemblies, and every runtime's assets for the host to pick
+    # from, the way a RID-less `dotnet publish` lists them.
+    nuget_resolution_test(
+        name = "a_portable_app_takes_every_runtimes_native_libraries",
+        files = [
+            "lib/netstandard2.0/A.dll",
+            "runtimes/linux-x64/native/libx.so",
+            "runtimes/osx-arm64/native/libx.dylib",
+            "runtimes/win-x64/native/x.dll",
+            # Nothing to load, as for the configured runtime.
+            "runtimes/linux-arm64/native/_._",
+        ],
+        portable = True,
+        expected_libs = ["lib/netstandard2.0/A.dll"],
+        expected_runtime_targets = {
+            "runtimes/linux-x64/native/libx.so": "linux-x64 native",
+            "runtimes/osx-arm64/native/libx.dylib": "osx-arm64 native",
+            "runtimes/win-x64/native/x.dll": "win-x64 native",
+        },
+    ),
+    nuget_resolution_test(
+        name = "a_portable_app_keeps_the_rid_agnostic_assembly_beside_the_rid_ones",
+        # The layout `a_rid_assembly_replaces_the_lib_group_on_linux` resolves
+        # to the unix assembly alone.
+        files = [
+            "lib/netstandard2.0/A.dll",
+            "ref/netstandard2.0/A.dll",
+            "ref/netcoreapp3.0/A.dll",
+            "runtimes/unix/lib/netcoreapp2.1/A.dll",
+            "runtimes/win/lib/netcoreapp2.1/A.dll",
+        ],
+        target_framework = "net6.0",
+        portable = True,
+        expected_libs = ["lib/netstandard2.0/A.dll"],
+        expected_runtime_targets = {
+            "runtimes/unix/lib/netcoreapp2.1/A.dll": "unix runtime",
+            "runtimes/win/lib/netcoreapp2.1/A.dll": "win runtime",
+        },
+    ),
+    nuget_resolution_test(
+        name = "each_runtime_of_a_portable_app_takes_its_own_nearest_framework",
+        files = [
+            "lib/netstandard2.0/A.dll",
+            "runtimes/unix/lib/netcoreapp2.0/A.dll",
+            "runtimes/unix/lib/netcoreapp2.1/A.dll",
+            "runtimes/win/lib/netcoreapp2.0/A.dll",
+            # Too new for net6.0, so win stays on netcoreapp2.0 although unix
+            # has a nearer framework than that.
+            "runtimes/win/lib/net8.0/A.dll",
+            # No framework net6.0 can use.
+            "runtimes/osx/lib/net8.0/A.dll",
+        ],
+        target_framework = "net6.0",
+        portable = True,
+        expected_libs = ["lib/netstandard2.0/A.dll"],
+        expected_runtime_targets = {
+            "runtimes/unix/lib/netcoreapp2.1/A.dll": "unix runtime",
+            "runtimes/win/lib/netcoreapp2.0/A.dll": "win runtime",
+        },
+    ),
+    nuget_resolution_test(
+        name = "a_rid_placeholder_claims_its_framework_in_a_portable_app",
+        # The win folder's nearest framework holds a placeholder, so win
+        # brings nothing rather than the netstandard2.0 assembly.
+        files = [
+            "lib/netstandard2.0/A.dll",
+            "runtimes/win/lib/net6.0/_._",
+            "runtimes/win/lib/netstandard2.0/A.dll",
+            "runtimes/unix/lib/netstandard2.0/A.dll",
+        ],
+        portable = True,
+        expected_libs = ["lib/netstandard2.0/A.dll"],
+        expected_runtime_targets = {
+            "runtimes/unix/lib/netstandard2.0/A.dll": "unix runtime",
+        },
+    ),
+    nuget_resolution_test(
+        name = "a_portable_app_keeps_a_version_qualified_rid_as_the_package_spells_it",
+        # Not folded onto linux-x64: the host matches the folder against the
+        # RID it runs on.
+        files = [
+            "lib/netstandard2.0/A.dll",
+            "runtimes/ubuntu.16.04-x64/lib/netstandard2.0/Ubuntu.dll",
+            "runtimes/ubuntu.16.04-x64/native/libu.so",
+        ],
+        portable = True,
+        expected_libs = ["lib/netstandard2.0/A.dll"],
+        expected_runtime_targets = {
+            "runtimes/ubuntu.16.04-x64/lib/netstandard2.0/Ubuntu.dll": "ubuntu.16.04-x64 runtime",
+            "runtimes/ubuntu.16.04-x64/native/libu.so": "ubuntu.16.04-x64 native",
+        },
+    ),
+    nuget_resolution_test(
+        name = "a_portable_app_takes_build_lib_assemblies_too",
+        files = [
+            "lib/netstandard2.0/A.dll",
+            "build/net8.0/lib/L.dll",
+            "runtimes/win/lib/netstandard2.0/A.dll",
+        ],
+        portable = True,
+        expected_libs = ["build/net8.0/lib/L.dll", "lib/netstandard2.0/A.dll"],
+        expected_runtime_targets = {
+            "runtimes/win/lib/netstandard2.0/A.dll": "win runtime",
+        },
+    ),
+    nuget_resolution_test(
+        name = "a_package_of_only_rid_assemblies_gives_a_portable_app_no_rid_agnostic_one",
+        files = [
+            "runtimes/linux/lib/netstandard1.6/Linux.dll",
+            "runtimes/osx/lib/netstandard1.6/Osx.dll",
+        ],
+        portable = True,
+        expected_runtime_targets = {
+            "runtimes/linux/lib/netstandard1.6/Linux.dll": "linux runtime",
+            "runtimes/osx/lib/netstandard1.6/Osx.dll": "osx runtime",
+        },
+    ),
 ]

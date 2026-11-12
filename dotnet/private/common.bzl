@@ -907,6 +907,22 @@ def is_from_nuget_package(dep):
     """
     return dep.nuget_info != None and dep.nuget_info.nupkg != None
 
+def get_portable_assets(dep, portable):
+    """What an app takes from a dependency in place of its configured runtime's assets.
+
+    Args:
+        dep: (DotnetAssemblyRuntimeInfo) The dependency.
+        portable: Whether the app runs on any runtime, as a .NET tool does.
+    Returns:
+        The `NuGetPortableAssetsInfo` of the package, or None when the app is
+        not portable or the dependency is no NuGet package: then its `libs`
+        and `native` are what it takes.
+    """
+    if not portable or dep.nuget_info == None:
+        return None
+
+    return dep.nuget_info.portable_assets
+
 def runtime_target_path(file):
     """The key a native asset takes in the `runtimeTargets` of a deps.json.
 
@@ -943,7 +959,8 @@ def generate_depsjson(
         target_assembly_runtime_info,
         transitive_runtime_deps,
         runtime_pack_info = None,
-        use_relative_paths = False):
+        use_relative_paths = False,
+        portable = False):
     """Generates a deps.json file.
 
     Args:
@@ -954,6 +971,10 @@ def generate_depsjson(
         transitive_runtime_deps: List of DotnetAssemblyRuntimeInfo providers which are the transitive runtime dependencies of the target.
         runtime_pack_info: The DotnetRuntimePackInfo of the runtime pack that is used for a self contained publish.
         use_relative_paths: If the paths to the dependencies should be relative to the workspace root.
+        portable: Whether the app runs on any runtime, as a .NET tool does: a
+            NuGet package then gives its RID-agnostic assemblies as `runtime`
+            and every runtime's assets as `runtimeTargets`, the way a RID-less
+            `dotnet publish` lists them. Not with `is_self_contained`.
     Returns:
         The deps.json file as a struct.
     """
@@ -1039,11 +1060,13 @@ def generate_depsjson(
             "dependencies": runtime_dep.direct_deps_depsjson_fragment,
         }
 
+        portable_assets = get_portable_assets(runtime_dep, portable)
+
         # Do not add the `runtime` and `native` sections if the runtime pack overrides the dependency.
         if runtime_dep.name.lower() not in runtime_pack_overrides:
             target_fragment["runtime"] = {(dll.basename if not use_relative_paths else to_rlocation_path(ctx, dll)): {
                 "assemblyVersion": runtime_dep.version + ".0",
-            } for dll in runtime_dep.libs}
+            } for dll in (portable_assets.libs if portable_assets else runtime_dep.libs)}
 
             target_fragment["resources"] = {(resource_assembly.basename if not use_relative_paths else to_rlocation_path(ctx, resource_assembly)): {
                 "locale": _get_resource_assembly_locale(resource_assembly),
@@ -1054,6 +1077,16 @@ def generate_depsjson(
             # Otherwise we followe the conventions mentioned here: https://github.com/dotnet/sdk/blob/main/documentation/specs/runtime-configuration-file.md#framework-dependent-deployment-model
             if is_self_contained:
                 target_fragment["native"] = {native_file.basename: {"fileVersion": "0.0.0.0"} for native_file in runtime_dep.native}
+            elif portable_assets:
+                # The host takes the assets of the runtime it runs on, by the
+                # RID folder they sit in.
+                target_fragment["runtimeTargets"] = {
+                    asset.path: {
+                        "rid": asset.rid,
+                        "assetType": asset.asset_type,
+                    }
+                    for asset in portable_assets.runtime_targets
+                }
             elif not is_from_nuget_package(runtime_dep):
                 # For non self-contained binaries that are not from a NuGet package, assume we built
                 # them and point to their relative location within the execroot.

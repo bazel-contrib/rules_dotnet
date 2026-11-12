@@ -32,8 +32,10 @@ def nuget_resolution_test(
         expected_tools = {},
         expected_framework_list = {},
         expected_targeting_pack_overrides = {},
+        expected_runtime_targets = {},
         expect_incompatible = False,
-        default_configuration = False):
+        default_configuration = False,
+        portable = False):
     """One package layout and what a build gets out of it.
 
     Stating no expectations at all is how a test says the package resolves to
@@ -60,12 +62,19 @@ def nuget_resolution_test(
         asserting on them asserts nothing else.
       expected_framework_list: Assembly versions a targeting pack declares.
       expected_targeting_pack_overrides: Packages a targeting pack supersedes.
+      expected_runtime_targets: Every runtime's assets an app that runs on any
+        runtime takes, by their path in the package, to `<rid> native` or
+        `<rid> runtime`. Read by a `portable` test alone.
       expect_incompatible: The package supports nothing that can be built here,
         which is an error rather than a package that brings nothing. Asserts
         only that, so no other expectation can be stated alongside it.
       default_configuration: Resolve without a framework transition in front,
         the way anything reaching the package from outside the .NET rules does.
         There is no framework or RID to name, and only `expected_libs` is read.
+      portable: Resolve what an app that runs on any runtime takes, as a .NET
+        tool package does: `expected_libs` are then its RID-agnostic
+        assemblies, `expected_runtime_targets` every runtime's assets, and
+        nothing else is read. There is no RID to name.
 
     Returns:
       The test declaration.
@@ -85,6 +94,7 @@ def nuget_resolution_test(
             ("expected_tools", expected_tools),
             ("expected_framework_list", expected_framework_list),
             ("expected_targeting_pack_overrides", expected_targeting_pack_overrides),
+            ("expected_runtime_targets", expected_runtime_targets),
         ]
         if value
     ]
@@ -143,6 +153,22 @@ def nuget_resolution_test(
             stated,
         )
 
+    if portable:
+        if expect_incompatible or default_configuration:
+            fail("{}: a portable test is asserted on its own".format(name))
+
+        if runtime_identifier:
+            fail("{}: a portable test takes every runtime, so it cannot name a runtime_identifier".format(name))
+
+        _reject_unchecked(
+            name,
+            "a portable test reads expected_libs and expected_runtime_targets only",
+            ["expected_libs", "expected_runtime_targets"],
+            stated,
+        )
+    elif expected_runtime_targets:
+        fail("{}: only a portable test reads expected_runtime_targets".format(name))
+
     return struct(
         name = name,
         files = files,
@@ -161,6 +187,8 @@ def nuget_resolution_test(
         expected_tools = expected_tools,
         expected_framework_list = expected_framework_list,
         expected_targeting_pack_overrides = expected_targeting_pack_overrides,
+        expected_runtime_targets = expected_runtime_targets,
         expect_incompatible = expect_incompatible,
         default_configuration = default_configuration,
+        portable = portable,
     )

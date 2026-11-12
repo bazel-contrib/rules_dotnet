@@ -79,6 +79,28 @@ NuGetInfo = provider(
         "framework_list": "map[string, string]: Targeting packs like e.g. Microsoft.NETCore.App.Ref have a FrameworkList.xml that includes a list of the DLLs in the targeting pack. This is used for selecting the correct DLL versions during compilation and runtime.",
         "sha512": "string: the SHA512 SRI string for the package",
         "nupkg": "File: the underlying `.nupkg` file which provides this package",
+        "portable_assets": "NuGetPortableAssetsInfo: What the package gives an app that runs on any runtime, or None for an import that names no package.",
+    },
+)
+
+NuGetPortableAssetsInfo = provider(
+    doc = """What a NuGet package gives an app that is not built for one runtime identifier.
+
+A RID-less restore, `dotnet publish` without `-r` and `dotnet pack` of a .NET
+tool take every runtime's assets of a package, not the configured runtime's:
+the host picks the ones for the machine it runs on from the `runtimeTargets`
+of the deps.json. `libs` and `native` of `DotnetAssemblyRuntimeInfo` hold one
+runtime's, so this holds the rest, for the configured target framework.""",
+    fields = {
+        "libs": "list[File]: The RID-agnostic runtime assemblies, under `lib/<tfm>/`: the `runtime` assets of the deps.json.",
+        "runtime_targets": """list[struct]: Every runtime's assets, sorted by `path`: the `runtimeTargets` of the deps.json. Each carries
+
+  * `path`: where the file sits in the package, `runtimes/<rid>/native/...` or
+    `runtimes/<rid>/lib/<tfm>/<assembly>`, which is also the deps.json key and
+    where a publish puts it.
+  * `file`: the File.
+  * `rid`: the runtime identifier of the folder, as the package spells it.
+  * `asset_type`: `native` or `runtime`.""",
     },
 )
 

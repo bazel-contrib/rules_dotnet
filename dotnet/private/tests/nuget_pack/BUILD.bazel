@@ -31,6 +31,7 @@ write_source_files(
         "//dotnet/private/tests/nuget_pack/razor:panel_pack_test.update",
         "//dotnet/private/tests/nuget_pack/rid:rid_pack_test.update",
         "//dotnet/private/tests/nuget_pack/tool:fs_tool_pack_test.update",
+        "//dotnet/private/tests/nuget_pack/tool:rocks_tool_pack_test.update",
         "//dotnet/private/tests/nuget_pack/tool:tool_pack_test.update",
     ],
 )
