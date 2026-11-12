@@ -1,6 +1,7 @@
 """Asserts how a publish splits into container layers."""
 
 load("@rules_testing//lib:analysis_test.bzl", "analysis_test", "test_suite")
+load("@rules_testing//lib:truth.bzl", "matching")
 load("@rules_testing//lib:util.bzl", "TestingAspectInfo")
 load("//dotnet:defs.bzl", "publish_binary")
 load("//dotnet/private:providers.bzl", "DotnetNativeToolsInfo")
@@ -357,41 +358,54 @@ def _single_file_test_impl(env, target):
     env.expect.that_collection(layers["third_party"]).has_size(1)
 
 def _native_compiler_other_framework_test(name):
-    for (suffix, kwargs) in [
-        ("_ready_to_run_composite", {"ready_to_run": True, "ready_to_run_composite": True}),
-        ("_native_aot", {"native_aot": True, "target_compatible_with": _NOT_WINDOWS}),
-    ]:
-        publish_binary(
-            name = name + suffix,
-            binary = ":net9_app",
-            self_contained = True,
-            tags = ["manual"],
-            target_framework = "net10.0",
-            **kwargs
-        )
+    publish_binary(
+        name = name + "_ready_to_run_composite",
+        binary = ":net9_app",
+        ready_to_run = True,
+        ready_to_run_composite = True,
+        self_contained = True,
+        tags = ["manual"],
+        target_framework = "net10.0",
+    )
 
     analysis_test(
         name = name,
         impl = _native_compiler_other_framework_test_impl,
-        targets = {
-            "composite": name + "_ready_to_run_composite",
-            "native_aot": name + "_native_aot",
-        },
+        target = name + "_ready_to_run_composite",
     )
 
-def _native_compiler_other_framework_test_impl(env, targets):
+def _native_compiler_other_framework_test_impl(env, target):
     # The binary is built for net9.0, so it runs on net9.0 whatever framework
     # the publish asked for, and a runtime only uses native code from a
     # compiler of its own version. The compilers come from the binary's band.
-    crossgen2 = _native_tools(targets.composite).crossgen2.tool
+    crossgen2 = _native_tools(target).crossgen2.tool
     env.expect.that_str(crossgen2.path).contains("/net9.0/")
-    env.expect.that_collection(_actions(targets.composite, ["Crossgen2Composite"])[0].inputs.to_list()).contains(crossgen2)
+    env.expect.that_collection(_actions(target, ["Crossgen2Composite"])[0].inputs.to_list()).contains(crossgen2)
 
-    native_tools = _native_tools(targets.native_aot)
-    env.expect.that_str(native_tools.ilcompiler.tool.path).contains("/net9.0/")
-    env.expect.that_bool(len(native_tools.nativeaot_pack.libs) > 0).equals(True)
-    env.expect.that_collection([lib.path for lib in native_tools.nativeaot_pack.libs if ".v9.0." not in lib.path]).has_size(0)
-    env.expect.that_collection(_actions(targets.native_aot, ["Ilc"])[0].inputs.to_list()).contains(native_tools.ilcompiler.tool)
+def _native_aot_needs_net10_test(name):
+    # Asked for net10.0, but the binary is built for net9.0, whose band
+    # supplies the compiler.
+    publish_binary(
+        name = name + "_native_aot",
+        binary = ":net9_app",
+        native_aot = True,
+        self_contained = True,
+        tags = ["manual"],
+        target_compatible_with = _NOT_WINDOWS,
+        target_framework = "net10.0",
+    )
+
+    analysis_test(
+        name = name,
+        impl = _native_aot_needs_net10_test_impl,
+        target = name + "_native_aot",
+        expect_failure = True,
+    )
+
+def _native_aot_needs_net10_test_impl(env, target):
+    failures = env.expect.that_target(target).failures()
+    failures.contains_predicate(matching.contains("native_aot needs .NET 10 or later"))
+    failures.contains_predicate(matching.contains(":net9_app is built for net9.0"))
 
 def _binary_dependency_test(name):
     for (suffix, kwargs) in [
@@ -449,6 +463,7 @@ def container_layers_test_suite(name):
             _native_aot_test,
             _single_file_test,
             _native_compiler_other_framework_test,
+            _native_aot_needs_net10_test,
             _binary_dependency_test,
             _data_test,
         ],
