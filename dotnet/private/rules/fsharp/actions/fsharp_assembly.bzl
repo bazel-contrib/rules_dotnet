@@ -203,6 +203,7 @@ def AssemblyAction(
         transitive_compile_data,
         framework_files,
         exports_files,
+        transitive_internals,
     ) = collect_compile_info(
         assembly_name,
         deps,
@@ -361,6 +362,7 @@ def AssemblyAction(
         compile_data = compile_data,
         exports = exports_files,
         transitive_refs = prefs,
+        transitive_internals = transitive_internals,
         transitive_analyzers = analyzers,
         transitive_analyzers_csharp = analyzers_csharp,
         transitive_analyzers_fsharp = analyzers_fsharp,

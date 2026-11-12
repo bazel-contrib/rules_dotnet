@@ -300,6 +300,8 @@ def collect_compile_info(name, deps, targeting_pack, exports, strict_deps):
     transitive_analyzers_csharp = []
     transitive_analyzers_fsharp = []
     transitive_analyzers_vb = []
+    direct_internals = []
+    transitive_internals = []
 
     exports_files = []
 
@@ -318,6 +320,17 @@ def collect_compile_info(name, deps, targeting_pack, exports, strict_deps):
         framework_list = targeting_pack_info.framework_list
 
         direct_compile_data.extend(targeting_pack_info.compile_data)
+
+    # Under non-strict deps the closure is walked below, the way MSBuild follows
+    # transitive ProjectReferences. An assembly in it that names this one in its
+    # `internals_visible_to` is handed over as its internals-carrying reference
+    # assembly, and only as that: given two reference assemblies with the same
+    # identity, csc keeps the last and fsc does not.
+    friend_irefs = {}
+    if not strict_deps:
+        for ref, iref, friends in depset(transitive = [dep[DotnetAssemblyCompileInfo].transitive_internals for dep in deps]).to_list():
+            if name in friends:
+                friend_irefs[ref] = iref
 
     for dep in deps:
         assembly = dep[DotnetAssemblyCompileInfo]
@@ -356,6 +369,10 @@ def collect_compile_info(name, deps, targeting_pack, exports, strict_deps):
             direct_analyzers_fsharp.extend(assembly.analyzers_fsharp)
             direct_analyzers_vb.extend(assembly.analyzers_vb)
             direct_compile_data.extend(assembly.compile_data)
+            if assembly.internals_visible_to:
+                for ref, iref in zip(assembly.refs, assembly.irefs):
+                    if ref != iref:
+                        direct_internals.append((ref, iref, tuple(assembly.internals_visible_to)))
 
         # We take all the exports of each dependency and add them
         # to the direct refs.
@@ -370,11 +387,12 @@ def collect_compile_info(name, deps, targeting_pack, exports, strict_deps):
             for transitive_assembly in assembly.transitive_refs.to_list():
                 transitive_name = transitive_assembly.basename.replace(".dll", "").lower()
                 if transitive_name not in targeting_pack_overrides and transitive_name not in framework_list:
-                    transitive_ref.append(transitive_assembly)
+                    transitive_ref.append(friend_irefs.get(transitive_assembly, transitive_assembly))
 
             # The provider keeps the deps' depsets, so every consumer shares one
             # copy of the closure and filters it against its own targeting pack.
             transitive_ref_depsets.append(assembly.transitive_refs)
+            transitive_internals.append(assembly.transitive_internals)
 
             transitive_analyzers.append(assembly.transitive_analyzers)
             transitive_analyzers_csharp.append(assembly.transitive_analyzers_csharp)
@@ -417,6 +435,7 @@ def collect_compile_info(name, deps, targeting_pack, exports, strict_deps):
         depset(direct = direct_compile_data, transitive = transitive_compile_data),
         framework_files,
         exports_files,
+        depset(direct = direct_internals, transitive = transitive_internals),
     )
 
 def collect_transitive_runfiles(ctx, assembly_runtime_info, deps):

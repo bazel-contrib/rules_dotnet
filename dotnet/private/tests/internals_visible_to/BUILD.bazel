@@ -2,6 +2,7 @@ load(
     "//dotnet:defs.bzl",
     "csharp_library",
     "csharp_nunit_test",
+    "fsharp_library",
 )
 
 # Only here to give `chain` a transitive closure to walk.
@@ -35,7 +36,10 @@ csharp_library(
 csharp_library(
     name = "secrets",
     srcs = ["Secrets.cs"],
-    internals_visible_to = ["consumer"],
+    internals_visible_to = [
+        "consumer",
+        "transitive_consumer",
+    ],
     target_frameworks = ["net9.0"],
     deps = [":code_block_analyzer"],
 )
@@ -58,4 +62,72 @@ csharp_nunit_test(
     srcs = ["Outsider.cs"],
     target_frameworks = ["net9.0"],
     deps = [":secrets"],
+)
+
+# Only built with strict deps off: strict deps never hand a target the
+# dependencies of its dependencies, so these cannot see `secrets` at all
+# otherwise. See README.md.
+config_setting(
+    name = "strict_deps_off",
+    flag_values = {"//dotnet/settings:strict_deps": "False"},
+)
+
+NON_STRICT_DEPS_ONLY = select({
+    ":strict_deps_off": [],
+    "//conditions:default": ["@platforms//:incompatible"],
+})
+
+csharp_library(
+    name = "relay",
+    srcs = ["Relay.cs"],
+    target_frameworks = ["net9.0"],
+    deps = [":secrets"],
+)
+
+# Reaches `secrets` only through `relay`. See README.md.
+csharp_nunit_test(
+    name = "transitive_consumer",
+    srcs = ["TransitiveConsumer.cs"],
+    target_compatible_with = NON_STRICT_DEPS_ONLY,
+    target_frameworks = ["net9.0"],
+    deps = [":relay"],
+)
+
+# The F# targets are compile-only: what they test is whether fsc accepts the
+# access to an internal member. See README.md.
+fsharp_library(
+    name = "fsharp_secrets",
+    srcs = ["FSharpSecrets.fs"],
+    internals_visible_to = [
+        "fsharp_consumer",
+        "fsharp_transitive_consumer",
+    ],
+    target_frameworks = ["net9.0"],
+)
+
+fsharp_library(
+    name = "fsharp_relay",
+    srcs = ["FSharpRelay.fs"],
+    target_frameworks = ["net9.0"],
+    deps = [":fsharp_secrets"],
+)
+
+# Reaches `fsharp_secrets` directly and, with strict deps off, through
+# `fsharp_relay` too. See README.md.
+fsharp_library(
+    name = "fsharp_consumer",
+    srcs = ["FSharpConsumer.fs"],
+    target_frameworks = ["net9.0"],
+    deps = [
+        ":fsharp_relay",
+        ":fsharp_secrets",
+    ],
+)
+
+fsharp_library(
+    name = "fsharp_transitive_consumer",
+    srcs = ["FSharpConsumer.fs"],
+    target_compatible_with = NON_STRICT_DEPS_ONLY,
+    target_frameworks = ["net9.0"],
+    deps = [":fsharp_relay"],
 )

@@ -255,6 +255,7 @@ def AssemblyAction(
         transitive_compile_data,
         framework_files,
         exports_files,
+        transitive_internals,
     ) = collect_compile_info(
         assembly_name,
         compile_deps,
@@ -518,6 +519,7 @@ def AssemblyAction(
         compile_data = compile_data,
         exports = exports_files,
         transitive_refs = prefs if not (is_analyzer or is_language_specific_analyzer) else depset(),
+        transitive_internals = transitive_internals if not (is_analyzer or is_language_specific_analyzer) else depset(),
         transitive_analyzers = analyzers,
         transitive_analyzers_csharp = analyzers_csharp,
         transitive_analyzers_fsharp = analyzers_fsharp,
