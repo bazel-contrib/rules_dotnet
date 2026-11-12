@@ -3,6 +3,7 @@
 load(
     "//dotnet/private:common.bzl",
     "get_nearest_compatible_target_framework",
+    "get_portable_assets",
     "is_core_framework",
     "is_greater_or_equal_framework",
     "tfm_to_nuget_framework",
@@ -431,16 +432,41 @@ def tool_directory(tfm):
     """
     return "tools/{}/any".format(tfm)
 
-def tool_layout(tfm, binary_info, runtime_info, assembly_files, runtime_identifier, depsjson, runtimeconfig):
+def reject_runtime_specific_natives(runtime_info, transitive_runtime_deps, label):
+    """Fails when a tool depends on native libraries that exist for the configured runtime only.
+
+    Only NuGet packages carry native libraries for every runtime.
+
+    Args:
+      runtime_info: The `DotnetAssemblyRuntimeInfo` of the binary.
+      transitive_runtime_deps: The `DotnetAssemblyRuntimeInfo`s of its transitive dependencies.
+      label: This package's label, for messages.
+    """
+    for info in [runtime_info] + transitive_runtime_deps:
+        if not info.native or get_portable_assets(info, True):
+            continue
+
+        fail(("{}: the tool depends on {}, whose native libraries ({}) exist for the runtime " +
+              "being built alone. A tool package installs on any operating system, so the " +
+              "native libraries it ships have to come out of NuGet packages, which carry one " +
+              "for every runtime identifier.").format(
+            label,
+            info.name,
+            ", ".join(sorted({str(file.owner) if file.owner else file.path: None for file in info.native}.keys())),
+        ))
+
+def tool_layout(tfm, binary_info, runtime_info, assembly_files, depsjson, runtimeconfig):
     """Where a tool's framework-dependent publish goes for one framework.
+
+    The publish is portable: `reject_runtime_specific_natives` has ruled out
+    native libraries built here, so only NuGet packages' `runtime_targets` are
+    runtime specific.
 
     Args:
       tfm: The target framework moniker.
       binary_info: The `DotnetBinaryInfo` of the binary.
       runtime_info: The `DotnetAssemblyRuntimeInfo` of the binary.
-      assembly_files: What `collect_assembly_files` returned for it.
-      runtime_identifier: The runtime identifier the binary was built for, which
-        names the folder of any native library built alongside it.
+      assembly_files: What `collect_assembly_files` returned for it, `portable`.
       depsjson: The `deps.json` written for the package.
       runtimeconfig: The `runtimeconfig.json` written for the package.
 
@@ -451,7 +477,7 @@ def tool_layout(tfm, binary_info, runtime_info, assembly_files, runtime_identifi
 
     entries = [
         (prefix + path, file)
-        for (path, file) in publish_layout(runtime_identifier, binary_info, assembly_files, [], False)
+        for (path, file) in publish_layout(None, binary_info, assembly_files, [], False)
     ]
 
     # A publish ships the symbols of what it built, so a tool package does too.

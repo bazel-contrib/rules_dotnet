@@ -5,13 +5,14 @@ Shared by `publish_binary`, which copies the layout into a directory, and
 package.
 """
 
-load("//dotnet/private:common.bzl", "runtime_target_path")
+load("//dotnet/private:common.bzl", "get_portable_assets", "runtime_target_path")
 
 def publish_layout(runtime_identifier, binary_info, assembly_files, runtime_pack_files, is_self_contained):
     """Every published file paired with the path it takes inside the publish directory.
 
     The directory is flat apart from resource assemblies, the servable `wwwroot`
-    tree and, unless the publish is self-contained, native libraries.
+    tree, every runtime's assets of a portable app and, unless the publish is
+    self-contained, native libraries.
 
     Args:
       runtime_identifier: The RID the binary is published for.
@@ -46,6 +47,10 @@ def publish_layout(runtime_identifier, binary_info, assembly_files, runtime_pack
             # is what tells the two apart.
             rid = file.dirname.split("/")[-2] if file.is_source else runtime_identifier
             layout.append(("runtimes/{}/native/{}".format(rid, file.basename), file))
+
+    # A portable app's runtime assets keep their path in the package, where
+    # `runtimeTargets` says they are.
+    layout.extend(assembly_files.runtime_targets)
 
     # A self-contained publish carries the runtime pack at the root of the
     # publish folder.
@@ -87,7 +92,7 @@ def reject_conflicting_paths(layout, label, what = "published"):
                   "Set `out` on one of them to give its assembly a different " +
                   "file name.").format(label, previous.owner, file.owner, what, path))
 
-def collect_assembly_files(assembly_info, transitive_runtime_deps, deps_json_struct):
+def collect_assembly_files(assembly_info, transitive_runtime_deps, deps_json_struct, portable = False):
     """The files a publish copies, gathered from the target and its deps.
 
     Args:
@@ -95,14 +100,17 @@ def collect_assembly_files(assembly_info, transitive_runtime_deps, deps_json_str
       transitive_runtime_deps: The `DotnetAssemblyRuntimeInfo`s of its transitive dependencies.
       deps_json_struct: The generated `deps.json`, which says which of a
         dependency's files the runtime will load.
+      portable: Whether the deps.json was generated `portable`.
 
     Returns:
       A struct of `libs`, `resource_assemblies`, `native`, `data` and
-      `appsetting_files` lists.
+      `appsetting_files` lists, and `runtime_targets`, the `(path, File)` pairs
+      of a portable app's runtime assets.
     """
     libs = list(assembly_info.libs)
     resource_assemblies = list(assembly_info.resource_assemblies)
     native_files = list(assembly_info.native)
+    runtime_target_files = []
     data = list(assembly_info.data)
     targets = deps_json_struct["targets"].values()[0]
 
@@ -115,14 +123,20 @@ def collect_assembly_files(assembly_info, transitive_runtime_deps, deps_json_str
             dep_native = target.get("native", {})
             runtime_targets = target.get("runtimeTargets", {})
             runtime = target.get("runtime", {})
+            portable_assets = get_portable_assets(dep, portable)
 
-            # `native` is keyed by basename, `runtimeTargets` by the path the
-            # asset takes inside the publish.
-            for file in dep.native:
-                if file.basename in dep_native or runtime_targets.get(runtime_target_path(file), {}).get("assetType") == "native":
-                    native_files.append(file)
+            if portable_assets:
+                for asset in portable_assets.runtime_targets:
+                    if asset.path in runtime_targets:
+                        runtime_target_files.append((asset.path, asset.file))
+            else:
+                # `native` is keyed by basename, `runtimeTargets` by the path the
+                # asset takes inside the publish.
+                for file in dep.native:
+                    if file.basename in dep_native or runtime_targets.get(runtime_target_path(file), {}).get("assetType") == "native":
+                        native_files.append(file)
 
-            for file in dep.libs:
+            for file in (portable_assets.libs if portable_assets else dep.libs):
                 if file.basename in runtime:
                     libs.append(file)
 
@@ -133,6 +147,7 @@ def collect_assembly_files(assembly_info, transitive_runtime_deps, deps_json_str
         libs = libs,
         resource_assemblies = resource_assemblies,
         native = native_files,
+        runtime_targets = runtime_target_files,
         data = data,
         appsetting_files = assembly_info.appsetting_files.to_list(),
     )

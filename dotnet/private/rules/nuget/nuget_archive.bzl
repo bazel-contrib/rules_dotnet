@@ -1,6 +1,10 @@
 "NuGet Archive"
 
 load(
+    "@bazel_skylib//rules:common_settings.bzl",
+    "BuildSettingInfo",
+)
+load(
     "@bazel_tools//tools/build_defs/repo:utils.bzl",
     "read_netrc",
     "read_user_netrc",
@@ -15,6 +19,7 @@ load(
     "get_nearest_compatible_target_framework",
 )
 load("//dotnet/private:portable_rids.bzl", "rids_by_preference", "to_portable_rid")
+load("//dotnet/private:providers.bzl", "NuGetPortableAssetsInfo")
 load(
     "//dotnet/private/rules/nuget:dotnet_tool.bzl",
     "DotnetToolInfo",
@@ -144,6 +149,26 @@ def _create_tools_select(tools):
         return None
 
     return "tool_filegroup(\"tools\", %s)" % _file_dict(tools)
+
+def _create_portable_assets(groups):
+    """Emits the `portable_assets` target.
+
+    Its RID-agnostic assemblies are the `lib` and `build` groups that `libs`
+    falls back to when no RID-bound assembly applies.
+    """
+    libs = []
+
+    if groups.libs or groups.rid_libs:
+        libs.append(":libs_package_lib")
+
+    if groups.build_libs:
+        libs.append(":libs_build")
+
+    return "portable_assets(\"portable_assets\", %s, %s, %s)" % (
+        json.encode(libs),
+        json.encode(groups.portable_runtimes["native"]),
+        json.encode(groups.portable_runtimes["lib"]),
+    )
 
 def _sanitize_path(file_path):
     # On linux the relative file path starts with ./
@@ -330,6 +355,20 @@ def _resolve_roslyn_analyzers(groups):
 def _process_content_file(groups, file):
     groups["contentFiles"]["any"].append(file)
 
+def _process_portable_runtimes_file(group, parts, file):
+    """Records a `runtimes` file for a RID-less restore, which keeps every RID folder as spelled.
+
+    A `_._` under `lib` is kept: it still claims its framework for its RID.
+    """
+    if parts[2] == "native" and len(parts) > 3 and not file.endswith("_._"):
+        group["native"].append(file)
+
+    if parts[2] == "lib" and len(parts) > 4:
+        tfm = _normalize_tfm(parts[3])
+
+        if tfm != None and (file.endswith("_._") or (file.endswith(".dll") and not file.endswith(".resources.dll"))):
+            group["lib"][file] = tfm
+
 def _process_runtimes_file(groups, file):
     parts = file.split("/")
 
@@ -340,6 +379,8 @@ def _process_runtimes_file(groups, file):
     # `ubuntu.16.04-x64`. rules_dotnet configures only on portable RIDs, so fold
     # those onto the nearest portable ancestor.
     source_rid = parts[1]
+
+    _process_portable_runtimes_file(groups["portable_runtimes"], parts, file)
 
     if source_rid not in RUNTIME_GRAPH:
         return
@@ -602,6 +643,12 @@ def _group_package_files(id, all_files):
         # See https://docs.microsoft.com/en-us/nuget/create-packages/supporting-multiple-target-frameworks#architecture-specific-folders
         # Format: runtimes/<RID>/native/<assembly>.dll OR runtimes/<RID>/lib/<TFM>/<assembly>.dll
         "runtimes": {},
+        # The same files for a RID-less restore: every RID folder, unfolded.
+        # `lib` maps a file to its framework.
+        "portable_runtimes": {
+            "native": [],
+            "lib": {},
+        },
         # See: https://learn.microsoft.com/en-us/nuget/concepts/msbuild-props-and-targets#framework-specific-build-folder
         # Format: build/<TFM>/ref/<assembly>.dll OR build/<TFM>/lib/<assembly>.dll
         # NB: Only the assemblies are picked up; the MSBuild props and targets
@@ -677,6 +724,7 @@ def _group_package_files(id, all_files):
         static_web_assets = groups["staticwebassets"],
         libs = libs,
         native = native,
+        portable_runtimes = groups["portable_runtimes"],
         refs = groups["ref"],
         resource_assemblies = groups["resource_assemblies"],
         rid_libs = rid_libs,
@@ -723,7 +771,7 @@ def _write_repository(ctx, id, nupkg_name, all_files, prefix = ""):
 
     ctx.file(prefix + "BUILD.bazel", r"""package(default_visibility = ["//visibility:public"])
 exports_files(glob(["**"]))
-load("%s", "tfm_filegroup", "rid_tfm_filegroup", "ref_tfm_filegroup", "rid_filegroup", "tool_filegroup", "unsupported_frameworks")
+load("%s", "tfm_filegroup", "rid_tfm_filegroup", "ref_tfm_filegroup", "rid_filegroup", "portable_assets", "tool_filegroup", "unsupported_frameworks")
 """ % str(Label("//dotnet/private/rules/nuget:nuget_archive.bzl")) + "\n".join([
         _create_group(
             "libs",
@@ -752,6 +800,7 @@ load("%s", "tfm_filegroup", "rid_tfm_filegroup", "ref_tfm_filegroup", "rid_fileg
         "filegroup(name = \"analyzers_vb\", srcs = [%s])" % ",".join(["\n  \"%s\"" % a for a in groups.analyzers["dotnet/vb"]]),
         "filegroup(name = \"data\", srcs = [])",
         _create_rid_native_select("native", groups.native) or "filegroup(name = \"native\", srcs = [])",
+        _create_portable_assets(groups),
         "filegroup(name = \"content_files\", srcs = [%s])" % ",".join(["\n  \"%s\"" % a for a in groups.content_files]),
         "filegroup(name = \"typeproviders\", srcs = [%s])" % ",".join(["\n  \"%s\"" % _sanitize_path(a) for a in groups.typeproviders]),
         "filegroup(name = \"static_web_assets\", srcs = [%s])" % ",".join(["\n  \"%s\"" % _sanitize_path(a) for a in groups.static_web_assets]),
@@ -1088,6 +1137,73 @@ def rid_filegroup(name, files_per_rid):
     return native.alias(
         name = name,
         actual = _rid_chain("%s_chain" % name, targets_by_rid, fallback),
+        visibility = ["//visibility:public"],
+    )
+
+def _rid(target):
+    # A file target's name is its path in the package, `runtimes/<rid>/...`,
+    # which is also its deps.json key and its path in a publish.
+    return target.label.name.split("/")[1]
+
+def _runtime_targets(targets, asset_type):
+    return [
+        struct(path = target.label.name, file = file, rid = _rid(target), asset_type = asset_type)
+        for target in targets
+        for file in target.files.to_list()
+    ]
+
+def _portable_assets_impl(ctx):
+    target_framework = ctx.attr._target_framework[BuildSettingInfo].value
+    runtime_targets = _runtime_targets(ctx.attr.native, "native")
+
+    libs_by_rid = {}
+    for (target, tfm) in ctx.attr.rid_libs.items():
+        libs_by_rid.setdefault(_rid(target), {}).setdefault(tfm, []).append(target)
+
+    # Each RID takes the nearest framework among its own folders, whatever the
+    # other RIDs or `lib` offer.
+    for by_tfm in libs_by_rid.values():
+        nearest = get_nearest_compatible_target_framework(target_framework, by_tfm.keys())
+
+        if nearest != None:
+            runtime_targets += _runtime_targets(
+                [target for target in by_tfm[nearest] if not target.label.name.endswith("_._")],
+                "runtime",
+            )
+
+    return [NuGetPortableAssetsInfo(
+        libs = ctx.files.libs,
+        runtime_targets = sorted(runtime_targets, key = lambda asset: asset.path),
+    )]
+
+_portable_assets_rule = rule(
+    implementation = _portable_assets_impl,
+    doc = "A package's assets for an app that runs on any runtime, at the configured framework.",
+    attrs = {
+        "libs": attr.label_list(
+            doc = "The RID-agnostic runtime assemblies, already resolved for the framework.",
+            allow_files = True,
+        ),
+        "native": attr.label_list(
+            doc = "Every file under `runtimes/<rid>/native/`.",
+            allow_files = True,
+        ),
+        "rid_libs": attr.label_keyed_string_dict(
+            doc = "Every assembly or `_._` under `runtimes/<rid>/lib/<tfm>/`, to its framework.",
+            allow_files = True,
+        ),
+        "_target_framework": attr.label(default = Label("//dotnet:target_framework")),
+    },
+)
+
+# This function is public because it's used by the nuget_archive repository rule.
+# buildifier: disable=function-docstring
+def portable_assets(name, libs, native, rid_libs):
+    _portable_assets_rule(
+        name = name,
+        libs = libs,
+        native = native,
+        rid_libs = rid_libs,
         visibility = ["//visibility:public"],
     )
 

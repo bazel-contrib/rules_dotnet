@@ -19,6 +19,7 @@ load(
     "//dotnet/private/tests/nuget_resolution/internal:assertions.bzl",
     "files_test",
     "incompatible_test",
+    "portable_test",
     "resolution_test",
     "resolved_package",
     "tools_test",
@@ -108,6 +109,13 @@ def nuget_resolution_tests():
         if test.expect_incompatible:
             incompatible_test(
                 name = test.name,
+                target_under_test = ":{}_subject".format(test.name),
+            )
+        elif test.portable:
+            portable_test(
+                name = test.name,
+                expected_libs = test.expected_libs,
+                expected_runtime_targets = test.expected_runtime_targets,
                 target_under_test = ":{}_subject".format(test.name),
             )
         else:

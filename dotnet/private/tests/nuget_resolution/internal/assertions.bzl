@@ -90,6 +90,36 @@ resolution_test = analysistest.make(
     },
 )
 
+def _portable_test_impl(ctx):
+    env = analysistest.begin(ctx)
+
+    assets = analysistest.target_under_test(env)[NuGetInfo].portable_assets
+    runtime_targets = assets.runtime_targets
+    paths = _package_relative_paths([asset.file for asset in runtime_targets])
+
+    _assert_paths(env, "libs", ctx.attr.expected_libs, assets.libs)
+
+    # The path an asset reports is the one it takes in a publish, so it has to
+    # be where the file sits in the package.
+    _assert_equals(env, "runtime target paths", paths, [asset.path for asset in runtime_targets])
+    _assert_equals(
+        env,
+        "runtime_targets",
+        ctx.attr.expected_runtime_targets,
+        {asset.path: "{} {}".format(asset.rid, asset.asset_type) for asset in runtime_targets},
+    )
+
+    return analysistest.end(env)
+
+portable_test = analysistest.make(
+    _portable_test_impl,
+    attrs = {
+        "expected_libs": attr.string_list(default = []),
+        "expected_runtime_targets": attr.string_dict(default = {}),
+    },
+    doc = "Asserts what a package gives an app that runs on any runtime.",
+)
+
 def _files_test_impl(ctx):
     env = analysistest.begin(ctx)
     files = analysistest.target_under_test(env)[DefaultInfo].files.to_list()

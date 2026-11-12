@@ -120,6 +120,7 @@ def nuget_package(
         libs = ["{}:libs".format(archive)],
         native = ["{}:native".format(archive)],
         nupkg = "{}:{}.{}.nupkg".format(archive, library_name.lower(), version),
+        portable_assets = "{}:portable_assets".format(archive),
         refs = ["{}:refs".format(archive)],
         resource_assemblies = ["{}:resource_assemblies".format(archive)],
         static_web_assets = ["{}:static_web_assets".format(archive)],

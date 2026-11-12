@@ -79,6 +79,25 @@ NuGetInfo = provider(
         "framework_list": "map[string, string]: Targeting packs like e.g. Microsoft.NETCore.App.Ref have a FrameworkList.xml that includes a list of the DLLs in the targeting pack. This is used for selecting the correct DLL versions during compilation and runtime.",
         "sha512": "string: the SHA512 SRI string for the package",
         "nupkg": "File: the underlying `.nupkg` file which provides this package",
+        "portable_assets": "NuGetPortableAssetsInfo: The package's assets for an app that runs on any runtime, or None if the import has none.",
+    },
+)
+
+NuGetPortableAssetsInfo = provider(
+    doc = """A NuGet package's assets for an app that runs on any runtime, such as a .NET tool.
+
+`DotnetAssemblyRuntimeInfo.libs` and `.native` hold the configured runtime's
+assets. This holds every runtime's, for the configured target framework, as a
+RID-less `dotnet publish` lists them.""",
+    fields = {
+        "libs": "list[File]: The RID-agnostic assemblies under `lib/<tfm>/`, the deps.json `runtime` assets.",
+        "runtime_targets": """list[struct]: The deps.json `runtimeTargets`, sorted by `path`. Each has
+
+  * `path`: the file's path in the package, which is also its deps.json key
+    and its path in a publish.
+  * `file`: the File.
+  * `rid`: the RID folder, as the package spells it.
+  * `asset_type`: `native` or `runtime`.""",
     },
 )
 

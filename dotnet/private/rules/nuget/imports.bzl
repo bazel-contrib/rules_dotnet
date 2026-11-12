@@ -10,7 +10,13 @@ load(
     "collect_transitive_runfiles",
     "get_toolchain",
 )
-load("//dotnet/private:providers.bzl", "DotnetAssemblyCompileInfo", "DotnetAssemblyRuntimeInfo", "NuGetInfo")
+load(
+    "//dotnet/private:providers.bzl",
+    "DotnetAssemblyCompileInfo",
+    "DotnetAssemblyRuntimeInfo",
+    "NuGetInfo",
+    "NuGetPortableAssetsInfo",
+)
 load(
     "//dotnet/private/rules/common:static_web_assets.bzl",
     "PACKAGE_CONTENT_ROOT",
@@ -49,6 +55,7 @@ def _import_library(ctx):
         framework_list = ctx.attr.framework_list,
         sha512 = ctx.attr.sha512,
         nupkg = ctx.file.nupkg,
+        portable_assets = ctx.attr.portable_assets[NuGetPortableAssetsInfo] if ctx.attr.portable_assets else None,
     )
 
     dotnet_assembly_compile_info = DotnetAssemblyCompileInfo(
@@ -206,6 +213,12 @@ Empty for `_content/<library_name>`, MSBuild's default.""",
         "nupkg": attr.label(
             doc = "The `.nupkg` file providing this import",
             allow_single_file = True,
+        ),
+        "portable_assets": attr.label(
+            doc = """The `portable_assets` target of the package's `nuget_archive`:
+            every runtime's assets, which a .NET tool package ships. Without it,
+            a tool package ships `libs` as they are and fails on `native`.""",
+            providers = [NuGetPortableAssetsInfo],
         ),
     }),
     toolchains = [

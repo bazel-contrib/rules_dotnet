@@ -26,6 +26,8 @@ bzl_library(
         ":package_metadata",
         "//dotnet/private:common",
         "//dotnet/private:portable_rids",
+        "//dotnet/private:providers",
+        "@bazel_skylib//rules:common_settings",
         "@bazel_tools//tools/build_defs/repo:utils.bzl",
     ],
 )
