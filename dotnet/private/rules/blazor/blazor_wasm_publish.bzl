@@ -66,7 +66,7 @@ blazor_wasm_publish = rule(
         ),
         "trim_mode": attr.string(
             doc = TRIM_MODE_DOC,
-            default = "full",
+            default = "partial",
             values = TRIM_MODES,
         ),
         "_illink": attr.label(

@@ -2,7 +2,18 @@ load("@rules_shell//shell:sh_test.bzl", "sh_test")
 load(
     "//dotnet:defs.bzl",
     "csharp_binary",
+    "csharp_library",
     "publish_binary",
+)
+
+# A library nothing refers to in code, as if the application only reached it
+# through reflection. The trimmer has no reference to keep it by, so only the
+# SDK's partial trimming, which leaves alone assemblies that do not declare
+# themselves trimmable, ships it.
+csharp_library(
+    name = "reflected",
+    srcs = ["Reflected.cs"],
+    target_frameworks = ["net10.0"],
 )
 
 csharp_binary(
@@ -16,7 +27,10 @@ csharp_binary(
     root_namespace = "BlazorApp",
     static_web_assets = glob(["wwwroot/**"]),
     target_frameworks = ["net10.0"],
-    deps = ["@paket.rules_dotnet_static_web_assets_tests//microsoft.aspnetcore.components.webassembly"],
+    deps = [
+        ":reflected",
+        "@paket.rules_dotnet_static_web_assets_tests//microsoft.aspnetcore.components.webassembly",
+    ],
 )
 
 publish_binary(
