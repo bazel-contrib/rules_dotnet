@@ -79,7 +79,7 @@ csharp_test = rule(
     attrs = CSHARP_BINARY_COMMON_ATTRS,
     test = True,
     toolchains = [
-        "//dotnet:toolchain_type",
+        "//dotnet/toolchain:toolchain_type",
     ],
     cfg = tfm_transition,
 )

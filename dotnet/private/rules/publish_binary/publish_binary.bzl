@@ -1278,7 +1278,7 @@ Requires `single_file = True`.""",
             cfg = "exec",
         ),
     },
-    toolchains = ["//dotnet:toolchain_type"],
+    toolchains = ["//dotnet/toolchain:toolchain_type"],
     executable = True,
     cfg = tfm_transition,
 )

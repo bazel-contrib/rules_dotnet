@@ -142,5 +142,5 @@ them.
         "_windows_constraint": attr.label(default = "@platforms//os:windows"),
     },
     executable = True,
-    toolchains = ["//dotnet:toolchain_type"],
+    toolchains = ["//dotnet/toolchain:toolchain_type"],
 )

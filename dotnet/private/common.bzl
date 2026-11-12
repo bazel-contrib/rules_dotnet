@@ -147,7 +147,7 @@ def get_toolchain(ctx):
         The `ToolchainInfo` of the resolved .Net toolchain.
     """
 
-    return ctx.toolchains["//dotnet:toolchain_type"]
+    return ctx.toolchains["//dotnet/toolchain:toolchain_type"]
 
 def targets_windows(ctx):
     """Whether the target platform is Windows.

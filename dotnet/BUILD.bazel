@@ -9,19 +9,6 @@ load(
     "register_tfms",
 )
 
-toolchain_type(
-    name = "toolchain_type",
-    visibility = ["//visibility:public"],
-)
-
-# The SDK rules_dotnet builds its own tools with: the apphost shimmer and the
-# C# compiler worker. Kept apart from `toolchain_type` so the SDK the user
-# registers cannot decide what those are built with, or against.
-toolchain_type(
-    name = "bootstrap_toolchain_type",
-    visibility = ["//visibility:public"],
-)
-
 resolved_toolchain(
     name = "resolved_toolchain",
     # Marked manual so that `bazel test //...` passes
@@ -96,7 +83,7 @@ exports_files(["defs.bzl"])
 
 bzl_library(
     name = "toolchain",
-    srcs = ["toolchain.bzl"],
+    srcs = ["//dotnet/toolchain:toolchain.bzl"],
     visibility = ["//visibility:public"],
     deps = ["//dotnet/private/transitions:icu_transition"],
 )
