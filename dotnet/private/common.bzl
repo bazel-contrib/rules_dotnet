@@ -273,6 +273,12 @@ def _resolve_analyzers(direct, transitive):
 
     return depset(resolved.values())
 
+def _internals(assembly):
+    if not assembly.internals_visible_to:
+        return []
+    friends = tuple(assembly.internals_visible_to)
+    return [(ref, iref, friends) for ref, iref in zip(assembly.refs, assembly.irefs)]
+
 def collect_compile_info(name, deps, targeting_pack, exports, strict_deps):
     """Determine the transitive dependencies by the target framework.
 
@@ -300,6 +306,7 @@ def collect_compile_info(name, deps, targeting_pack, exports, strict_deps):
     transitive_analyzers_csharp = []
     transitive_analyzers_fsharp = []
     transitive_analyzers_vb = []
+    direct_internals = []
 
     exports_files = []
 
@@ -356,6 +363,7 @@ def collect_compile_info(name, deps, targeting_pack, exports, strict_deps):
             direct_analyzers_fsharp.extend(assembly.analyzers_fsharp)
             direct_analyzers_vb.extend(assembly.analyzers_vb)
             direct_compile_data.extend(assembly.compile_data)
+            direct_internals.extend(_internals(assembly))
 
         # We take all the exports of each dependency and add them
         # to the direct refs.
@@ -382,6 +390,19 @@ def collect_compile_info(name, deps, targeting_pack, exports, strict_deps):
             transitive_analyzers_vb.append(assembly.transitive_analyzers_vb)
             transitive_compile_data.append(assembly.transitive_compile_data)
 
+    # A friend reaching an assembly through an export or the closure gets its
+    # iref in place of its ref, never both: of two reference assemblies with
+    # the same identity, fsc keeps the first and csc the last.
+    deps_internals = [dep[DotnetAssemblyCompileInfo].transitive_internals for dep in deps]
+    friend_irefs = {
+        ref: iref
+        for ref, iref, friends in depset(transitive = deps_internals).to_list()
+        if name in friends
+    }
+    if friend_irefs:
+        direct_iref = [friend_irefs.get(ref, ref) for ref in direct_iref]
+        transitive_ref = [friend_irefs.get(ref, ref) for ref in transitive_ref]
+
     if targeting_pack_info:
         # Last, so a dependency wins a file name clash: it contributes analyzers
         # only once it has superseded the pack's reference assembly, so its
@@ -404,6 +425,7 @@ def collect_compile_info(name, deps, targeting_pack, exports, strict_deps):
     for export in exports:
         assembly = export[DotnetAssemblyCompileInfo]
         exports_files.extend(assembly.refs)
+        direct_internals.extend(_internals(assembly))
 
     return (
         # Filtered and flat: the compiler's reference arguments.
@@ -417,6 +439,7 @@ def collect_compile_info(name, deps, targeting_pack, exports, strict_deps):
         depset(direct = direct_compile_data, transitive = transitive_compile_data),
         framework_files,
         exports_files,
+        depset(direct_internals, transitive = [] if strict_deps else deps_internals),
     )
 
 def collect_transitive_runfiles(ctx, assembly_runtime_info, deps):

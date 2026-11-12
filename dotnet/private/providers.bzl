@@ -16,6 +16,7 @@ DotnetAssemblyCompileInfo = provider(
         "compile_data": "list[File]: Compile data files",
         "exports": "list[File]",
         "transitive_refs": "depset[File]: Transitive reference-only assemblies containing only public symbols. Only used when strict deps are off.",
+        "transitive_internals": "depset[tuple[File, File, tuple[string]]]: `(ref, iref, internals_visible_to)` for each assembly in `transitive_refs` or `exports` that grants its internals to others.",
         "transitive_compile_data": "depset[File]: Transitive compile data files. Only used when strict deps are off.",
         "transitive_analyzers": "depset[File]: Transitive analyzer dlls. Only used when strict deps are off.",
         "transitive_analyzers_csharp": "depset[File]: Transitive C# analyzer dlls. Only used when strict deps are off.",

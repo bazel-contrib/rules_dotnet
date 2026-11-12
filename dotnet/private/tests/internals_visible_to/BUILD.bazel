@@ -2,6 +2,7 @@ load(
     "//dotnet:defs.bzl",
     "csharp_library",
     "csharp_nunit_test",
+    "fsharp_library",
 )
 
 # Only here to give `chain` a transitive closure to walk.
@@ -35,7 +36,11 @@ csharp_library(
 csharp_library(
     name = "secrets",
     srcs = ["Secrets.cs"],
-    internals_visible_to = ["consumer"],
+    internals_visible_to = [
+        "consumer",
+        "export_consumer",
+        "transitive_consumer",
+    ],
     target_frameworks = ["net9.0"],
     deps = [":code_block_analyzer"],
 )
@@ -58,4 +63,83 @@ csharp_nunit_test(
     srcs = ["Outsider.cs"],
     target_frameworks = ["net9.0"],
     deps = [":secrets"],
+)
+
+csharp_library(
+    name = "exporter",
+    srcs = ["Relay.cs"],
+    target_frameworks = ["net9.0"],
+    exports = [":secrets"],
+    deps = [":secrets"],
+)
+
+# Reaches `secrets` through the `exports` of `exporter`. See README.md.
+csharp_library(
+    name = "export_consumer",
+    srcs = ["ExportConsumer.cs"],
+    target_frameworks = ["net9.0"],
+    deps = [":exporter"],
+)
+
+config_setting(
+    name = "strict_deps_off",
+    flag_values = {"//dotnet/settings:strict_deps": "False"},
+)
+
+# Strict deps never hand a target the dependencies of its dependencies.
+NON_STRICT_DEPS_ONLY = select({
+    ":strict_deps_off": [],
+    "//conditions:default": ["@platforms//:incompatible"],
+})
+
+csharp_library(
+    name = "relay",
+    srcs = ["Relay.cs"],
+    target_frameworks = ["net9.0"],
+    deps = [":secrets"],
+)
+
+# Reaches `secrets` only through `relay`.
+csharp_nunit_test(
+    name = "transitive_consumer",
+    srcs = ["TransitiveConsumer.cs"],
+    target_compatible_with = NON_STRICT_DEPS_ONLY,
+    target_frameworks = ["net9.0"],
+    deps = [":relay"],
+)
+
+fsharp_library(
+    name = "fsharp_secrets",
+    srcs = ["FSharpSecrets.fs"],
+    internals_visible_to = [
+        "fsharp_consumer",
+        "fsharp_transitive_consumer",
+    ],
+    target_frameworks = ["net9.0"],
+)
+
+fsharp_library(
+    name = "fsharp_relay",
+    srcs = ["FSharpRelay.fs"],
+    target_frameworks = ["net9.0"],
+    deps = [":fsharp_secrets"],
+)
+
+# See README.md.
+fsharp_library(
+    name = "fsharp_consumer",
+    srcs = ["FSharpConsumer.fs"],
+    target_frameworks = ["net9.0"],
+    deps = [
+        ":fsharp_relay",
+        ":fsharp_secrets",
+    ],
+)
+
+fsharp_library(
+    name = "fsharp_transitive_consumer",
+    srcs = ["FSharpConsumer.fs"],
+    target_compatible_with = NON_STRICT_DEPS_ONLY,
+    target_frameworks = ["net9.0"],
+    deps = [":fsharp_relay"],
 )
