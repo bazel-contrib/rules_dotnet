@@ -22,7 +22,7 @@ load(
     _DEFAULT_TARGET_FRAMEWORK = "DEFAULT_TARGET_FRAMEWORK",
     _FRAMEWORK_COMPATIBILITY = "FRAMEWORK_COMPATIBILITY",
 )
-load("//dotnet/private/sdk:packs.bzl", "WEB_SDK", "normalize_project_sdk")
+load("//dotnet/private/sdk:packs.bzl", "WEB_SDK", "WINDOWSDESKTOP_SDK", "normalize_project_sdk")
 load("//dotnet/private/sdk:rids.bzl", "RUNTIME_GRAPH")
 
 def _collect_transitive():
@@ -1146,6 +1146,8 @@ def generate_runtimeconfig(target_framework, project_sdk, is_self_contained, rol
         ]
         if normalize_project_sdk(project_sdk) == WEB_SDK:
             frameworks.append({"name": "Microsoft.AspNetCore.App", "version": framework_version})
+        elif normalize_project_sdk(project_sdk) == WINDOWSDESKTOP_SDK:
+            frameworks.append({"name": "Microsoft.WindowsDesktop.App", "version": framework_version})
 
         base["runtimeOptions"]["frameworks"] = frameworks
     return base

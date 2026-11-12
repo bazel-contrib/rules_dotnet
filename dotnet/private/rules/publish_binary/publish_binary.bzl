@@ -796,7 +796,7 @@ def _executable_name(dll, runtime_identifier):
     """The name of the executable that starts `dll` on `runtime_identifier`."""
     return paths.replace_extension(dll.basename, ".exe" if runtime_identifier.startswith("win") else "")
 
-def _stamp_host(ctx, host, dll, output, runtime_identifier, mnemonic, progress_message):
+def _stamp_host(ctx, host, dll, output, runtime_identifier, winexe, mnemonic, progress_message):
     """Copies a host from its pack to `output`, set to start `dll` from beside it.
 
     Args:
@@ -805,6 +805,7 @@ def _stamp_host(ctx, host, dll, output, runtime_identifier, mnemonic, progress_m
         dll: The assembly the host starts.
         output: The File to write the host to.
         runtime_identifier: The runtime identifier published for.
+        winexe: True if the host should receive the Windows GUI PE subsystem.
         mnemonic: The action's mnemonic.
         progress_message: The action's progress message.
     """
@@ -812,7 +813,7 @@ def _stamp_host(ctx, host, dll, output, runtime_identifier, mnemonic, progress_m
         mnemonic = mnemonic,
         progress_message = progress_message,
         executable = ctx.attr._apphost_shimmer.files_to_run,
-        arguments = [host.path, dll.basename, output.path, runtime_identifier],
+        arguments = [host.path, dll.basename, output.path, runtime_identifier, "true" if winexe else "false"],
         # The host only records the assembly's name, as it sits beside it.
         # Depending on the assembly would tie the host, and so the app layer,
         # to the action copying the whole publish.
@@ -821,7 +822,7 @@ def _stamp_host(ctx, host, dll, output, runtime_identifier, mnemonic, progress_m
         outputs = [output],
     )
 
-def _create_shim_exe(ctx, apphost_pack_info, dll, runtime_identifier):
+def _create_shim_exe(ctx, apphost_pack_info, dll, runtime_identifier, winexe = False):
     output = ctx.actions.declare_file(_executable_name(dll, runtime_identifier), sibling = dll)
 
     _stamp_host(
@@ -830,6 +831,7 @@ def _create_shim_exe(ctx, apphost_pack_info, dll, runtime_identifier):
         dll,
         output,
         runtime_identifier,
+        winexe,
         "DotnetApphostShim",
         "Creating apphost shim for %{label}",
     )
@@ -840,7 +842,7 @@ def _bundle_spec(entry):
     (path, file) = entry
     return "{}={}".format(path, file.path)
 
-def _create_single_file(ctx, apphost_pack_info, dll, runtime_identifier, runtime_pack_info, target_framework, bundle):
+def _create_single_file(ctx, apphost_pack_info, dll, runtime_identifier, runtime_pack_info, target_framework, bundle, winexe = False):
     """Bundles files into a copy of `singlefilehost` that starts `dll`.
 
     Args:
@@ -853,6 +855,7 @@ def _create_single_file(ctx, apphost_pack_info, dll, runtime_identifier, runtime
         target_framework: The framework the binary runs on, which decides the
             bundle's format.
         bundle: The File to bundle at each path.
+        winexe: True if the host should receive the Windows GUI PE subsystem.
 
     Returns:
         The executable.
@@ -873,6 +876,7 @@ def _create_single_file(ctx, apphost_pack_info, dll, runtime_identifier, runtime
         dll,
         host,
         runtime_identifier,
+        winexe,
         "DotnetSingleFileHost",
         "Creating single-file host for %{label}",
     )
@@ -1017,6 +1021,11 @@ def _publish_binary_impl(ctx):
     assembly_name = assembly_runtime_info.name
     runtime_pack_info = binary_info.runtime_pack_info if is_self_contained else None
     runtime_identifier = ctx.attr.runtime_identifier if ctx.attr.runtime_identifier else binary_info.runtime_pack_info.runtime_identifier
+    if not runtime_identifier or (is_self_contained and not runtime_pack_info.assembly_runtime_infos):
+        fail("No runtime pack found for target framework {} and runtime identifier {}".format(
+            target_framework,
+            ctx.attr.runtime_identifier or "<host>",
+        ))
     roll_forward_behavior = ctx.attr.roll_forward_behavior
 
     if ctx.attr.native_aot:
@@ -1140,6 +1149,7 @@ def _publish_binary_impl(ctx):
                 _publish_entries([(path, file) for (path, file) in layout if file in bundled], ready_to_run),
                 {file.basename: file for file in [runtimeconfig, depsjson]},
             ),
+            binary_info.winexe,
         )
 
         return _executable_publish(
@@ -1153,7 +1163,7 @@ def _publish_binary_impl(ctx):
     entries = _publish_entries(layout, ready_to_run)
     (main_dll, outputs) = _copy_to_publish(ctx, runtime_identifier, entries, binary_info)
 
-    apphost_shim = _create_shim_exe(ctx, binary_info.apphost_pack_info, main_dll, runtime_identifier)
+    apphost_shim = _create_shim_exe(ctx, binary_info.apphost_pack_info, main_dll, runtime_identifier, binary_info.winexe)
 
     output_groups = _publish_layers(
         ctx,

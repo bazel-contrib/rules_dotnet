@@ -147,6 +147,7 @@ binary, so a publish copies these rather than laying the tree out a second time.
         "apphost_pack_info": "DotnetApphostPackInfo: The apphost pack for the binary",
         "runtime_pack_info": "DotnetRuntimePackInfo: The runtime pack for the binary",
         "framework_version": "string: The version of the shared frameworks the binary asks for when it is not self-contained",
+        "winexe": "bool: True if the binary is a Windows GUI executable (Subsystem.WindowsGui)",
     },
 )
 
