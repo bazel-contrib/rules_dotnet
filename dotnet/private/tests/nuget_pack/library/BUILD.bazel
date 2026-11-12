@@ -380,6 +380,53 @@ nuget_pack(
     ]
 ]
 
+# --- Files placed at a path --------------------------------------------------
+#
+# `files` and `content_files` are built in the default configuration, as the
+# other files a package carries are, whatever configuration the package is
+# built in.
+
+nuget_pack(
+    name = "placed_pack",
+    authors = ["rules_dotnet"],
+    content_files = {
+        "any/net9.0/docs/README.md": ["README.md"],
+    },
+    description = "Places files under build/, buildTransitive/ and contentFiles/.",
+    files = {
+        "build/": ["Simple.cs"],
+        "buildTransitive/": [
+            ":net9_only",
+            "Simple.cs",
+        ],
+        # The same file at the same path again is the same entry.
+        "buildTransitive/Simple.cs": ["Simple.cs"],
+    },
+    library = ":net9_only",
+    package_id = "RulesDotnet.Tests.Placed",
+    target_frameworks = ["net9.0"],
+    version = "1.0.0",
+)
+
+nuget_pack_test(
+    name = "placed_pack_test",
+    contents = {
+        "expected/placed_pack.nuspec": "RulesDotnet.Tests.Placed.nuspec",
+    },
+    files = [
+        "build/Simple.cs",
+        "buildTransitive/Simple.cs",
+        "buildTransitive/net9_only.dll",
+        "buildTransitive/net9_only.xml",
+        "contentFiles/any/net9.0/docs/README.md",
+        "lib/net9.0/net9_only.dll",
+        "lib/net9.0/net9_only.xml",
+        "ref/net9.0/net9_only.dll",
+    ],
+    package = ":placed_pack",
+    warnings = ["NU5131"],
+)
+
 # --- Failures ----------------------------------------------------------------
 #
 # The targets under test are `manual`: they exist to fail, and only the tests
@@ -497,4 +544,75 @@ fails_with_test(
     size = "small",
     expected_message_fragments = ["both ship the assembly mapped"],
     target_under_test = ":two_packages_one_assembly",
+)
+
+# Two different files at one path: the package could hold only one of them.
+nuget_pack(
+    name = "placed_twice",
+    authors = ["rules_dotnet"],
+    description = "d",
+    files = {
+        "build/": ["Simple.cs"],
+        "build/Simple.cs": ["README.md"],
+    },
+    library = ":net9_only",
+    tags = ["manual"],
+    target_frameworks = ["net9.0"],
+)
+
+fails_with_test(
+    name = "placed_twice_test",
+    size = "small",
+    expected_message_fragments = [
+        "are both packed as \"build/Simple.cs\"",
+        "a path in a package holds one file",
+    ],
+    target_under_test = ":placed_twice",
+)
+
+# A placed file at a path the library's own contents already take.
+nuget_pack(
+    name = "placed_over_library",
+    authors = ["rules_dotnet"],
+    description = "d",
+    files = {
+        "lib/net9.0/net9_only.xml": ["README.md"],
+    },
+    library = ":net9_only",
+    tags = ["manual"],
+    target_frameworks = ["net9.0"],
+)
+
+fails_with_test(
+    name = "placed_over_library_test",
+    size = "small",
+    expected_message_fragments = [
+        "are both packed as \"lib/net9.0/net9_only.xml\"",
+    ],
+    target_under_test = ":placed_over_library",
+)
+
+# A path that names one file cannot take two targets.
+nuget_pack(
+    name = "file_path_two_targets",
+    authors = ["rules_dotnet"],
+    description = "d",
+    files = {
+        "build/My.props": [
+            "README.md",
+            "Simple.cs",
+        ],
+    },
+    library = ":net9_only",
+    tags = ["manual"],
+    target_frameworks = ["net9.0"],
+)
+
+fails_with_test(
+    name = "file_path_two_targets_test",
+    size = "small",
+    expected_message_fragments = [
+        "the package path \"build/My.props\" names one file, so it takes one target, not 2",
+    ],
+    target_under_test = ":file_path_two_targets",
 )

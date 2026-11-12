@@ -36,6 +36,7 @@ load(
     "is_valid_package_id",
     "library_layout",
     "plan_library_contents",
+    "reject_placed_conflicts",
     "static_web_assets_layout",
     "static_web_assets_props",
     "tool_directory",
@@ -333,15 +334,18 @@ def _nuget_pack_impl(ctx):
     if not is_tool and not packs_analyzer:
         entries += _pack_static_web_assets(ctx, split[keys[0]], identity.name, package_id, sorted(copied_names.keys()))
 
-    entries += extra_files_layout(ctx.attr.files, ctx.label)
+    reject_conflicting_paths(entries, ctx.label, what = "packed")
+
+    placed = extra_files_layout(ctx.attr.files, ctx.label)
     content = content_files_layout(ctx.attr.content_files, ctx.label)
-    entries += content.entries
+    placed += content.entries
 
     for file in [ctx.file.readme, ctx.file.icon, ctx.file.license_file]:
         if file:
-            entries.append((file.basename, file))
+            placed.append((file.basename, file))
 
-    reject_conflicting_paths(entries, ctx.label, what = "packed")
+    reject_placed_conflicts(entries, placed, ctx.label)
+    entries += placed
 
     # The same file under the same path more than once is one entry.
     by_path = {}
@@ -565,21 +569,28 @@ travel with it, so only the packages listed in `deps` are declared.
             default = False,
         ),
         "min_client_version": attr.string(doc = "The lowest NuGet client version that can install the package."),
-        "files": attr.label_keyed_string_dict(
-            doc = """Further files, keyed by target and valued by their path in the package.
-            A path ending in `/` is a folder that every file of the target goes into by
-            name; otherwise the target has to be one file, which takes that path. Use this
-            for `build/<tfm>/<package_id>.props`, `buildTransitive/`, and the like. An
-            analyzer that needs an assembly out of a NuGet package ships it this way,
-            under `analyzers/dotnet/cs/`.""",
+        # Keyed by path rather than by target: Bazel cannot apply a Starlark
+        # transition to a `label_keyed_string_dict`, and a target can then go to
+        # several paths.
+        "files": attr.label_list_dict(
+            doc = """Further files, keyed by their path in the package and valued by the
+            targets that go there. A path ending in `/` is a folder that every file of its
+            targets goes into by name; otherwise the path names one file, so it takes one
+            target of one file. A target can go to several paths, such as a props file
+            under both `build/` and `buildTransitive/`:
+            `{"build/": ["My.props"], "buildTransitive/": ["My.props", ":my_targets"]}`.
+            Use this for `build/<tfm>/<package_id>.props`, `buildTransitive/`, and the
+            like. An analyzer that needs an assembly out of a NuGet package ships it
+            this way, under `analyzers/dotnet/cs/`.""",
             allow_files = True,
             cfg = default_transition,
         ),
-        "content_files": attr.label_keyed_string_dict(
-            doc = """Files a consuming project gets, keyed by target and valued by their
-            path under `contentFiles/`, which is `<language>/<framework>/<path>`, such as
-            `any/any/settings.json`. The path may end in `/` like in `files`. The
-            `content_files_*` attributes say what a consumer does with them.""",
+        "content_files": attr.label_list_dict(
+            doc = """Files a consuming project gets, keyed by their path under
+            `contentFiles/` and valued by the targets that go there. The path is
+            `<language>/<framework>/<path>`, such as `any/any/settings.json`, and may end
+            in `/` like in `files`. The `content_files_*` attributes say what a consumer
+            does with them.""",
             allow_files = True,
             cfg = default_transition,
         ),

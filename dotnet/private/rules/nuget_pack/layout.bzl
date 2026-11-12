@@ -483,20 +483,21 @@ def framework_reference_group(tfm, project_sdk):
         frameworkReferences = [_ASPNETCORE_FRAMEWORK_REFERENCE],
     )
 
-def _check_package_path(path, label, target):
+def _check_package_path(path, label):
     for segment in path.split("/"):
         if segment in ["", ".", ".."]:
-            fail("{}: the package path \"{}\" of {} must be relative, with no empty, `.` or `..` segments".format(label, path, target.label))
+            fail("{}: the package path \"{}\" must be relative, with no empty, `.` or `..` segments".format(label, path))
     if "\\" in path:
-        fail("{}: the package path \"{}\" of {} must use forward slashes".format(label, path, target.label))
+        fail("{}: the package path \"{}\" must use forward slashes".format(label, path))
 
 def extra_files_layout(files, label, prefix = ""):
     """Places arbitrary files in the package.
 
     Args:
-      files: A dict of `Target` to in-package path. A path ending in `/` is a
-        folder every file of the target goes into by its base name; otherwise the
-        target must be exactly one file, which takes that path.
+      files: A dict of in-package path to a list of `Target`s. A path ending in
+        `/` is a folder every file of its targets goes into by its base name;
+        otherwise the path names one file, so it takes exactly one target of
+        exactly one file.
       label: This package's label, for messages.
       prefix: A folder to place everything under, with its trailing slash.
 
@@ -505,26 +506,56 @@ def extra_files_layout(files, label, prefix = ""):
     """
     entries = []
 
-    for (target, path) in files.items():
-        target_files = target.files.to_list()
-
+    for (path, targets) in files.items():
         if path.endswith("/"):
-            _check_package_path(path[:-1], label, target)
-            for file in target_files:
-                entries.append((prefix + path + file.basename, file))
-        else:
-            _check_package_path(path, label, target)
-            if len(target_files) != 1:
-                fail("{}: {} is {} files, so its package path \"{}\" has to name a folder (end in `/`)".format(label, target.label, len(target_files), path))
-            entries.append((prefix + path, target_files[0]))
+            _check_package_path(path[:-1], label)
+            for target in targets:
+                for file in target.files.to_list():
+                    entries.append((prefix + path + file.basename, file))
+            continue
+
+        _check_package_path(path, label)
+        if len(targets) != 1:
+            fail("{}: the package path \"{}\" names one file, so it takes one target, not {}; end it in `/` to make it a folder".format(label, path, len(targets)))
+
+        target = targets[0]
+        target_files = target.files.to_list()
+        if len(target_files) != 1:
+            fail("{}: {} is {} files, so its package path \"{}\" has to name a folder (end in `/`)".format(label, target.label, len(target_files), path))
+        entries.append((prefix + path, target_files[0]))
 
     return entries
+
+def reject_placed_conflicts(entries, placed, label):
+    """Fails when a placed file takes a path that a different file takes.
+
+    The package's own contents resolve a duplicate the way a publish does, by
+    `reject_conflicting_paths`, which lets files out of NuGet packages through.
+    A placed file is at a path someone chose, so a different file there is a
+    mistake whatever either file is. The same file at the same path twice is
+    one entry.
+
+    Args:
+      entries: The `(path, File)` pairs of the package's own contents.
+      placed: The `(path, File)` pairs placed by `files`, `content_files`,
+        `readme`, `icon` and `license_file`.
+      label: This package's label, for messages.
+    """
+    taken = {}
+    for (path, file) in entries:
+        taken.setdefault(path, file)
+
+    for (path, file) in placed:
+        previous = taken.setdefault(path, file)
+        if previous.path != file.path:
+            fail("{}: {} and {} are both packed as \"{}\"; a path in a package holds one file".format(label, previous.owner, file.owner, path))
 
 def content_files_layout(files, label):
     """Places files under `contentFiles/` and describes them for the manifest.
 
     Args:
-      files: A dict of `Target` to `<language>/<framework>/<path>` under `contentFiles/`.
+      files: A dict of `<language>/<framework>/<path>` under `contentFiles/` to a
+        list of `Target`s, as `extra_files_layout` takes.
       label: This package's label, for messages.
 
     Returns:
