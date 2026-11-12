@@ -29,6 +29,7 @@ bzl_library(
         "//dotnet/private/rules/blazor:app",
         "//dotnet/private/rules/blazor:devserver",
         "//dotnet/private/rules/common:embed_sources",
+        "//dotnet/private/rules/csharp:analyze",
         "//dotnet/private/rules/csharp:binary",
         "//dotnet/private/rules/csharp:library",
         "//dotnet/private/rules/csharp:nunit_test",

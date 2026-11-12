@@ -2,8 +2,43 @@
 `enforce_code_style_in_build`, and `analysis_mode`)."""
 
 load("@bazel_skylib//lib:unittest.bzl", "analysistest", "asserts")
-load("//dotnet:defs.bzl", "csharp_library")
+load("//dotnet:defs.bzl", "analyze_csharp_target", "csharp_library", "csharp_nunit_test")
 load("//dotnet/private/tests:utils.bzl", "only_action")
+
+def _test_analyze_aspect_impl(target, ctx):
+    sarif = ctx.actions.declare_file(target.label.name + ".sarif.json")
+    if not analyze_csharp_target(
+        ctx.actions,
+        target,
+        sarif,
+        extra_analyzer_configs = [ctx.file._globalconfig],
+    ):
+        return []
+    return [OutputGroupInfo(sarif = depset([sarif]))]
+
+_test_analyze_aspect = aspect(
+    implementation = _test_analyze_aspect_impl,
+    attrs = {
+        "_globalconfig": attr.label(
+            default = "//dotnet/private/tests/sdk_analyzers:lint.globalconfig",
+            allow_single_file = True,
+        ),
+    },
+)
+
+def _extract_sarif_impl(ctx):
+    files = ctx.attr.target[OutputGroupInfo].sarif
+    return [DefaultInfo(files = files)]
+
+extract_sarif = rule(
+    implementation = _extract_sarif_impl,
+    attrs = {
+        "target": attr.label(
+            aspects = [_test_analyze_aspect],
+            mandatory = True,
+        ),
+    },
+)
 
 _ANALYZER_PREFIX = "/analyzer:"
 _CONFIG_PREFIX = "/analyzerconfig:"
@@ -181,4 +216,26 @@ def sdk_analyzers_tests():
             "Microsoft.CodeAnalysis.NetAnalyzers.dll",
             "Microsoft.CodeAnalysis.CodeStyle.dll",
         ],
+    )
+
+    csharp_library(
+        name = "unformatted_lib",
+        srcs = ["UnformattedSample.cs"],
+        target_frameworks = ["net10.0"],
+        treat_warnings_as_errors = True,
+    )
+
+    extract_sarif(
+        name = "unformatted_lib_sarif",
+        target = ":unformatted_lib",
+    )
+
+    csharp_nunit_test(
+        name = "sarif_lint_test",
+        srcs = ["SarifTest.cs"],
+        data = [":unformatted_lib_sarif"],
+        envs = {
+            "SARIF_FILE": "$(rootpath :unformatted_lib_sarif)",
+        },
+        target_frameworks = ["net10.0"],
     )

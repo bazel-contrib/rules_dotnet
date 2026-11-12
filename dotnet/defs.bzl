@@ -16,6 +16,10 @@ load(
     _embed_sources_or_flag = "embed_sources_or_flag",
 )
 load(
+    "//dotnet/private/rules/csharp:analyze.bzl",
+    _analyze_csharp_target = "analyze_csharp_target",
+)
+load(
     "//dotnet/private/rules/csharp:binary.bzl",
     _csharp_binary = "csharp_binary",
 )
@@ -160,6 +164,7 @@ def fsharp_test(name, **kwargs):
     _fsharp_test(name = name, embed_sources = _embed_sources_or_flag(kwargs.pop("embed_sources", None)), **kwargs)
 
 csharp_nunit_test = _csharp_nunit_test
+analyze_csharp_target = _analyze_csharp_target
 fsharp_nunit_test = _fsharp_nunit_test
 publish_binary = _publish_binary
 blazor_devserver = _blazor_devserver
