@@ -667,14 +667,6 @@ def _compile(
         args.add(out_xml, format = "/doc:\"%s\"")
         outputs.append(out_xml)
 
-    # A `/refonly` pass does not record every reference the real compilation
-    # uses, so only the latter can say which ones went unused. The worker writes
-    # the list next to the assembly it just read, which is this path.
-    unused_inputs = None
-    if compiler_worker and compiler_worker.prune_unused_references and out_dll != None:
-        unused_inputs = actions.declare_file(out_dll.basename + ".unused_inputs", sibling = out_dll)
-        outputs.append(unused_inputs)
-
     # assembly references
     # csc resolves a duplicate assembly identity by order, so refs must come
     # before the framework files.
@@ -771,8 +763,8 @@ def _compile(
         arguments = icu_arguments + [
             toolchain.compiler_host.files_to_run.executable.path,
             toolchain.csharp_compiler.files_to_run.executable.path,
-        ] + (["--prune_unused_inputs"] if unused_inputs else []) + [args],
-        unused_inputs_list = unused_inputs,
+            args,
+        ],
         env = dicts.add(
             {"DOTNET_CLI_HOME": toolchain.compiler_host.files_to_run.executable.dirname},
             globalization_env(toolchain),
