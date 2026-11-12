@@ -217,7 +217,7 @@ toolchain is resolved through Bazel's standard mechanism and requested
 optionally, so a build that never publishes NativeAOT does not need one to
 exist.
 
-Windows AOT is not supported yet.
+The binary has to be built for .NET 10 or later, and Windows AOT is not supported yet.
 
 ### Recommended: a hermetic toolchain
 

@@ -7,7 +7,7 @@ load("@bazel_skylib//lib:paths.bzl", "paths")
 load("@bazel_skylib//lib:shell.bzl", "shell")
 load("@rules_cc//cc:action_names.bzl", "CPP_LINK_EXECUTABLE_ACTION_NAME")
 load("@rules_cc//cc/common:cc_common.bzl", "cc_common")
-load("//dotnet/private:common.bzl", "generate_depsjson", "generate_runtimeconfig", "get_toolchain", "is_from_nuget_package", "tfm_to_semver", "to_rlocation_path")
+load("//dotnet/private:common.bzl", "generate_depsjson", "generate_runtimeconfig", "get_toolchain", "is_from_nuget_package", "tfm_to_semver", "tfm_version", "to_rlocation_path")
 load(
     "//dotnet/private:providers.bzl",
     "DotnetAssemblyCompileInfo",
@@ -129,6 +129,10 @@ _AOT_INIT_ASSEMBLIES = [
     "System.Private.TypeLoader",
     "System.Private.Reflection.Execution",
 ]
+
+# The first .NET a NativeAOT publish supports. Earlier compilers take other
+# options and bind the framework's native libraries by other names.
+_AOT_MIN_MAJOR_VERSION = 10
 
 # The trimming switches the SDK turns on for a NativeAOT publish. A switch
 # removes the feature's code (`--feature`) and tells the runtime it is gone
@@ -991,6 +995,16 @@ def _publish_binary_impl(ctx):
     if ctx.attr.native_aot and ctx.attr.ready_to_run:
         fail("native_aot cannot be combined with ready_to_run: it compiles ahead of time already")
 
+    # The compiler comes from the band of the framework the binary is built
+    # for, which can be lower than the one the publish asks for.
+    if ctx.attr.native_aot and tfm_version(assembly_compile_info.target_framework)[0] < _AOT_MIN_MAJOR_VERSION:
+        fail("{}: native_aot needs .NET {} or later, but {} is built for {}.".format(
+            ctx.label,
+            _AOT_MIN_MAJOR_VERSION,
+            _binary(ctx).label,
+            assembly_compile_info.target_framework,
+        ))
+
     if ctx.attr.single_file and not is_self_contained:
         fail("single_file requires self_contained")
 
@@ -1243,7 +1257,7 @@ has to be part of the image.""",
 The output is a single self-contained binary with no IL and no JIT, so the
 managed publish layout does not apply: `deps.json`, `runtimeconfig.json` and
 the apphost shim are all absent. Implies trimming, and needs a registered
-C/C++ toolchain to link with.""",
+C/C++ toolchain to link with. The binary has to be built for .NET 10 or later.""",
             default = False,
         ),
         "single_file": attr.bool(
