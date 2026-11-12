@@ -729,8 +729,7 @@ TESTS = [
     ),
     nuget_resolution_test(
         name = "a_portable_app_keeps_a_version_qualified_rid_as_the_package_spells_it",
-        # Not folded onto linux-x64: the host matches the folder against the
-        # RID it runs on.
+        # Not folded onto linux-x64, as a RID-less `dotnet publish` keeps it.
         files = [
             "lib/netstandard2.0/A.dll",
             "runtimes/ubuntu.16.04-x64/lib/netstandard2.0/Ubuntu.dll",

@@ -125,9 +125,6 @@ def _pack_tool(ctx, tfm, target, compile_info, runtime_info):
     transitive = binary_info.transitive_runtime_deps
     name = runtime_info.name
 
-    # `dotnet tool install` puts the package on any operating system, so it
-    # carries what a RID-less publish would: every runtime's assets of the NuGet
-    # packages, for the host to pick from.
     reject_runtime_specific_natives(runtime_info, transitive, ctx.label)
 
     # The binary's own deps.json and runtimeconfig.json describe the runfiles

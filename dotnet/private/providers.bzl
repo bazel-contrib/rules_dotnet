@@ -79,27 +79,24 @@ NuGetInfo = provider(
         "framework_list": "map[string, string]: Targeting packs like e.g. Microsoft.NETCore.App.Ref have a FrameworkList.xml that includes a list of the DLLs in the targeting pack. This is used for selecting the correct DLL versions during compilation and runtime.",
         "sha512": "string: the SHA512 SRI string for the package",
         "nupkg": "File: the underlying `.nupkg` file which provides this package",
-        "portable_assets": "NuGetPortableAssetsInfo: What the package gives an app that runs on any runtime, or None for an import that names no package.",
+        "portable_assets": "NuGetPortableAssetsInfo: The package's assets for an app that runs on any runtime, or None if the import has none.",
     },
 )
 
 NuGetPortableAssetsInfo = provider(
-    doc = """What a NuGet package gives an app that is not built for one runtime identifier.
+    doc = """A NuGet package's assets for an app that runs on any runtime, such as a .NET tool.
 
-A RID-less restore, `dotnet publish` without `-r` and `dotnet pack` of a .NET
-tool take every runtime's assets of a package, not the configured runtime's:
-the host picks the ones for the machine it runs on from the `runtimeTargets`
-of the deps.json. `libs` and `native` of `DotnetAssemblyRuntimeInfo` hold one
-runtime's, so this holds the rest, for the configured target framework.""",
+`DotnetAssemblyRuntimeInfo.libs` and `.native` hold the configured runtime's
+assets. This holds every runtime's, for the configured target framework, as a
+RID-less `dotnet publish` lists them.""",
     fields = {
-        "libs": "list[File]: The RID-agnostic runtime assemblies, under `lib/<tfm>/`: the `runtime` assets of the deps.json.",
-        "runtime_targets": """list[struct]: Every runtime's assets, sorted by `path`: the `runtimeTargets` of the deps.json. Each carries
+        "libs": "list[File]: The RID-agnostic assemblies under `lib/<tfm>/`, the deps.json `runtime` assets.",
+        "runtime_targets": """list[struct]: The deps.json `runtimeTargets`, sorted by `path`. Each has
 
-  * `path`: where the file sits in the package, `runtimes/<rid>/native/...` or
-    `runtimes/<rid>/lib/<tfm>/<assembly>`, which is also the deps.json key and
-    where a publish puts it.
+  * `path`: the file's path in the package, which is also its deps.json key
+    and its path in a publish.
   * `file`: the File.
-  * `rid`: the runtime identifier of the folder, as the package spells it.
+  * `rid`: the RID folder, as the package spells it.
   * `asset_type`: `native` or `runtime`.""",
     },
 )

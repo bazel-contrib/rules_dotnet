@@ -104,11 +104,8 @@ nuget_pack_test(
 
 # --- Every runtime's assets --------------------------------------------------
 #
-# `dotnet tool install` puts a tool on any operating system, so the package
-# carries what `dotnet pack` with `PackAsTool` gives it: every runtime's native
-# libraries and assemblies out of the NuGet packages, at their path in the
-# package they came from, and a deps.json listing them under `runtimeTargets`
-# for the host to pick the ones for the machine it runs on.
+# As with `dotnet pack` and `PackAsTool`, a tool ships every runtime's assets of
+# its NuGet packages, listed under `runtimeTargets` for the host to pick from.
 
 csharp_binary(
     name = "rocks_tool",

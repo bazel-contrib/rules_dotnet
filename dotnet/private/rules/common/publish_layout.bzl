@@ -48,8 +48,8 @@ def publish_layout(runtime_identifier, binary_info, assembly_files, runtime_pack
             rid = file.dirname.split("/")[-2] if file.is_source else runtime_identifier
             layout.append(("runtimes/{}/native/{}".format(rid, file.basename), file))
 
-    # Every runtime's assets of a portable app keep the path they have in their
-    # package, which is where the `runtimeTargets` of the deps.json say they are.
+    # A portable app's runtime assets keep their path in the package, where
+    # `runtimeTargets` says they are.
     layout.extend(assembly_files.runtime_targets)
 
     # A self-contained publish carries the runtime pack at the root of the
@@ -100,14 +100,12 @@ def collect_assembly_files(assembly_info, transitive_runtime_deps, deps_json_str
       transitive_runtime_deps: The `DotnetAssemblyRuntimeInfo`s of its transitive dependencies.
       deps_json_struct: The generated `deps.json`, which says which of a
         dependency's files the runtime will load.
-      portable: Whether the deps.json was generated `portable`, so that a NuGet
-        package brings every runtime's assets rather than the configured one's.
+      portable: Whether the deps.json was generated `portable`.
 
     Returns:
       A struct of `libs`, `resource_assemblies`, `native`, `data` and
-      `appsetting_files` lists, and `runtime_targets`: the `(path, File)` pairs
-      of every runtime's assets of a portable app, at their path in the package
-      they came from.
+      `appsetting_files` lists, and `runtime_targets`, the `(path, File)` pairs
+      of a portable app's runtime assets.
     """
     libs = list(assembly_info.libs)
     resource_assemblies = list(assembly_info.resource_assemblies)

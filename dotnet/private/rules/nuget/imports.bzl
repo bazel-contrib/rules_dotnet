@@ -215,11 +215,9 @@ Empty for `_content/<library_name>`, MSBuild's default.""",
             allow_single_file = True,
         ),
         "portable_assets": attr.label(
-            doc = """What the package gives an app that runs on any runtime: the
-            `portable_assets` target of the package's `nuget_archive`. A .NET tool
-            package ships every runtime's native libraries and assemblies from it,
-            where `libs` and `native` hold the configured runtime's alone. Without
-            it, a tool package ships `libs` as they are and fails on `native`.""",
+            doc = """The `portable_assets` target of the package's `nuget_archive`:
+            every runtime's assets, which a .NET tool package ships. Without it,
+            a tool package ships `libs` as they are and fails on `native`.""",
             providers = [NuGetPortableAssetsInfo],
         ),
     }),

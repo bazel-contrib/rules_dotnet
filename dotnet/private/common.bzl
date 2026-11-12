@@ -908,15 +908,14 @@ def is_from_nuget_package(dep):
     return dep.nuget_info != None and dep.nuget_info.nupkg != None
 
 def get_portable_assets(dep, portable):
-    """What an app takes from a dependency in place of its configured runtime's assets.
+    """The assets a portable app takes from a dependency in place of `libs` and `native`.
 
     Args:
         dep: (DotnetAssemblyRuntimeInfo) The dependency.
         portable: Whether the app runs on any runtime, as a .NET tool does.
     Returns:
-        The `NuGetPortableAssetsInfo` of the package, or None when the app is
-        not portable or the dependency is no NuGet package: then its `libs`
-        and `native` are what it takes.
+        The package's `NuGetPortableAssetsInfo`, or None when the app is not
+        portable or the dependency has none.
     """
     if not portable or dep.nuget_info == None:
         return None
@@ -971,10 +970,9 @@ def generate_depsjson(
         transitive_runtime_deps: List of DotnetAssemblyRuntimeInfo providers which are the transitive runtime dependencies of the target.
         runtime_pack_info: The DotnetRuntimePackInfo of the runtime pack that is used for a self contained publish.
         use_relative_paths: If the paths to the dependencies should be relative to the workspace root.
-        portable: Whether the app runs on any runtime, as a .NET tool does: a
-            NuGet package then gives its RID-agnostic assemblies as `runtime`
-            and every runtime's assets as `runtimeTargets`, the way a RID-less
-            `dotnet publish` lists them. Not with `is_self_contained`.
+        portable: List NuGet packages as a RID-less `dotnet publish` does: RID-agnostic
+            assemblies as `runtime`, every runtime's assets as `runtimeTargets`.
+            Not with `is_self_contained`.
     Returns:
         The deps.json file as a struct.
     """
@@ -1078,8 +1076,6 @@ def generate_depsjson(
             if is_self_contained:
                 target_fragment["native"] = {native_file.basename: {"fileVersion": "0.0.0.0"} for native_file in runtime_dep.native}
             elif portable_assets:
-                # The host takes the assets of the runtime it runs on, by the
-                # RID folder they sit in.
                 target_fragment["runtimeTargets"] = {
                     asset.path: {
                         "rid": asset.rid,

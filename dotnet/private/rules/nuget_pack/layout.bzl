@@ -3,6 +3,7 @@
 load(
     "//dotnet/private:common.bzl",
     "get_nearest_compatible_target_framework",
+    "get_portable_assets",
     "is_core_framework",
     "is_greater_or_equal_framework",
     "tfm_to_nuget_framework",
@@ -406,11 +407,9 @@ def tool_directory(tfm):
     return "tools/{}/any".format(tfm)
 
 def reject_runtime_specific_natives(runtime_info, transitive_runtime_deps, label):
-    """Fails when a tool would need native libraries for the runtime it was built for alone.
+    """Fails when a tool depends on native libraries that exist for the configured runtime only.
 
-    A tool package installs on any operating system, so it ships every
-    runtime's native libraries, which only a NuGet package has: one built here
-    exists for the configured runtime alone.
+    Only NuGet packages carry native libraries for every runtime.
 
     Args:
       runtime_info: The `DotnetAssemblyRuntimeInfo` of the binary.
@@ -418,7 +417,7 @@ def reject_runtime_specific_natives(runtime_info, transitive_runtime_deps, label
       label: This package's label, for messages.
     """
     for info in [runtime_info] + transitive_runtime_deps:
-        if not info.native or (info.nuget_info != None and info.nuget_info.portable_assets != None):
+        if not info.native or get_portable_assets(info, True):
             continue
 
         fail(("{}: the tool depends on {}, whose native libraries ({}) exist for the runtime " +
@@ -433,9 +432,9 @@ def reject_runtime_specific_natives(runtime_info, transitive_runtime_deps, label
 def tool_layout(tfm, binary_info, runtime_info, assembly_files, depsjson, runtimeconfig):
     """Where a tool's framework-dependent publish goes for one framework.
 
-    The publish is portable: NuGet packages bring every runtime's assets,
-    which `collect_assembly_files` puts in `runtime_targets`, and nothing else
-    is runtime specific, as `reject_runtime_specific_natives` makes sure.
+    The publish is portable: `reject_runtime_specific_natives` has ruled out
+    native libraries built here, so only NuGet packages' `runtime_targets` are
+    runtime specific.
 
     Args:
       tfm: The target framework moniker.
