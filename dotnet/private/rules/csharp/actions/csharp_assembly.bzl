@@ -132,6 +132,11 @@ def _collect_analyzer_dependencies(deps, analyzer_runtime_deps):
 
     return {dll: None for info in loaded for dll in info.libs}.keys()
 
+def _without_analyzers(analyzers, excluded):
+    if not excluded:
+        return analyzers
+    return depset([dll for dll in analyzers.to_list() if dll.basename not in excluded])
+
 # buildifier: disable=unnamed-macro
 def AssemblyAction(
         actions,
@@ -183,6 +188,7 @@ def AssemblyAction(
         compiler_options,
         interceptors_namespaces,
         is_windows,
+        excluded_analyzers = [],
         analyzer_runtime_deps = []):
     """Creates an action that runs the CSharp compiler with the specified inputs.
 
@@ -238,6 +244,7 @@ def AssemblyAction(
         compiler_options: Additional options to pass to the compiler.
         interceptors_namespaces: Namespaces that are allowed to contain interceptors.
         is_windows: Whether or not the target is running on Windows.
+        excluded_analyzers: File names of analyzer and source generator DLLs to leave out of the compilation.
         analyzer_runtime_deps: The NuGet packages an analyzer loads, which it also compiles against.
     Returns:
         The compile and runtime providers, and the static web assets the compile
@@ -294,6 +301,13 @@ def AssemblyAction(
     else:
         compile_analyzers_csharp = analyzers_csharp
         compile_analyzer_configs = analyzer_configs
+
+    # Exclusions apply to the SDK's analyzers too, as MSBuild's `Analyzer Remove` does.
+    compile_analyzers = _without_analyzers(analyzers, excluded_analyzers)
+    compile_analyzers_csharp = _without_analyzers(compile_analyzers_csharp, excluded_analyzers)
+
+    # The ref-only compile reports no diagnostics, so it gets no SDK analyzers.
+    ref_only_analyzers_csharp = _without_analyzers(analyzers_csharp, excluded_analyzers)
 
     # TODO: Ensure that all the analyzer DLLs also target netstandard2.0.
     analyzer_dlls = _collect_analyzer_dependencies(compile_deps, analyzer_runtime_deps) if (is_analyzer or is_language_specific_analyzer) else []
@@ -399,7 +413,7 @@ def AssemblyAction(
             compiler_worker,
             label,
             additionalfiles,
-            analyzers,
+            compile_analyzers,
             compile_analyzers_csharp,
             compile_analyzer_configs,
             debug,
@@ -452,7 +466,7 @@ def AssemblyAction(
             compiler_worker,
             label,
             additionalfiles,
-            analyzers,
+            compile_analyzers,
             compile_analyzers_csharp,
             compile_analyzer_configs,
             debug,
@@ -494,8 +508,8 @@ def AssemblyAction(
             compiler_worker,
             label,
             additionalfiles,
-            analyzers,
-            analyzers_csharp,
+            compile_analyzers,
+            ref_only_analyzers_csharp,
             analyzer_configs,
             debug,
             embed_sources,

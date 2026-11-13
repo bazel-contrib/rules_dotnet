@@ -1,0 +1,14 @@
+load("@bazel_lib//:bzl_library.bzl", "bzl_library")
+load(":csharp_excluded_analyzers.bzl", "csharp_excluded_analyzers")
+
+csharp_excluded_analyzers()
+
+bzl_library(
+    name = "csharp_excluded_analyzers",
+    srcs = ["csharp_excluded_analyzers.bzl"],
+    visibility = ["//dotnet:__subpackages__"],
+    deps = [
+        "//dotnet:defs",
+        "//dotnet/private/tests:utils",
+    ],
+)
