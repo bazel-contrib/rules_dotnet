@@ -69,6 +69,7 @@ def _compile_action(ctx, tfm, toolchain):
         analyzer_configs = ctx.files.analyzer_configs,
         compiler_options = ctx.attr.compiler_options,
         interceptors_namespaces = ctx.attr.interceptors_namespaces,
+        excluded_analyzers = ctx.attr.excluded_analyzers,
         is_windows = targets_windows(ctx),
     )
 
