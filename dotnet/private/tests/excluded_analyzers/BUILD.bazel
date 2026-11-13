@@ -1,0 +1,3 @@
+load(":excluded_analyzers.bzl", "test_excluded_analyzers")
+
+test_excluded_analyzers()

@@ -179,7 +179,8 @@ def AssemblyAction(
         compiler_options,
         interceptors_namespaces,
         is_windows,
-        analyzer_runtime_deps = []):
+        analyzer_runtime_deps = [],
+        excluded_analyzers = []):
     """Creates an action that runs the CSharp compiler with the specified inputs.
 
     This macro aims to match the [C# compiler](https://docs.microsoft.com/en-us/dotnet/csharp/language-reference/compiler-options/listed-alphabetically), with the inputs mapping to compiler options.
@@ -232,6 +233,7 @@ def AssemblyAction(
         interceptors_namespaces: Namespaces that are allowed to contain interceptors.
         is_windows: Whether or not the target is running on Windows.
         analyzer_runtime_deps: The NuGet packages an analyzer loads, which it also compiles against.
+        excluded_analyzers: Analyzer assembly file names to exclude from compilation.
     Returns:
         The compile and runtime providers, and the static web assets the compile
         generated.
@@ -403,6 +405,7 @@ def AssemblyAction(
             compiler_options,
             interceptors_namespaces,
             razor,
+            excluded_analyzers = excluded_analyzers,
             out_dll = out_dll,
             out_ref = out_ref,
             out_pdb = out_pdb,
@@ -456,6 +459,7 @@ def AssemblyAction(
             compiler_options,
             interceptors_namespaces,
             razor,
+            excluded_analyzers = excluded_analyzers,
             out_ref = out_iref,
             out_dll = out_dll,
             out_pdb = out_pdb,
@@ -498,6 +502,7 @@ def AssemblyAction(
             compiler_options,
             interceptors_namespaces,
             razor,
+            excluded_analyzers = excluded_analyzers,
             out_dll = None,
             out_ref = out_ref,
             out_pdb = None,
@@ -585,6 +590,7 @@ def _compile(
         compiler_options,
         interceptors_namespaces,
         razor,
+        excluded_analyzers = [],
         out_dll = None,
         out_ref = None,
         out_pdb = None,
@@ -681,6 +687,21 @@ def _compile(
         args.add_all(razor.analyzers, format_each = "/analyzer:\"%s\"")
         args.add_all(razor.additionalfiles, format_each = "/additionalfile:\"%s\"")
         args.add_all(razor.configs, format_each = "/analyzerconfig:\"%s\"")
+
+    # Exclude specific analyzer/source-generator assemblies (matched by file
+    # basename) so a single bundled analyzer can be turned off per target while
+    # leaving the others active.
+    if excluded_analyzers:
+        analyzer_assemblies = depset([
+            a
+            for a in analyzer_assemblies.to_list()
+            if a.basename not in excluded_analyzers
+        ])
+        analyzer_assemblies_csharp = depset([
+            a
+            for a in analyzer_assemblies_csharp.to_list()
+            if a.basename not in excluded_analyzers
+        ])
 
     # analyzers
     if run_analyzers:

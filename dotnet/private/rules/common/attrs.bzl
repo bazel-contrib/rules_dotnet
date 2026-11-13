@@ -314,6 +314,11 @@ CSHARP_COMMON_ATTRS = dicts.add(
             mandatory = False,
             default = [],
         ),
+        "excluded_analyzers": attr.string_list(
+            doc = "A list of analyzer/source-generator assembly file names (e.g. \"Microsoft.Extensions.Configuration.Binder.SourceGeneration.dll\") to exclude from this compilation. Use this to turn off a specific bundled analyzer or source generator that is otherwise applied automatically via a NuGet dependency.",
+            mandatory = False,
+            default = [],
+        ),
     },
 )
 
