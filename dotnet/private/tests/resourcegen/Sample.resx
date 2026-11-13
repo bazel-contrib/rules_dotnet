@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <resheader name="resmimetype">
+    <value>text/microsoft-resx</value>
+  </resheader>
+  <data name="Greeting" xml:space="preserve">
+    <value>Hello</value>
+  </data>
+  <data name="Padded" xml:space="preserve">
+    <value>  pad  </value>
+  </data>
+  <data name="Blank">
+    <value>   </value>
+  </data>
+  <data name="PaddedBlank" xml:space="preserve">
+    <value>   </value>
+  </data>
+  <data name="Unicode" xml:space="preserve">
+    <value>Café ☕</value>
+  </data>
+  <data name="ExplicitString" type="System.String, mscorlib" xml:space="preserve">
+    <value>typed-but-string</value>
+  </data>
+  <data name="Case" xml:space="preserve">
+    <value>upper</value>
+  </data>
+  <data name="case" xml:space="preserve">
+    <value>lower</value>
+  </data>
+</root>

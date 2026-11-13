@@ -33,6 +33,7 @@ def _compile_action(ctx, tfm, toolchain):
         # MSBuild passes no --langversion for F#; fsc then defaults to latest.
         langversion = ctx.attr.langversion,
         resources = ctx.files.resources,
+        resx = ctx.attr.resx,
         srcs = ctx.files.srcs,
         data = ctx.files.data,
         appsetting_files = [],

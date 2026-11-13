@@ -1,0 +1,90 @@
+"Tests for compiling `.resx` files and resolving them (incl. localization) at runtime."
+
+load("@bazel_lib//lib:run_binary.bzl", "run_binary")
+load("@bazel_skylib//rules:diff_test.bzl", "diff_test")
+load(
+    "//dotnet:defs.bzl",
+    "csharp_binary",
+    "fsharp_binary",
+    "resx_resource",
+)
+load(":action_args.bzl", "resx_action_args_tests")
+
+# A neutral `.resx` plus a French culture variant. The manifest name is derived from the
+# consuming assembly name (used as the root namespace).
+resx_resource(
+    name = "strings",
+    srcs = [
+        "Strings.fr.resx",
+        "Strings.resx",
+    ],
+)
+
+# A resource with an explicit `logical_names` override, so its manifest name is independent
+# of the file path and the assembly's root namespace. The culture variant inherits the same
+# logical base name.
+resx_resource(
+    name = "messages",
+    srcs = [
+        "resources/Messages.fr.resx",
+        "resources/Messages.resx",
+    ],
+    logical_names = {
+        "resources/Messages.resx": "MyApp.Messages",
+    },
+)
+
+csharp_binary(
+    name = "greeter_cs",
+    srcs = ["Greeter.cs"],
+    out = "ResxCsTest",
+    resx = [
+        ":messages",
+        ":strings",
+    ],
+    target_frameworks = ["net8.0"],
+)
+
+fsharp_binary(
+    name = "greeter_fs",
+    srcs = ["Greeter.fs"],
+    out = "ResxFsTest",
+    resx = [
+        ":messages",
+        ":strings",
+    ],
+    target_frameworks = ["net8.0"],
+    deps = [
+        "@paket.rules_dotnet_dev_nuget_packages//fsharp.core",
+    ],
+)
+
+resx_action_args_tests()
+
+# Runtime localization: run each binary and diff its ResourceManager lookups against the
+# expected neutral/French/logical-name output.
+run_binary(
+    name = "run_greeter_cs",
+    outs = ["actual_cs"],
+    args = ["$@"],
+    tool = ":greeter_cs",
+)
+
+diff_test(
+    name = "diff_test_greeter_cs",
+    file1 = ":actual_cs",
+    file2 = "expected_output",
+)
+
+run_binary(
+    name = "run_greeter_fs",
+    outs = ["actual_fs"],
+    args = ["$@"],
+    tool = ":greeter_fs",
+)
+
+diff_test(
+    name = "diff_test_greeter_fs",
+    file1 = ":actual_fs",
+    file2 = "expected_output",
+)

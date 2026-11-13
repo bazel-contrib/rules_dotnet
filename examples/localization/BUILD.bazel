@@ -1,0 +1,34 @@
+load(
+    "@rules_dotnet//dotnet:defs.bzl",
+    "csharp_binary",
+    "csharp_library",
+    "resx_resource",
+)
+
+# Compile the neutral `.resx` and its per-culture variants into `.resources` blobs.
+resx_resource(
+    name = "strings",
+    srcs = [
+        "Strings.de.resx",
+        "Strings.fr.resx",
+        "Strings.resx",
+    ],
+)
+
+# The neutral resources are embedded into this library and the culture variants become
+# satellite assemblies (fr/Localization.resources.dll, de/Localization.resources.dll).
+csharp_library(
+    name = "greeter",
+    srcs = ["Greeter.cs"],
+    out = "Localization",
+    resx = [":strings"],
+    target_frameworks = ["net9.0"],
+)
+
+# bazel run //localization:hello
+csharp_binary(
+    name = "hello",
+    srcs = ["Program.cs"],
+    target_frameworks = ["net9.0"],
+    deps = [":greeter"],
+)
