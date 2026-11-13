@@ -38,11 +38,6 @@ def _no_images_when_native_aot_test(name):
         name,
         native_aot = True,
         self_contained = True,
-        # The linker for NativeAOT only drives Unix toolchains.
-        target_compatible_with = select({
-            "@platforms//os:windows": ["@platforms//:incompatible"],
-            "//conditions:default": [],
-        }),
     )
 
 def ready_to_run_test_suite(name):

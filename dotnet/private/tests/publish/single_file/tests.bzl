@@ -11,12 +11,6 @@ load("//dotnet:defs.bzl", "publish_binary")
 
 _APP = "//dotnet/private/tests/publish/app_to_publish"
 
-# The linker for NativeAOT only drives Unix toolchains.
-_NOT_WINDOWS = select({
-    "@platforms//os:windows": ["@platforms//:incompatible"],
-    "//conditions:default": [],
-})
-
 def _publish_test(name, impl, expect_failure = False, **kwargs):
     publish_binary(
         name = name + "_publish",
@@ -125,7 +119,6 @@ def _not_with_native_aot_test(name):
         native_aot = True,
         self_contained = True,
         single_file = True,
-        target_compatible_with = _NOT_WINDOWS,
     )
 
 def single_file_test_suite(name):

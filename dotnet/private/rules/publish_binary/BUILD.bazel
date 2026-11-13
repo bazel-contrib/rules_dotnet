@@ -89,6 +89,8 @@ bzl_library(
     ],
 )
 
+exports_files(["WindowsAPIs.txt"])
+
 bzl_library(
     name = "publish_binary",
     srcs = ["publish_binary.bzl"],

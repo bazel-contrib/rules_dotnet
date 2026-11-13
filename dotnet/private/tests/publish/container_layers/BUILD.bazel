@@ -57,11 +57,6 @@ PUBLISHES = {
         binary = binary,
         native_aot = publish == "native_aot_publish",
         self_contained = True,
-        # The linker for NativeAOT only drives Unix toolchains.
-        target_compatible_with = select({
-            "@platforms//os:windows": ["@platforms//:incompatible"],
-            "//conditions:default": [],
-        }) if publish == "native_aot_publish" else [],
         target_framework = "net10.0",
     )
     for (publish, binary) in PUBLISHES.items()

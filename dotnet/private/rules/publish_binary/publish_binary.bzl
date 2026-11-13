@@ -173,7 +173,9 @@ _AOT_SWITCHES_WITHOUT_KNOB = ["System.Diagnostics.Debugger.IsSupported"]
 _AOT_LINK_ORDER = [
     "System.Native",
     "System.Globalization.Native",
+    "System.Globalization.Native.Aot",
     "System.IO.Compression.Native",
+    "System.IO.Compression.Native.Aot",
     "System.Net.Security.Native",
     "System.Security.Cryptography.Native.Apple",
     "System.Security.Cryptography.Native.OpenSsl",
@@ -185,6 +187,7 @@ _AOT_LINK_ORDER = [
     "aotminipal",
     "stdc++compat",
     "z",
+    "zlibstatic",
     "brotlienc",
     "brotlidec",
     "brotlicommon",
@@ -192,10 +195,27 @@ _AOT_LINK_ORDER = [
 
 # Libraries the runtime expects from the platform rather than from its pack,
 # keyed by the target operating systems a publish can link for. The C++ runtime
-# is absent because the pack's own libstdc++compat.a covers it.
+# is absent on Unix because the pack's own libstdc++compat.a covers it.
 _AOT_SYSTEM_LIBS = {
     "linux": ["dl", "rt", "m"],
     "osx": ["dl", "objc", "m"],
+    "windows": [
+        "advapi32",
+        "bcrypt",
+        "crypt32",
+        "iphlpapi",
+        "kernel32",
+        "mswsock",
+        "ncrypt",
+        "normaliz",
+        "ntdll",
+        "ole32",
+        "oleaut32",
+        "secur32",
+        "user32",
+        "version",
+        "ws2_32",
+    ],
 }
 
 # Apple frameworks the runtime links against. They come from the macOS SDK, so
@@ -242,13 +262,14 @@ def _aot_closure(assembly_info, transitive_runtime_deps):
         appsetting_files = assembly_info.appsetting_files.to_list(),
     )
 
-def _aot_link_libraries(link_inputs):
+def _aot_link_libraries(link_inputs, is_windows):
     """The pack's static libraries, in the order the linker needs them."""
     libraries = []
+    patterns = ["{}.obj", "{}.lib"] if is_windows else ["lib{}.a", "lib{}.o"]
 
     for name in _AOT_LINK_ORDER:
-        for basename in ["lib{}.a".format(name), "lib{}.o".format(name)]:
-            library = link_inputs.get(basename)
+        for pattern in patterns:
+            library = link_inputs.get(pattern.format(name))
 
             if library:
                 libraries.append(library)
@@ -262,6 +283,7 @@ def _ilc_compile(ctx, dll, closure, aot):
     linked from it.
     """
     ilc = _native_tools(ctx).ilcompiler
+    is_windows = aot.os == "windows"
 
     # The AOT framework replaces the JIT one wholesale: ilc compiles the app
     # and its dependencies against assemblies built for ahead-of-time use. The
@@ -269,8 +291,8 @@ def _ilc_compile(ctx, dll, closure, aot):
     references = {reference.path: reference for reference in aot.pack.libs + closure.libs}
     references.pop(dll.path, None)
 
-    object_file = ctx.actions.declare_file(aot.prefix + ".o")
-    exports_file = ctx.actions.declare_file(aot.prefix + ".exports")
+    object_file = ctx.actions.declare_file(aot.prefix + (".obj" if is_windows else ".o"))
+    exports_file = ctx.actions.declare_file(aot.prefix + (".def" if is_windows else ".exports"))
 
     # Every path reaches ilc as a File so that path mapping can rewrite it; a
     # path baked into a string at analysis time would survive unmapped.
@@ -283,16 +305,25 @@ def _ilc_compile(ctx, dll, closure, aot):
     args.add("-O")
     args.add("--dehydrate")
     args.add(exports_file, format = "--exportsfile:%s")
-    args.add("--export-dynamic-symbol:DotNetRuntimeDebugHeader")
+    if is_windows:
+        args.add("--export-dynamic-symbol:DotNetRuntimeDebugHeader,DATA")
+    else:
+        args.add("--export-dynamic-symbol:DotNetRuntimeDebugHeader")
     args.add_all(_AOT_INIT_ASSEMBLIES, format_each = "--initassembly:%s")
 
     # The bootstrapper calls into the class library through a fixed set of
     # entry points, which only exist if ilc is asked to emit them.
     args.add("--generateunmanagedentrypoints:System.Private.CoreLib")
     args.add_all(_direct_pinvokes(aot.pack.link_inputs), format_each = "--directpinvoke:%s")
+    direct_pinvoke_lists = [ctx.file._windows_apis] if is_windows else []
+    args.add_all(direct_pinvoke_lists, format_each = "--directpinvokelist:%s")
 
-    for switch in sorted(_AOT_FEATURE_SWITCHES):
-        setting = "{}={}".format(switch, "true" if _AOT_FEATURE_SWITCHES[switch] else "false")
+    switches = dict(_AOT_FEATURE_SWITCHES)
+    if is_windows:
+        switches["System.Threading.ThreadPool.UseWindowsThreadPool"] = True
+
+    for switch in sorted(switches):
+        setting = "{}={}".format(switch, "true" if switches[switch] else "false")
         args.add("--feature:" + setting)
 
         if switch not in _AOT_SWITCHES_WITHOUT_KNOB:
@@ -302,6 +333,8 @@ def _ilc_compile(ctx, dll, closure, aot):
     args.add("--stacktracedata")
     args.add("--scanreflection")
     args.add("--methodbodyfolding:generic")
+    if is_windows:
+        args.add("--win32resourcemodule:" + aot.name)
 
     # A warning from framework code is not the user's to fix, and one bad
     # method should not fail the whole publish.
@@ -315,7 +348,7 @@ def _ilc_compile(ctx, dll, closure, aot):
         executable = ilc.tool,
         arguments = [args],
         inputs = depset(
-            [dll] + references.values(),
+            [dll] + references.values() + direct_pinvoke_lists,
             transitive = [ilc.files],
         ),
         outputs = [object_file, exports_file],
@@ -350,8 +383,9 @@ def _ilc_link(ctx, compiled, aot):
     )
 
     is_apple = aot.os == "osx"
-    libraries = _aot_link_libraries(aot.pack.link_inputs)
-    executable = ctx.actions.declare_file(aot.prefix)
+    is_windows = aot.os == "windows"
+    libraries = _aot_link_libraries(aot.pack.link_inputs, is_windows)
+    executable = ctx.actions.declare_file(aot.prefix + (".exe" if is_windows else ""))
 
     # Ordered the way a Unix linker reads its command line: the object first,
     # then the archives that satisfy it, then the system libraries.
@@ -367,32 +401,56 @@ def _ilc_link(ctx, compiled, aot):
         variables = link_variables,
     ))
     args.add(compiled.object_file)
-    args.add("-o", executable)
 
-    if is_apple:
-        # Exports only what ilc listed and drops the rest. There is no Linux
-        # counterpart: the runtime relies on sections a GC-ing linker cannot
-        # prove are reachable.
-        args.add("-exported_symbols_list", compiled.exports_file)
-
-    args.add_all(libraries)
-
-    if not is_apple:
-        args.add("-Wl,--build-id=sha1")
-        args.add("-Wl,--as-needed")
-        args.add("-pthread")
-
-    args.add_all(_AOT_SYSTEM_LIBS[aot.os], format_each = "-l%s")
-
-    if is_apple:
-        args.add_all(_AOT_APPLE_FRAMEWORKS, before_each = "-framework")
+    if is_windows:
+        args.add(executable, format = "/OUT:%s")
+        args.add(compiled.exports_file, format = "/DEF:%s")
+        args.add_all(libraries)
+        args.add_all(_AOT_SYSTEM_LIBS[aot.os], format_each = "%s.lib")
+        args.add("/NOLOGO")
+        args.add("/MANIFEST:NO")
+        args.add("/MERGE:.managedcode=.text")
+        args.add("/MERGE:hydrated=.bss")
+        args.add("/INCREMENTAL:NO")
+        args.add("/SUBSYSTEM:CONSOLE")
+        args.add("/ENTRY:wmainCRTStartup")
+        args.add("/NOEXP")
+        args.add("/NOIMPLIB")
+        args.add("/STACK:1572864")
+        args.add("/IGNORE:4104")
+        if aot.arch == "x64":
+            args.add("/CETCOMPAT")
+        args.add("/NODEFAULTLIB:libucrt.lib")
+        args.add("/DEFAULTLIB:ucrt.lib")
+        args.add("/OPT:REF")
+        args.add("/OPT:ICF")
     else:
-        # The hardening the runtime ships with: read-only relocations,
-        # immediate binding, and a position-independent executable.
-        args.add("-Wl,-z,relro")
-        args.add("-Wl,-z,now")
-        args.add("-pie")
-        args.add("-Wl,-pie")
+        args.add("-o", executable)
+
+        if is_apple:
+            # Exports only what ilc listed and drops the rest. There is no Linux
+            # counterpart: the runtime relies on sections a GC-ing linker cannot
+            # prove are reachable.
+            args.add("-exported_symbols_list", compiled.exports_file)
+
+        args.add_all(libraries)
+
+        if not is_apple:
+            args.add("-Wl,--build-id=sha1")
+            args.add("-Wl,--as-needed")
+            args.add("-pthread")
+
+        args.add_all(_AOT_SYSTEM_LIBS[aot.os], format_each = "-l%s")
+
+        if is_apple:
+            args.add_all(_AOT_APPLE_FRAMEWORKS, before_each = "-framework")
+        else:
+            # The hardening the runtime ships with: read-only relocations,
+            # immediate binding, and a position-independent executable.
+            args.add("-Wl,-z,relro")
+            args.add("-Wl,-z,now")
+            args.add("-pie")
+            args.add("-Wl,-pie")
 
     ctx.actions.run(
         executable = linker,
@@ -423,7 +481,7 @@ def _native_aot_executable(ctx, dll, closure, runtime_identifier, target_framewo
     (target_os, target_arch) = native_target(runtime_identifier)
 
     if target_os not in _AOT_SYSTEM_LIBS:
-        fail("NativeAOT cannot target {} yet: only Linux and macOS are supported".format(target_os))
+        fail("NativeAOT cannot target {} yet".format(target_os))
 
     name = dll.basename.removesuffix(".dll")
     aot = struct(
@@ -1290,6 +1348,10 @@ Requires `single_file = True`.""",
             executable = True,
             default = "//dotnet/private/tools/apphost_shimmer:apphost_shimmer",
             cfg = "exec",
+        ),
+        "_windows_apis": attr.label(
+            allow_single_file = True,
+            default = "//dotnet/private/rules/publish_binary:WindowsAPIs.txt",
         ),
     },
     toolchains = ["//dotnet/toolchain:toolchain_type"],
