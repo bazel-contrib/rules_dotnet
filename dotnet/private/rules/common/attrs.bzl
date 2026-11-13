@@ -314,6 +314,16 @@ CSHARP_COMMON_ATTRS = dicts.add(
             mandatory = False,
             default = [],
         ),
+        "excluded_analyzers": attr.string_list(
+            doc = """File names of analyzer and source generator DLLs to leave out of the compilation.
+
+            Matches against the analyzers this target would otherwise receive from its dependencies. This
+            mirrors how MSBuild removes `Analyzer` items. The exclusion only applies to this target's
+            compilation, not to targets that depend on it.
+            """,
+            mandatory = False,
+            default = [],
+        ),
     },
 )
 
