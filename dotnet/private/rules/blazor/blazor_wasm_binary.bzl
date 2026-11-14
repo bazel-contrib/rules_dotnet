@@ -47,6 +47,7 @@ def _blazor_wasm_binary_impl(ctx):
         assembled.binary[DotnetAssemblyCompileInfo],
         assembled.binary[DotnetAssemblyRuntimeInfo],
         assembled.binary[DotnetBinaryInfo],
+        assembled.binary[OutputGroupInfo],
     ]
     if StaticWebAssetsInfo in assembled.binary:
         forwarded.append(assembled.binary[StaticWebAssetsInfo])

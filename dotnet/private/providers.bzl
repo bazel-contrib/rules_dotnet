@@ -157,6 +157,8 @@ DotnetBinaryInfo = provider(
     doc = "Information about a .Net binary",
     fields = {
         "dll": "File: The main binary dll",
+        "depsjson": "File: The binary's .deps.json file, or None.",
+        "runtimeconfig": "File: The binary's .runtimeconfig.json file, or None.",
         "static_web_files": """list[struct]: The servable tree, as structs of a `file` and
 the `publish_path` it takes inside a publish directory. Already materialized by the
 binary, so a publish copies these rather than laying the tree out a second time.""",
