@@ -1,0 +1,32 @@
+load("//dotnet:defs.bzl", "csharp_library", "csharp_nunit_test", "fsharp_library")
+
+csharp_library(
+    name = "csharp_lib_secrets_only",
+    srcs = ["UserSecretsOnlyLib.cs"],
+    project_sdk = "web",
+    target_frameworks = ["net6.0"],
+    user_secrets_id = "csharp-secrets-only-id",
+)
+
+fsharp_library(
+    name = "fsharp_lib_with_secrets",
+    srcs = ["UserSecretsIdLib.fs"],
+    project_sdk = "web",
+    target_frameworks = ["net6.0"],
+    user_secrets_id = "fsharp-test-secrets-id",
+    version = "2.1.0",
+    deps = ["@paket.rules_dotnet_dev_nuget_packages//fsharp.core"],
+)
+
+csharp_nunit_test(
+    name = "user_secrets_id_test",
+    srcs = ["UserSecretsIdTest.cs"],
+    project_sdk = "web",
+    target_frameworks = ["net6.0"],
+    user_secrets_id = "csharp-test-secrets-id",
+    version = "1.2.3",
+    deps = [
+        ":csharp_lib_secrets_only",
+        ":fsharp_lib_with_secrets",
+    ],
+)
