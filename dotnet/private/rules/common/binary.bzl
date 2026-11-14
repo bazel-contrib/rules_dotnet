@@ -272,6 +272,8 @@ def build_binary(ctx, compile_action, toolchain, runtime_toolchain = None):
 
     dotnet_binary_info = DotnetBinaryInfo(
         dll = dll,
+        depsjson = depsjson,
+        runtimeconfig = runtimeconfig,
         static_web_files = static_web_files,
         transitive_runtime_deps = transitive_runtime_deps,
         # None for rules_dotnet's own tools, which are never published.
@@ -280,4 +282,9 @@ def build_binary(ctx, compile_action, toolchain, runtime_toolchain = None):
         framework_version = framework_version,
     )
 
-    return [default_info, dotnet_binary_info, compile_provider, runtime_provider, static_web_assets_info, RunEnvironmentInfo(environment = {key: expand_variables(ctx, expand_locations(ctx, value, ctx.attr.data)) for key, value in ctx.attr.envs.items()}, inherited_environment = ctx.attr.env_inherit)]
+    output_group_info = OutputGroupInfo(
+        deps_json = depset([depsjson] if depsjson != None else []),
+        runtimeconfig_json = depset([runtimeconfig] if runtimeconfig != None else []),
+    )
+
+    return [default_info, dotnet_binary_info, output_group_info, compile_provider, runtime_provider, static_web_assets_info, RunEnvironmentInfo(environment = {key: expand_variables(ctx, expand_locations(ctx, value, ctx.attr.data)) for key, value in ctx.attr.envs.items()}, inherited_environment = ctx.attr.env_inherit)]
