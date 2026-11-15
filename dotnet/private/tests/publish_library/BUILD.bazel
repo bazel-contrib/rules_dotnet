@@ -1,0 +1,103 @@
+load(
+    "//dotnet:defs.bzl",
+    "csharp_library",
+    "csharp_nunit_test",
+    "import_library",
+    "publish_library",
+)
+load(":tests.bzl", "publish_library_test_suite")
+
+publish_library_test_suite(name = "publish_library_test_suite")
+
+csharp_library(
+    name = "contract_base",
+    srcs = ["ContractBase.cs"],
+    target_frameworks = ["net9.0"],
+)
+
+csharp_library(
+    name = "plugin_contract",
+    srcs = ["IPlugin.cs"],
+    target_frameworks = ["net9.0"],
+    exports = [":contract_base"],
+    deps = [":contract_base"],
+)
+
+csharp_library(
+    name = "private_dep",
+    srcs = ["PrivateDep.cs"],
+    target_frameworks = ["net9.0"],
+)
+
+csharp_library(
+    name = "sample_plugin",
+    srcs = ["SamplePlugin.cs"],
+    target_frameworks = ["net9.0"],
+    deps = [
+        ":plugin_contract",
+        ":private_dep",
+    ],
+)
+
+csharp_library(
+    name = "portable_lib",
+    srcs = ["PortableLib.cs"],
+    target_frameworks = ["net9.0"],
+    deps = [
+        ":private_dep",
+        "@paket.rules_dotnet_dev_nuget_packages//fsharp.core",
+        "@paket.rules_dotnet_dev_nuget_packages//rocksdb",
+    ],
+)
+
+genrule(
+    name = "native_stub",
+    outs = ["native_stub.dll"],
+    cmd = "echo stub > $@",
+)
+
+import_library(
+    name = "workspace_native",
+    library_name = "workspace_native",
+    native = [":native_stub"],
+    version = "1.0.0",
+)
+
+csharp_library(
+    name = "native_lib",
+    srcs = ["NativeLib.cs"],
+    target_frameworks = ["net9.0"],
+    deps = [
+        ":workspace_native",
+        "@paket.rules_dotnet_dev_nuget_packages//rocksdb",
+    ],
+)
+
+csharp_library(
+    name = "netfx_lib",
+    srcs = ["NetFxLib.cs"],
+    target_frameworks = ["net48"],
+    deps = [
+        "@paket.rules_dotnet_dev_nuget_packages//rocksdb",
+    ],
+)
+
+publish_library(
+    name = "published_plugin",
+    exclude_deps = [":plugin_contract"],
+    library = ":sample_plugin",
+    target_framework = "net9.0",
+)
+
+csharp_nunit_test(
+    name = "plugin_load_test",
+    size = "small",
+    srcs = ["PluginLoadTest.cs"],
+    data = [":published_plugin"],
+    nullable = "enable",
+    target_frameworks = ["net9.0"],
+    deps = [
+        ":plugin_contract",
+        "//tools/runfiles",
+    ],
+)

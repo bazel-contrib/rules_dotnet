@@ -485,6 +485,39 @@ Mark .NET Framework tests with
   cover the version the application references. MSBuild replaces it with the
   one it generates and warns (MSB3836).
 
+## Publishing libraries and plugins
+
+`publish_library` assembles the publish layout of a `csharp_library` or
+`fsharp_library` and its runtime dependencies without creating an apphost
+executable or `runtimeconfig.json`, matching `dotnet publish` on a class library
+(and `<EnableDynamicLoading>true</EnableDynamicLoading>` on .NET):
+
+```python
+publish_library(
+    name = "plugin_publish",
+    library = ":my_plugin",
+    exclude_deps = [":plugin_contract"],
+    target_framework = "net10.0",
+)
+```
+
+- When `runtime_identifier` is omitted, the publish is portable and carries
+  every runtime identifier's assets from NuGet packages under `runtimes/<rid>/`.
+  When `runtime_identifier` is set, only that runtime's assets (including
+  workspace-built native libraries) are included.
+- `exclude_deps` excludes the runtime closures of dependencies that the host
+  process already provides (mirroring `<ProjectReference Private="false"
+  ExcludeAssets="runtime" />`), so dynamically loaded plugins share contract
+  types with the host `AssemblyLoadContext` while keeping their private
+  dependencies and `.deps.json`.
+- On .NET Core / .NET 5+, `<library>.deps.json` is emitted by default so
+  `AssemblyDependencyResolver` can resolve managed and native dependencies from
+  the published directory; on .NET Framework and .NET Standard no `deps.json` is
+  emitted.
+- The published tree is also available as a single directory in the
+  `publish_dir` output group and as `third_party_layer`, `first_party_layer`,
+  and `app_layer` output groups.
+
 ## Container images
 
 The output from `publish_binary` can easily be used to build container images.

@@ -85,6 +85,10 @@ load(
     _publish_binary = "publish_binary",
 )
 load(
+    "//dotnet/private/rules/publish_library:publish_library.bzl",
+    _publish_library = "publish_library",
+)
+load(
     "//dotnet/private/sdk:packs.bzl",
     _BLAZORWASM_SDK = "BLAZORWASM_SDK",
 )
@@ -170,6 +174,7 @@ def fsharp_test(name, **kwargs):
 csharp_nunit_test = _csharp_nunit_test
 fsharp_nunit_test = _fsharp_nunit_test
 publish_binary = _publish_binary
+publish_library = _publish_library
 blazor_devserver = _blazor_devserver
 import_library = _import_library
 import_dll = _import_dll

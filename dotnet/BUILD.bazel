@@ -46,6 +46,7 @@ bzl_library(
         "//dotnet/private/rules/nuget_pack",
         "//dotnet/private/rules/nuget_pack:nuget_push",
         "//dotnet/private/rules/publish_binary",
+        "//dotnet/private/rules/publish_library",
         "//dotnet/private/sdk:packs",
     ],
 )
