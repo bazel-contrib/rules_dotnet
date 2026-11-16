@@ -318,7 +318,9 @@ def build_binary(ctx, compile_action, toolchain, runtime_toolchain = None, winex
     if is_standard_framework(tfm):
         fail("It doesn't make sense to build an executable for " + tfm)
 
-    (compile_provider, runtime_provider, generated_assets) = compile_action(ctx, tfm, toolchain)
+    compiled = compile_action(ctx, tfm, toolchain)
+    (compile_provider, runtime_provider, generated_assets) = compiled[:3]
+    extra_providers = list(compiled[3:])
     runtime_provider = with_ready_to_run_images(ctx, runtime_provider)
     transitive_runtime_deps = runtime_provider.deps.to_list()
 
@@ -426,4 +428,4 @@ def build_binary(ctx, compile_action, toolchain, runtime_toolchain = None, winex
             },
             inherited_environment = ctx.attr.env_inherit,
         ),
-    ]
+    ] + extra_providers
