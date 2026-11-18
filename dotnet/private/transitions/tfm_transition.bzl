@@ -16,6 +16,7 @@ load(
     "READY_TO_RUN_FRAMEWORK",
     "READY_TO_RUN_PROJECT_SDK",
     "TFM_RID_TRANSITION_OUTPUTS",
+    "TRIMMED",
     "platform_to_rid",
     "rid_compatability_transition_outputs",
 )
@@ -23,9 +24,10 @@ load(
 def _ready_to_run(settings, attr, transitioned_tfm):
     """The ReadyToRun settings a target passes down.
 
-    The published binary keeps the native compiler its publish asked for, and
-    names the runtime the images below it are compiled against: its own
-    framework and project SDK. Everything else passes the framework on.
+    The published binary keeps the native compiler its publish asked for and
+    whether the publish trims it, and names the runtime the images below it are
+    compiled against: its own framework and project SDK. Everything else passes
+    the framework on.
     """
 
     # A publish asks its binary through publish_binary_transition.
@@ -42,6 +44,7 @@ def _ready_to_run(settings, attr, transitioned_tfm):
 
     return dicts.add(NO_READY_TO_RUN, {
         NATIVE_COMPILER: settings[NATIVE_COMPILER],
+        TRIMMED: settings[TRIMMED],
         READY_TO_RUN_FRAMEWORK: transitioned_tfm if framework else "",
         READY_TO_RUN_PROJECT_SDK: normalize_project_sdk(attr.project_sdk) if framework else "",
     })
@@ -83,6 +86,8 @@ def _publish_binary_impl(settings, attr):
     binary = dicts.add(_impl(settings, attr), {
         PUBLISHED: True,
         READY_TO_RUN_FRAMEWORK: attr.target_framework if attr.ready_to_run and not attr.ready_to_run_composite else "",
+        # NativeAOT is the only publish of a .NET binary that trims it.
+        TRIMMED: attr.native_aot,
     })
 
     if attr.native_aot:

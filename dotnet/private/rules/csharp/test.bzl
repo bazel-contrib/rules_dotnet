@@ -73,6 +73,8 @@ def _compile_action(ctx, tfm, toolchain):
         compiler_options = ctx.attr.compiler_options,
         interceptors_namespaces = ctx.attr.interceptors_namespaces,
         excluded_analyzers = ctx.attr.excluded_analyzers,
+        enable_request_delegate_generator = ctx.attr.enable_request_delegate_generator,
+        enable_configuration_binding_generator = ctx.attr.enable_configuration_binding_generator,
         is_windows = targets_windows(ctx),
     )
 

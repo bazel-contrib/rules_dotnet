@@ -20,8 +20,11 @@ READY_TO_RUN_PROJECT_SDK = "//dotnet/private/rules/ready_to_run:project_sdk"
 PUBLISHED = "//dotnet/private/rules/publish_binary:published"
 NATIVE_COMPILER = "//dotnet/private/rules/publish_binary:native_compiler"
 
+# Set on the same edge, and kept by the binary alone: that the publish trims it.
+TRIMMED = "//dotnet/private/rules/publish_binary:trimmed"
+
 # What every transition but the publish's leaves them at.
-NO_READY_TO_RUN = {READY_TO_RUN_FRAMEWORK: "", READY_TO_RUN_PROJECT_SDK: "", NATIVE_COMPILER: "", PUBLISHED: False}
+NO_READY_TO_RUN = {READY_TO_RUN_FRAMEWORK: "", READY_TO_RUN_PROJECT_SDK: "", NATIVE_COMPILER: "", PUBLISHED: False, TRIMMED: False}
 
 # Every transition that moves the TFM/RID graph writes the same settings.
 TFM_RID_TRANSITION_OUTPUTS = ["//dotnet:target_framework", "//dotnet:rid"] + \

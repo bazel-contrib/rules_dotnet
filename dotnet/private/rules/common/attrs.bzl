@@ -335,10 +335,11 @@ CSHARP_COMMON_ATTRS = dicts.add(
         "interceptors_namespaces": attr.string_list(
             doc = """List of namespaces that are allowed to contain interceptors.
 
-            This is passed to the compiler as `/features:InterceptorsNamespaces=<ns1>;<ns2>`. Some source
-            generators (for example the one shipped with `Microsoft.Extensions.Configuration.Binder`) emit
-            interceptors and require their namespace to be listed here. This mirrors the `InterceptorsNamespaces`
-            MSBuild property that the corresponding NuGet `.targets` files set automatically.
+            This is passed to the compiler as `/features:InterceptorsNamespaces=<ns1>;<ns2>`, and mirrors the
+            `InterceptorsNamespaces` MSBuild property. Like the .NET SDK, the rules already allow the namespaces
+            of the SDK's own generators: those of the request delegate and configuration binding generators
+            while they are on, and `Microsoft.Extensions.Validation.Generated` for .NET 10 and later. List the
+            namespaces of any other generator that emits interceptors here.
             """,
             mandatory = False,
             default = [],
@@ -352,6 +353,26 @@ CSHARP_COMMON_ATTRS = dicts.add(
             """,
             mandatory = False,
             default = [],
+        ),
+        "enable_request_delegate_generator": attr.int(
+            doc = """Run ASP.NET Core's Request Delegate Generator, which generates the minimal API endpoints at compile time, matching MSBuild's `EnableRequestDelegateGenerator`.
+
+            `-1` follows the .NET SDK: on for a binary that `publish_binary` publishes with `native_aot`, and
+            for `project_sdk = "blazorwasm"`, which the SDK always trims; off otherwise. `1` turns it on, and
+            `0` turns it off. While it is on, its interceptors namespace, `Microsoft.AspNetCore.Http.Generated`,
+            is allowed.""",
+            default = -1,
+            values = [-1, 0, 1],
+        ),
+        "enable_configuration_binding_generator": attr.int(
+            doc = """Run the configuration binding source generator from `Microsoft.Extensions.Configuration.Binder`, matching MSBuild's `EnableConfigurationBindingGenerator`.
+
+            `-1` follows the .NET SDK: on for a binary that `publish_binary` publishes with `native_aot`, and
+            off otherwise, `project_sdk = "blazorwasm"` included. `1` turns it on, and `0` turns it off. While
+            it is on, its interceptors namespace, `Microsoft.Extensions.Configuration.Binder.SourceGeneration`,
+            is allowed.""",
+            default = -1,
+            values = [-1, 0, 1],
         ),
     },
 )

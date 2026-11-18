@@ -12,6 +12,8 @@ load(
     "framework_preprocessor_symbols",
     "generate_warning_args",
     "get_framework_version_info",
+    "is_core_framework",
+    "tfm_version",
     "use_highentropyva",
 )
 load("//dotnet/private:nuget_version.bzl", "DEFAULT_ASSEMBLY_VERSION", "nuget_version")
@@ -29,7 +31,7 @@ load(
 )
 load("//dotnet/private/rules/csharp/actions:scoped_css.bzl", "scoped_css_action")
 load("//dotnet/private/rules/csharp/actions:sdk_analyzers.bzl", "sdk_analyzer_compile_inputs")
-load("//dotnet/private/sdk:packs.bzl", "uses_razor")
+load("//dotnet/private/sdk:packs.bzl", "BLAZORWASM_SDK", "uses_razor")
 
 def _write_internals_visible_to_csharp(actions, label_name, dll_name, others):
     """Write a .cs file containing InternalsVisibleTo attributes.
@@ -132,10 +134,79 @@ def _collect_analyzer_dependencies(deps, analyzer_runtime_deps):
 
     return {dll: None for info in loaded for dll in info.libs}.keys()
 
+# The source generators the .NET SDK leaves out of a compilation unless the
+# project turns them on, and the namespace each one's interceptors live in. See
+# `ResolveOffByDefaultAnalyzers` in Microsoft.NET.Sdk.FrameworkReferenceResolution.targets;
+# the Microsoft.Extensions.Configuration.Binder package's own targets drop its
+# copy of the binding generator the same way.
+_REQUEST_DELEGATE_GENERATOR = struct(
+    dll = "Microsoft.AspNetCore.Http.RequestDelegateGenerator.dll",
+    interceptors_namespace = "Microsoft.AspNetCore.Http.Generated",
+)
+_CONFIGURATION_BINDING_GENERATOR = struct(
+    dll = "Microsoft.Extensions.Configuration.Binder.SourceGeneration.dll",
+    interceptors_namespace = "Microsoft.Extensions.Configuration.Binder.SourceGeneration",
+)
+
+# The SDK allows this one for every project on .NET 10 or later, for the
+# validation generator that ships with ASP.NET Core.
+_VALIDATION_INTERCEPTORS_NAMESPACE = "Microsoft.Extensions.Validation.Generated"
+
+def _generator_enabled(setting, sdk_default):
+    """Resolves an `enable_*_generator` attribute, where -1 takes the .NET SDK's default."""
+    return sdk_default if setting == -1 else setting == 1
+
+def _off_by_default_generators(project_sdk, target_framework, publish_trimmed, enable_request_delegate_generator, enable_configuration_binding_generator):
+    """Decides which of the SDK's off-by-default generators run, as MSBuild does.
+
+    Args:
+        project_sdk: The project SDK named on the target.
+        target_framework: The target framework.
+        publish_trimmed: Whether a publish trims the target, MSBuild's
+            `PublishTrimmed` or `PublishAot`.
+        enable_request_delegate_generator: The target's tri-state attribute.
+        enable_configuration_binding_generator: The target's tri-state attribute.
+
+    Returns:
+        A struct of the generator DLLs to leave out, and the interceptors
+        namespaces the SDK allows.
+    """
+
+    # The Blazor WebAssembly SDK always trims, and then turns the binding
+    # generator back off.
+    trimmed = publish_trimmed or project_sdk == BLAZORWASM_SDK
+    enabled = [
+        (_REQUEST_DELEGATE_GENERATOR, _generator_enabled(enable_request_delegate_generator, trimmed)),
+        (_CONFIGURATION_BINDING_GENERATOR, _generator_enabled(
+            enable_configuration_binding_generator,
+            trimmed and project_sdk != BLAZORWASM_SDK,
+        )),
+    ]
+
+    namespaces = [generator.interceptors_namespace for generator, on in enabled if on]
+    version = tfm_version(target_framework) if is_core_framework(target_framework) else []
+    if version and version[0] >= 10:
+        namespaces.append(_VALIDATION_INTERCEPTORS_NAMESPACE)
+
+    return struct(
+        excluded = [generator.dll for generator, on in enabled if not on],
+        interceptors_namespaces = namespaces,
+    )
+
 def _without_analyzers(analyzers, excluded):
-    if not excluded:
-        return analyzers
-    return depset([dll for dll in analyzers.to_list() if dll.basename not in excluded])
+    """Drops analyzers by file name, as MSBuild's `Analyzer Remove` with `MatchOnMetadata="FileName"` does.
+
+    Args:
+        analyzers: A depset of analyzer DLLs.
+        excluded: A dict keyed by the file names to drop, `.dll` included,
+            matched case-sensitively.
+
+    Returns:
+        The analyzers that are left, or `analyzers` itself when none is dropped.
+    """
+    files = analyzers.to_list()
+    kept = [dll for dll in files if dll.basename not in excluded]
+    return analyzers if len(kept) == len(files) else depset(kept)
 
 # buildifier: disable=unnamed-macro
 def AssemblyAction(
@@ -189,6 +260,9 @@ def AssemblyAction(
         interceptors_namespaces,
         is_windows,
         excluded_analyzers = [],
+        enable_request_delegate_generator = -1,
+        enable_configuration_binding_generator = -1,
+        publish_trimmed = False,
         analyzer_runtime_deps = []):
     """Creates an action that runs the CSharp compiler with the specified inputs.
 
@@ -245,6 +319,9 @@ def AssemblyAction(
         interceptors_namespaces: Namespaces that are allowed to contain interceptors.
         is_windows: Whether or not the target is running on Windows.
         excluded_analyzers: File names of analyzer and source generator DLLs to leave out of the compilation.
+        enable_request_delegate_generator: MSBuild's `EnableRequestDelegateGenerator`: 1, 0, or -1 for the SDK's default.
+        enable_configuration_binding_generator: MSBuild's `EnableConfigurationBindingGenerator`: 1, 0, or -1 for the SDK's default.
+        publish_trimmed: Whether a publish trims this assembly, MSBuild's `PublishTrimmed` or `PublishAot`.
         analyzer_runtime_deps: The NuGet packages an analyzer loads, which it also compiles against.
     Returns:
         The compile and runtime providers, and the static web assets the compile
@@ -302,12 +379,27 @@ def AssemblyAction(
         compile_analyzers_csharp = analyzers_csharp
         compile_analyzer_configs = analyzer_configs
 
-    # Exclusions apply to the SDK's analyzers too, as MSBuild's `Analyzer Remove` does.
-    compile_analyzers = _without_analyzers(analyzers, excluded_analyzers)
-    compile_analyzers_csharp = _without_analyzers(compile_analyzers_csharp, excluded_analyzers)
+    generators = _off_by_default_generators(
+        project_sdk,
+        target_framework,
+        publish_trimmed,
+        enable_request_delegate_generator,
+        enable_configuration_binding_generator,
+    )
+    interceptors_namespaces = {
+        namespace: None
+        for namespace in interceptors_namespaces + generators.interceptors_namespaces
+    }.keys()
+
+    # Dropped from every analyzer the compilation gets, as MSBuild's
+    # `Analyzer Remove` does, but kept in the providers: a dependent decides for
+    # itself.
+    excluded = {dll: None for dll in excluded_analyzers + generators.excluded}
+    compile_analyzers = _without_analyzers(analyzers, excluded)
+    compile_analyzers_csharp = _without_analyzers(compile_analyzers_csharp, excluded)
 
     # The ref-only compile reports no diagnostics, so it gets no SDK analyzers.
-    ref_only_analyzers_csharp = _without_analyzers(analyzers_csharp, excluded_analyzers)
+    ref_only_analyzers_csharp = _without_analyzers(analyzers_csharp, excluded)
 
     # TODO: Ensure that all the analyzer DLLs also target netstandard2.0.
     analyzer_dlls = _collect_analyzer_dependencies(compile_deps, analyzer_runtime_deps) if (is_analyzer or is_language_specific_analyzer) else []

@@ -12,6 +12,17 @@ bool_setting(
     visibility = ["//visibility:public"],
 )
 
+# True only for the binary a NativeAOT publish publishes: what MSBuild calls
+# `PublishAot`, which also trims. The binary turns on the source generators the
+# SDK turns on for a trimmed application. Only the binary keeps it; see
+# //dotnet/private/transitions:tfm_transition.
+bool_setting(
+    name = "trimmed",
+    build_setting_default = False,
+    scope = "target",
+    visibility = ["//visibility:public"],
+)
+
 # The native compiler a ReadyToRun or NativeAOT publish asks its binary for.
 # Only the binary keeps it; see //dotnet/private/transitions:tfm_transition.
 string_setting(
