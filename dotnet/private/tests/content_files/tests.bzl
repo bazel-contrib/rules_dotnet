@@ -4,9 +4,11 @@ load("@rules_testing//lib:analysis_test.bzl", "analysis_test", "test_suite")
 load(
     "//dotnet:defs.bzl",
     "csharp_binary",
+    "csharp_library",
     "csharp_test",
     "dotnet_content_files",
     "fsharp_binary",
+    "fsharp_library",
     "fsharp_test",
     "publish_binary",
 )
@@ -173,6 +175,86 @@ def _cross_package(name):
         target = name + "_target_under_test",
     )
 
+def _csharp_library(name):
+    csharp_library(
+        name = name + "_target_under_test",
+        srcs = ["Main.cs"],
+        content_files = _CONTENT_FILES,
+        target_frameworks = ["net6.0"],
+    )
+
+    analysis_test(
+        name = name,
+        impl = _content_files_test_impl,
+        target = name + "_target_under_test",
+    )
+
+def _fsharp_library(name):
+    fsharp_library(
+        name = name + "_target_under_test",
+        srcs = ["Main.fs"],
+        content_files = _CONTENT_FILES,
+        target_frameworks = ["net6.0"],
+    )
+
+    analysis_test(
+        name = name,
+        impl = _content_files_test_impl,
+        target = name + "_target_under_test",
+    )
+
+def _csharp_library_transitive_binary(name):
+    csharp_library(
+        name = name + "_lib",
+        srcs = ["Main.cs"],
+        out = name + "_lib_dll",
+        content_files = _CONTENT_FILES,
+        target_frameworks = ["net6.0"],
+    )
+
+    csharp_binary(
+        name = name + "_target_under_test",
+        srcs = ["Main.cs"],
+        deps = [name + "_lib"],
+        target_frameworks = ["net6.0"],
+    )
+
+    analysis_test(
+        name = name,
+        impl = _content_files_test_impl,
+        target = name + "_target_under_test",
+    )
+
+def _csharp_library_transitive_publish(name):
+    csharp_library(
+        name = name + "_lib",
+        srcs = ["Main.cs"],
+        out = name + "_lib_dll",
+        content_files = _CONTENT_FILES,
+        target_frameworks = ["net6.0"],
+    )
+
+    csharp_binary(
+        name = name + "_binary",
+        srcs = ["Main.cs"],
+        deps = [name + "_lib"],
+        target_frameworks = ["net6.0"],
+    )
+
+    publish_binary(
+        name = name + "_target_under_test",
+        binary = name + "_binary",
+        roll_forward_behavior = "Major",
+        self_contained = False,
+        target_framework = "net6.0",
+    )
+
+    analysis_test(
+        name = name,
+        impl = _publish_test_impl,
+        target = name + "_target_under_test",
+    )
+
 def _content_files_test_impl(env, target):
     tfm = get_target_tfm(target)
     prefix = "{}/{}/{}".format(target.label.package, target.label.name, tfm)
@@ -220,11 +302,15 @@ def content_files_test_suite(name):
         name = name,
         tests = [
             _csharp_binary,
+            _csharp_library,
             _csharp_test,
             _fsharp_binary,
+            _fsharp_library,
             _fsharp_test,
             _csharp_publish,
             _fsharp_publish,
+            _csharp_library_transitive_binary,
+            _csharp_library_transitive_publish,
             _cross_package,
             _content_files_rule_csharp,
             _content_files_rule_fsharp,

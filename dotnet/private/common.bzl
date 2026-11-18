@@ -460,7 +460,8 @@ def collect_transitive_runfiles(ctx, assembly_runtime_info, deps):
 
     # XML documentation is a build output, not a runtime input: nothing loads it
     # and a publish does not ship it, so it stays out of the runfiles tree.
-    runfiles = ctx.runfiles(files = assembly_runtime_info.data + assembly_runtime_info.native + assembly_runtime_info.libs + assembly_runtime_info.resource_assemblies)
+    content_files = [entry.file for entry in assembly_runtime_info.content_files]
+    runfiles = ctx.runfiles(files = assembly_runtime_info.data + assembly_runtime_info.native + assembly_runtime_info.libs + assembly_runtime_info.resource_assemblies + content_files)
 
     transitive_runfiles = [dep[DefaultInfo].default_runfiles for dep in deps]
     transitive_runfiles.extend([
@@ -1225,20 +1226,25 @@ def to_rlocation_path(ctx, file):
         return ctx.workspace_name + "/" + file.short_path
 
 def package_relative_path(file, package):
-    """Re-roots `file`'s path to be relative to `package`.
+    """Re-roots `file`'s path to be relative to `package`, or its owning package.
 
     Args:
         file: The `File` to re-root.
         package: The Bazel package to make the path relative to (typically `ctx.label.package`).
 
     Returns:
-        `file`'s path relative to `package`, or `file.basename` if `file` lies outside `package`
-        (for example a file from an external repository or an unrelated package).
+        `file`'s path relative to `package` (when inside `package`), relative to `file.owner.package`
+        (when from another package in the workspace), or `file.basename` otherwise.
     """
     if not file.short_path.startswith("../"):
         prefix = package + "/" if package else ""
         if file.short_path.startswith(prefix):
             return file.short_path[len(prefix):]
+        owner_pkg = file.owner.package if file.owner else ""
+        if owner_pkg:
+            owner_prefix = owner_pkg + "/"
+            if file.short_path.startswith(owner_prefix):
+                return file.short_path[len(owner_prefix):]
     return file.basename
 
 def _copy_files_to_dir(actions, is_windows, file_mappings, out_dir, script_name, executables = []):
