@@ -4,7 +4,7 @@ class Test
 {
     static int Main(string[] args)
     {
-        string[] expected = { "--output=D:\\temp\\out", "a\\b", "a b", "x ^ y" };
+        string[] expected = { "--output=D:\\temp\\out", "a\\b", "a b", "x ^ y", "a\"b" };
         if (args.Length != expected.Length)
         {
             Console.Error.WriteLine("expected " + expected.Length + " arguments, got " + args.Length);
