@@ -7,7 +7,6 @@ load(
     "//dotnet/private:common.bzl",
     "add_resource_args",
     "add_resx_resource_args",
-    "build_satellite_assemblies",
     "collect_compile_info",
     "copy_appsettings_to_dir",
     "copy_content_to_dir",
@@ -18,7 +17,6 @@ load(
     "is_core_framework",
     "is_greater_or_equal_framework",
     "resolve_tristate",
-    "resx_manifest_name",
     "use_highentropyva",
 )
 load("//dotnet/private:nuget_version.bzl", "DEFAULT_ASSEMBLY_VERSION", "nuget_version")
@@ -26,10 +24,10 @@ load(
     "//dotnet/private:providers.bzl",
     "DotnetAssemblyCompileInfo",
     "DotnetAssemblyRuntimeInfo",
-    "DotnetResxInfo",
     "StaticWebAssetsInfo",
 )
 load("//dotnet/private/icu:settings.bzl", "globalization_env", "icu_wrapper_arguments")
+load("//dotnet/private/rules/common:resx.bzl", "resx_compile")
 load(
     "//dotnet/private/rules/csharp/actions:razor.bzl",
     "partition_srcs",
@@ -274,8 +272,7 @@ def AssemblyAction(
         keyfile: Specifies a strong name key file of the assembly.
         langversion: Specify language version: Default, ISO-1, ISO-2, 3, 4, 5, 6, 7, 7.1, 7.2, 7.3, or Latest
         resources: The list of resouces to be embedded in the assembly.
-        resx: A list of `resx_resource` targets (providing `DotnetResxInfo`) whose compiled
-            `.resx` resources are embedded and turned into satellite assemblies.
+        resx: The `.resx` resources to compile, from `split_resources`, or None.
         srcs: The source files that are processed to create the assembly.
         data: List of files that are a direct runtime dependency
         appsetting_files: List of appsettings files to include in the output.
@@ -480,29 +477,20 @@ def AssemblyAction(
     out_pdb = actions.declare_file("%s/%s.pdb" % (out_dir, assembly_name))
     out_xml = actions.declare_file("%s/%s.xml" % (out_dir, assembly_name)) if generate_documentation_file else None
 
-    # Neutral `.resx` resources are embedded in the assembly under their manifest name;
-    # per-culture resources are compiled into separate satellite assemblies.
-    resx_neutral_resources = []
-    culture_resources = []
-    for resx_target in resx:
-        resx_info = resx_target[DotnetResxInfo]
-        for neutral in resx_info.neutral:
-            resx_neutral_resources.append((
-                neutral.file,
-                resx_manifest_name(assembly_name, neutral.base_name, neutral.logical_name),
-            ))
-        culture_resources.extend(resx_info.culture)
-
-    satellite_assemblies = build_satellite_assemblies(
+    # A `.resx` is compiled and embedded; a culture's goes into a satellite
+    # assembly instead.
+    (resx_neutral_resources, satellite_assemblies) = resx_compile(
         actions,
-        compiler_wrapper,
-        toolchain,
-        framework_files,
-        culture_resources,
-        assembly_name,
-        out_dir,
+        label = label,
+        resx = resx,
+        out_dir = out_dir,
+        assembly_name = assembly_name,
+        toolchain = toolchain,
+        compiler_wrapper = compiler_wrapper,
+        references = depset(transitive = [irefs, framework_files]),
+        framework_files = framework_files,
         keyfile = keyfile,
-        version = nuget_version.assembly_version(version) if version else "0.0.0.0",
+        version = version,
     )
 
     # Stage appsettings and content files next to the assembly.

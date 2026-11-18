@@ -4,6 +4,7 @@ filegroup(
     srcs = ["Tasks.cs"],
     visibility = [
         "//dotnet/private/tools/blazor_wasm:__pkg__",
+        "//dotnet/private/tools/resx:__pkg__",
         "//dotnet/private/tools/scoped_css:__pkg__",
     ],
 )

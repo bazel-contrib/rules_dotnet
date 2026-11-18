@@ -19,6 +19,7 @@ load(
 load("//dotnet/private:toolchains_repo.bzl", "BOOTSTRAP_TOOLCHAIN_TYPE", "DOTNET_TOOLCHAIN_TYPE")
 load("//dotnet/private/rules/common:attrs.bzl", "CSHARP_BINARY_COMMON_ATTRS")
 load("//dotnet/private/rules/common:binary.bzl", "build_binary")
+load("//dotnet/private/rules/common:resx.bzl", "split_resources")
 load("//dotnet/private/rules/content_files:content_files.bzl", "resolve_content_file_mappings")
 load("//dotnet/private/rules/csharp/actions:csharp_assembly.bzl", "AssemblyAction")
 load("//dotnet/private/sdk:packs.bzl", "BOOTSTRAP_PACKS")
@@ -26,6 +27,7 @@ load("//dotnet/private/transitions:bootstrap_tool_transition.bzl", "bootstrap_to
 load("//dotnet/private/transitions:tfm_transition.bzl", "tfm_transition")
 
 def _compile_action(ctx, tfm, toolchain):
+    resources = split_resources(ctx)
     return AssemblyAction(
         ctx.actions,
         get_compiler_wrapper(ctx),
@@ -41,8 +43,8 @@ def _compile_action(ctx, tfm, toolchain):
         internals_visible_to = ctx.attr.internals_visible_to,
         keyfile = ctx.file.keyfile,
         langversion = ctx.attr.langversion if ctx.attr.langversion != "" else default_csharp_lang_version(tfm, toolchain.dotnetinfo.csharp_default_version),
-        resources = ctx.files.resources,
-        resx = ctx.attr.resx,
+        resources = resources.files,
+        resx = resources.resx,
         srcs = ctx.files.srcs,
         data = ctx.files.data,
         appsetting_files = ctx.files.appsetting_files,
@@ -148,8 +150,8 @@ csharp_binary = rule(
 # bootstrap toolchain rather than the user's: its SDK compiles them and its
 # packs are what they compile against. The attributes pointing at rules_dotnet's
 # own tools are stubbed out rather than dropped - a tool cannot depend on
-# itself, and nothing these rules compile has Razor sources or web assets, so
-# neither tool is ever invoked. Nor is a tool ever published, so it takes none
+# itself, and nothing these rules compile has Razor sources, `.resx` resources
+# or web assets, so none of those tools is ever invoked. Nor is a tool ever published, so it takes none
 # of the packs a publish needs, which only the user's SDK has, and only for the
 # frameworks it knows.
 _BOOTSTRAP_ATTRS = dicts.add(
@@ -157,6 +159,7 @@ _BOOTSTRAP_ATTRS = dicts.add(
     {
         "_pack_set": attr.string(default = BOOTSTRAP_PACKS),
         "_scoped_css_tool": attr.label(default = "//dotnet/private:no_tool", cfg = "exec"),
+        "_resx_tool": attr.label(default = "//dotnet/private:no_tool", cfg = "exec"),
         "_static_web_assets_tool": attr.label(default = "//dotnet/private:no_tool", cfg = "exec"),
         "_apphost_pack": attr.label_list(default = []),
         "_runtime_pack": attr.label_list(default = []),

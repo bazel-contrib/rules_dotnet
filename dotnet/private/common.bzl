@@ -1068,7 +1068,9 @@ def generate_depsjson(
                 "assemblyVersion": runtime_dep.version + ".0",
             } for dll in (portable_assets.libs if portable_assets else runtime_dep.libs)}
 
-            target_fragment["resources"] = {(resource_assembly.basename if not use_relative_paths else to_rlocation_path(ctx, resource_assembly)): {
+            # A satellite assembly is keyed by its locale folder as well, as MSBuild
+            # writes it: every locale's satellite has the same file name.
+            target_fragment["resources"] = {("{}/{}".format(_get_resource_assembly_locale(resource_assembly), resource_assembly.basename) if not use_relative_paths else to_rlocation_path(ctx, resource_assembly)): {
                 "locale": _get_resource_assembly_locale(resource_assembly),
             } for resource_assembly in runtime_dep.resource_assemblies}
 
@@ -1409,8 +1411,8 @@ def add_resx_resource_args(args, resx_resources, language):
 
     Args:
         args: The Args object for the compilation action.
-        resx_resources: List of `(File, str)` pairs of the compiled `.resources` blob and its
-            precomputed manifest resource name.
+        resx_resources: List of `(File, str)` pairs of a compiled `.resources` file and
+            its manifest resource name.
         language: (str) The language of the target that is embedding the resource ("csharp" or "fsharp").
     """
     if language == "csharp":
@@ -1422,135 +1424,3 @@ def add_resx_resource_args(args, resx_resources, language):
 
     for (resource_file, manifest_name) in resx_resources:
         args.add(resource_file, format = base_resource_fmt + "," + _quote_resource_name(manifest_name, language))
-
-def resx_manifest_name(assembly_name, base_name, logical_name, culture = None):
-    """Computes the manifest resource name for a compiled `.resx` resource.
-
-    A resource without an explicit logical name is named `<RootNamespace>.<path>.resources`,
-    where rules_dotnet uses the assembly name as the root namespace. Culture variants get a
-    `.<culture>` segment appended, which is the name `ResourceManager` looks up when it
-    resolves a satellite assembly at runtime.
-
-    Args:
-        assembly_name: The name of the assembly embedding (or owning the satellite for) the resource.
-        base_name: The package-relative path of the neutral `.resx` without extension, `/`-separated.
-        logical_name: An explicit manifest base name (without `.resources`), or `None`.
-        culture: The culture of the resource (e.g. `fr`), or `None` for a neutral resource.
-
-    Returns:
-        The manifest resource name string (including the `.resources` suffix).
-    """
-    if logical_name:
-        base = logical_name
-    else:
-        base = "{}.{}".format(assembly_name, base_name.replace("/", "."))
-
-    if culture:
-        return "{}.{}.resources".format(base, culture)
-    return "{}.resources".format(base)
-
-def build_satellite_assemblies(
-        actions,
-        compiler_wrapper,
-        toolchain,
-        framework_files,
-        culture_resources,
-        assembly_name,
-        out_dir,
-        keyfile = None,
-        version = "0.0.0.0"):
-    """Builds per-culture satellite assemblies from compiled culture `.resources`.
-
-    A satellite assembly is a resources-only managed DLL (`<assembly>.resources.dll`) that
-    carries `[AssemblyCulture]`/`[AssemblyVersion]` and the culture resources under their
-    manifest names. It contains no code, so it is always built with the toolchain's C#
-    compiler regardless of the language of the main assembly. The output is placed in a
-    `<culture>/` sub-directory next to the main assembly so the .NET runtime resolves it.
-
-    Args:
-        actions: The rule's `ctx.actions`.
-        compiler_wrapper: The compiler wrapper script (sh/bat) used by the toolchain.
-        toolchain: The .NET toolchain (supplies the C# compiler and runtime).
-        framework_files: Depset or list of framework reference assemblies (from the targeting pack).
-        culture_resources: List of structs with `file`, `culture`, `base_name` and
-            `logical_name` (as produced by the `resx_resource` rule).
-        assembly_name: The name of the main assembly (satellites are `<assembly_name>.resources`).
-        out_dir: The output directory of the main assembly (`<target>/<tfm>`).
-        keyfile: An optional strong-name key file, applied so the satellite's public key
-            token matches the main assembly.
-        version: The assembly version stamped on the satellite. Must match the main assembly.
-
-    Returns:
-        A list of the built satellite assembly `File`s.
-    """
-    if not culture_resources:
-        return []
-
-    by_culture = {}
-    for resource in culture_resources:
-        manifest = resx_manifest_name(assembly_name, resource.base_name, resource.logical_name, resource.culture)
-        by_culture.setdefault(resource.culture, []).append((resource.file, manifest))
-
-    satellites = []
-    for culture in sorted(by_culture.keys()):
-        items = by_culture[culture]
-        assembly_info = actions.declare_file("%s/_satellite/%s/AssemblyInfo.cs" % (out_dir, culture))
-        actions.write(
-            output = assembly_info,
-            content = "[assembly: System.Reflection.AssemblyCulture(\"{culture}\")]\n".format(culture = culture) +
-                      "[assembly: System.Reflection.AssemblyVersion(\"{version}\")]\n".format(version = version),
-        )
-
-        satellite = actions.declare_file("%s/%s/%s.resources.dll" % (out_dir, culture, assembly_name))
-
-        args = actions.args()
-        args.add("/nostdlib+")
-        args.add("/deterministic+")
-        args.add("/filealign:512")
-        args.add("/nologo")
-        args.add("/utf8output")
-        args.add("/target:library")
-        args.add(satellite, format = "/out:\"%s\"")
-        add_resx_resource_args(args, items, language = "csharp")
-        if keyfile != None:
-            args.add(keyfile, format = "/keyfile:\"%s\"")
-        format_ref_arg(args, depset(framework_files) if type(framework_files) == "list" else framework_files)
-        args.add(assembly_info, format = "\"%s\"")
-        args.set_param_file_format("multiline")
-        args.use_param_file("@%s", use_always = True)
-
-        actions.run(
-            mnemonic = "ResxSatellite",
-            progress_message = "Building %s satellite assembly for %s" % (culture, assembly_name),
-            executable = compiler_wrapper,
-            arguments = [
-                toolchain.compiler_host.files_to_run.executable.path,
-                toolchain.csharp_compiler.files_to_run.executable.path,
-                args,
-            ],
-            inputs = depset(
-                direct = [resource_file for (resource_file, _) in items] +
-                         [assembly_info] +
-                         ([keyfile] if keyfile != None else []),
-                transitive = [depset(framework_files) if type(framework_files) == "list" else framework_files],
-            ),
-            tools = depset(
-                direct = [
-                    compiler_wrapper,
-                    toolchain.compiler_host.files_to_run.executable,
-                    toolchain.csharp_compiler.files_to_run.executable,
-                ],
-                transitive = [
-                    toolchain.compiler_host.default_runfiles.files,
-                    toolchain.csharp_compiler.default_runfiles.files,
-                ],
-            ),
-            outputs = [satellite],
-            env = {
-                "DOTNET_CLI_HOME": toolchain.compiler_host.files_to_run.executable.dirname,
-            },
-            execution_requirements = {"supports-path-mapping": "1"},
-        )
-        satellites.append(satellite)
-
-    return satellites

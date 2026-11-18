@@ -1,0 +1,18 @@
+neutral: Hello
+fr: Bonjour
+sr-Latn-RS: Zdravo
+es-419: Hola
+api: Api
+directory: Thing
+file ref string: from a file
+file ref bytes: from a file
+messages neutral: BaseHello
+messages fr: BaseBonjour
+legacy: Legacy
+embedded: MyApp.Messages.resources
+embedded: ResxFs.App.plain.txt
+embedded: ResxFsTest.Legacy.fr.resources
+embedded: ResxFsTest.My_Res._9lives.Thing.resources
+embedded: ResxFsTest.Strings.api.resources
+embedded: ResxFsTest.Strings.resources
+embedded: ResxFsTest.fileref.FileRef.resources

@@ -16,10 +16,12 @@ load(
 )
 load("//dotnet/private/rules/common:attrs.bzl", "CSHARP_LIBRARY_COMMON_ATTRS")
 load("//dotnet/private/rules/common:library.bzl", "build_library")
+load("//dotnet/private/rules/common:resx.bzl", "split_resources")
 load("//dotnet/private/rules/csharp/actions:csharp_assembly.bzl", "AssemblyAction")
 load("//dotnet/private/transitions:tfm_transition.bzl", "tfm_transition")
 
 def _compile_action(ctx, tfm, toolchain):
+    resources = split_resources(ctx)
     return AssemblyAction(
         ctx.actions,
         get_compiler_wrapper(ctx),
@@ -36,8 +38,8 @@ def _compile_action(ctx, tfm, toolchain):
         internals_visible_to = ctx.attr.internals_visible_to,
         keyfile = ctx.file.keyfile,
         langversion = ctx.attr.langversion if ctx.attr.langversion != "" else default_csharp_lang_version(tfm, toolchain.dotnetinfo.csharp_default_version),
-        resources = ctx.files.resources,
-        resx = ctx.attr.resx,
+        resources = resources.files,
+        resx = resources.resx,
         srcs = ctx.files.srcs,
         data = ctx.files.data,
         appsetting_files = [],

@@ -9,6 +9,7 @@ bzl_library(
         "//dotnet/private:nuget_version",
         "//dotnet/private:providers",
         "//dotnet/private/icu:settings",
+        "//dotnet/private/rules/common:resx",
         "@bazel_skylib//lib:dicts",
     ],
 )
