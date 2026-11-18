@@ -16,6 +16,10 @@ load(
     _embed_sources_or_flag = "embed_sources_or_flag",
 )
 load(
+    "//dotnet/private/rules/common:resx.bzl",
+    _resx_resource = "resx_resource",
+)
+load(
     "//dotnet/private/rules/content_files:content_files.bzl",
     _dotnet_content_files = "dotnet_content_files",
 )
@@ -175,3 +179,4 @@ dotnet_tool = _dotnet_tool
 dotnet_content_files = _dotnet_content_files
 nuget_pack = _nuget_pack
 nuget_push = _nuget_push
+resx_resource = _resx_resource

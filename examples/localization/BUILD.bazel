@@ -1,0 +1,24 @@
+load(
+    "@rules_dotnet//dotnet:defs.bzl",
+    "csharp_binary",
+    "csharp_library",
+)
+
+# Strings.resx is embedded as `Localization.Strings`; the French and German
+# ones become fr/ and de/ satellite assemblies.
+csharp_library(
+    name = "greeter",
+    srcs = ["Greeter.cs"],
+    out = "Localization",
+    resources = glob(["*.resx"]),
+    root_namespace = "Localization",
+    target_frameworks = ["net9.0"],
+)
+
+# bazel run //localization:hello
+csharp_binary(
+    name = "hello",
+    srcs = ["Program.cs"],
+    target_frameworks = ["net9.0"],
+    deps = [":greeter"],
+)

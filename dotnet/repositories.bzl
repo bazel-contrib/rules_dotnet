@@ -122,6 +122,19 @@ import_dll(
     dll = "sdk/{sdk_version}/Microsoft.NET.StringTools.dll",
 )
 
+# GenerateResource, which compiles `.resx` files.
+filegroup(
+    name = "msbuild_tasks",
+    srcs = glob(
+        [
+            "sdk/{sdk_version}/Microsoft.Build.Tasks.Core.dll",
+            "sdk/{sdk_version}/System.Resources.Extensions.dll",
+        ],
+        allow_empty = True,
+    ),
+    visibility = ["//visibility:public"],
+)
+
 # The tasks that implement scoped CSS, and the CSS parser they use. The net472
 # copies are for MSBuild.exe on .NET Framework; ours run on the .NET host.
 filegroup(
@@ -228,6 +241,7 @@ dotnet_toolchain(
     csharp_codestyle_analyzers = ":csharp_codestyle_analyzers",
     web_sdk_analyzers = ":web_sdk_analyzers",
     static_web_assets_tasks = ":static_web_assets_tasks",
+    msbuild_tasks = ":msbuild_tasks",
     msbuild_dlls = [":msbuild_framework", ":msbuild_utilities", ":msbuild_string_tools"],
     os = "{os}",
     sdk_version = "{sdk_version}",

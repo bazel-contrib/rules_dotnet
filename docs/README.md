@@ -85,6 +85,25 @@ csharp_library(
 )
 ```
 
+## Resources and localization
+
+`resources` works like MSBuild's `EmbeddedResource`. `.resx` files are compiled,
+and culture ones (`Strings.fr.resx`) go into satellite assemblies
+(`fr/<assembly>.resources.dll`):
+
+```starlark
+csharp_library(
+    name = "greeter",
+    srcs = ["Greeter.cs"],
+    resources = glob(["**/*.resx"]),
+    root_namespace = "Localization",  # Strings.resx -> Localization.Strings
+    target_frameworks = ["net9.0"],
+)
+```
+
+Use `resx_resource` to set a logical name or culture, or to provide files
+referenced by `ResXFileRef`. See [`examples/localization`](../examples/localization).
+
 ## Razor
 
 `.razor` and `.cshtml` files go in `srcs` alongside `.cs`, and `project_sdk`

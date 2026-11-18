@@ -141,6 +141,7 @@ def _dotnet_toolchain_impl(ctx):
         csharp_codestyle_analyzers = ctx.attr.csharp_codestyle_analyzers,
         web_sdk_analyzers = ctx.attr.web_sdk_analyzers,
         static_web_assets_tasks = ctx.attr.static_web_assets_tasks,
+        msbuild_tasks = ctx.attr.msbuild_tasks,
         msbuild_dlls = ctx.attr.msbuild_dlls,
         strict_deps = ctx.attr._strict_deps,
         invariant_globalization = ctx.attr._invariant_globalization,
@@ -218,6 +219,12 @@ tool of ours instantiate such a task and run it directly.""",
 
 Carries the scoped CSS implementation: `ComputeCssScope`, `RewriteCss` and
 `ConcatenateCssFiles`.""",
+            mandatory = False,
+            allow_files = True,
+            cfg = "exec",
+        ),
+        "msbuild_tasks": attr.label(
+            doc = "`Microsoft.Build.Tasks.Core` and its dependencies, for `GenerateResource`.",
             mandatory = False,
             allow_files = True,
             cfg = "exec",

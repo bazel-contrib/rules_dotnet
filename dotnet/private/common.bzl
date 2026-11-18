@@ -1068,7 +1068,9 @@ def generate_depsjson(
                 "assemblyVersion": runtime_dep.version + ".0",
             } for dll in (portable_assets.libs if portable_assets else runtime_dep.libs)}
 
-            target_fragment["resources"] = {(resource_assembly.basename if not use_relative_paths else to_rlocation_path(ctx, resource_assembly)): {
+            # A satellite assembly is keyed by its locale folder as well, as MSBuild
+            # writes it: every locale's satellite has the same file name.
+            target_fragment["resources"] = {("{}/{}".format(_get_resource_assembly_locale(resource_assembly), resource_assembly.basename) if not use_relative_paths else to_rlocation_path(ctx, resource_assembly)): {
                 "locale": _get_resource_assembly_locale(resource_assembly),
             } for resource_assembly in runtime_dep.resource_assemblies}
 
@@ -1403,3 +1405,22 @@ def _resource_arg_format(file, target_label, out_dll, language):
     # `%` is the escape character in an Args format string, so a resource whose
     # name contains one has to double it to come out literal.
     return base_resource_fmt + "," + _quote_resource_name(resource_name, language)
+
+def add_resx_resource_args(args, resx_resources, language):
+    """Adds one resource argument per compiled `.resx` resource to `args`.
+
+    Args:
+        args: The Args object for the compilation action.
+        resx_resources: List of `(File, str)` pairs of a compiled `.resources` file and
+            its manifest resource name.
+        language: (str) The language of the target that is embedding the resource ("csharp" or "fsharp").
+    """
+    if language == "csharp":
+        base_resource_fmt = _RESOURCE_TEMPLATE_CSHARP
+    elif language == "fsharp":
+        base_resource_fmt = _RESOURCE_TEMPLATE_FSHARP
+    else:
+        fail("Unsupported language: {}".format(language))
+
+    for (resource_file, manifest_name) in resx_resources:
+        args.add(resource_file, format = base_resource_fmt + "," + _quote_resource_name(manifest_name, language))

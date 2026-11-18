@@ -6,6 +6,7 @@ load("@bazel_skylib//lib:dicts.bzl", "dicts")
 load(
     "//dotnet/private:common.bzl",
     "add_resource_args",
+    "add_resx_resource_args",
     "collect_compile_info",
     "copy_appsettings_to_dir",
     "copy_content_to_dir",
@@ -26,6 +27,7 @@ load(
     "StaticWebAssetsInfo",
 )
 load("//dotnet/private/icu:settings.bzl", "globalization_env", "icu_wrapper_arguments")
+load("//dotnet/private/rules/common:resx.bzl", "resx_compile")
 load(
     "//dotnet/private/rules/csharp/actions:razor.bzl",
     "partition_srcs",
@@ -209,6 +211,7 @@ def AssemblyAction(
         keyfile,
         langversion,
         resources,
+        resx,
         srcs,
         data,
         appsetting_files,
@@ -269,6 +272,7 @@ def AssemblyAction(
         keyfile: Specifies a strong name key file of the assembly.
         langversion: Specify language version: Default, ISO-1, ISO-2, 3, 4, 5, 6, 7, 7.1, 7.2, 7.3, or Latest
         resources: The list of resouces to be embedded in the assembly.
+        resx: The `.resx` resources to compile, from `split_resources`, or None.
         srcs: The source files that are processed to create the assembly.
         data: List of files that are a direct runtime dependency
         appsetting_files: List of appsettings files to include in the output.
@@ -473,6 +477,22 @@ def AssemblyAction(
     out_pdb = actions.declare_file("%s/%s.pdb" % (out_dir, assembly_name))
     out_xml = actions.declare_file("%s/%s.xml" % (out_dir, assembly_name)) if generate_documentation_file else None
 
+    # A `.resx` is compiled and embedded; a culture's goes into a satellite
+    # assembly instead.
+    (resx_neutral_resources, satellite_assemblies) = resx_compile(
+        actions,
+        label = label,
+        resx = resx,
+        out_dir = out_dir,
+        assembly_name = assembly_name,
+        toolchain = toolchain,
+        compiler_wrapper = compiler_wrapper,
+        references = depset(transitive = [irefs, framework_files]),
+        framework_files = framework_files,
+        keyfile = keyfile,
+        version = version,
+    )
+
     # Stage appsettings and content files next to the assembly.
     out_appsetting_files = copy_appsettings_to_dir(target_name, actions, is_windows, appsetting_files, out_dir)
     out_content_files = copy_content_to_dir(target_name, actions, is_windows, content_file_mappings, out_dir)
@@ -517,6 +537,7 @@ def AssemblyAction(
             out_ref = out_ref,
             out_pdb = out_pdb,
             out_xml = out_xml,
+            resx_neutral_resources = resx_neutral_resources,
         )
     else:
         # If the user is using internals_visible_to generate an additional
@@ -570,6 +591,7 @@ def AssemblyAction(
             out_dll = out_dll,
             out_pdb = out_pdb,
             out_xml = out_xml,
+            resx_neutral_resources = resx_neutral_resources,
         )
 
         # Generate a ref-only DLL without internals
@@ -612,6 +634,7 @@ def AssemblyAction(
             out_ref = out_ref,
             out_pdb = None,
             out_xml = None,
+            resx_neutral_resources = resx_neutral_resources,
         )
 
     return (DotnetAssemblyCompileInfo(
@@ -639,7 +662,7 @@ def AssemblyAction(
         name = assembly_name,
         version = version or DEFAULT_ASSEMBLY_VERSION,
         libs = [out_dll] if not (is_analyzer or is_language_specific_analyzer) else [],
-        resource_assemblies = [],
+        resource_assemblies = satellite_assemblies,
         pdbs = [out_pdb] if out_pdb else [],
         xml_docs = [out_xml] if out_xml else [],
         data = data,
@@ -699,7 +722,8 @@ def _compile(
         out_dll = None,
         out_ref = None,
         out_pdb = None,
-        out_xml = None):
+        out_xml = None,
+        resx_neutral_resources = []):
     # Our goal is to match msbuild as much as reasonable
     # https://docs.microsoft.com/en-us/dotnet/csharp/language-reference/compiler-options/listed-alphabetically
     args = actions.args()
@@ -806,6 +830,9 @@ def _compile(
     # resources
     add_resource_args(args, resources, label, out_dll.basename if out_dll != None else None, "csharp")
 
+    # compiled `.resx` resources, embedded under their manifest name
+    add_resx_resource_args(args, resx_neutral_resources, language = "csharp")
+
     # defines
     args.add_all(defines, format_each = "/d:%s")
 
@@ -826,7 +853,7 @@ def _compile(
     args.set_param_file_format("multiline")
     args.use_param_file("@%s", use_always = True)
 
-    direct_inputs = srcs + resources + additionalfiles + analyzer_configs
+    direct_inputs = srcs + resources + [resource_file for (resource_file, _) in resx_neutral_resources] + additionalfiles + analyzer_configs
     direct_inputs += [keyfile] if keyfile else []
     if razor:
         direct_inputs += razor.analyzers + razor.additionalfiles + razor.configs

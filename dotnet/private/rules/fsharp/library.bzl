@@ -13,10 +13,12 @@ load(
 )
 load("//dotnet/private/rules/common:attrs.bzl", "FSHARP_LIBRARY_COMMON_ATTRS")
 load("//dotnet/private/rules/common:library.bzl", "build_library")
+load("//dotnet/private/rules/common:resx.bzl", "split_resources")
 load("//dotnet/private/rules/fsharp/actions:fsharp_assembly.bzl", "AssemblyAction")
 load("//dotnet/private/transitions:tfm_transition.bzl", "tfm_transition")
 
 def _compile_action(ctx, tfm, toolchain):
+    resources = split_resources(ctx)
     return AssemblyAction(
         ctx.actions,
         get_compiler_wrapper(ctx),
@@ -32,7 +34,8 @@ def _compile_action(ctx, tfm, toolchain):
         keyfile = ctx.file.keyfile,
         # MSBuild passes no --langversion for F#; fsc then defaults to latest.
         langversion = ctx.attr.langversion,
-        resources = ctx.files.resources,
+        resources = resources.files,
+        resx = resources.resx,
         srcs = ctx.files.srcs,
         data = ctx.files.data,
         appsetting_files = [],

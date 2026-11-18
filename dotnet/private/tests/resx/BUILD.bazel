@@ -1,0 +1,131 @@
+"Tests for compiling `.resx` resources and resolving them, localized ones included, at run time."
+
+load("@bazel_lib//lib:run_binary.bzl", "run_binary")
+load("@bazel_skylib//rules:diff_test.bzl", "diff_test")
+load(
+    "//dotnet:defs.bzl",
+    "csharp_binary",
+    "csharp_library",
+    "fsharp_binary",
+    "publish_binary",
+    "resx_resource",
+)
+load(":tests.bzl", "resx_tests")
+
+# A logical name in place of MSBuild's, which the French resource takes too.
+resx_resource(
+    name = "messages",
+    srcs = [
+        "resources/Messages.fr.resx",
+        "resources/Messages.resx",
+    ],
+    logical_names = {
+        "resources/Messages.resx": "MyApp.Messages",
+    },
+)
+
+# A `.resx` with `ResXFileRef` entries, and the file they reference.
+resx_resource(
+    name = "file_ref",
+    srcs = ["fileref/FileRef.resx"],
+    data = ["fileref/notes.txt"],
+)
+
+# `fr` is a culture, but this resource is not French.
+resx_resource(
+    name = "legacy",
+    srcs = ["Legacy.fr.resx"],
+    cultures = {
+        "Legacy.fr.resx": "",
+    },
+)
+
+_RESOURCES = glob([
+    "Strings*.resx",
+    "My-Res/**/*.resx",
+]) + [
+    ":file_ref",
+    ":legacy",
+    ":messages",
+    # Anything else is embedded as it is.
+    "plain.txt",
+]
+
+# `root_namespace` differs from the assembly name, which resource names do not
+# follow. The version reaches the satellite assemblies too.
+csharp_binary(
+    name = "greeter_cs",
+    srcs = ["Greeter.cs"],
+    out = "ResxCs.App",
+    resources = _RESOURCES,
+    root_namespace = "ResxCsTest",
+    target_frameworks = ["net8.0"],
+    version = "1.2.3",
+)
+
+fsharp_binary(
+    name = "greeter_fs",
+    srcs = ["Greeter.fs"],
+    out = "ResxFs.App",
+    resources = _RESOURCES,
+    root_namespace = "ResxFsTest",
+    target_frameworks = ["net8.0"],
+    version = "1.2.3",
+    deps = [
+        "@paket.rules_dotnet_dev_nuget_packages//fsharp.core",
+    ],
+)
+
+publish_binary(
+    name = "publish_cs",
+    binary = ":greeter_cs",
+    target_framework = "net8.0",
+)
+
+# The same `.resx` twice is the same resource name twice.
+resx_resource(
+    name = "strings_again",
+    srcs = ["Strings.resx"],
+)
+
+csharp_library(
+    name = "duplicate_names",
+    resources = [
+        "Strings.resx",
+        ":strings_again",
+    ],
+    tags = ["manual"],
+    target_frameworks = ["net8.0"],
+)
+
+resx_resource(
+    name = "logical_name_of_a_culture",
+    srcs = ["resources/Messages.fr.resx"],
+    logical_names = {
+        "resources/Messages.fr.resx": "MyApp.Messages",
+    },
+    tags = ["manual"],
+)
+
+resx_tests()
+
+# Run each binary and compare what its ResourceManager lookups find.
+[
+    (
+        run_binary(
+            name = "run_greeter_" + language,
+            outs = ["actual_" + language],
+            args = ["$@"],
+            tool = ":greeter_" + language,
+        ),
+        diff_test(
+            name = "greeter_{}_test".format(language),
+            file1 = ":actual_" + language,
+            file2 = "expected_" + language,
+        ),
+    )
+    for language in [
+        "cs",
+        "fs",
+    ]
+]

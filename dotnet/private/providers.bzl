@@ -58,6 +58,14 @@ DotnetContentFilesInfo = provider(
     },
 )
 
+DotnetResxInfo = provider(
+    doc = "`.resx` files from a `resx_resource`.",
+    fields = {
+        "resources": "list[struct]: `file`, `culture` (None if neutral), `neutral_path` and `logical_name`.",
+        "data": "depset[File]: Files referenced by `ResXFileRef` entries.",
+    },
+)
+
 StaticWebAssetsInfo = provider(
     doc = "The web-servable files a target contributes, and those of its dependencies.",
     fields = {
