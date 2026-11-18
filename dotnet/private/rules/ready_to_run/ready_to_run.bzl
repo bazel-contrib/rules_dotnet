@@ -235,6 +235,7 @@ def with_ready_to_run_images(ctx, runtime_info):
         data = runtime_info.data,
         resource_assemblies = runtime_info.resource_assemblies,
         appsetting_files = runtime_info.appsetting_files,
+        content_files = runtime_info.content_files,
         nuget_info = runtime_info.nuget_info,
         deps = runtime_info.deps,
         direct_deps_depsjson_fragment = runtime_info.direct_deps_depsjson_fragment,
