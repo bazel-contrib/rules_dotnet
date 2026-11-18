@@ -51,7 +51,7 @@ DotnetAssemblyRuntimeInfo = provider(
 )
 
 DotnetContentFilesInfo = provider(
-    doc = "Content files with explicit destination paths, produced by the `dotnet_content_files` rule and consumed by the `content_files` attribute of the binary/test rules. Lets users remap where each file lands relative to the assembly output directory (MSBuild CopyToOutputDirectory/Link parity).",
+    doc = "Content files with explicit destination paths, produced by the `dotnet_content_files` rule and consumed by the `content_files` attribute of the library, binary, and test rules. Lets users remap where each file lands relative to the assembly output directory (MSBuild CopyToOutputDirectory/Link parity).",
     fields = {
         "files": "depset[File]: The source files, for DefaultInfo/runfiles propagation.",
         "mappings": "list[struct]: `struct(src = File, dest = string)` pairs, where `dest` is the destination path (relative to the assembly output directory) at which `src` should be staged.",

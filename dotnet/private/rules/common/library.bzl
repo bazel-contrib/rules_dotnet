@@ -36,6 +36,7 @@ def build_library(ctx, compile_action, toolchain):
         DefaultInfo(
             files = depset(
                 runtime_provider.libs + runtime_provider.xml_docs +
+                [entry.file for entry in runtime_provider.content_files] +
                 [asset.file for asset in generated_assets],
             ),
             default_runfiles = collect_transitive_runfiles(

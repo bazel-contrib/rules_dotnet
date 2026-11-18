@@ -39,6 +39,22 @@ COMMON_ATTRS = {
         # in their compile_data and we want the TFM graphs to be disconnected
         cfg = default_transition,
     ),
+    "content_files": attr.label_list(
+        doc = "A list of data files to copy next to the output assembly, preserving each " +
+              "file's path relative to the consuming or owning target's Bazel package so nested " +
+              "directory trees are kept intact (unlike `appsetting_files`, which flattens " +
+              "every file to its basename). The staged files sit alongside the assembly and " +
+              "flow transitively from library dependencies to consuming binaries, tests, and " +
+              "publishes, where they are resolvable at runtime relative to `AppContext.BaseDirectory`. " +
+              "Accepts plain files as well as [`dotnet_content_files`](#dotnet_content_files) targets, " +
+              "which give explicit control over each file's destination path.",
+        allow_files = True,
+        default = [],
+        allow_empty = True,
+        # Transition to the default configuration to match appsetting_files: the end user might
+        # have dotnet binaries among the content and we want the TFM graphs to be disconnected.
+        cfg = default_transition,
+    ),
     "keyfile": attr.label(
         doc = "The key file used to sign the assembly with a strong name.",
         allow_single_file = True,
@@ -207,21 +223,6 @@ BINARY_COMMON_ATTRS = dicts.add(STATIC_WEB_ASSETS_ATTRS, {
         allow_empty = True,
         # We transition to the default configuration because the end user might have dotnet binaries
         # in their appsetting_files and we want the TFM graphs to be disconnected
-        cfg = default_transition,
-    ),
-    "content_files": attr.label_list(
-        doc = "A list of data files to copy next to the output assembly, preserving each " +
-              "file's path relative to the consuming target's Bazel package so nested " +
-              "directory trees are kept intact (unlike `appsetting_files`, which flattens " +
-              "every file to its basename). The staged files sit alongside the assembly and " +
-              "are resolvable at runtime relative to `AppContext.BaseDirectory`. Accepts plain " +
-              "files as well as [`dotnet_content_files`](#dotnet_content_files) targets, which " +
-              "give explicit control over each file's destination path.",
-        allow_files = True,
-        default = [],
-        allow_empty = True,
-        # Transition to the default configuration to match appsetting_files: the end user might
-        # have dotnet binaries among the content and we want the TFM graphs to be disconnected.
         cfg = default_transition,
     ),
     "envs": attr.string_dict(

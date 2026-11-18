@@ -117,6 +117,10 @@ def collect_assembly_files(assembly_info, transitive_runtime_deps, deps_json_str
     native_files = list(assembly_info.native)
     runtime_target_files = []
     data = list(assembly_info.data)
+    content_files = list(assembly_info.content_files)
+    seen_dests = {f.basename: True for f in assembly_info.appsetting_files.to_list()}
+    for entry in content_files:
+        seen_dests[entry.dest] = True
     targets = deps_json_struct["targets"].values()[0]
 
     for dep in transitive_runtime_deps:
@@ -147,6 +151,10 @@ def collect_assembly_files(assembly_info, transitive_runtime_deps, deps_json_str
 
         data += dep.data
         resource_assemblies += dep.resource_assemblies
+        for entry in dep.content_files:
+            if entry.dest not in seen_dests:
+                seen_dests[entry.dest] = True
+                content_files.append(entry)
 
     return struct(
         libs = libs,
@@ -155,5 +163,5 @@ def collect_assembly_files(assembly_info, transitive_runtime_deps, deps_json_str
         runtime_targets = runtime_target_files,
         data = data,
         appsetting_files = assembly_info.appsetting_files.to_list(),
-        content_files = list(assembly_info.content_files),
+        content_files = content_files,
     )
