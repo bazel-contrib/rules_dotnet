@@ -12,6 +12,15 @@ bool_setting(
     visibility = ["//visibility:public"],
 )
 
+# Whether the publish trims its binary, as MSBuild's `PublishAot` does. Only the
+# binary keeps it; see //dotnet/private/transitions:tfm_transition.
+bool_setting(
+    name = "trimmed",
+    build_setting_default = False,
+    scope = "target",
+    visibility = ["//visibility:public"],
+)
+
 # The native compiler a ReadyToRun or NativeAOT publish asks its binary for.
 # Only the binary keeps it; see //dotnet/private/transitions:tfm_transition.
 string_setting(

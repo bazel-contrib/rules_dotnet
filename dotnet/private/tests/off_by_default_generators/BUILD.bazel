@@ -1,0 +1,15 @@
+load("@bazel_lib//:bzl_library.bzl", "bzl_library")
+load(":tests.bzl", "off_by_default_generators_test_suite")
+
+off_by_default_generators_test_suite(name = "off_by_default_generators_test_suite")
+
+bzl_library(
+    name = "tests",
+    srcs = ["tests.bzl"],
+    visibility = ["//dotnet:__subpackages__"],
+    deps = [
+        "//dotnet:defs",
+        "//dotnet/private/tests:utils",
+        "@rules_testing//lib:analysis_test_bzl",
+    ],
+)

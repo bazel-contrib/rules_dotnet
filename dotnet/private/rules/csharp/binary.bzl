@@ -12,6 +12,8 @@ load(
     "get_toolchain",
     "is_debug",
     "is_greater_or_equal_framework",
+    "resolve_enable_net_analyzers",
+    "resolve_enforce_code_style_in_build",
     "targets_windows",
 )
 load("//dotnet/private:toolchains_repo.bzl", "BOOTSTRAP_TOOLCHAIN_TYPE", "DOTNET_TOOLCHAIN_TYPE")
@@ -64,11 +66,18 @@ def _compile_action(ctx, tfm, toolchain):
         allow_unsafe_blocks = ctx.attr.allow_unsafe_blocks,
         nullable = ctx.attr.nullable,
         run_analyzers = ctx.attr.run_analyzers,
+        enable_net_analyzers = resolve_enable_net_analyzers(ctx),
+        enforce_code_style_in_build = resolve_enforce_code_style_in_build(ctx),
+        analysis_mode = ctx.attr.analysis_mode,
         is_analyzer = False,
         is_language_specific_analyzer = False,
         analyzer_configs = ctx.files.analyzer_configs,
         compiler_options = ctx.attr.compiler_options,
         interceptors_namespaces = ctx.attr.interceptors_namespaces,
+        excluded_analyzers = ctx.attr.excluded_analyzers,
+        enable_request_delegate_generator = ctx.attr.enable_request_delegate_generator,
+        enable_configuration_binding_generator = ctx.attr.enable_configuration_binding_generator,
+        publish_trimmed = ctx.attr._trimmed[BuildSettingInfo].value,
         is_windows = targets_windows(ctx),
     )
 
@@ -113,6 +122,10 @@ _BINARY_ATTRS = dicts.add(
         "include_msbuild_dlls": attr.bool(
             doc = "Whether to include the MSBuild interfaces from the toolchain. This is only required by tools that run an SDK build task directly.",
             default = False,
+        ),
+        "_trimmed": attr.label(
+            doc = "Whether a `publish_binary` trims this binary, which turns on the SDK's off-by-default source generators.",
+            default = "//dotnet/private/rules/publish_binary:trimmed",
         ),
     },
 )

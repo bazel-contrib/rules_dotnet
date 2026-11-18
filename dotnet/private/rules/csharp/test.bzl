@@ -13,6 +13,8 @@ load(
     "get_csharp_compiler_worker",
     "get_toolchain",
     "is_debug",
+    "resolve_enable_net_analyzers",
+    "resolve_enforce_code_style_in_build",
     "targets_windows",
 )
 load("//dotnet/private/rules/common:attrs.bzl", "CSHARP_BINARY_COMMON_ATTRS")
@@ -62,11 +64,17 @@ def _compile_action(ctx, tfm, toolchain):
         allow_unsafe_blocks = ctx.attr.allow_unsafe_blocks,
         nullable = ctx.attr.nullable,
         run_analyzers = ctx.attr.run_analyzers,
+        enable_net_analyzers = resolve_enable_net_analyzers(ctx),
+        enforce_code_style_in_build = resolve_enforce_code_style_in_build(ctx),
+        analysis_mode = ctx.attr.analysis_mode,
         is_analyzer = False,
         is_language_specific_analyzer = False,
         analyzer_configs = ctx.files.analyzer_configs,
         compiler_options = ctx.attr.compiler_options,
         interceptors_namespaces = ctx.attr.interceptors_namespaces,
+        excluded_analyzers = ctx.attr.excluded_analyzers,
+        enable_request_delegate_generator = ctx.attr.enable_request_delegate_generator,
+        enable_configuration_binding_generator = ctx.attr.enable_configuration_binding_generator,
         is_windows = targets_windows(ctx),
     )
 
