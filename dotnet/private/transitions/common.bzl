@@ -15,12 +15,10 @@ READY_TO_RUN_FRAMEWORK = "//dotnet/private/rules/ready_to_run:framework"
 READY_TO_RUN_PROJECT_SDK = "//dotnet/private/rules/ready_to_run:project_sdk"
 
 # Set on the edge from a publish to its binary: that the binary is the one
-# published, and the native compiler the publish asks it for. See
-# //dotnet/private/rules/publish_binary.
+# published, the native compiler the publish asks it for, and whether the
+# publish trims it. See //dotnet/private/rules/publish_binary.
 PUBLISHED = "//dotnet/private/rules/publish_binary:published"
 NATIVE_COMPILER = "//dotnet/private/rules/publish_binary:native_compiler"
-
-# Set on the same edge, and kept by the binary alone: that the publish trims it.
 TRIMMED = "//dotnet/private/rules/publish_binary:trimmed"
 
 # What every transition but the publish's leaves them at.

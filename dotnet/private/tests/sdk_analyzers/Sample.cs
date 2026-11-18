@@ -1,11 +1,10 @@
-using System;
-
-namespace RulesDotnet.Tests.SdkAnalyzers;
-
-public static class Sample
+namespace RulesDotnet.Tests.SdkAnalyzers
 {
-    public static string Greet(string name)
+    public static class Sample
     {
-        return $"Hello, {name}!";
+        public static string Greet(string name)
+        {
+            return $"Hello, {name}!";
+        }
     }
 }

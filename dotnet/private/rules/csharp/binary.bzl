@@ -124,7 +124,7 @@ _BINARY_ATTRS = dicts.add(
             default = False,
         ),
         "_trimmed": attr.label(
-            doc = "Whether the publish of this binary trims it, which turns on the source generators the .NET SDK turns on for a trimmed application.",
+            doc = "Whether a `publish_binary` trims this binary, which turns on the SDK's off-by-default source generators.",
             default = "//dotnet/private/rules/publish_binary:trimmed",
         ),
     },

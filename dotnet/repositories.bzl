@@ -145,8 +145,8 @@ filegroup(
     visibility = ["//visibility:public"],
 )
 
-# The `.NET` analyzers `Microsoft.NET.Sdk` puts into `@(Analyzer)` when
-# `EnableNETAnalyzers` is enabled, and their built-in global configs.
+# The SDK's code quality analyzers (`CAxxxx`), and the configs that set their
+# severities per analysis level and mode.
 filegroup(
     name = "csharp_net_analyzers",
     srcs = glob(
@@ -168,8 +168,7 @@ filegroup(
     visibility = ["//visibility:public"],
 )
 
-# The C# code style analyzers (`IDExxxx`) `Microsoft.NET.Sdk` puts into
-# `@(Analyzer)` when `EnforceCodeStyleInBuild` is enabled, and their configs.
+# The SDK's C# code style analyzers (`IDExxxx`).
 filegroup(
     name = "csharp_codestyle_analyzers",
     srcs = glob(
@@ -182,17 +181,7 @@ filegroup(
     visibility = ["//visibility:public"],
 )
 
-filegroup(
-    name = "csharp_codestyle_configs",
-    srcs = glob(
-        ["sdk/{sdk_version}/Sdks/Microsoft.NET.Sdk/codestyle/cs/build/config/*.globalconfig"],
-        allow_empty = True,
-    ),
-    visibility = ["//visibility:public"],
-)
-
-# The ASP.NET Core and MVC analyzers `Microsoft.NET.Sdk.Web` puts into
-# `@(Analyzer)` for web projects.
+# The ASP.NET Core and MVC analyzers of `Microsoft.NET.Sdk.Web`.
 filegroup(
     name = "web_sdk_analyzers",
     srcs = glob(
@@ -237,7 +226,6 @@ dotnet_toolchain(
     csharp_net_analyzers = ":csharp_net_analyzers",
     net_analyzer_configs = ":net_analyzer_configs",
     csharp_codestyle_analyzers = ":csharp_codestyle_analyzers",
-    csharp_codestyle_configs = ":csharp_codestyle_configs",
     web_sdk_analyzers = ":web_sdk_analyzers",
     static_web_assets_tasks = ":static_web_assets_tasks",
     msbuild_dlls = [":msbuild_framework", ":msbuild_utilities", ":msbuild_string_tools"],

@@ -214,17 +214,15 @@ def get_fsharp_compiler_worker(ctx):
 
     return _worker_executable(ctx.attr._fsharp_compiler_worker)
 
+def resolve_tristate(value, default):
+    """Resolves a `"true"`, `"false"`, or `"default"` attribute, where `"default"` takes `default`."""
+    return default if value == "default" else value == "true"
+
 def resolve_enable_net_analyzers(ctx):
-    """Whether the target runs the .NET SDK's built-in `CAxxxx` analyzers."""
-    if ctx.attr.enable_net_analyzers == -1:
-        return ctx.attr._enable_net_analyzers[BuildSettingInfo].value
-    return ctx.attr.enable_net_analyzers == 1
+    return resolve_tristate(ctx.attr.enable_net_analyzers, ctx.attr._enable_net_analyzers[BuildSettingInfo].value)
 
 def resolve_enforce_code_style_in_build(ctx):
-    """Whether the target runs the .NET SDK's built-in `IDExxxx` code style analyzers."""
-    if ctx.attr.enforce_code_style_in_build == -1:
-        return ctx.attr._enforce_code_style_in_build[BuildSettingInfo].value
-    return ctx.attr.enforce_code_style_in_build == 1
+    return resolve_tristate(ctx.attr.enforce_code_style_in_build, ctx.attr._enforce_code_style_in_build[BuildSettingInfo].value)
 
 def _format_ref_with_overrides(assembly):
     # See https://github.com/bazel-contrib/rules_dotnet/issues/405

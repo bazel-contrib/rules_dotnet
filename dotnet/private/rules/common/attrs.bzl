@@ -276,24 +276,26 @@ CSHARP_COMMON_ATTRS = dicts.add(
             mandatory = False,
             default = True,
         ),
-        "enable_net_analyzers": attr.int(
+        "enable_net_analyzers": attr.string(
             doc = """Run the .NET SDK's built-in code quality analyzers (`CAxxxx`), matching MSBuild's `EnableNETAnalyzers`.
 
-            `-1` inherits `//dotnet/settings:enable_net_analyzers` (false by default), `1` enables them for this target, and `0` disables them.""",
-            default = -1,
-            values = [-1, 0, 1],
+            For `project_sdk = "web"` this also adds the ASP.NET Core analyzers. `"default"` takes
+            `//dotnet/settings:enable_net_analyzers`, which is false unless set.""",
+            default = "default",
+            values = ["default", "true", "false"],
         ),
-        "enforce_code_style_in_build": attr.int(
+        "enforce_code_style_in_build": attr.string(
             doc = """Run the .NET SDK's built-in C# code style analyzers (`IDExxxx`), matching MSBuild's `EnforceCodeStyleInBuild`.
 
-            `-1` inherits `//dotnet/settings:enforce_code_style_in_build` (false by default), `1` enables them for this target, and `0` disables them.""",
-            default = -1,
-            values = [-1, 0, 1],
+            `"default"` takes `//dotnet/settings:enforce_code_style_in_build`, which is false unless set.""",
+            default = "default",
+            values = ["default", "true", "false"],
         ),
         "analysis_mode": attr.string(
-            doc = """Rule severity preset for the .NET SDK's built-in analyzers, matching MSBuild's `AnalysisMode`.
+            doc = """Rule severity preset for the .NET SDK's code quality analyzers, matching MSBuild's `AnalysisMode`.
 
-            Selects the SDK's `analysislevel_<version>_<mode>.globalconfig` and `analysislevelstyle_<mode>.globalconfig` files.""",
+            Like MSBuild, it only applies to .NET 5 and later, where it selects the SDK's
+            `analysislevel_<version>_<mode>.globalconfig`.""",
             default = "default",
             values = ["default", "none", "minimum", "recommended", "all"],
         ),
@@ -316,11 +318,11 @@ CSHARP_COMMON_ATTRS = dicts.add(
             cfg = "exec",
         ),
         "_enable_net_analyzers": attr.label(
-            doc = "Whether the compile action runs the .NET SDK's built-in analyzers by default.",
+            doc = "The default for `enable_net_analyzers`.",
             default = "//dotnet/settings:enable_net_analyzers",
         ),
         "_enforce_code_style_in_build": attr.label(
-            doc = "Whether the compile action runs the .NET SDK's built-in code style analyzers by default.",
+            doc = "The default for `enforce_code_style_in_build`.",
             default = "//dotnet/settings:enforce_code_style_in_build",
         ),
         "_csharp_compiler_worker": attr.label(
@@ -335,11 +337,10 @@ CSHARP_COMMON_ATTRS = dicts.add(
         "interceptors_namespaces": attr.string_list(
             doc = """List of namespaces that are allowed to contain interceptors.
 
-            This is passed to the compiler as `/features:InterceptorsNamespaces=<ns1>;<ns2>`, and mirrors the
-            `InterceptorsNamespaces` MSBuild property. Like the .NET SDK, the rules already allow the namespaces
-            of the SDK's own generators: those of the request delegate and configuration binding generators
-            while they are on, and `Microsoft.Extensions.Validation.Generated` for .NET 10 and later. List the
-            namespaces of any other generator that emits interceptors here.
+            Mirrors MSBuild's `InterceptorsNamespaces`. The namespaces of the SDK's own generators are
+            already allowed: see `enable_request_delegate_generator` and
+            `enable_configuration_binding_generator`, and `Microsoft.Extensions.Validation.Generated` for
+            .NET 10 and later.
             """,
             mandatory = False,
             default = [],
@@ -347,32 +348,29 @@ CSHARP_COMMON_ATTRS = dicts.add(
         "excluded_analyzers": attr.string_list(
             doc = """File names of analyzer and source generator DLLs to leave out of the compilation.
 
-            Matches against the analyzers this target would otherwise receive from its dependencies. This
-            mirrors how MSBuild removes `Analyzer` items. The exclusion only applies to this target's
-            compilation, not to targets that depend on it.
+            Mirrors MSBuild's `<Analyzer Remove="..." />`. Only this target's compilation drops them, not the
+            targets that depend on it.
             """,
             mandatory = False,
             default = [],
         ),
-        "enable_request_delegate_generator": attr.int(
+        "enable_request_delegate_generator": attr.string(
             doc = """Run ASP.NET Core's Request Delegate Generator, which generates the minimal API endpoints at compile time, matching MSBuild's `EnableRequestDelegateGenerator`.
 
-            `-1` follows the .NET SDK: on for a binary that `publish_binary` publishes with `native_aot`, and
-            for `project_sdk = "blazorwasm"`, which the SDK always trims; off otherwise. `1` turns it on, and
-            `0` turns it off. While it is on, its interceptors namespace, `Microsoft.AspNetCore.Http.Generated`,
-            is allowed.""",
-            default = -1,
-            values = [-1, 0, 1],
+            `"default"` follows the .NET SDK: on for a binary that `publish_binary` publishes with `native_aot`, and
+            for `project_sdk = "blazorwasm"`, which always trims; off otherwise. While it is on, its
+            interceptors namespace, `Microsoft.AspNetCore.Http.Generated`, is allowed.""",
+            default = "default",
+            values = ["default", "true", "false"],
         ),
-        "enable_configuration_binding_generator": attr.int(
+        "enable_configuration_binding_generator": attr.string(
             doc = """Run the configuration binding source generator from `Microsoft.Extensions.Configuration.Binder`, matching MSBuild's `EnableConfigurationBindingGenerator`.
 
-            `-1` follows the .NET SDK: on for a binary that `publish_binary` publishes with `native_aot`, and
-            off otherwise, `project_sdk = "blazorwasm"` included. `1` turns it on, and `0` turns it off. While
-            it is on, its interceptors namespace, `Microsoft.Extensions.Configuration.Binder.SourceGeneration`,
-            is allowed.""",
-            default = -1,
-            values = [-1, 0, 1],
+            `"default"` follows the .NET SDK: on for a binary that `publish_binary` publishes with `native_aot`, and
+            off otherwise, `project_sdk = "blazorwasm"` included. While it is on, its interceptors namespace,
+            `Microsoft.Extensions.Configuration.Binder.SourceGeneration`, is allowed.""",
+            default = "default",
+            values = ["default", "true", "false"],
         ),
     },
 )

@@ -82,8 +82,8 @@ def _web_default_test_impl(env, target):
 def _web_enabled_test(name):
     _library(
         name + "_lib",
-        enable_configuration_binding_generator = 1,
-        enable_request_delegate_generator = 1,
+        enable_configuration_binding_generator = "true",
+        enable_request_delegate_generator = "true",
     )
     analysis_test(name = name, impl = _web_enabled_test_impl, target = name + "_lib")
 
@@ -126,8 +126,8 @@ def _native_aot_publish_respects_attributes_test(name):
     _published(
         name,
         native_aot = True,
-        enable_configuration_binding_generator = 0,
-        enable_request_delegate_generator = 0,
+        enable_configuration_binding_generator = "false",
+        enable_request_delegate_generator = "false",
     )
     analysis_test(name = name, impl = _native_aot_publish_respects_attributes_test_impl, target = name + "_publish")
 
