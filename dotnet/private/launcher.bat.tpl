@@ -58,9 +58,4 @@ for %%F in (%dotnet_executable%) do set DOTNET_ROOT=%%~dpF
 
 call :rlocation "TEMPLATED_executable" run_script
 set args=%*
-rem Escape \ and * in args before passsing it with double quote
-if defined args (
-  set args=!args:\=\\\\!
-  set args=!args:"=\"!
-)
 "!dotnet_executable!" exec "!run_script!" !args!

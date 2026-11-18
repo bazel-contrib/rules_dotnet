@@ -1,0 +1,15 @@
+"Test that arguments reach the binary unchanged"
+
+load("//dotnet:defs.bzl", "csharp_test")
+
+csharp_test(
+    name = "test",
+    srcs = ["Test.cs"],
+    args = [
+        "--output=D:\\temp\\out",
+        "a\\b",
+        "a b",
+        "x ^ y",
+    ],
+    target_frameworks = ["net6.0"],
+)
