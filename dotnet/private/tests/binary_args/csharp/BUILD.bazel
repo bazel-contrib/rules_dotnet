@@ -1,0 +1,20 @@
+"Test that arguments reach the binary unchanged"
+
+load("//dotnet:defs.bzl", "csharp_test")
+
+csharp_test(
+    name = "test",
+    srcs = ["Test.cs"],
+    # Bazel splits `args` like a Bourne shell, so each value is quoted to reach
+    # the launcher as one argument with its backslashes intact.
+    args = [
+        "'--output=D:\\temp\\out'",
+        "'a\\b'",
+        "\"a b\"",
+        "\"x ^ y\"",
+        # cmd.exe counts the escaped quote in `"a\"b"` as a quote, so this must
+        # come last: a caret after it would be outside quotes for cmd.
+        "'a\"b'",
+    ],
+    target_frameworks = ["net6.0"],
+)

@@ -58,11 +58,6 @@ for %%F in (%dotnet_executable%) do set DOTNET_ROOT=%%~dpF
 
 call :rlocation "TEMPLATED_executable" run_script
 set args=%*
-rem Escape \ and * in args before passsing it with double quote
-if defined args (
-  set args=!args:\=\\\\!
-  set args=!args:"=\"!
-)
 rem `bazel run` starts the tool in its runfiles tree, but a command-line tool
 rem is meant to act on the directory it was invoked from. Unset during a build
 rem action, where the tool's inputs are declared and the runfiles tree is right.
