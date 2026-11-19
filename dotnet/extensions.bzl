@@ -13,16 +13,43 @@ _BOOTSTRAP_NAME = "dotnet_bootstrap"
 # cannot decide what rules_dotnet's own tools are built with.
 _BOOTSTRAP_MODULE = "rules_dotnet"
 
-_VERSION_ATTRS = {
-    "dotnet_version": attr.string(
-        doc = """Version of the .Net SDK, such as `11.0.100`.
+_DOTNET_VERSION_DOC = """Version of the .Net SDK, such as `11.0.100`.
 
 Any SDK in Microsoft's release metadata can be used. Its archives and their
 hashes are looked up there the first time and recorded in `MODULE.bazel.lock`,
-after which builds no longer need the metadata.""",
+after which builds no longer need the metadata."""
+
+_VERSION_ATTRS = {
+    "dotnet_version": attr.string(
+        doc = _DOTNET_VERSION_DOC,
         mandatory = True,
     ),
 }
+
+_TOOLCHAIN_ATTRS = {
+    "dotnet_version": attr.string(
+        doc = _DOTNET_VERSION_DOC + "\n\nSet this or `global_json`.",
+    ),
+    "global_json": attr.label(
+        doc = """A `global.json` whose `sdk.version` is the version of the .Net SDK.
+
+This lets the `dotnet` CLI and IDEs outside Bazel pin the same SDK as the build.
+Bazel uses exactly `sdk.version`: `rollForward` does not apply. Set this or
+`dotnet_version`.""",
+        allow_single_file = [".json"],
+    ),
+}
+
+def _toolchain_version(module_ctx, toolchain):
+    """The SDK version a toolchain tag names, directly or through its global.json."""
+    if bool(toolchain.dotnet_version) == bool(toolchain.global_json):
+        fail("dotnet.toolchain needs exactly one of dotnet_version and global_json")
+    if toolchain.dotnet_version:
+        return toolchain.dotnet_version
+    version = json.decode(module_ctx.read(toolchain.global_json)).get("sdk", {}).get("version")
+    if not version:
+        fail("{} has no sdk.version for dotnet.toolchain to use".format(toolchain.global_json))
+    return version
 
 def _toolchain_extension(module_ctx):
     sdk_version = None
@@ -44,7 +71,7 @@ def _toolchain_extension(module_ctx):
         # processed breadth-first, so the root-most registration wins.
         for toolchain in mod.tags.toolchain:
             if sdk_version == None:
-                sdk_version = toolchain.dotnet_version
+                sdk_version = _toolchain_version(module_ctx, toolchain)
 
     # rules_dotnet registers both itself, so only a module graph without it
     # lacks one.
@@ -86,7 +113,7 @@ dotnet = module_extension(
     implementation = _toolchain_extension,
     tag_classes = {
         "toolchain": tag_class(
-            attrs = _VERSION_ATTRS,
+            attrs = _TOOLCHAIN_ATTRS,
             doc = "The .Net SDK to build with.",
         ),
         "bootstrap_toolchain": tag_class(

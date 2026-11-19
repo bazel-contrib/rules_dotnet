@@ -36,6 +36,14 @@ use_repo(dotnet, "dotnet_toolchains")
 register_toolchains("@dotnet_toolchains//:all")
 ```
 
+To pin the SDK in one place for Bazel and for the `dotnet` CLI and IDEs, read
+the version from a `global.json` instead. Bazel uses exactly its `sdk.version`;
+`rollForward` does not apply.
+
+```starlark
+dotnet.toolchain(global_json = "//:global.json")
+```
+
 
 ## Design
 
