@@ -2,6 +2,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
@@ -78,9 +79,9 @@ public class CompilerWorkersTest
             {
                 Process.GetProcessById(id).Kill();
             }
-            catch (Exception e) when (e is ArgumentException or InvalidOperationException)
+            catch (Exception e) when (e is ArgumentException or InvalidOperationException or Win32Exception)
             {
-                // Already gone.
+                // Already gone, or on its way out.
             }
         }
 
@@ -244,10 +245,10 @@ public class CompilerWorkersTest
                     {
                         "/nostdlib+",
                         "/target:library",
-                        "/out:" + Path.Combine(_directory, $"Library{i}.dll"),
-                        "/r:" + Path.Combine(_sharedFramework, "System.Runtime.dll"),
-                        "/r:" + Path.Combine(_sharedFramework, "System.Private.CoreLib.dll"),
-                        source,
+                        "/out:" + Quoted(Path.Combine(_directory, $"Library{i}.dll")),
+                        "/r:" + Quoted(Path.Combine(_sharedFramework, "System.Runtime.dll")),
+                        "/r:" + Quoted(Path.Combine(_sharedFramework, "System.Private.CoreLib.dll")),
+                        Quoted(source),
                     },
                     ResponseTimeout));
             }
@@ -260,6 +261,9 @@ public class CompilerWorkersTest
         return responses;
     }
 
+    /// <summary>The worker hands csc its arguments in a response file, whose lines csc splits on whitespace.</summary>
+    private static string Quoted(string path) => "\"" + path + "\"";
+
     private void RememberBuildServers(string log)
     {
         if (!File.Exists(log))
@@ -267,10 +271,21 @@ public class CompilerWorkersTest
             return;
         }
 
-        foreach (Match match in Regex.Matches(File.ReadAllText(log), @"Successfully created process with process id (\d+)"))
+        foreach (Match match in Regex.Matches(ReadLog(log), @"Successfully created process with process id (\d+)"))
         {
             _servers.Add(int.Parse(match.Groups[1].Value));
         }
+    }
+
+    /// <summary>
+    /// The build server holds its log open for writing for as long as it runs,
+    /// and Windows only lets a reader in that shares write access.
+    /// </summary>
+    private static string ReadLog(string log)
+    {
+        using var stream = new FileStream(log, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+        using var reader = new StreamReader(stream);
+        return reader.ReadToEnd();
     }
 
     /// <summary>
@@ -280,7 +295,7 @@ public class CompilerWorkersTest
     /// </summary>
     private static void AssertTheBuildServerServedEveryCompile(string log, int compiles)
     {
-        var outcomes = Regex.Matches(File.ReadAllText(log), @"Server compilation completed: (\w+)")
+        var outcomes = Regex.Matches(ReadLog(log), @"Server compilation completed: (\w+)")
             .Select(match => match.Groups[1].Value)
             .ToList();
 
