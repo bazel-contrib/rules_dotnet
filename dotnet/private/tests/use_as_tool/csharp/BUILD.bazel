@@ -51,6 +51,23 @@ assert_contains(
     expected = "Hello World!",
 )
 
+# The same from an action that supports path mapping, as bazel_lib's
+# `run_binary` does. Under --experimental_output_paths=strip, which .bazelrc
+# sets on Linux and macOS, the tool's runfiles are staged under
+# `bazel-out/cfg/bin` rather than its configuration's output directory, and
+# `:lib` has to be found there.
+run_rule(
+    name = "run_path_mapped",
+    supports_path_mapping = True,
+    tool = ":main",
+)
+
+assert_contains(
+    name = "check_output_run_path_mapped",
+    actual = ":run_path_mapped",
+    expected = "Hello World!",
+)
+
 # Also test that self contained binaries are also usable as tools in custom rules
 publish_binary(
     name = "publish_self_contained",
@@ -78,6 +95,18 @@ assert_contains(
 assert_contains(
     name = "check_output_run_shell_self_contained",
     actual = ":run_shell_self_contained",
+    expected = "Hello World!",
+)
+
+run_rule(
+    name = "run_path_mapped_self_contained",
+    supports_path_mapping = True,
+    tool = ":publish_self_contained",
+)
+
+assert_contains(
+    name = "check_output_run_path_mapped_self_contained",
+    actual = ":run_path_mapped_self_contained",
     expected = "Hello World!",
 )
 

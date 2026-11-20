@@ -132,15 +132,22 @@ def build_binary(ctx, compile_action, toolchain, runtime_toolchain = None):
         )
 
         # Add additional lookup paths so that we can avoid copying all DLLs
-        # into the output directory. The deps.json file will then contain
-        # paths that are relative to the workspace root
+        # into the output directory. The deps.json file lists each assembly by
+        # its runfiles path, and the host resolves these relative paths against
+        # its working directory: under `bazel run` and `bazel test` that is the
+        # main repository's directory in the runfiles tree, so `../` is the
+        # root of that tree.
+        #
+        # The launcher passes the root of the runfiles tree it runs from as
+        # well, which is what finds the assemblies when the binary is the tool
+        # of an action. That path is not written here: it is only known at run
+        # time, as an action that supports path mapping stages the tool's
+        # runfiles outside the output directory of its configuration.
         runtimeconfig_struct["runtimeOptions"]["additionalProbingPaths"] = [
             "./",
             "./external",
             "../",
             "../external",
-            # This one is for when the binary target is used as an tool in e.g. a custom rule
-            "{}.runfiles".format(launcher.path),
         ]
         ctx.actions.write(
             output = runtimeconfig,
