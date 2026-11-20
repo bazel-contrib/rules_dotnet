@@ -114,20 +114,51 @@ namespace RulesDotnet
         {
             using var stdin = Console.OpenStandardInput();
             using var stdout = Console.OpenStandardOutput();
+            return RunWorkerLoop(compile, stdin, stdout, Console.Error);
+        }
 
+        /// <summary>
+        /// Serves the work requests in <paramref name="requests"/>, writing a
+        /// response for each to <paramref name="responses"/>. Returns 0 once the
+        /// requests run out, or 1, with the reason on <paramref name="errors"/>, when
+        /// they are not JSON work requests.
+        /// </summary>
+        public static int RunWorkerLoop(Compilation compile, Stream requests, Stream responses, TextWriter errors)
+        {
             var pending = new List<byte>();
-            while (ReadRequest(stdin, pending) is { } request)
+            while (true)
             {
+                WorkRequest? request;
+                try
+                {
+                    request = ReadRequest(requests, pending);
+                }
+                catch (JsonException e)
+                {
+                    // Nothing can be answered: a reply Bazel can read needs the
+                    // protocol it is speaking.
+                    errors.WriteLine(
+                        "error: the compiler worker read something other than a JSON work request (" + e.Message +
+                        "). It speaks only Bazel's JSON worker protocol, which its actions ask for with " +
+                        "requires-worker-protocol=json. An executor that runs it as a remote persistent worker " +
+                        "has to be told to send JSON, for example with the platform property " +
+                        "persistentWorkerProtocol=json.");
+                    return 1;
+                }
+
+                if (request == null)
+                {
+                    return 0;
+                }
+
                 var arguments = ExpandResponseFiles(request.Arguments ?? new List<string>());
                 var output = new StringBuilder();
 
                 // One bad request must not take the worker down with it.
                 var exitCode = CompileOrFail(compile, arguments, output);
 
-                WriteResponse(stdout, request.RequestId, exitCode, output.ToString());
+                WriteResponse(responses, request.RequestId, exitCode, output.ToString());
             }
-
-            return 0;
         }
 
         /// <summary>Runs a single compilation, reporting the way a plain action does.</summary>
@@ -189,9 +220,17 @@ namespace RulesDotnet
                 UseShellExecute = false,
             };
 
-            // Roslyn's build server loads the runtime from the DOTNET_ROOT it starts
-            // with and outlives this worker, whose directory Bazel restages.
-            startInfo.Environment["DOTNET_ROOT"] = Path.GetDirectoryName(LinkTarget(dotnet) ?? Path.GetFullPath(dotnet));
+            // Roslyn's build server needs the runtime of the SDK it ships in, which
+            // may be newer than the one this worker runs on, and it outlives this
+            // worker, whose directory Bazel restages. csc gives the server the
+            // directory of DOTNET_HOST_PATH as its DOTNET_ROOT; without one, the
+            // directory behind a `dotnet` link in the working directory, such as an
+            // execution root's link to a source folder of that name; and only then
+            // its own DOTNET_ROOT. A server that cannot load its runtime never
+            // starts, and every compile waits 20 s for it before compiling alone.
+            var host = LinkTarget(dotnet) ?? Path.GetFullPath(dotnet);
+            startInfo.Environment["DOTNET_HOST_PATH"] = host;
+            startInfo.Environment["DOTNET_ROOT"] = Path.GetDirectoryName(host);
 
             startInfo.ArgumentList.Add(compiler);
             foreach (var flag in flags)
@@ -306,7 +345,8 @@ namespace RulesDotnet
 
             using (document)
             {
-                request = document.RootElement.Deserialize<WorkRequest>(JsonOptions);
+                request = document.RootElement.Deserialize<WorkRequest>(JsonOptions) ??
+                          throw new JsonException("a work request is an object, not null");
             }
 
             pending.RemoveRange(0, (int)reader.BytesConsumed);

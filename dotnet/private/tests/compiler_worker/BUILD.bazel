@@ -21,3 +21,35 @@ csharp_nunit_test(
     ],
     target_frameworks = ["net10.0"],
 )
+
+csharp_nunit_test(
+    name = "worker_loop",
+    size = "small",
+    srcs = [
+        "WorkerLoopTest.cs",
+        "//dotnet/private/tools/worker:srcs",
+    ],
+    target_frameworks = ["net10.0"],
+)
+
+# Runs the compiler workers themselves, with the toolchain's compilers.
+csharp_nunit_test(
+    name = "compiler_workers",
+    size = "medium",
+    srcs = ["CompilerWorkersTest.cs"],
+    data = [
+        "//dotnet:resolved_toolchain",
+        "//dotnet/private/tools/csharp_compiler_worker",
+        "//dotnet/private/tools/fsharp_compiler_worker",
+    ],
+    envs = {
+        "CSC_BIN": "$(CSC_BIN)",
+        "CSHARP_COMPILER_WORKER": "$(rlocationpaths //dotnet/private/tools/csharp_compiler_worker)",
+        "DOTNET_BIN": "$(DOTNET_BIN)",
+        "FSC_BIN": "$(FSC_BIN)",
+        "FSHARP_COMPILER_WORKER": "$(rlocationpaths //dotnet/private/tools/fsharp_compiler_worker)",
+    },
+    target_frameworks = ["net10.0"],
+    toolchains = ["//dotnet:resolved_toolchain"],
+    deps = ["//tools/runfiles"],
+)
