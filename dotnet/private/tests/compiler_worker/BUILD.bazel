@@ -11,3 +11,13 @@ csharp_nunit_test(
     ],
     target_frameworks = ["net10.0"],
 )
+
+csharp_nunit_test(
+    name = "run_once",
+    size = "small",
+    srcs = [
+        "RunOnceTest.cs",
+        "//dotnet/private/tools/worker:srcs",
+    ],
+    target_frameworks = ["net10.0"],
+)
