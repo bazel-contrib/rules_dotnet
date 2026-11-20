@@ -309,6 +309,7 @@ namespace FSharpCompilerWorker
 
             private readonly MethodInfo _compile;
             private readonly Type _stopProcessing;
+            private readonly Type _reportedError;
             private readonly Type _threadTokenType;
             private readonly Type _exiterType;
             private readonly Type _loggerProviderType;
@@ -319,6 +320,7 @@ namespace FSharpCompilerWorker
             private InProcessCompiler(
                 MethodInfo compile,
                 Type stopProcessing,
+                Type reportedError,
                 Type threadTokenType,
                 Type exiterType,
                 Type loggerProviderType,
@@ -328,6 +330,7 @@ namespace FSharpCompilerWorker
             {
                 _compile = compile;
                 _stopProcessing = stopProcessing;
+                _reportedError = reportedError;
                 _threadTokenType = threadTokenType;
                 _exiterType = exiterType;
                 _loggerProviderType = loggerProviderType;
@@ -362,6 +365,7 @@ namespace FSharpCompilerWorker
 
                     var parameters = compile.GetParameters();
                     var stopProcessing = service.GetType("FSharp.Compiler.DiagnosticsLogger+StopProcessingExn", throwOnError: false);
+                    var reportedError = service.GetType("FSharp.Compiler.DiagnosticsLogger+ReportedError", throwOnError: false);
                     var exiter = FindImplementation(service, parameters[6].ParameterType, "StopProcessingExiter");
                     var loggerProvider = FindImplementation(service, parameters[7].ParameterType, "ConsoleLoggerProvider");
                     var resolver = ReadStatic(service, "FSharp.Compiler.CodeAnalysis.SimulatedMSBuildReferenceResolver", "SimulatedMSBuildResolver");
@@ -373,7 +377,7 @@ namespace FSharpCompilerWorker
                     var reduceMemory = ReadStatic(service, parameters[4].ParameterType, "Yes");
                     var copyFSharpCore = ReadStatic(service, parameters[5].ParameterType, "No");
 
-                    if (stopProcessing == null || exiter == null || loggerProvider == null ||
+                    if (stopProcessing == null || reportedError == null || exiter == null || loggerProvider == null ||
                         resolver == null || reduceMemory == null || copyFSharpCore == null)
                     {
                         return null;
@@ -382,6 +386,7 @@ namespace FSharpCompilerWorker
                     return new InProcessCompiler(
                         compile,
                         stopProcessing,
+                        reportedError,
                         parameters[0].ParameterType,
                         exiter,
                         loggerProvider,
@@ -507,11 +512,16 @@ namespace FSharpCompilerWorker
                     return 0;
                 }
                 catch (TargetInvocationException e) when (e.InnerException != null &&
-                                                          _stopProcessing.IsInstanceOfType(e.InnerException))
+                                                          (_stopProcessing.IsInstanceOfType(e.InnerException) ||
+                                                           _reportedError.IsInstanceOfType(e.InnerException)))
                 {
-                    // The compiler asked to stop, which is how a reported error
-                    // arrives once the exiter raises instead of quitting. The
-                    // diagnostics are already in the captured output.
+                    // Either the compiler asked to stop, which is how a reported
+                    // error arrives once the exiter raises instead of quitting, or
+                    // an error was raised where no phase of the compiler recovers
+                    // from it. The compiler's `error` reports the diagnostic before
+                    // it raises `ReportedError`, and fsc's own last-chance handler
+                    // takes that exception to mean "already reported" and exits 1.
+                    // Either way the diagnostics are already in the captured output.
                     return 1;
                 }
             }
