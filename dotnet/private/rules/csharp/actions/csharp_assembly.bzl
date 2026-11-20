@@ -31,6 +31,7 @@ load(
 )
 load("//dotnet/private/rules/common:compiler_action.bzl", "run_compiler")
 load("//dotnet/private/rules/common:resx.bzl", "resx_compile")
+load("//dotnet/private/rules/csharp/actions:global_usings.bzl", "write_global_usings_csharp")
 load(
     "//dotnet/private/rules/csharp/actions:razor.bzl",
     "partition_srcs",
@@ -406,7 +407,10 @@ def AssemblyAction(
         user_secrets_id = "",
         frameworks = {},
         xaml_tool = None,
-        wpf_resources = []):
+        wpf_resources = [],
+        implicit_usings = False,
+        global_usings = [],
+        excluded_global_usings = []):
     """Creates the actions that compile a C# assembly.
 
     The arguments map onto the [C# compiler options](https://learn.microsoft.com/en-us/dotnet/csharp/language-reference/compiler-options/).
@@ -472,6 +476,9 @@ def AssemblyAction(
         frameworks: The shared frameworks the assembly references beyond Microsoft.NETCore.App, as `resolve_framework_references` returns them.
         xaml_tool: The tool that compiles WPF XAML.
         wpf_resources: Files embedded in `<assembly name>.g.resources` for WPF to load.
+        implicit_usings: Whether to generate the .NET SDK's implicit `global using` directives.
+        global_usings: Additional namespaces to emit as `global using` directives.
+        excluded_global_usings: Namespaces to exclude from the generated `global using` directives.
 
     Returns:
         The compile and runtime providers, and the static web assets the compile
@@ -561,6 +568,22 @@ def AssemblyAction(
     )
 
     srcs = partitioned.compile
+    global_usings_cs = write_global_usings_csharp(
+        actions,
+        label = label,
+        out_dir = out_dir,
+        assembly_name = assembly_name,
+        langversion = langversion,
+        project_sdk = project_sdk,
+        target_framework = target_framework,
+        frameworks = frameworks,
+        implicit_usings = implicit_usings,
+        global_usings = global_usings,
+        excluded_global_usings = excluded_global_usings,
+    )
+    if global_usings_cs:
+        srcs = srcs + [global_usings_cs]
+
     if razor:
         srcs = srcs + razor.srcs
 
