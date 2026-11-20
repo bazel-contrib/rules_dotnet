@@ -87,6 +87,12 @@ COMMON_ATTRS = {
         Unset, no attributes are generated and the assembly is reported as `1.0.0`.""",
         default = "",
     ),
+    "user_secrets_id": attr.string(
+        doc = "The user secrets ID for the assembly (`<UserSecretsId>` in MSBuild). " +
+              "When set, emits `Microsoft.Extensions.Configuration.UserSecrets.UserSecretsIdAttribute` " +
+              "into the generated assembly info source file.",
+        default = "",
+    ),
     "target_frameworks": attr.string_list(
         doc = "A list of target framework monikers to build" +
               "See https://docs.microsoft.com/en-us/dotnet/standard/frameworks",

@@ -50,6 +50,7 @@ def _compile_action(ctx, tfm, toolchain):
         target_name = ctx.attr.name,
         target_framework = tfm,
         version = ctx.attr.version,
+        user_secrets_id = ctx.attr.user_secrets_id,
         toolchain = toolchain,
         strict_deps = toolchain.strict_deps[BuildSettingInfo].value,
         generate_documentation_file = ctx.attr.generate_documentation_file,
