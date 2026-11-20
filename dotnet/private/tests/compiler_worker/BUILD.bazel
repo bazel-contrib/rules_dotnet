@@ -27,6 +27,7 @@ csharp_nunit_test(
     size = "small",
     srcs = [
         "WorkerLoopTest.cs",
+        "WorkerProtocol.cs",
         "//dotnet/private/tools/worker:srcs",
     ],
     target_frameworks = ["net10.0"],
@@ -36,7 +37,10 @@ csharp_nunit_test(
 csharp_nunit_test(
     name = "compiler_workers",
     size = "medium",
-    srcs = ["CompilerWorkersTest.cs"],
+    srcs = [
+        "CompilerWorkersTest.cs",
+        "WorkerProtocol.cs",
+    ],
     data = [
         "//dotnet:resolved_toolchain",
         "//dotnet/private/tools/csharp_compiler_worker",

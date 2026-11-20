@@ -9,7 +9,6 @@ using System.Linq;
 using System.Reflection.PortableExecutable;
 using System.Runtime.InteropServices;
 using System.Text;
-using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using Bazel;
@@ -19,7 +18,7 @@ namespace RulesDotnet.Tests;
 
 /// <summary>
 /// Runs the compiler workers the rules build, with the toolchain's SDK, over
-/// Bazel's JSON worker protocol.
+/// Bazel's worker protocol.
 /// </summary>
 [TestFixture]
 [NonParallelizable]
@@ -143,7 +142,8 @@ public class CompilerWorkersTest
     }
 
     [Test]
-    public void AnFSharpErrorRaisedDuringCodeGenerationFailsTheRequestAndTheWorkerServesTheNext()
+    public void AnFSharpErrorRaisedDuringCodeGenerationFailsTheRequestAndTheWorkerServesTheNext(
+        [Values] WorkerEncoding encoding)
     {
         // Arrange
         var failing = WriteSource("CustomMarshaler.fs", CustomMarshalerSource);
@@ -152,7 +152,8 @@ public class CompilerWorkersTest
             _dotnet,
             new[] { _fsharpWorker, _dotnet, _fsc, "--persistent_worker" },
             _directory,
-            new Dictionary<string, string?>());
+            new Dictionary<string, string?>(),
+            encoding);
 
         // Act
         var failed = worker.Send(FSharpArguments(failing, "failing"), ResponseTimeout);
@@ -237,7 +238,8 @@ public class CompilerWorkersTest
                 _dotnet,
                 new[] { _csharpWorker, _dotnet, csc, "--persistent_worker" },
                 workingDirectory,
-                environment);
+                environment,
+                WorkerEncoding.Json);
             for (var i = 0; i < 2; i++)
             {
                 responses.Add(worker.Send(
@@ -369,17 +371,19 @@ public class CompilerWorkersTest
         return (process.ExitCode, standardOutput.Result + standardError.Result);
     }
 
-    /// <summary>A worker serving requests over its standard input and output.</summary>
+    /// <summary>A worker serving requests over its standard input and output, in one of the protocol's encodings.</summary>
     private sealed class WorkerProcess : IDisposable
     {
         private readonly Process _process;
+        private readonly WorkerEncoding _encoding;
         private readonly Task<string> _standardError;
         private readonly List<byte> _pending = new();
         private int _requestId;
 
-        private WorkerProcess(Process process)
+        private WorkerProcess(Process process, WorkerEncoding encoding)
         {
             _process = process;
+            _encoding = encoding;
             _standardError = process.StandardError.ReadToEndAsync();
         }
 
@@ -387,7 +391,8 @@ public class CompilerWorkersTest
             string fileName,
             IEnumerable<string> arguments,
             string workingDirectory,
-            IDictionary<string, string?> environment)
+            IDictionary<string, string?> environment,
+            WorkerEncoding encoding)
         {
             var startInfo = new ProcessStartInfo(fileName)
             {
@@ -414,13 +419,13 @@ public class CompilerWorkersTest
                 }
             }
 
-            return new WorkerProcess(Process.Start(startInfo)!);
+            return new WorkerProcess(Process.Start(startInfo)!, encoding);
         }
 
         public (int ExitCode, string Output) Send(IReadOnlyList<string> arguments, TimeSpan timeout)
         {
             var id = ++_requestId;
-            var request = JsonSerializer.SerializeToUtf8Bytes(new { arguments, requestId = id });
+            var request = WorkerProtocol.Request(_encoding, id, arguments);
             _process.StandardInput.BaseStream.Write(request);
             _process.StandardInput.BaseStream.Flush();
 
@@ -429,10 +434,10 @@ public class CompilerWorkersTest
             var deadline = DateTime.UtcNow + timeout;
             while (true)
             {
-                if (TryTakeResponse(out var response))
+                if (WorkerProtocol.TryTakeResponse(_encoding, _pending, out var response))
                 {
-                    Assert.That(response.GetProperty("requestId").GetInt32(), Is.EqualTo(id));
-                    return (response.GetProperty("exitCode").GetInt32(), response.GetProperty("output").GetString() ?? "");
+                    Assert.That(response.RequestId, Is.EqualTo(id));
+                    return (response.ExitCode, response.Output);
                 }
 
                 var read = stdout.ReadAsync(buffer, 0, buffer.Length);
@@ -443,24 +448,6 @@ public class CompilerWorkersTest
 
                 _pending.AddRange(buffer.Take(read.Result));
             }
-        }
-
-        private bool TryTakeResponse(out JsonElement response)
-        {
-            var reader = new Utf8JsonReader(_pending.ToArray(), isFinalBlock: false, state: default);
-            if (!JsonDocument.TryParseValue(ref reader, out var document))
-            {
-                response = default;
-                return false;
-            }
-
-            using (document)
-            {
-                response = document!.RootElement.Clone();
-            }
-
-            _pending.RemoveRange(0, (int)reader.BytesConsumed);
-            return true;
         }
 
         private string Describe()
