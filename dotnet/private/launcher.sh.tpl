@@ -31,6 +31,17 @@ export DOTNET_MULTILEVEL_LOOKUP="false"
 export DOTNET_NOLOGO="1"
 export DOTNET_CLI_TELEMETRY_OPTOUT="1"
 TEMPLATED_environment
-export DOTNET_ROOT="$(dirname $(rlocation TEMPLATED_dotnet))"
+dotnet="$(rlocation TEMPLATED_dotnet)"
+executable="$(rlocation TEMPLATED_executable)"
+export DOTNET_ROOT="$(dirname "$dotnet")"
 
-exec $(rlocation TEMPLATED_dotnet) exec $(rlocation TEMPLATED_executable) "$@"
+# The deps.json lists each assembly by its runfiles path, so the host probes
+# the runfiles tree this launcher runs from. Its location is only known now: an
+# action that supports path mapping stages a tool's runfiles outside the output
+# directory of the tool's configuration. With only a runfiles manifest
+# (--noenable_runfiles) there is no tree to probe.
+if [[ -d "${RUNFILES_DIR:-}" ]]; then
+  exec "$dotnet" exec --additionalprobingpath "$RUNFILES_DIR" "$executable" "$@"
+fi
+
+exec "$dotnet" exec "$executable" "$@"

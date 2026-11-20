@@ -57,5 +57,21 @@ call :rlocation "TEMPLATED_dotnet" dotnet_executable
 for %%F in (%dotnet_executable%) do set DOTNET_ROOT=%%~dpF
 
 call :rlocation "TEMPLATED_executable" run_script
+
+rem The deps.json lists each assembly by its runfiles path, so the host probes
+rem the runfiles tree this launcher runs from. Its location is only known now:
+rem an action that supports path mapping stages a tool's runfiles outside the
+rem output directory of the tool's configuration. Bazel names the tree in
+rem RUNFILES_DIR for a test and lays it out beside the launcher otherwise. With
+rem only a runfiles manifest (--noenable_runfiles) there is no tree to probe.
+set probing_path=
+if defined RUNFILES_DIR set "probing_path=!RUNFILES_DIR:/=\!"
+rem A trailing backslash would escape the quote that closes the argument.
+if defined probing_path if "!probing_path:~-1!" equ "\" set "probing_path=!probing_path:~0,-1!"
+if defined probing_path if not exist "!probing_path!\" set probing_path=
+if not defined probing_path if exist "%~f0.runfiles\" set "probing_path=%~f0.runfiles"
+set probing_option=
+if defined probing_path set probing_option=--additionalprobingpath "!probing_path!"
+
 set args=%*
-"!dotnet_executable!" exec "!run_script!" !args!
+"!dotnet_executable!" exec !probing_option! "!run_script!" !args!
