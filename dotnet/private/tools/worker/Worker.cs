@@ -120,17 +120,9 @@ namespace RulesDotnet
             {
                 var arguments = ExpandResponseFiles(request.Arguments ?? new List<string>());
                 var output = new StringBuilder();
-                int exitCode;
-                try
-                {
-                    exitCode = compile(arguments, output);
-                }
-                catch (Exception e)
-                {
-                    // One bad request must not take the worker down with it.
-                    output.AppendLine(e.ToString());
-                    exitCode = 1;
-                }
+
+                // One bad request must not take the worker down with it.
+                var exitCode = CompileOrFail(compile, arguments, output);
 
                 WriteResponse(stdout, request.RequestId, exitCode, output.ToString());
             }
@@ -142,9 +134,31 @@ namespace RulesDotnet
         public static int RunOnce(Compilation compile, List<string> arguments)
         {
             var output = new StringBuilder();
-            var exitCode = compile(ExpandResponseFiles(arguments), output);
+
+            // An exception left unhandled would end the process before the
+            // compiler's own diagnostics, already captured, were ever printed.
+            var exitCode = CompileOrFail(compile, ExpandResponseFiles(arguments), output);
+
             Console.Error.Write(output.ToString());
             return exitCode;
+        }
+
+        /// <summary>
+        /// Runs <paramref name="compile"/>, and turns an exception it throws into a
+        /// failed compilation: exit code 1, with the exception after whatever the
+        /// compiler had said by then.
+        /// </summary>
+        private static int CompileOrFail(Compilation compile, List<string> arguments, StringBuilder output)
+        {
+            try
+            {
+                return compile(arguments, output);
+            }
+            catch (Exception e)
+            {
+                output.AppendLine(e.ToString());
+                return 1;
+            }
         }
 
         /// <summary>
