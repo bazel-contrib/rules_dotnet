@@ -310,6 +310,8 @@ namespace FSharpCompilerWorker
             private readonly MethodInfo _compile;
             private readonly Type _stopProcessing;
             private readonly Type _reportedError;
+            private readonly Type _wrappedError;
+            private readonly PropertyInfo _wrappedErrorCause;
             private readonly Type _threadTokenType;
             private readonly Type _exiterType;
             private readonly Type _loggerProviderType;
@@ -321,6 +323,8 @@ namespace FSharpCompilerWorker
                 MethodInfo compile,
                 Type stopProcessing,
                 Type reportedError,
+                Type wrappedError,
+                PropertyInfo wrappedErrorCause,
                 Type threadTokenType,
                 Type exiterType,
                 Type loggerProviderType,
@@ -331,6 +335,8 @@ namespace FSharpCompilerWorker
                 _compile = compile;
                 _stopProcessing = stopProcessing;
                 _reportedError = reportedError;
+                _wrappedError = wrappedError;
+                _wrappedErrorCause = wrappedErrorCause;
                 _threadTokenType = threadTokenType;
                 _exiterType = exiterType;
                 _loggerProviderType = loggerProviderType;
@@ -366,6 +372,19 @@ namespace FSharpCompilerWorker
                     var parameters = compile.GetParameters();
                     var stopProcessing = service.GetType("FSharp.Compiler.DiagnosticsLogger+StopProcessingExn", throwOnError: false);
                     var reportedError = service.GetType("FSharp.Compiler.DiagnosticsLogger+ReportedError", throwOnError: false);
+
+                    // `exception WrappedError of exn * range`: the first field is
+                    // the exception it adds a range to. The compiler declares it
+                    // internal, and its fields with it.
+                    var wrappedError = service.GetType("FSharp.Compiler.DiagnosticsLogger+WrappedError", throwOnError: false);
+                    var wrappedErrorCause = wrappedError?.GetProperty(
+                        "Data0",
+                        BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+                    if (wrappedErrorCause != null && !typeof(Exception).IsAssignableFrom(wrappedErrorCause.PropertyType))
+                    {
+                        wrappedErrorCause = null;
+                    }
+
                     var exiter = FindImplementation(service, parameters[6].ParameterType, "StopProcessingExiter");
                     var loggerProvider = FindImplementation(service, parameters[7].ParameterType, "ConsoleLoggerProvider");
                     var resolver = ReadStatic(service, "FSharp.Compiler.CodeAnalysis.SimulatedMSBuildReferenceResolver", "SimulatedMSBuildResolver");
@@ -377,7 +396,8 @@ namespace FSharpCompilerWorker
                     var reduceMemory = ReadStatic(service, parameters[4].ParameterType, "Yes");
                     var copyFSharpCore = ReadStatic(service, parameters[5].ParameterType, "No");
 
-                    if (stopProcessing == null || reportedError == null || exiter == null || loggerProvider == null ||
+                    if (stopProcessing == null || reportedError == null || wrappedError == null ||
+                        wrappedErrorCause == null || exiter == null || loggerProvider == null ||
                         resolver == null || reduceMemory == null || copyFSharpCore == null)
                     {
                         return null;
@@ -387,6 +407,8 @@ namespace FSharpCompilerWorker
                         compile,
                         stopProcessing,
                         reportedError,
+                        wrappedError,
+                        wrappedErrorCause,
                         parameters[0].ParameterType,
                         exiter,
                         loggerProvider,
@@ -511,19 +533,36 @@ namespace FSharpCompilerWorker
 
                     return 0;
                 }
-                catch (TargetInvocationException e) when (e.InnerException != null &&
-                                                          (_stopProcessing.IsInstanceOfType(e.InnerException) ||
-                                                           _reportedError.IsInstanceOfType(e.InnerException)))
+                catch (TargetInvocationException e) when (e.InnerException != null && IsReported(e.InnerException))
                 {
-                    // Either the compiler asked to stop, which is how a reported
-                    // error arrives once the exiter raises instead of quitting, or
-                    // an error was raised where no phase of the compiler recovers
-                    // from it. The compiler's `error` reports the diagnostic before
-                    // it raises `ReportedError`, and fsc's own last-chance handler
-                    // takes that exception to mean "already reported" and exits 1.
-                    // Either way the diagnostics are already in the captured output.
+                    // The diagnostics are already in the captured output.
                     return 1;
                 }
+            }
+
+            /// <summary>
+            /// Whether an exception that escaped the compiler stands for an error
+            /// it has already reported, by the test fsc's own last-chance handler
+            /// applies before it exits 1.
+            /// </summary>
+            /// <remarks>
+            /// Two exceptions mean that. <c>StopProcessingExn</c> is the compiler
+            /// asking to stop, which is how a reported error arrives once the
+            /// exiter raises instead of quitting. <c>ReportedError</c> is what the
+            /// compiler's <c>error</c> raises after it has reported the diagnostic,
+            /// and it escapes when no phase of the compiler recovers from it.
+            /// Either may also arrive inside a <c>WrappedError</c>, which only adds
+            /// a range to the exception it carries.
+            /// </remarks>
+            private bool IsReported(Exception exception)
+            {
+                if (_wrappedError.IsInstanceOfType(exception) &&
+                    _wrappedErrorCause.GetValue(exception) is Exception cause)
+                {
+                    exception = cause;
+                }
+
+                return _stopProcessing.IsInstanceOfType(exception) || _reportedError.IsInstanceOfType(exception);
             }
         }
 
