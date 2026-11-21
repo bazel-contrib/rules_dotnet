@@ -1,3 +1,5 @@
+module Main
+
 open System
 
 [<EntryPoint>]

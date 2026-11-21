@@ -234,13 +234,20 @@ def _aot_closure(assembly_info, transitive_runtime_deps):
     beside the executable.
     """
     parts = [assembly_info] + transitive_runtime_deps
+    content_files = []
+    seen_dests = {f.basename: True for f in assembly_info.appsetting_files.to_list()}
+    for part in parts:
+        for entry in part.content_files:
+            if entry.dest not in seen_dests:
+                seen_dests[entry.dest] = True
+                content_files.append(entry)
 
     return struct(
         libs = [file for part in parts for file in part.libs],
         native = [file for part in parts for file in part.native],
         data = [file for part in parts for file in part.data],
         appsetting_files = assembly_info.appsetting_files.to_list(),
-        content_files = list(assembly_info.content_files),
+        content_files = content_files,
     )
 
 def _aot_link_libraries(link_inputs):
