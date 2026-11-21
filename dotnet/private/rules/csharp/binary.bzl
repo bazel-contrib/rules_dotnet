@@ -51,7 +51,7 @@ def _compile_action(ctx, tfm, toolchain):
         content_file_mappings = resolve_content_file_mappings(ctx.attr.content_files, ctx.label.package),
         compile_data = ctx.files.compile_data,
         out = ctx.attr.out,
-        target = "exe",
+        target = "winexe" if ctx.attr.winexe else "exe",
         target_name = ctx.attr.name,
         target_framework = tfm,
         version = ctx.attr.version,
@@ -158,6 +158,7 @@ _BOOTSTRAP_ATTRS = dicts.add(
     _BINARY_ATTRS,
     {
         "_pack_set": attr.string(default = BOOTSTRAP_PACKS),
+        "_netfx_config_tool": attr.label(default = "//dotnet/private:no_tool", cfg = "exec"),
         "_scoped_css_tool": attr.label(default = "//dotnet/private:no_tool", cfg = "exec"),
         "_resx_tool": attr.label(default = "//dotnet/private:no_tool", cfg = "exec"),
         "_static_web_assets_tool": attr.label(default = "//dotnet/private:no_tool", cfg = "exec"),
