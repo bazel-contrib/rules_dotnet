@@ -22,8 +22,9 @@ namespace ApphostShimmer
             var appBinaryFilePath = args[1];
             var output = args[2];
             var targetRid = args[3];
+            var isWindowsGui = args.Length > 4 && bool.Parse(args[4]);
 
-            new AppHostShellShimMaker(apphost).CreateApphostShellShim(appBinaryFilePath, output, targetRid);
+            new AppHostShellShimMaker(apphost).CreateApphostShellShim(appBinaryFilePath, output, targetRid, isWindowsGui);
         }
     }
 }
