@@ -444,16 +444,12 @@ build --worker_max_instances=FSharpCompile=HOST_CPUS
 
 ### Remote persistent workers
 
-The workers speak only Bazel's JSON worker protocol. A remote executor that runs them as
-persistent workers has to send JSON, and one that cannot tell the protocol from the action needs
-to be told. BuildBuddy, for example, reads it from a platform property:
+The workers also run as persistent workers on remote executors that support them, over either the
+JSON or the protobuf worker protocol. Enable it with:
 
 ```
 build --experimental_remote_mark_tool_inputs
-build --remote_default_exec_properties=persistentWorkerProtocol=json
 ```
-
-A worker handed anything else exits with an error that names the JSON protocol.
 
 ## Path mapping
 

@@ -11,11 +11,26 @@ using System.Text.Json;
 namespace RulesDotnet
 {
     /// <summary>
-    /// Bazel's JSON persistent worker protocol, and the child process plumbing
-    /// the C# and F# compiler workers share.
+    /// Bazel's persistent worker protocol, in both its JSON and its protobuf
+    /// encoding, and the child process plumbing the C# and F# compiler workers
+    /// share.
     /// </summary>
     internal static class Worker
     {
+        // The protobuf wire types a work request can use:
+        // https://protobuf.dev/programming-guides/encoding/#structure
+        private const int Varint = 0;
+        private const int Fixed64 = 1;
+        private const int LengthDelimited = 2;
+        private const int Fixed32 = 5;
+
+        // The fields of Bazel's worker_protocol.proto this worker reads and writes.
+        private const int WorkRequestArguments = 1;
+        private const int WorkRequestRequestId = 3;
+        private const int WorkResponseExitCode = 1;
+        private const int WorkResponseOutput = 2;
+        private const int WorkResponseRequestId = 3;
+
         /// <summary>
         /// Compiles one request, appending whatever the compiler said to
         /// <paramref name="output"/> and returning its exit code.
@@ -119,30 +134,34 @@ namespace RulesDotnet
 
         /// <summary>
         /// Serves the work requests in <paramref name="requests"/>, writing a
-        /// response for each to <paramref name="responses"/>. Returns 0 once the
-        /// requests run out, or 1, with the reason on <paramref name="errors"/>, when
-        /// they are not JSON work requests.
+        /// response for each to <paramref name="responses"/> in the encoding the
+        /// requests came in. Returns 0 once the requests run out, or 1, with the
+        /// reason on <paramref name="errors"/>, when one cannot be read.
         /// </summary>
         public static int RunWorkerLoop(Compilation compile, Stream requests, Stream responses, TextWriter errors)
         {
             var pending = new List<byte>();
+            if (DetectProtocol(requests, pending) is not { } protocol)
+            {
+                return 0;
+            }
+
             while (true)
             {
                 WorkRequest? request;
                 try
                 {
-                    request = ReadRequest(requests, pending);
+                    request = ReadRequest(requests, pending, protocol);
                 }
-                catch (JsonException e)
+                catch (Exception e) when (e is JsonException or InvalidDataException)
                 {
-                    // Nothing can be answered: a reply Bazel can read needs the
-                    // protocol it is speaking.
+                    // Nothing can be answered: a reply Bazel can match up needs the
+                    // request it answers.
                     errors.WriteLine(
-                        "error: the compiler worker read something other than a JSON work request (" + e.Message +
-                        "). It speaks only Bazel's JSON worker protocol, which its actions ask for with " +
-                        "requires-worker-protocol=json. An executor that runs it as a remote persistent worker " +
-                        "has to be told to send JSON, for example with the platform property " +
-                        "persistentWorkerProtocol=json.");
+                        "error: the compiler worker could not read a " + (protocol == Protocol.Json ? "JSON" : "protobuf") +
+                        " work request (" + e.Message + "). It speaks Bazel's worker protocol in JSON and in " +
+                        "protobuf, and takes the encoding from the first byte it reads: '{' for JSON, anything " +
+                        "else for length-delimited protobuf.");
                     return 1;
                 }
 
@@ -157,7 +176,14 @@ namespace RulesDotnet
                 // One bad request must not take the worker down with it.
                 var exitCode = CompileOrFail(compile, arguments, output);
 
-                WriteResponse(responses, request.RequestId, exitCode, output.ToString());
+                if (protocol == Protocol.Json)
+                {
+                    WriteJsonResponse(responses, request.RequestId, exitCode, output.ToString());
+                }
+                else
+                {
+                    WriteProtobufResponse(responses, request.RequestId, exitCode, output.ToString());
+                }
             }
         }
 
@@ -298,6 +324,13 @@ namespace RulesDotnet
             return expanded;
         }
 
+        /// <summary>The two encodings of Bazel's worker protocol.</summary>
+        private enum Protocol
+        {
+            Json,
+            Protobuf,
+        }
+
         private sealed class WorkRequest
         {
             public int RequestId { get; set; }
@@ -306,43 +339,88 @@ namespace RulesDotnet
         }
 
         /// <summary>
-        /// Reads the next work request, or null at end of stream. Bazel's JSON
-        /// worker protocol writes the objects back to back with no delimiter
-        /// between them, so <paramref name="pending"/> carries whatever was read
-        /// past the end of the last one.
+        /// Tells the encoding of the work requests from the first byte of the
+        /// first one, or returns null when the stream ends before it.
         /// </summary>
-        private static WorkRequest? ReadRequest(Stream stream, List<byte> pending)
+        /// <remarks>
+        /// The encoding is Bazel's choice when it runs the worker, but a remote
+        /// executor's when it does, and nothing tells the worker which. A JSON
+        /// request is an object, written with nothing before it, so it starts with
+        /// <c>{</c>. A protobuf request starts with its length as a varint, which
+        /// is that byte only for a message of exactly 123 bytes. No compile
+        /// request is that short: the smallest, a satellite assembly's, takes more
+        /// than that for its output and its fixed flags alone.
+        /// </remarks>
+        private static Protocol? DetectProtocol(Stream stream, List<byte> pending)
         {
-            Span<byte> chunk = stackalloc byte[8192];
+            while (pending.Count == 0)
+            {
+                if (!ReadMore(stream, pending))
+                {
+                    return null;
+                }
+            }
 
+            return pending[0] == (byte)'{' ? Protocol.Json : Protocol.Protobuf;
+        }
+
+        /// <summary>
+        /// Reads the next work request, or null once the stream ends between two.
+        /// <paramref name="pending"/> carries whatever was read past the end of
+        /// the last one, since nothing marks where a JSON request ends but the
+        /// object closing.
+        /// </summary>
+        private static WorkRequest? ReadRequest(Stream stream, List<byte> pending, Protocol protocol)
+        {
             while (true)
             {
-                if (TryTakeRequest(pending, out var request))
+                var request = protocol == Protocol.Json ? TakeJsonRequest(pending) : TakeProtobufRequest(pending);
+                if (request != null)
                 {
                     return request;
                 }
 
-                var read = stream.Read(chunk);
-                if (read <= 0)
+                if (!ReadMore(stream, pending))
                 {
-                    return null;
-                }
+                    // Nothing may follow the last request but, in JSON, the line
+                    // break a writer can end it with.
+                    if (pending.Count == 0 ||
+                        (protocol == Protocol.Json && pending.TrueForAll(b => (char)b is ' ' or '\t' or '\r' or '\n')))
+                    {
+                        return null;
+                    }
 
-                pending.AddRange(chunk[..read]);
+                    throw new InvalidDataException("the input ended partway through a work request");
+                }
             }
         }
 
-        private static bool TryTakeRequest(List<byte> pending, out WorkRequest? request)
+        /// <summary>Appends what <paramref name="stream"/> has next to <paramref name="pending"/>, or returns false at its end.</summary>
+        private static bool ReadMore(Stream stream, List<byte> pending)
+        {
+            Span<byte> chunk = stackalloc byte[8192];
+            var read = stream.Read(chunk);
+            if (read <= 0)
+            {
+                return false;
+            }
+
+            pending.AddRange(chunk[..read]);
+            return true;
+        }
+
+        /// <summary>Takes a JSON work request off the front of <paramref name="pending"/>, or returns null while it is incomplete.</summary>
+        private static WorkRequest? TakeJsonRequest(List<byte> pending)
         {
             // isFinalBlock: false makes a half-received object a "not yet", rather
             // than a parse error.
             var reader = new Utf8JsonReader(CollectionsMarshal.AsSpan(pending), isFinalBlock: false, state: default);
             if (!JsonDocument.TryParseValue(ref reader, out var document))
             {
-                request = null;
-                return false;
+                return null;
             }
 
+            WorkRequest request;
             using (document)
             {
                 request = document.RootElement.Deserialize<WorkRequest>(JsonOptions) ??
@@ -350,10 +428,71 @@ namespace RulesDotnet
             }
 
             pending.RemoveRange(0, (int)reader.BytesConsumed);
-            return true;
+            return request;
         }
 
-        private static void WriteResponse(Stream stdout, int requestId, int exitCode, string output)
+        /// <summary>
+        /// Takes a <c>WorkRequest</c> message, preceded by its length as a varint,
+        /// off the front of <paramref name="pending"/>, or returns null while it is
+        /// incomplete.
+        /// </summary>
+        private static WorkRequest? TakeProtobufRequest(List<byte> pending)
+        {
+            var frame = new ProtobufReader(CollectionsMarshal.AsSpan(pending));
+            if (!frame.TryReadVarint(out var length))
+            {
+                return null;
+            }
+
+            if (length > int.MaxValue)
+            {
+                throw new InvalidDataException("a work request cannot be " + length + " bytes long");
+            }
+
+            if (frame.Remaining < (int)length)
+            {
+                return null;
+            }
+
+            var request = ParseWorkRequest(CollectionsMarshal.AsSpan(pending).Slice(frame.Position, (int)length));
+            pending.RemoveRange(0, frame.Position + (int)length);
+            return request;
+        }
+
+        /// <summary>
+        /// Reads the fields of a <c>WorkRequest</c> this worker needs:
+        /// https://github.com/bazelbuild/bazel/blob/master/src/main/protobuf/worker_protocol.proto
+        /// </summary>
+        private static WorkRequest ParseWorkRequest(ReadOnlySpan<byte> message)
+        {
+            var arguments = new List<string>();
+            var requestId = 0;
+            var reader = new ProtobufReader(message);
+            while (!reader.AtEnd)
+            {
+                var (field, wireType) = reader.ReadTag();
+                if (field == WorkRequestArguments && wireType == LengthDelimited)
+                {
+                    arguments.Add(Encoding.UTF8.GetString(reader.ReadLengthDelimited()));
+                }
+                else if (field == WorkRequestRequestId && wireType == Varint)
+                {
+                    // An int32 is the low 32 bits of the varint.
+                    requestId = unchecked((int)reader.ReadVarint());
+                }
+                else
+                {
+                    // The inputs and their digests, cancel, verbosity and
+                    // sandbox_dir, none of which a worker that neither multiplexes
+                    // nor cancels needs, and any field added after them.
+                    reader.Skip(wireType);
+                }
+            }
+
+            return new WorkRequest { RequestId = requestId, Arguments = arguments };
+        }
+
+        private static void WriteJsonResponse(Stream stdout, int requestId, int exitCode, string output)
         {
             using var writer = new Utf8JsonWriter(stdout, new JsonWriterOptions { SkipValidation = true });
             writer.WriteStartObject();
@@ -363,6 +502,160 @@ namespace RulesDotnet
             writer.WriteEndObject();
             writer.Flush();
             stdout.Flush();
+        }
+
+        /// <summary>
+        /// Writes a <c>WorkResponse</c> message, preceded by its length as a
+        /// varint. Fields at their default value are left out, as protobuf does.
+        /// </summary>
+        private static void WriteProtobufResponse(Stream stdout, int requestId, int exitCode, string output)
+        {
+            var message = new List<byte>();
+            if (exitCode != 0)
+            {
+                WriteVarint(message, WorkResponseExitCode << 3 | Varint);
+
+                // A negative int32, such as a Windows NTSTATUS, is sign-extended to ten bytes.
+                WriteVarint(message, unchecked((ulong)(long)exitCode));
+            }
+
+            if (output.Length > 0)
+            {
+                var bytes = Encoding.UTF8.GetBytes(output);
+                WriteVarint(message, WorkResponseOutput << 3 | LengthDelimited);
+                WriteVarint(message, (ulong)bytes.Length);
+                message.AddRange(bytes);
+            }
+
+            if (requestId != 0)
+            {
+                WriteVarint(message, WorkResponseRequestId << 3 | Varint);
+                WriteVarint(message, unchecked((ulong)(long)requestId));
+            }
+
+            var frame = new List<byte>(message.Count + 5);
+            WriteVarint(frame, (ulong)message.Count);
+            frame.AddRange(message);
+
+            stdout.Write(CollectionsMarshal.AsSpan(frame));
+            stdout.Flush();
+        }
+
+        private static void WriteVarint(List<byte> bytes, ulong value)
+        {
+            while (value >= 0x80)
+            {
+                bytes.Add((byte)(value | 0x80));
+                value >>= 7;
+            }
+
+            bytes.Add((byte)value);
+        }
+
+        /// <summary>
+        /// Reads the protobuf wire format, as much of it as a work request uses:
+        /// https://protobuf.dev/programming-guides/encoding/
+        /// </summary>
+        private ref struct ProtobufReader
+        {
+            private readonly ReadOnlySpan<byte> _data;
+
+            public ProtobufReader(ReadOnlySpan<byte> data)
+            {
+                _data = data;
+                Position = 0;
+            }
+
+            public int Position { get; private set; }
+
+            public readonly int Remaining => _data.Length - Position;
+
+            public readonly bool AtEnd => Position == _data.Length;
+
+            /// <summary>Reads a varint, or returns false when the data ends before it does.</summary>
+            public bool TryReadVarint(out ulong value)
+            {
+                value = 0;
+                for (var shift = 0; shift < 64; shift += 7)
+                {
+                    if (AtEnd)
+                    {
+                        return false;
+                    }
+
+                    var b = _data[Position++];
+                    value |= (ulong)(b & 0x7F) << shift;
+                    if (b < 0x80)
+                    {
+                        return true;
+                    }
+                }
+
+                throw new InvalidDataException("a varint runs past ten bytes");
+            }
+
+            public ulong ReadVarint() =>
+                TryReadVarint(out var value) ? value : throw Truncated();
+
+            public (int Field, int WireType) ReadTag()
+            {
+                var tag = ReadVarint();
+                var field = tag >> 3;
+                if (field == 0 || field > int.MaxValue)
+                {
+                    throw new InvalidDataException("a work request has no field " + field);
+                }
+
+                return ((int)field, (int)(tag & 7));
+            }
+
+            public ReadOnlySpan<byte> ReadLengthDelimited()
+            {
+                var length = ReadVarint();
+                if (length > (ulong)Remaining)
+                {
+                    throw Truncated();
+                }
+
+                var value = _data.Slice(Position, (int)length);
+                Position += (int)length;
+                return value;
+            }
+
+            public void Skip(int wireType)
+            {
+                switch (wireType)
+                {
+                    case Varint:
+                        ReadVarint();
+                        break;
+                    case Fixed64:
+                        Advance(8);
+                        break;
+                    case LengthDelimited:
+                        ReadLengthDelimited();
+                        break;
+                    case Fixed32:
+                        Advance(4);
+                        break;
+                    default:
+                        // 3 and 4, the start and end of a group, which proto3 has no use for.
+                        throw new InvalidDataException("a work request has no fields of wire type " + wireType);
+                }
+            }
+
+            private void Advance(int count)
+            {
+                if (count > Remaining)
+                {
+                    throw Truncated();
+                }
+
+                Position += count;
+            }
+
+            private static InvalidDataException Truncated() =>
+                new InvalidDataException("a work request ends partway through a field");
         }
     }
 }

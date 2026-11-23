@@ -237,8 +237,8 @@ namespace FSharpCompilerWorker
             {
                 // `utf8output` only asks the compiler to write its diagnostics to a
                 // console as UTF-8, and nothing here goes near one: diagnostics are
-                // captured as a string and reach Bazel over the JSON protocol, which
-                // is UTF-8 already.
+                // captured as a string and reach Bazel over the worker protocol,
+                // which is UTF-8 in both its JSON and its protobuf encoding.
                 if (!IsUtf8Output(argument))
                 {
                     args.Add(argument);
