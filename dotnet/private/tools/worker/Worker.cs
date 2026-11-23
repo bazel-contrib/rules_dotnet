@@ -382,9 +382,10 @@ namespace RulesDotnet
 
                 if (!ReadMore(stream, pending))
                 {
-                    // All that may follow the last request is the line break a
-                    // JSON writer can end it with.
-                    if (pending.TrueForAll(b => protocol == Protocol.Json && (char)b is ' ' or '\t' or '\r' or '\n'))
+                    // Nothing may follow the last request but, in JSON, the line
+                    // break a writer can end it with.
+                    if (pending.Count == 0 ||
+                        (protocol == Protocol.Json && pending.TrueForAll(b => (char)b is ' ' or '\t' or '\r' or '\n')))
                     {
                         return null;
                     }

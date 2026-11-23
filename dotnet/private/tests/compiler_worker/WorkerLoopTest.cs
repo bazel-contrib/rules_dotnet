@@ -234,6 +234,41 @@ public class WorkerLoopTest
         Assert.That(errors.ToString(), Does.Contain("ended partway through a work request"));
     }
 
+    // An argument whose length runs past the end of its message, and the start
+    // of a group, a wire type a WorkRequest has no fields of.
+    [TestCase(new byte[] { 0x0A, 0x05, (byte)'a', (byte)'b' }, "ends partway through a field")]
+    [TestCase(new byte[] { 0x0B, 0x0C }, "no fields of wire type 3")]
+    public void AMalformedProtobufRequestFailsTheWorkerInsteadOfReadingIntoTheNext(byte[] message, string reason)
+    {
+        // Arrange: a well-formed request right behind it, so a reader that
+        // overran the first message would find bytes to read.
+        var requests = new List<byte>();
+        WorkerProtocol.WriteVarint(requests, (ulong)message.Length);
+        requests.AddRange(message);
+        requests.AddRange(WorkerProtocol.Request(WorkerEncoding.Protobuf, 1, new[] { "/target:library", "Library.cs" }));
+        var stdout = new MemoryStream();
+        var errors = new StringWriter();
+        var compiled = false;
+
+        // Act
+        var exitCode = Worker.RunWorkerLoop(
+            (_, _) =>
+            {
+                compiled = true;
+                return 0;
+            },
+            new MemoryStream(requests.ToArray()),
+            stdout,
+            errors);
+
+        // Assert
+        Assert.That(exitCode, Is.EqualTo(1));
+        Assert.That(compiled, Is.False);
+        Assert.That(stdout.Length, Is.EqualTo(0));
+        Assert.That(errors.ToString(), Does.Contain("could not read a protobuf work request"));
+        Assert.That(errors.ToString(), Does.Contain(reason));
+    }
+
     /// <summary>Hands out its bytes one at a time, as a pipe may.</summary>
     private sealed class TrickleStream : Stream
     {
