@@ -70,26 +70,37 @@ def _declare_selected(state, path):
 def _select(state, kind, group, pdb_path, satellite_paths):
     """Has netfx_config copy the highest version of `group` into the output directory.
 
-    Its PDB and satellite assemblies come from the same copy.
+    Its PDB and satellite assemblies come from the same copy. Which copy that
+    is is only known once the action runs, so each satellite assembly any copy
+    has gets a directory of its name, `de/Foo.resources/`, which .NET
+    Framework probes for it after `de/Foo.resources.dll`. The chosen copy's
+    goes in it; for a culture that copy has none of, it stays empty and the
+    assembly's own resources serve instead.
 
     Returns:
         A list of the (path, File) pairs it writes, the assembly's first.
     """
     output = _declare_selected(state, group.path)
     pdb_output = _declare_selected(state, pdb_path) if pdb_path else None
-    satellite_outputs = [_declare_selected(state, path) for path in satellite_paths]
+    satellite_directories = [satellite_path.removesuffix(".dll") for satellite_path in satellite_paths]
+    satellite_outputs = []
+    for path in satellite_directories:
+        directory = state.ctx.actions.declare_directory("{}/{}".format(state.out_dir, path))
+        state.selected.append(directory)
+        state.files.append(directory)
+        satellite_outputs.append(directory)
 
     state.args.add_all(["--select", kind, output, pdb_output or "-", str(len(satellite_outputs))])
-    state.args.add_all(satellite_outputs)
+    state.args.add_all(satellite_outputs, expand_directories = False)
     state.args.add(str(len(group.candidates)))
     for candidate in group.candidates:
-        satellites = [candidate.satellites[path.lower()] for path in satellite_paths]
-        state.args.add_all([candidate.file, candidate.pdb or "-"] + satellites)
-        state.inputs.extend([candidate.file] + satellites)
+        satellites = [candidate.satellites.get(path.lower()) for path in satellite_paths]
+        state.args.add_all([candidate.file, candidate.pdb or "-"] + [satellite or "-" for satellite in satellites])
+        state.inputs.extend([candidate.file] + [satellite for satellite in satellites if satellite])
         if candidate.pdb:
             state.inputs.append(candidate.pdb)
 
-    return [(group.path, output)] + [(path, satellite_outputs[i]) for (i, path) in enumerate(satellite_paths)]
+    return [(group.path, output)] + [(path, satellite_outputs[i]) for (i, path) in enumerate(satellite_directories)]
 
 def _pdb_path(taken, group):
     """Where the PDB of an assembly goes, or None to leave it out.
@@ -224,19 +235,17 @@ def stage_netfx_application(
                 _stage(state, path, satellite)
                 publish_layout.append((path, satellite))
         else:
-            # Only the chosen copy's satellite assemblies match it, and which
-            # copy that is is only known once the action runs. So a culture
-            # only some copies have is left out, falling back to the
-            # assembly's own resources.
-            satellite_paths = [
-                satellite_path(satellite)
-                for (key, satellite) in group.candidates[0].satellites.items()
-                if all([key in candidate.satellites for candidate in group.candidates])
-            ]
-            for path in satellite_paths:
+            # Only the chosen copy's satellite assemblies match it: every
+            # culture any copy has is made room for. See _select.
+            satellite_paths = {}
+            for candidate in group.candidates:
+                for satellite in candidate.satellites.values():
+                    satellite_paths.setdefault(satellite_path(satellite).lower(), satellite_path(satellite))
+            for path in satellite_paths.values():
                 _claim(label, taken, path, "the satellite assembly {} of `{}`".format(path, owner))
+                _claim(label, taken, path.removesuffix(".dll"), "the satellite assemblies of `{}`".format(owner))
                 with_assembly[path.lower()] = True
-            publish_layout.extend(_select(state, "lib", group, pdb_path, satellite_paths))
+            publish_layout.extend(_select(state, "lib", group, pdb_path, satellite_paths.values()))
 
     for group in resources.values():
         # A language pack's satellite assembly gives way to the one that

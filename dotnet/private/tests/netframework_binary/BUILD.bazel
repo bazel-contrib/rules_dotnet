@@ -8,6 +8,7 @@ load(
     "import_library",
     "publish_binary",
 )
+load(":publish_runfiles_test.bzl", "publish_runfiles_test")
 
 csharp_binary(
     name = "keygen",
@@ -23,14 +24,33 @@ genrule(
     tools = [":keygen"],
 )
 
+# A second key, for an assembly that shares SharedDep's name but is not it.
+genrule(
+    name = "generate_other_snk",
+    outs = ["other.snk"],
+    cmd = "$(execpath :keygen) $@",
+    tools = [":keygen"],
+)
+
+csharp_library(
+    name = "shared_dep_other_key",
+    srcs = ["SharedDep.cs"],
+    out = "SharedDep",
+    keyfile = ":other.snk",
+    target_frameworks = ["net48"],
+    version = "2.0.0",
+)
+
 csharp_library(
     name = "shared_dep_v1",
     srcs = ["SharedDep.cs"],
     out = "SharedDep",
     keyfile = ":test.snk",
-    # The German satellite assembly carries the library's version.
+    # Its satellite assemblies carry the library's version. Each version has
+    # a culture the other lacks.
     resources = [
         "Strings.de.resx",
+        "Strings.es.resx",
         "Strings.resx",
     ],
     target_frameworks = ["net48"],
@@ -42,9 +62,9 @@ csharp_library(
     srcs = ["SharedDep.cs"],
     out = "SharedDep",
     keyfile = ":test.snk",
-    # The German satellite assembly carries the library's version.
     resources = [
         "Strings.de.resx",
+        "Strings.fr.resx",
         "Strings.resx",
     ],
     target_frameworks = ["net48"],
@@ -175,11 +195,13 @@ csharp_nunit_test(
         ":app_config_app",
         ":app_publish_files",
         ":conflict_app",
+        ":conflict_publish_files",
         ":fsharp_app",
     ],
     envs = {
         "APP_CONFIG_APP_FILES": "$(rootpaths :app_config_app)",
         "CONFLICT_APP_FILES": "$(rootpaths :conflict_app)",
+        "CONFLICT_PUBLISH_FILES": "$(rootpaths :conflict_publish_files)",
         "CSHARP_APP_FILES": "$(rootpaths :app)",
         "CSHARP_APP_LAUNCHER": "$(rootpath :app)",
         "FSHARP_APP_FILES": "$(rootpaths :fsharp_app)",
@@ -187,6 +209,30 @@ csharp_nunit_test(
     },
     nullable = "enable",
     target_frameworks = ["net8.0"],
+)
+
+# A publish copies the satellite directories of the conflict app too.
+publish_binary(
+    name = "conflict_publish",
+    binary = ":conflict_app",
+    target_framework = "net48",
+)
+
+filegroup(
+    name = "conflict_publish_files",
+    srcs = [":conflict_publish"],
+)
+
+publish_runfiles_test(
+    name = "publish_runfiles_test",
+    expected = [
+        "Consumer.dll",
+        "SharedDep.dll",
+        "app.exe",
+        "app.exe.config",
+        "unsigned_dep.dll",
+    ],
+    target_under_test = ":app_publish",
 )
 
 # Runs the tool's logic in process, on assemblies built here.
@@ -199,12 +245,14 @@ csharp_nunit_test(
     ],
     data = [
         ":consumer_compiled",
+        ":shared_dep_other_key",
         ":shared_dep_v1",
         ":shared_dep_v2",
         ":uses_v2",
     ],
     envs = {
         "CONSUMER_FILES": "$(rootpaths :consumer_compiled)",
+        "SHARED_DEP_OTHER_KEY_FILES": "$(rootpaths :shared_dep_other_key)",
         "SHARED_DEP_V1_FILES": "$(rootpaths :shared_dep_v1)",
         "SHARED_DEP_V2_FILES": "$(rootpaths :shared_dep_v2)",
         "USES_V2_FILES": "$(rootpaths :uses_v2)",

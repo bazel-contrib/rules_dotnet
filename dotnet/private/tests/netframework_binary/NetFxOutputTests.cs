@@ -74,6 +74,12 @@ public sealed class NetFxOutputTests
         Assert.That(File.Exists(Path.Combine(outDir, "SharedDep.pdb")), Is.True);
         Assert.That(File.Exists(Path.Combine(outDir, "unsigned_dep.pdb")), Is.True);
 
+        // With one copy of SharedDep, its satellite assemblies are where MSBuild puts them.
+        foreach (string culture in new[] { "de", "fr" })
+        {
+            Assert.That(AssemblyVersion(Path.Combine(outDir, culture, "SharedDep.resources.dll")), Is.EqualTo(new Version(2, 0, 0, 0)), culture);
+        }
+
         // .NET Framework does not look in runtimes/<rid>/native.
         Assert.That(Directory.Exists(Path.Combine(outDir, "runtimes")), Is.False);
 
@@ -128,8 +134,19 @@ public sealed class NetFxOutputTests
         Assert.That(AssemblyVersion(Path.Combine(outDir, "SharedDep.dll")), Is.EqualTo(new Version(2, 0, 0, 0)));
         Assert.That(File.Exists(Path.Combine(outDir, "SharedDep.pdb")), Is.True);
 
-        // Its satellite assembly comes from the same copy.
-        Assert.That(AssemblyVersion(Path.Combine(outDir, "de", "SharedDep.resources.dll")), Is.EqualTo(new Version(2, 0, 0, 0)));
+        // Its satellite assemblies come from the same copy, in a directory of
+        // their name that .NET Framework probes, since which copy that is is
+        // only known once the build runs: German, which both have, and French,
+        // which only 2.0.0.0 has. 1.0.0.0's Spanish one does not ship.
+        foreach (string culture in new[] { "de", "fr" })
+        {
+            string satellite = Path.Combine(outDir, culture, "SharedDep.resources", "SharedDep.resources.dll");
+            Assert.That(AssemblyVersion(satellite), Is.EqualTo(new Version(2, 0, 0, 0)), culture);
+            Assert.That(File.Exists(Path.Combine(outDir, culture, "SharedDep.resources.dll")), Is.False, culture);
+        }
+
+        Assert.That(File.Exists(Path.Combine(outDir, "es", "SharedDep.resources", "SharedDep.resources.dll")), Is.False);
+        Assert.That(File.Exists(Path.Combine(outDir, "es", "SharedDep.resources.dll")), Is.False);
 
         XDocument config = XDocument.Load(Path.Combine(outDir, "conflict_app.exe.config"));
         var redirect = Redirect(config, "SharedDep");
@@ -169,10 +186,24 @@ public sealed class NetFxOutputTests
         // wherever it is built: flat, but for satellite assemblies.
         string root = Path.GetDirectoryName(files.Single(f => Path.GetFileName(f) == "app.exe"))!;
         Assert.That(Path.GetFileName(root), Does.StartWith("win-"));
-        Assert.That(files.Select(Path.GetDirectoryName).Distinct(), Is.EquivalentTo(new[] { root, Path.Combine(root, "de") }));
+        Assert.That(files.Select(Path.GetDirectoryName).Distinct(), Is.EquivalentTo(new[] { root, Path.Combine(root, "de"), Path.Combine(root, "fr") }));
 
         string configPath = files.Single(f => Path.GetFileName(f) == "app.exe.config");
         Assert.That(Redirect(XDocument.Load(configPath), "SharedDep")?.NewVersion, Is.EqualTo("2.0.0.0"));
+    }
+
+    [Test]
+    public void APublishCarriesTheSatelliteDirectoriesOfTheChosenCopy()
+    {
+        string root = Path.GetDirectoryName(Files("CONFLICT_PUBLISH_FILES").Single(f => Path.GetFileName(f) == "conflict_app.exe"))!;
+
+        foreach (string culture in new[] { "de", "fr" })
+        {
+            string satellite = Path.Combine(root, culture, "SharedDep.resources", "SharedDep.resources.dll");
+            Assert.That(AssemblyVersion(satellite), Is.EqualTo(new Version(2, 0, 0, 0)), culture);
+        }
+
+        Assert.That(File.Exists(Path.Combine(root, "es", "SharedDep.resources", "SharedDep.resources.dll")), Is.False);
     }
 
     [Test]

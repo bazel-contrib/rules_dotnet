@@ -34,6 +34,7 @@ public sealed class NetFxConfigTests
 
     private static string SharedDepV1 => Built("SHARED_DEP_V1_FILES", "SharedDep.dll");
     private static string SharedDepV2 => Built("SHARED_DEP_V2_FILES", "SharedDep.dll");
+    private static string SharedDepOtherKey => Built("SHARED_DEP_OTHER_KEY_FILES", "SharedDep.dll");
     private static string Consumer => Built("CONSUMER_FILES", "Consumer.dll");
     private static string UsesV2 => Built("USES_V2_FILES", "uses_v2.dll");
 
@@ -97,6 +98,17 @@ public sealed class NetFxConfigTests
     }
 
     [Test]
+    public void SelectRejectsDifferentAssembliesOfOneName()
+    {
+        int exitCode = Run(
+            "--main", Consumer,
+            "--select", "lib", Path.Combine(_dir, "SharedDep.dll"), "-", "0", "2", SharedDepV1, "-", SharedDepOtherKey, "-");
+
+        Assert.That(exitCode, Is.EqualTo(1));
+        Assert.That(_error.ToString(), Does.Contain("are different assemblies rather than versions of one"));
+    }
+
+    [Test]
     public void SelectCarriesThePdbOfTheCopyItShips()
     {
         string v1Pdb = Path.Combine(_dir, "v1.pdb");
@@ -113,24 +125,34 @@ public sealed class NetFxConfigTests
         Assert.That(File.ReadAllText(chosenPdb), Is.EqualTo("v2"));
     }
 
+    private string Satellite(string version, string culture)
+    {
+        string path = Path.Combine(_dir, version, culture, "SharedDep.resources.dll");
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        File.WriteAllText(path, $"{version} {culture}");
+        return path;
+    }
+
     [Test]
     public void SelectCarriesTheSatelliteAssembliesOfTheCopyItShips()
     {
-        string v1German = Path.Combine(_dir, "v1", "SharedDep.resources.dll");
-        string v2German = Path.Combine(_dir, "v2", "SharedDep.resources.dll");
-        Directory.CreateDirectory(Path.GetDirectoryName(v1German)!);
-        Directory.CreateDirectory(Path.GetDirectoryName(v2German)!);
-        File.WriteAllText(v1German, "v1");
-        File.WriteAllText(v2German, "v2");
-        string chosenGerman = Path.Combine(_dir, "de", "SharedDep.resources.dll");
+        // German in both copies, French only in v2, Spanish only in v1.
+        string german = Path.Combine(_dir, "out", "de", "SharedDep.resources");
+        string french = Path.Combine(_dir, "out", "fr", "SharedDep.resources");
+        string spanish = Path.Combine(_dir, "out", "es", "SharedDep.resources");
 
         int exitCode = Run(
             "--main", Consumer,
-            "--select", "lib", Path.Combine(_dir, "SharedDep.dll"), "-", "1", chosenGerman,
-            "2", SharedDepV2, "-", v2German, SharedDepV1, "-", v1German);
+            "--select", "lib", Path.Combine(_dir, "SharedDep.dll"), "-", "3", german, french, spanish,
+            "2",
+            SharedDepV1, "-", Satellite("v1", "de"), "-", Satellite("v1", "es"),
+            SharedDepV2, "-", Satellite("v2", "de"), Satellite("v2", "fr"), "-");
 
         Assert.That(exitCode, Is.EqualTo(0), _error.ToString());
-        Assert.That(File.ReadAllText(chosenGerman), Is.EqualTo("v2"));
+        Assert.That(File.ReadAllText(Path.Combine(german, "SharedDep.resources.dll")), Is.EqualTo("v2 de"));
+        Assert.That(File.ReadAllText(Path.Combine(french, "SharedDep.resources.dll")), Is.EqualTo("v2 fr"));
+        Assert.That(Directory.Exists(spanish), Is.True);
+        Assert.That(Directory.EnumerateFileSystemEntries(spanish), Is.Empty, "v1's Spanish does not match v2");
     }
 
     [Test]
@@ -174,6 +196,16 @@ public sealed class NetFxConfigTests
     }
 
     [Test]
+    public void AFrameworkAssemblyOfTheSameNameButAnotherKeyIsNotItsCopy()
+    {
+        // The framework's SharedDep 2.0.0.0 is signed with another key.
+        int exitCode = Run("--main", UsesV2, "--assembly", SharedDepV1, "--framework", SharedDepOtherKey);
+
+        Assert.That(exitCode, Is.EqualTo(1));
+        Assert.That(_error.ToString(), Does.Contain("the newest SharedDep it can load is 1.0.0.0 (SharedDep.dll)"));
+    }
+
+    [Test]
     public void AReferenceTheFrameworksCopyServesNeedsNoRedirect()
     {
         // The framework provides SharedDep 2.0.0.0, newer than the copy shipped.
@@ -198,6 +230,70 @@ public sealed class NetFxConfigTests
         Assert.That(exitCode, Is.EqualTo(0), _error.ToString());
         Assert.That(Config().Descendants(Asm + "dependentAssembly").Count(), Is.EqualTo(1));
         Assert.That(RedirectTo(Config(), "SharedDep"), Is.EqualTo("1.0.0.0"));
+    }
+
+    [Test]
+    public void AnExplicitRedirectForAnotherKeyDoesNotCount()
+    {
+        string appConfig = AppConfig("""
+            <dependentAssembly>
+              <assemblyIdentity name="SharedDep" publicKeyToken="0000000000000000" culture="neutral" />
+              <bindingRedirect oldVersion="0.0.0.0-9.0.0.0" newVersion="1.0.0.0" />
+            </dependentAssembly>
+            """);
+
+        int exitCode = Run("--main", UsesV2, "--app-config", appConfig, "--assembly", SharedDepV1);
+
+        Assert.That(exitCode, Is.EqualTo(1));
+        Assert.That(_error.ToString(), Does.Contain("references SharedDep 2.0.0.0"));
+    }
+
+    [Test]
+    public void AnExplicitRedirectMustTakeInTheVersionReferenced()
+    {
+        string appConfig = AppConfig($"""
+            <dependentAssembly>
+              <assemblyIdentity name="SharedDep" publicKeyToken="{SharedDepToken}" culture="neutral" />
+              <bindingRedirect oldVersion="0.0.0.0-1.5.0.0" newVersion="1.0.0.0" />
+            </dependentAssembly>
+            """);
+
+        int exitCode = Run("--main", UsesV2, "--app-config", appConfig, "--assembly", SharedDepV1);
+
+        Assert.That(exitCode, Is.EqualTo(1));
+        Assert.That(_error.ToString(), Does.Contain("references SharedDep 2.0.0.0"));
+    }
+
+    [Test]
+    public void ARedirectScopedToAnotherRuntimeIsLeftToIt()
+    {
+        string appConfig = Path.Combine(_dir, "App.config");
+        File.WriteAllText(appConfig, $"""
+            <configuration>
+              <runtime>
+                <assemblyBinding xmlns="urn:schemas-microsoft-com:asm.v1" appliesTo="v2.0.50727">
+                  <dependentAssembly>
+                    <assemblyIdentity name="SharedDep" publicKeyToken="{SharedDepToken}" culture="neutral" />
+                    <bindingRedirect oldVersion="0.0.0.0-9.0.0.0" newVersion="1.5.0.0" />
+                  </dependentAssembly>
+                </assemblyBinding>
+              </runtime>
+            </configuration>
+            """);
+
+        int exitCode = Run(
+            "--main", Consumer,
+            "--app-config", appConfig,
+            "--supported-runtime", "v4.0", ".NETFramework,Version=v4.8",
+            "--assembly", SharedDepV2);
+
+        Assert.That(exitCode, Is.EqualTo(0), _error.ToString());
+        Assert.That(_error.ToString(), Is.Empty);
+        var bindings = Config().Descendants(Asm + "assemblyBinding").ToList();
+        string? NewVersion(XElement binding) =>
+            (string?)binding.Descendants(Asm + "bindingRedirect").SingleOrDefault()?.Attribute("newVersion");
+        Assert.That(NewVersion(bindings.Single(b => b.Attribute("appliesTo") is not null)), Is.EqualTo("1.5.0.0"));
+        Assert.That(NewVersion(bindings.Single(b => b.Attribute("appliesTo") is null)), Is.EqualTo("2.0.0.0"));
     }
 
     [Test]

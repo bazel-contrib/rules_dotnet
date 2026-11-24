@@ -57,6 +57,9 @@ def _render_copy_script(copies, is_windows, directories = []):
     Each directory is created once instead, and the files that keep their name
     are copied in batches.
 
+    A source that is a directory, a tree artifact, is copied as its contents,
+    which are flat.
+
     Args:
         copies: The (source, destination path) pairs to copy, one pair per destination.
         is_windows: Whether the script is a batch file rather than a shell script.
@@ -72,8 +75,13 @@ def _render_copy_script(copies, is_windows, directories = []):
     # created along with the rest.
     same_name = {directory: [] for directory in directories}
     renamed = []
+    trees = []
 
     for (src, dst) in copies:
+        if src.is_directory:
+            trees.append((src, dst))
+            continue
+
         same_name.setdefault(paths.dirname(dst), [])
         if src.basename == paths.basename(dst):
             same_name[paths.dirname(dst)].append(src)
@@ -109,6 +117,17 @@ def _render_copy_script(copies, is_windows, directories = []):
             ))
         else:
             script_body.append("cp -f {src} {dst}".format(src = shell.quote(src.path), dst = shell.quote(dst)))
+
+    for (src, dst) in trees:
+        if is_windows:
+            script_body.append("if not exist \"{dst}\" @mkdir \"{dst}\" >NUL".format(dst = dst.replace("/", "\\")))
+            script_body.append("@for %%F in (\"{src}\\*\") do @copy /Y \"%%F\" \"{dst}\" >NUL".format(
+                src = src.path.replace("/", "\\"),
+                dst = dst.replace("/", "\\"),
+            ))
+        else:
+            script_body.append("mkdir -p {dst}".format(dst = shell.quote(dst)))
+            script_body.append("cp -Rf {src}/. {dst}".format(src = shell.quote(src.path), dst = shell.quote(dst)))
 
     return script_body
 
@@ -916,6 +935,12 @@ def _run_copy_script(ctx, copies, suffix, mnemonic, progress_message, directory 
 
     return outputs
 
+def _declare_like(ctx, source, path, sibling = None):
+    """Declares the copy of `source` at `path`: a directory for a tree artifact."""
+    if source.is_directory:
+        return ctx.actions.declare_directory(path, sibling = sibling)
+    return ctx.actions.declare_file(path, sibling = sibling)
+
 def _copy_beside(ctx, executable, layout):
     """Copies files into the directory holding `executable`.
 
@@ -929,7 +954,7 @@ def _copy_beside(ctx, executable, layout):
         The copied files.
     """
     copies = [
-        (file, ctx.actions.declare_file(path, sibling = executable))
+        (file, _declare_like(ctx, file, path, sibling = executable))
         for (path, file) in layout
     ]
     if not copies:
@@ -947,7 +972,7 @@ def _copy_to_publish(ctx, runtime_identifier, entries, binary_info):
     root = "{}/publish/{}".format(ctx.label.name, runtime_identifier)
 
     copies = [
-        (file, ctx.actions.declare_file("{}/{}".format(root, path)))
+        (file, _declare_like(ctx, file, "{}/{}".format(root, path)))
         for (path, file) in entries.items()
     ]
 
@@ -1205,9 +1230,14 @@ def _netfx_publish(ctx, binary_info, assembly_runtime_info, transitive_runtime_d
     (executable, outputs) = _copy_to_publish(ctx, runtime_identifier, entries, binary_info)
     data = assembly_runtime_info.data + [file for dep in transitive_runtime_deps for file in dep.data]
 
+    # The executable loads what is beside it, so that is in its runfiles too,
+    # as with a single-file or NativeAOT publish: a target that runs the
+    # publish from its own runfiles tree finds the whole application there.
+    beside = [(path, file) for (path, file) in entries.items() if path != executable.basename]
+
     output_groups = _publish_layers(
         ctx,
-        dicts.add(entries, _runfiles_entries(ctx, executable, data)),
+        dicts.add(entries, _runfiles_entries(ctx, executable, data, beside = beside)),
         _dependency_layers(transitive_runtime_deps, None),
     )
 
@@ -1215,7 +1245,7 @@ def _netfx_publish(ctx, binary_info, assembly_runtime_info, transitive_runtime_d
         DefaultInfo(
             executable = executable,
             files = depset(outputs),
-            runfiles = ctx.runfiles(files = data),
+            runfiles = ctx.runfiles(files = outputs + data),
         ),
         OutputGroupInfo(**output_groups),
     ]

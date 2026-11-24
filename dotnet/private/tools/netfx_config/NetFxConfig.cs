@@ -38,8 +38,8 @@ internal static class NetFxConfig
         "usage: netfx_config --output <exe.config> --main <exe> [--label <label>] [--app-config <app.config>]\n" +
         "         [--supported-runtime <version> <sku|->] [--no-binding-redirects]\n" +
         "         [--framework <reference assembly>]... [--assembly <shipped assembly>]...\n" +
-        "         [--select <lib|resource> <output> <pdb output|-> <satellite count> <satellite output>...\n" +
-        "                   <candidate count> (<candidate> <pdb|-> <satellite>...)...]...";
+        "         [--select <lib|resource> <output> <pdb output|-> <satellite count> <satellite directory>...\n" +
+        "                   <candidate count> (<candidate> <pdb|-> <satellite|->...)...]...";
 
     public static int Run(IReadOnlyList<string> args, TextWriter error)
     {
@@ -58,7 +58,12 @@ internal static class NetFxConfig
         var shipped = new List<string>(options.Assemblies);
         foreach (Selection selection in options.Selections)
         {
-            Select(selection);
+            if (Select(selection) is { } message)
+            {
+                error.WriteLine($"error: {options.Label}: {message}");
+                return 1;
+            }
+
             if (selection.IsLibrary)
             {
                 shipped.Add(selection.Output);
@@ -82,12 +87,12 @@ internal static class NetFxConfig
 
         if (options.GenerateBindingRedirects)
         {
-            List<XElement> dependentAssemblies = DependentAssemblies(configuration);
+            List<XElement> dependentAssemblies = DependentAssemblies(configuration, options.SupportedRuntime?.Version);
             Analysis analysis = Analyze(
                 options.Main,
                 shipped,
                 options.Framework,
-                identity => FindDependentAssembly(dependentAssemblies, identity, withRedirect: true) is not null);
+                (identity, version) => RedirectsVersion(dependentAssemblies, identity, version));
 
             if (analysis.Errors.Count > 0)
             {
@@ -128,8 +133,31 @@ internal static class NetFxConfig
     // ResolveAssemblyReference unifies on the highest version, so that is the
     // copy the application ships. Equal versions keep the first candidate, in
     // the order the rule gave them.
-    private static void Select(Selection selection)
+    //
+    // Returns why it cannot choose, or null.
+    private static string? Select(Selection selection)
     {
+        // Copies of one assembly differ only in version. Files of one name that
+        // are different assemblies, signed with different keys say, cannot
+        // stand in for each other, and only one of them fits beside the
+        // executable. MSBuild picks one arbitrarily (MSB3243); the references
+        // to the other then fail to load.
+        var assemblies = selection.Candidates
+            .Select(candidate => (candidate.Assembly, Metadata: TryReadAssembly(candidate.Assembly)))
+            .Where(candidate => candidate.Metadata is not null)
+            .ToList();
+        foreach (var other in assemblies.Skip(1))
+        {
+            var first = assemblies[0];
+            if (!IsSameAssembly(other.Metadata!.Identity, first.Metadata!.Identity))
+            {
+                return $"{first.Assembly} ({Describe(first.Metadata.Identity)}) and {other.Assembly} " +
+                       $"({Describe(other.Metadata.Identity)}) would both be {Path.GetFileName(selection.Output)} " +
+                       "beside the executable, but they are different assemblies rather than versions of one, so " +
+                       "neither can stand in for the other.";
+            }
+        }
+
         Candidate chosen = selection.Candidates[0];
         Version chosenVersion = VersionOf(chosen.Assembly);
         foreach (Candidate candidate in selection.Candidates.Skip(1))
@@ -148,12 +176,23 @@ internal static class NetFxConfig
             Copy(chosen.Pdb!, selection.PdbOutput);
         }
 
-        // Satellite assemblies only match the assembly they were built with.
+        // Satellite assemblies only match the assembly they were built with,
+        // so only the chosen copy's go in. A culture it has none of keeps its
+        // directory empty.
         for (int i = 0; i < selection.SatelliteOutputs.Count; i++)
         {
-            Copy(chosen.Satellites[i], selection.SatelliteOutputs[i]);
+            Directory.CreateDirectory(selection.SatelliteOutputs[i]);
+            if (chosen.Satellites[i] is { } satellite)
+            {
+                Copy(satellite, Path.Combine(selection.SatelliteOutputs[i], Path.GetFileName(satellite)));
+            }
         }
+
+        return null;
     }
+
+    private static string Describe(Identity identity) =>
+        $"{identity.Name}, Version={identity.Version}, Culture={identity.Culture}, PublicKeyToken={identity.PublicKeyToken ?? "null"}";
 
     private static Version VersionOf(string path) => TryReadAssembly(path)?.Identity.Version ?? new Version(0, 0, 0, 0);
 
@@ -172,7 +211,7 @@ internal static class NetFxConfig
         string main,
         IReadOnlyList<string> shippedPaths,
         IReadOnlyList<string> frameworkPaths,
-        Func<Identity, bool> redirectedByAppConfig)
+        Func<Identity, Version, bool> redirectedByAppConfig)
     {
         var shipped = new Dictionary<string, AssemblyMetadata>(StringComparer.OrdinalIgnoreCase);
         foreach (string path in shippedPaths)
@@ -184,15 +223,14 @@ internal static class NetFxConfig
             }
         }
 
-        // What the framework itself provides, by the version its reference
+        // What the framework itself provides, by the identities its reference
         // assemblies carry.
-        var inBox = new Dictionary<string, Version>(StringComparer.OrdinalIgnoreCase);
+        var inBox = new List<Identity>();
         foreach (string path in frameworkPaths)
         {
-            if (TryReadAssembly(path) is { } assembly &&
-                (!inBox.TryGetValue(assembly.Identity.Name, out Version? known) || assembly.Identity.Version > known))
+            if (TryReadAssembly(path) is { } assembly)
             {
-                inBox[assembly.Identity.Name] = assembly.Identity.Version;
+                inBox.Add(assembly.Identity);
             }
         }
 
@@ -224,18 +262,25 @@ internal static class NetFxConfig
                 .ToList();
 
             // The framework's own copy, from the GAC, serves any reference it
-            // is new enough for.
-            Version? frameworkVersion = inBox.TryGetValue(identity.Name, out Version? inBoxVersion) ? inBoxVersion : null;
+            // is new enough for, if it is the same assembly: one of the same
+            // name signed with another key is not.
+            Version? frameworkVersion = inBox
+                .Where(framework => IsSameAssembly(framework, identity))
+                .Select(framework => framework.Version)
+                .DefaultIfEmpty()
+                .Max();
             bool frameworkIsNewest = frameworkVersion is not null && frameworkVersion >= identity.Version;
             Version newest = frameworkIsNewest ? frameworkVersion! : identity.Version;
 
             var tooNew = requests.Where(request => request.Version > newest).ToList();
             if (tooNew.Count > 0)
             {
-                if (!redirectedByAppConfig(identity))
+                // A <bindingRedirect> in App.config whose range takes in the
+                // version referenced is the user's answer to it.
+                string source = frameworkIsNewest ? "from .NET Framework" : Path.GetFileName(assembly.Path);
+                foreach (var (referrer, version) in tooNew)
                 {
-                    string source = frameworkIsNewest ? "from .NET Framework" : Path.GetFileName(assembly.Path);
-                    foreach (var (referrer, version) in tooNew)
+                    if (!redirectedByAppConfig(identity, version))
                     {
                         errors.Add(
                             $"{Path.GetFileName(referrer.Path)} references {identity.Name} {version}, but the newest " +
@@ -297,12 +342,49 @@ internal static class NetFxConfig
         startup.Add(supportedRuntime);
     }
 
-    private static List<XElement> DependentAssemblies(XElement configuration) =>
+    /// <summary>
+    /// The <c>&lt;dependentAssembly&gt;</c> elements App.config has for the
+    /// runtime the application runs on: an <c>&lt;assemblyBinding&gt;</c>
+    /// whose <c>appliesTo</c> names another version of the CLR is for that one.
+    /// </summary>
+    private static List<XElement> DependentAssemblies(XElement configuration, string? runtimeVersion) =>
         configuration
             .Elements("runtime")
             .Elements(Asm + "assemblyBinding")
+            .Where(assemblyBinding =>
+                (string?)assemblyBinding.Attribute("appliesTo") is not { } appliesTo ||
+                runtimeVersion is null ||
+                ClrMajorVersion(appliesTo) == ClrMajorVersion(runtimeVersion))
             .Elements(Asm + "dependentAssembly")
             .ToList();
+
+    private static string ClrMajorVersion(string version) => version.TrimStart('v', 'V').Split('.')[0];
+
+    /// <summary>Whether App.config has a <c>&lt;bindingRedirect&gt;</c> for an assembly whose range takes in <paramref name="version"/>.</summary>
+    private static bool RedirectsVersion(IEnumerable<XElement> dependentAssemblies, Identity identity, Version version) =>
+        dependentAssemblies
+            .Where(dependentAssembly => Describes(dependentAssembly, identity))
+            .Elements(Asm + "bindingRedirect")
+            .Any(bindingRedirect => (string?)bindingRedirect.Attribute("oldVersion") is { } oldVersion && InRange(oldVersion, version));
+
+    // `oldVersion` is a version, or a range of two joined by a hyphen.
+    private static bool InRange(string range, Version version)
+    {
+        string[] bounds = range.Split('-', 2);
+        return Version.TryParse(bounds[0].Trim(), out Version? low) &&
+            Version.TryParse(bounds[^1].Trim(), out Version? high) &&
+            low <= version && version <= high;
+    }
+
+    private static bool Describes(XElement dependentAssembly, Identity identity)
+    {
+        XElement? assemblyIdentity = dependentAssembly.Element(Asm + "assemblyIdentity");
+        string culture = (string?)assemblyIdentity?.Attribute("culture") ?? "neutral";
+        return assemblyIdentity is not null &&
+            string.Equals((string?)assemblyIdentity.Attribute("name"), identity.Name, StringComparison.OrdinalIgnoreCase) &&
+            string.Equals((string?)assemblyIdentity.Attribute("publicKeyToken"), identity.PublicKeyToken, StringComparison.OrdinalIgnoreCase) &&
+            string.Equals(culture, identity.Culture, StringComparison.OrdinalIgnoreCase);
+    }
 
     /// <summary>
     /// The <c>&lt;dependentAssembly&gt;</c> App.config has for an assembly,
@@ -311,15 +393,8 @@ internal static class NetFxConfig
     /// </summary>
     private static XElement? FindDependentAssembly(IEnumerable<XElement> dependentAssemblies, Identity identity, bool withRedirect) =>
         dependentAssemblies.FirstOrDefault(dependentAssembly =>
-        {
-            XElement? assemblyIdentity = dependentAssembly.Element(Asm + "assemblyIdentity");
-            string culture = (string?)assemblyIdentity?.Attribute("culture") ?? "neutral";
-            return assemblyIdentity is not null &&
-                string.Equals((string?)assemblyIdentity.Attribute("name"), identity.Name, StringComparison.OrdinalIgnoreCase) &&
-                string.Equals((string?)assemblyIdentity.Attribute("publicKeyToken"), identity.PublicKeyToken, StringComparison.OrdinalIgnoreCase) &&
-                string.Equals(culture, identity.Culture, StringComparison.OrdinalIgnoreCase) &&
-                (dependentAssembly.Element(Asm + "bindingRedirect") is not null) == withRedirect;
-        });
+            Describes(dependentAssembly, identity) &&
+            (dependentAssembly.Element(Asm + "bindingRedirect") is not null) == withRedirect);
 
     private static void AddRedirects(
         XElement configuration,
@@ -489,7 +564,7 @@ internal static class NetFxConfig
 
     private sealed record Analysis(IReadOnlyList<Identity> Redirects, IReadOnlyList<string> Errors);
 
-    private sealed record Candidate(string Assembly, string? Pdb, IReadOnlyList<string> Satellites);
+    private sealed record Candidate(string Assembly, string? Pdb, IReadOnlyList<string?> Satellites);
 
     private sealed record Selection(
         bool IsLibrary,
@@ -595,7 +670,7 @@ internal static class NetFxConfig
             {
                 string assembly = next("--select");
                 string? pdb = optional(next("--select"));
-                var satellites = satelliteOutputs.Select(_ => next("--select")).ToList();
+                var satellites = satelliteOutputs.Select(_ => optional(next("--select"))).ToList();
                 candidates.Add(new Candidate(assembly, pdb, satellites));
             }
 
