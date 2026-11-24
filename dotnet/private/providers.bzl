@@ -157,8 +157,14 @@ DotnetBinaryInfo = provider(
     doc = "Information about a .Net binary",
     fields = {
         "dll": "File: The main binary dll",
-        "depsjson": "File: The binary's .deps.json file, or None.",
-        "runtimeconfig": "File: The binary's .runtimeconfig.json file, or None.",
+        "deps_json": """File: The `.deps.json` the binary runs with, or None when the
+target framework has none (.NET Framework). It describes the runfiles layout - its paths
+are relative to the runfiles root - so it is only valid next to the binary inside a
+runfiles tree. Something that is packaged or deployed takes the one `publish_binary`
+writes instead.""",
+        "runtimeconfig_json": """File: The `.runtimeconfig.json` the binary runs with, or
+None when the target framework has none (.NET Framework). Its probing paths point into the
+runfiles tree, so the same caveat as `deps_json` applies.""",
         "static_web_files": """list[struct]: The servable tree, as structs of a `file` and
 the `publish_path` it takes inside a publish directory. Already materialized by the
 binary, so a publish copies these rather than laying the tree out a second time.""",

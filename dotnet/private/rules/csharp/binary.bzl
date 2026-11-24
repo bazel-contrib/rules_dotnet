@@ -18,7 +18,7 @@ load(
 )
 load("//dotnet/private:toolchains_repo.bzl", "BOOTSTRAP_TOOLCHAIN_TYPE", "DOTNET_TOOLCHAIN_TYPE")
 load("//dotnet/private/rules/common:attrs.bzl", "CSHARP_BINARY_COMMON_ATTRS")
-load("//dotnet/private/rules/common:binary.bzl", "build_binary")
+load("//dotnet/private/rules/common:binary.bzl", "BINARY_OUTPUT_GROUPS_DOC", "build_binary")
 load("//dotnet/private/rules/common:resx.bzl", "split_resources")
 load("//dotnet/private/rules/content_files:content_files.bzl", "resolve_content_file_mappings")
 load("//dotnet/private/rules/csharp/actions:csharp_assembly.bzl", "AssemblyAction")
@@ -137,7 +137,7 @@ _BINARY_ATTRS = dicts.add(
 
 csharp_binary = rule(
     _binary_impl,
-    doc = """Compile a C# exe""",
+    doc = """Compile a C# exe""" + BINARY_OUTPUT_GROUPS_DOC,
     attrs = _BINARY_ATTRS,
     executable = True,
     toolchains = [

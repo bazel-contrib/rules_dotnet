@@ -70,6 +70,38 @@ def _create_launcher(ctx, executable, toolchain):
 
     return launcher
 
+# Appended to the documentation of every rule that `build_binary` implements.
+BINARY_OUTPUT_GROUPS_DOC = """
+
+### Output groups
+
+| Name | Contents |
+| --- | --- |
+| `deps_json` | The `.deps.json` the binary runs with. |
+| `runtimeconfig_json` | The `.runtimeconfig.json` the binary runs with. |
+
+Both are runfiles of the binary rather than default outputs, so a tool that has
+to be handed them - one that loads the assembly from its build output, such as
+the Swashbuckle CLI - selects them with a `filegroup`:
+
+```starlark
+filegroup(
+    name = "app_deps_json",
+    srcs = [":app"],
+    output_group = "deps_json",
+)
+```
+
+Both groups are empty for a target framework that has no such files
+(.NET Framework).
+
+These files describe the runfiles layout: the paths in the `.deps.json` are
+relative to the runfiles root and the `.runtimeconfig.json` probes the runfiles
+tree. They are only valid next to the binary inside its runfiles, so do not copy
+them into a package or a container image - `publish_binary` writes the ones a
+deployed application needs.
+"""
+
 def _native_tools(ctx, native_tools):
     """The binary in the branch a ReadyToRun or NativeAOT publish reaches it for the compiler.
 
@@ -272,8 +304,8 @@ def build_binary(ctx, compile_action, toolchain, runtime_toolchain = None):
 
     dotnet_binary_info = DotnetBinaryInfo(
         dll = dll,
-        depsjson = depsjson,
-        runtimeconfig = runtimeconfig,
+        deps_json = depsjson,
+        runtimeconfig_json = runtimeconfig,
         static_web_files = static_web_files,
         transitive_runtime_deps = transitive_runtime_deps,
         # None for rules_dotnet's own tools, which are never published.
@@ -282,9 +314,27 @@ def build_binary(ctx, compile_action, toolchain, runtime_toolchain = None):
         framework_version = framework_version,
     )
 
+    # The same two files, for a `filegroup` to select: they are runfiles, not
+    # default outputs, so nothing else names them. See BINARY_OUTPUT_GROUPS_DOC.
     output_group_info = OutputGroupInfo(
         deps_json = depset([depsjson] if depsjson != None else []),
         runtimeconfig_json = depset([runtimeconfig] if runtimeconfig != None else []),
     )
 
-    return [default_info, dotnet_binary_info, output_group_info, compile_provider, runtime_provider, static_web_assets_info, RunEnvironmentInfo(environment = {key: expand_variables(ctx, expand_locations(ctx, value, ctx.attr.data)) for key, value in ctx.attr.envs.items()}, inherited_environment = ctx.attr.env_inherit)]
+    run_environment_info = RunEnvironmentInfo(
+        environment = {
+            key: expand_variables(ctx, expand_locations(ctx, value, ctx.attr.data))
+            for key, value in ctx.attr.envs.items()
+        },
+        inherited_environment = ctx.attr.env_inherit,
+    )
+
+    return [
+        default_info,
+        dotnet_binary_info,
+        output_group_info,
+        compile_provider,
+        runtime_provider,
+        static_web_assets_info,
+        run_environment_info,
+    ]

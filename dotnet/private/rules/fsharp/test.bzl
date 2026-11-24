@@ -15,7 +15,7 @@ load(
     "targets_windows",
 )
 load("//dotnet/private/rules/common:attrs.bzl", "FSHARP_BINARY_COMMON_ATTRS")
-load("//dotnet/private/rules/common:binary.bzl", "build_binary")
+load("//dotnet/private/rules/common:binary.bzl", "BINARY_OUTPUT_GROUPS_DOC", "build_binary")
 load("//dotnet/private/rules/common:resx.bzl", "split_resources")
 load("//dotnet/private/rules/content_files:content_files.bzl", "resolve_content_file_mappings")
 load("//dotnet/private/rules/fsharp/actions:fsharp_assembly.bzl", "AssemblyAction")
@@ -69,7 +69,7 @@ def _fsharp_test_impl(ctx):
 
 fsharp_test = rule(
     _fsharp_test_impl,
-    doc = """Compile a F# executable and runs it as a test""",
+    doc = """Compile a F# executable and runs it as a test""" + BINARY_OUTPUT_GROUPS_DOC,
     attrs = FSHARP_BINARY_COMMON_ATTRS,
     test = True,
     toolchains = [
