@@ -5,7 +5,7 @@ Shared by `publish_binary`, which copies the layout into a directory, and
 package.
 """
 
-load("//dotnet/private:common.bzl", "get_portable_assets", "runtime_target_path")
+load("//dotnet/private:common.bzl", "collect_transitive_content_files", "get_portable_assets", "runtime_target_path")
 
 def publish_layout(runtime_identifier, binary_info, assembly_files, runtime_pack_files, is_self_contained):
     """Every published file paired with the path it takes inside the publish directory.
@@ -97,10 +97,29 @@ def reject_conflicting_paths(layout, label, what = "published"):
                   "Set `out` on one of them to give its assembly a different " +
                   "file name.").format(label, previous.owner, file.owner, what, path))
 
-def collect_assembly_files(assembly_info, transitive_runtime_deps, deps_json_struct, portable = False):
+def publish_content_files(label, assembly_info, transitive_runtime_deps):
+    """The content files a publish ships: the binary's own and its dependencies'.
+
+    Args:
+      label: The `Label` of the publishing target, for error messages.
+      assembly_info: The binary's `DotnetAssemblyRuntimeInfo`.
+      transitive_runtime_deps: The `DotnetAssemblyRuntimeInfo`s of its transitive dependencies.
+
+    Returns:
+      A list of `struct(file, dest, src)`.
+    """
+    return list(assembly_info.content_files) + collect_transitive_content_files(
+        label,
+        assembly_info,
+        transitive_runtime_deps,
+        reserved = [f.basename for f in assembly_info.libs + assembly_info.appsetting_files.to_list()],
+    )
+
+def collect_assembly_files(label, assembly_info, transitive_runtime_deps, deps_json_struct, portable = False):
     """The files a publish copies, gathered from the target and its deps.
 
     Args:
+      label: The `Label` of the publishing target, for error messages.
       assembly_info: The `DotnetAssemblyRuntimeInfo` of the binary.
       transitive_runtime_deps: The `DotnetAssemblyRuntimeInfo`s of its transitive dependencies.
       deps_json_struct: The generated `deps.json`, which says which of a
@@ -155,5 +174,5 @@ def collect_assembly_files(assembly_info, transitive_runtime_deps, deps_json_str
         runtime_targets = runtime_target_files,
         data = data,
         appsetting_files = assembly_info.appsetting_files.to_list(),
-        content_files = list(assembly_info.content_files),
+        content_files = publish_content_files(label, assembly_info, transitive_runtime_deps),
     )

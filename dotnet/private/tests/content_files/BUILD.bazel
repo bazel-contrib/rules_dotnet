@@ -1,4 +1,4 @@
-load("//dotnet:defs.bzl", "csharp_nunit_test", "dotnet_content_files")
+load("//dotnet:defs.bzl", "csharp_library", "csharp_nunit_test", "dotnet_content_files")
 load(":tests.bzl", "content_files_test_suite")
 
 # Analysis tests: assert that content_files preserve their package-relative
@@ -36,4 +36,23 @@ csharp_nunit_test(
     srcs = ["ContentFilesRuleTest.cs"],
     content_files = [":runtime_remapped_content"],
     target_frameworks = ["net6.0"],
+)
+
+# End-to-end runtime test for a library's content_files: the test lists none itself, so the
+# files it finds next to its assembly are the ones the library it depends on brought along.
+csharp_library(
+    name = "library_with_content",
+    srcs = ["Main.cs"],
+    content_files = [
+        "content/settings.json",
+        "content/nested/data.txt",
+    ],
+    target_frameworks = ["net6.0"],
+)
+
+csharp_nunit_test(
+    name = "content_files_library_runtime_test",
+    srcs = ["ContentFilesTest.cs"],
+    target_frameworks = ["net6.0"],
+    deps = [":library_with_content"],
 )

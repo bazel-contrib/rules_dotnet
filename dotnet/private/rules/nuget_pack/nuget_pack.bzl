@@ -151,7 +151,7 @@ def _pack_tool(ctx, tfm, target, compile_info, runtime_info):
         framework_version = binary_info.framework_version,
     )))
 
-    assembly_files = collect_assembly_files(runtime_info, transitive, depsjson_struct, portable = True)
+    assembly_files = collect_assembly_files(ctx.label, runtime_info, transitive, depsjson_struct, portable = True)
 
     return tool_layout(
         tfm,

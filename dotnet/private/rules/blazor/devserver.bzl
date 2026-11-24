@@ -113,7 +113,7 @@ be deployed:
 publish_binary(
     name = "publish",
     binary = ":app",
-    target_framework = "net10.0",
+    target_framework = "net11.0",
     wasm = True,
 )
 

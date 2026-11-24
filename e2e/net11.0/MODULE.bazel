@@ -14,11 +14,10 @@ local_path_override(
 
 dotnet = use_extension("@rules_dotnet//dotnet:extensions.bzl", "dotnet")
 
-# Newer than the SDK rules_dotnet builds its own tools with, which this is here
-# to cover: its framework and its packs are known to rules_dotnet only through
-# the SDK, and the tools that load the SDK's assemblies have to run on its
-# runtime.
-dotnet.toolchain(dotnet_version = "11.0.100-rc.3.26522.148")
+# The release rules_dotnet builds its own tools with. An SDK newer than that
+# one, whose tools have to run on its runtime rather than the bootstrap SDK's,
+# is covered by a workspace of its own once the next release has a preview.
+dotnet.toolchain(dotnet_version = "11.0.100")
 use_repo(dotnet, "dotnet_toolchains")
 
 register_toolchains("@dotnet_toolchains//:all")

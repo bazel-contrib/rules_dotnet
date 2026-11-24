@@ -36,6 +36,8 @@ def blazor_wasm_app(name, binary_rule, kwargs):
         if attribute in kwargs
     }
 
+    tags = kwargs.pop("tags", [])
+
     binary_rule(
         name = name + _BINARY_SUFFIX,
         # The assembly is named for the public target, not the private one it
@@ -44,13 +46,16 @@ def blazor_wasm_app(name, binary_rule, kwargs):
         out = kwargs.pop("out", None) or name,
         # Built as a dependency of the wrapper; a wildcard should not pick it
         # up in its own right.
-        tags = kwargs.pop("tags", []) + ["manual"],
+        tags = tags + ["manual"],
         **kwargs
     )
 
+    # The user's tags are the public target's: `manual` on the binary has to
+    # keep a wildcard from building it.
     blazor_wasm_binary(
         name = name,
         binary = ":" + name + _BINARY_SUFFIX,
+        tags = tags,
         target_framework = target_frameworks[0],
         visibility = kwargs.get("visibility", None),
         **wrapper_kwargs

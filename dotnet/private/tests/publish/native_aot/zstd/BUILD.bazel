@@ -1,0 +1,36 @@
+load("@rules_shell//shell:sh_test.bzl", "sh_test")
+load("//dotnet:defs.bzl", "csharp_binary", "publish_binary")
+
+# The native link needs a C/C++ toolchain for the target platform, and Windows
+# goes through MSVC rather than the Unix driver these rules support.
+_NOT_WINDOWS = select({
+    "@platforms//os:windows": ["@platforms//:incompatible"],
+    "//conditions:default": [],
+})
+
+# Built for .NET 11, whose compiler takes other options than .NET 10's, which
+# the other NativeAOT tests are built for, and whose runtime links zstd, which
+# only an application that compresses with it pulls in.
+csharp_binary(
+    name = "app",
+    srcs = ["Program.cs"],
+    target_frameworks = ["net11.0"],
+)
+
+publish_binary(
+    name = "native_aot",
+    binary = ":app",
+    native_aot = True,
+    self_contained = True,
+    target_compatible_with = _NOT_WINDOWS,
+    target_framework = "net11.0",
+)
+
+sh_test(
+    name = "native_aot_test",
+    size = "small",
+    srcs = ["test.sh"],
+    args = ["$(rootpath :native_aot)"],
+    data = [":native_aot"],
+    target_compatible_with = _NOT_WINDOWS,
+)

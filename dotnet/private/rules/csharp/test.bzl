@@ -18,7 +18,7 @@ load(
     "targets_windows",
 )
 load("//dotnet/private/rules/common:attrs.bzl", "CSHARP_BINARY_COMMON_ATTRS")
-load("//dotnet/private/rules/common:binary.bzl", "build_binary")
+load("//dotnet/private/rules/common:binary.bzl", "BINARY_OUTPUT_GROUPS_DOC", "build_binary")
 load("//dotnet/private/rules/common:resx.bzl", "split_resources")
 load("//dotnet/private/rules/content_files:content_files.bzl", "resolve_content_file_mappings")
 load("//dotnet/private/rules/csharp/actions:csharp_assembly.bzl", "AssemblyAction")
@@ -53,6 +53,7 @@ def _compile_action(ctx, tfm, toolchain):
         target_name = ctx.attr.name,
         target_framework = tfm,
         version = ctx.attr.version,
+        user_secrets_id = ctx.attr.user_secrets_id,
         toolchain = toolchain,
         strict_deps = toolchain.strict_deps[BuildSettingInfo].value,
         generate_documentation_file = ctx.attr.generate_documentation_file,
@@ -88,7 +89,7 @@ def _csharp_test_impl(ctx):
 
 csharp_test = rule(
     _csharp_test_impl,
-    doc = """Compiles a C# executable and runs it as a test""",
+    doc = """Compiles a C# executable and runs it as a test""" + BINARY_OUTPUT_GROUPS_DOC,
     attrs = CSHARP_BINARY_COMMON_ATTRS,
     test = True,
     toolchains = [

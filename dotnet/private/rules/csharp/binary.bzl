@@ -18,7 +18,7 @@ load(
 )
 load("//dotnet/private:toolchains_repo.bzl", "BOOTSTRAP_TOOLCHAIN_TYPE", "DOTNET_TOOLCHAIN_TYPE")
 load("//dotnet/private/rules/common:attrs.bzl", "CSHARP_BINARY_COMMON_ATTRS")
-load("//dotnet/private/rules/common:binary.bzl", "build_binary")
+load("//dotnet/private/rules/common:binary.bzl", "BINARY_OUTPUT_GROUPS_DOC", "build_binary")
 load("//dotnet/private/rules/common:resx.bzl", "split_resources")
 load("//dotnet/private/rules/content_files:content_files.bzl", "resolve_content_file_mappings")
 load("//dotnet/private/rules/csharp/actions:csharp_assembly.bzl", "AssemblyAction")
@@ -55,6 +55,7 @@ def _compile_action(ctx, tfm, toolchain):
         target_name = ctx.attr.name,
         target_framework = tfm,
         version = ctx.attr.version,
+        user_secrets_id = ctx.attr.user_secrets_id,
         toolchain = toolchain,
         strict_deps = toolchain.strict_deps[BuildSettingInfo].value,
         generate_documentation_file = ctx.attr.generate_documentation_file,
@@ -137,7 +138,7 @@ _BINARY_ATTRS = dicts.add(
 
 csharp_binary = rule(
     _binary_impl,
-    doc = """Compile a C# exe""",
+    doc = """Compile a C# exe""" + BINARY_OUTPUT_GROUPS_DOC,
     attrs = _BINARY_ATTRS,
     executable = True,
     toolchains = [

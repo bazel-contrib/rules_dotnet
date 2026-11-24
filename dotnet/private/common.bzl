@@ -5,6 +5,7 @@ Rules for compatability resolution of dependencies for .NET frameworks.
 load("@bazel_skylib//lib:sets.bzl", "sets")
 load("@bazel_skylib//lib:shell.bzl", "shell")
 load("@bazel_skylib//rules:common_settings.bzl", "BuildSettingInfo")
+load("//dotnet/private:nuget_version.bzl", "nuget_version")
 load(
     "//dotnet/private:providers.bzl",
     "DotnetAssemblyCompileInfo",
@@ -344,13 +345,14 @@ def collect_compile_info(name, deps, targeting_pack, exports, strict_deps):
         add_to_output = True
         if minimum_version != None:
             # An explicit dependency newer than the minimum supersedes the pack's
-            # own reference assembly, which has to go to avoid a conflict. The
-            # pop() is a no-op when `framework_list` never contributed one: not
-            # every assembly with a minimum version is in it for every
-            # `project_sdk`. System.Security.Cryptography.Xml, for example, has a
-            # minimum version for net8.0 but is only contributed by the
+            # own reference assembly, which has to go to avoid a conflict. One
+            # that sets no version is never newer. The pop() is a no-op when
+            # `framework_list` never contributed one: not every assembly with a
+            # minimum version is in it for every `project_sdk`.
+            # System.Security.Cryptography.Xml, for example, has a minimum
+            # version for net8.0 but is only contributed by the
             # `project_sdk = "web"` (ASP.NET) framework.
-            add_to_output = semver.to_comparable(assembly.version) > semver.to_comparable(minimum_version, relaxed = True)
+            add_to_output = nuget_version.is_newer(assembly.version, minimum_version)
             if add_to_output:
                 if not narrowed:
                     framework_list = dict(framework_list)
@@ -952,6 +954,29 @@ def _get_resource_assembly_locale(file):
     """
     return file.dirname.split("/")[-1]
 
+def _depsjson_runtime_asset(version):
+    """The properties of a `runtime` asset in a deps.json, from its library's version.
+
+    The host reads `assemblyVersion` as a `System.Version`, two to four numbers,
+    to choose between an app's assembly and a framework's of the same name: the
+    higher wins. A missing value and one it cannot parse are the same to it, no
+    version at all, which any framework assembly beats. So the value is written
+    padded to four numbers, as the framework's own deps.json spells it, and left
+    out when the library has no version that maps to one.
+
+    Args:
+        version: The library's version, a NuGet version string or "".
+
+    Returns:
+        A dict for the asset's entry in `runtime`.
+    """
+
+    # `error` also rejects a component above 65535, which `assembly_version`
+    # would fail on.
+    if not version or nuget_version.error(version):
+        return {}
+    return {"assemblyVersion": nuget_version.assembly_version(version)}
+
 # For deps.json spec see: https://github.com/dotnet/sdk/blob/main/documentation/specs/runtime-configuration-file.md
 def generate_depsjson(
         ctx,
@@ -1010,9 +1035,10 @@ def generate_depsjson(
         ]
         deps = [dep for dep in transitive_runtime_deps if dep.name.lower() in runtime_dlls]
         for dep in deps:
-            # We can use the first assembly_runtime_info since all assembly_runtime_infos since all assembly_runtime_infos will
-            # have the same version for the same runtime pack.
-            if semver.to_comparable(dep.version) > semver.to_comparable(runtime_pack_info.assembly_runtime_infos[0].version, relaxed = True):
+            # We can use the first assembly_runtime_info since all assembly_runtime_infos will
+            # have the same version for the same runtime pack. A dependency that sets no
+            # version is never newer.
+            if nuget_version.is_newer(dep.version, runtime_pack_info.assembly_runtime_infos[0].version):
                 dep_overrides.append(dep.name.lower())
             else:
                 runtime_pack_overrides.append(dep.name.lower())
@@ -1064,9 +1090,10 @@ def generate_depsjson(
 
         # Do not add the `runtime` and `native` sections if the runtime pack overrides the dependency.
         if runtime_dep.name.lower() not in runtime_pack_overrides:
-            target_fragment["runtime"] = {(dll.basename if not use_relative_paths else to_rlocation_path(ctx, dll)): {
-                "assemblyVersion": runtime_dep.version + ".0",
-            } for dll in (portable_assets.libs if portable_assets else runtime_dep.libs)}
+            target_fragment["runtime"] = {
+                (dll.basename if not use_relative_paths else to_rlocation_path(ctx, dll)): _depsjson_runtime_asset(runtime_dep.version)
+                for dll in (portable_assets.libs if portable_assets else runtime_dep.libs)
+            }
 
             # A satellite assembly is keyed by its locale folder as well, as MSBuild
             # writes it: every locale's satellite has the same file name.
@@ -1227,8 +1254,9 @@ def _copy_files_to_dir(actions, is_windows, file_mappings, out_dir, script_name,
         executables: Basenames to mark executable on Unix.
 
     Returns:
-        A list of `struct(file, dest)` in the same order as `file_mappings`, where `file` is the
-        copied `File` and `dest` is its `rel_path` relative to `out_dir`.
+        A list of `struct(file, dest, src)` in the same order as `file_mappings`, where `file` is
+        the copied `File`, `dest` is its `rel_path` relative to `out_dir` and `src` is the `File`
+        it was copied from.
     """
     script_body = ["@echo off"] if is_windows else ["#! /usr/bin/env bash", "set -eou pipefail"]
 
@@ -1237,7 +1265,7 @@ def _copy_files_to_dir(actions, is_windows, file_mappings, out_dir, script_name,
     for src, rel in file_mappings:
         dst = actions.declare_file("%s/%s" % (out_dir, rel))
         inputs.append(src)
-        outputs.append(struct(file = dst, dest = rel))
+        outputs.append(struct(file = dst, dest = rel, src = src))
         if is_windows:
             script_body.append("if not exist \"{dir}\" @mkdir \"{dir}\" >NUL".format(dir = dst.dirname.replace("/", "\\")))
             script_body.append("@copy /Y \"{src}\" \"{dst}\" >NUL".format(src = src.path.replace("/", "\\"), dst = dst.path.replace("/", "\\")))
@@ -1324,8 +1352,8 @@ def copy_content_to_dir(target_name, actions, is_windows, content_file_mappings,
         out_dir: The assembly output directory to stage into.
 
     Returns:
-        A list of `struct(file, dest)`, where `file` is the staged `File` and `dest` is its path
-        relative to `out_dir`.
+        A list of `struct(file, dest, src)`, where `file` is the staged `File`, `dest` is its path
+        relative to `out_dir` and `src` is the `File` it was staged from.
     """
     return _copy_files_to_dir(
         actions,
@@ -1334,6 +1362,54 @@ def copy_content_to_dir(target_name, actions, is_windows, content_file_mappings,
         out_dir,
         target_name + ".content.copy",
     )
+
+def collect_transitive_content_files(label, assembly_info, transitive_runtime_deps, reserved = []):
+    """Collects the content files a target inherits from its dependencies.
+
+    Every content file lands at its `dest` next to the consuming assembly, so two
+    different files cannot share one. Rather than let whichever dependency comes
+    first win, a clash fails the build and names both sides. The same source file
+    reaching the same `dest` through several libraries is not a clash.
+
+    Args:
+        label: The `Label` of the consuming target, for error messages.
+        assembly_info: The consuming target's `DotnetAssemblyRuntimeInfo`.
+        transitive_runtime_deps: The `DotnetAssemblyRuntimeInfo`s of its transitive dependencies.
+        reserved: Paths, relative to the output directory, that the consuming
+            target writes itself (its assembly, its appsettings files, ...).
+
+    Returns:
+        The dependencies' content files as a list of `struct(file, dest, src)`,
+        without the ones `assembly_info` stages itself.
+    """
+
+    # dest -> (source File or None, who put it there)
+    claimed = {path: (None, "an output of %s itself" % label) for path in reserved}
+    for entry in assembly_info.content_files:
+        claimed[entry.dest] = (entry.src, "the `content_files` of %s" % label)
+
+    inherited = []
+    for dep in transitive_runtime_deps:
+        for entry in dep.content_files:
+            if entry.dest not in claimed:
+                claimed[entry.dest] = (entry.src, "the `content_files` of its dependency `%s`" % dep.name)
+                inherited.append(entry)
+                continue
+
+            (src, owner) = claimed[entry.dest]
+            if src != entry.src:
+                fail(("%s: the content file %s of its dependency `%s` would be staged at %r, " +
+                      "but that path is already taken by %s%s. Give one of them another " +
+                      "destination, for example with `dotnet_content_files`.") % (
+                    label,
+                    entry.src.short_path,
+                    dep.name,
+                    entry.dest,
+                    owner,
+                    " (%s)" % src.short_path if src else "",
+                ))
+
+    return inherited
 
 _RESOURCE_TEMPLATE_CSHARP = "/resource:\"%s\""
 _RESOURCE_TEMPLATE_FSHARP = "--resource:%s"

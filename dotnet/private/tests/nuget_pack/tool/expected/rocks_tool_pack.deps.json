@@ -25,7 +25,7 @@
         "resources": {},
         "runtime": {
           "RocksDbSharp.dll": {
-            "assemblyVersion": "10.2.1.58549.0"
+            "assemblyVersion": "10.2.1.58549"
           }
         },
         "runtimeTargets": {

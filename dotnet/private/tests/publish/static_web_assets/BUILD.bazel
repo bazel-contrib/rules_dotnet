@@ -15,9 +15,12 @@ csharp_binary(
     deps = ["//dotnet/private/tests/static_web_assets/lib"],
 )
 
+# The test runs this on the registered SDK's runtime, which can be of a newer
+# release than the framework it is published for.
 publish_binary(
     name = "static_web_assets",
     binary = ":app_to_publish",
+    roll_forward_behavior = "Major",
     self_contained = False,
     target_framework = "net10.0",
 )

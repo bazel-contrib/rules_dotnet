@@ -47,6 +47,12 @@ def _blazor_wasm_binary_impl(ctx):
         assembled.binary[DotnetAssemblyCompileInfo],
         assembled.binary[DotnetAssemblyRuntimeInfo],
         assembled.binary[DotnetBinaryInfo],
+        # Named rather than forwarded whole: the binary's other output groups
+        # are Bazel's own, and the wrapper has its own of those.
+        OutputGroupInfo(
+            deps_json = assembled.binary[OutputGroupInfo].deps_json,
+            runtimeconfig_json = assembled.binary[OutputGroupInfo].runtimeconfig_json,
+        ),
     ]
     if StaticWebAssetsInfo in assembled.binary:
         forwarded.append(assembled.binary[StaticWebAssetsInfo])

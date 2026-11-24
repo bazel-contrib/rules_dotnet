@@ -15,7 +15,7 @@ namespace TargetingPackNugetConflict
             // We use the System.Text.Json dll for the test. The version of the user provided
             // System.Text.Json is 7.0.3 while the targeting pack has the latest version.
             // We publish a self-contained app targeting: 
-            // * net10.0 (higher, and listed in the pack's PackageOverrides),
+            // * net11.0 and net10.0 (higher, and listed in the pack's PackageOverrides),
             // * net8.0 (higher than user provided version),
             // * net7.0 (Same as user provided version),
             // * net6.0 (lower than user provided version). 

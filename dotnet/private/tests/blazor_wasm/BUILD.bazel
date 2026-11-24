@@ -5,6 +5,7 @@ load(
     "csharp_library",
     "publish_binary",
 )
+load(":tests.bzl", "blazor_wasm_test_suite")
 
 # A library nothing refers to in code, as if the application only reached it
 # through reflection. The trimmer has no reference to keep it by, so only the
@@ -45,3 +46,5 @@ sh_test(
     srcs = ["test.sh"],
     data = [":publish"],
 )
+
+blazor_wasm_test_suite(name = "blazor_wasm_tests")

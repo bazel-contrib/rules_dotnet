@@ -12,7 +12,7 @@ load(
     "targets_windows",
 )
 load("//dotnet/private/rules/common:attrs.bzl", "FSHARP_BINARY_COMMON_ATTRS")
-load("//dotnet/private/rules/common:binary.bzl", "build_binary")
+load("//dotnet/private/rules/common:binary.bzl", "BINARY_OUTPUT_GROUPS_DOC", "build_binary")
 load("//dotnet/private/rules/common:resx.bzl", "split_resources")
 load("//dotnet/private/rules/content_files:content_files.bzl", "resolve_content_file_mappings")
 load("//dotnet/private/rules/fsharp/actions:fsharp_assembly.bzl", "AssemblyAction")
@@ -47,6 +47,7 @@ def _compile_action(ctx, tfm, toolchain):
         target_name = ctx.attr.name,
         target_framework = tfm,
         version = ctx.attr.version,
+        user_secrets_id = ctx.attr.user_secrets_id,
         toolchain = toolchain,
         strict_deps = toolchain.strict_deps[BuildSettingInfo].value,
         generate_documentation_file = ctx.attr.generate_documentation_file,
@@ -66,7 +67,7 @@ def _binary_private_impl(ctx):
 
 fsharp_binary = rule(
     _binary_private_impl,
-    doc = """Compile a F# exe""",
+    doc = """Compile a F# exe""" + BINARY_OUTPUT_GROUPS_DOC,
     attrs = FSHARP_BINARY_COMMON_ATTRS,
     executable = True,
     toolchains = [

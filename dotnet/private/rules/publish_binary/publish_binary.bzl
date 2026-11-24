@@ -29,6 +29,7 @@ load(
 load(
     "//dotnet/private/rules/common:publish_layout.bzl",
     "collect_assembly_files",
+    "publish_content_files",
     "publish_layout",
     "reject_conflicting_paths",
 )
@@ -134,6 +135,13 @@ _AOT_INIT_ASSEMBLIES = [
 # options and bind the framework's native libraries by other names.
 _AOT_MIN_MAJOR_VERSION = 10
 
+# The first .NET whose NativeAOT publish is told some things differently. Its
+# ilc takes the stack trace data to emit, where earlier ones took a switch.
+# And the runtime's contract with debuggers and dump tools, which they look up
+# in the executable, is exported under a new name, and has to be pulled into
+# the link by name where it is not exported by a list.
+_AOT_NET11_MAJOR_VERSION = 11
+
 # The trimming switches the SDK turns on for a NativeAOT publish. A switch
 # removes the feature's code (`--feature`) and tells the runtime it is gone
 # (`--runtimeknob`); the debugger is the one feature the runtime reads from the
@@ -188,6 +196,8 @@ _AOT_LINK_ORDER = [
     "brotlienc",
     "brotlidec",
     "brotlicommon",
+    # From .NET 11, which compresses with zstd too.
+    "zstd",
 ]
 
 # What the Windows pack contributes to the link, as
@@ -207,9 +217,17 @@ _AOT_WINDOWS_LINK_INPUTS = [
     "System.IO.Compression.Native.Aot.lib",
 ]
 
-# The vectorised sort the garbage collector can use only exists for x64, so
-# only that pack carries the library that stubs it out.
-_AOT_WINDOWS_X64_LINK_INPUTS = ["Runtime.VxsortDisabled.lib"]
+# What only some Windows packs ship, and the SDK links wherever it is shipped.
+_AOT_WINDOWS_OPTIONAL_LINK_INPUTS = [
+    # Stubs out the garbage collector's vectorised sort, on the architectures
+    # that have one: x64, and arm64 from .NET 11.
+    "Runtime.VxsortDisabled.lib",
+    # From .NET 11, which compresses with zstd too.
+    "zstd_static.lib",
+]
+
+# Windows libraries the runtime has needed since .NET 11.
+_AOT_WINDOWS_NET11_SYSTEM_LIBS = ["Synchronization"]
 
 # The linkers that take link.exe's command line. A Windows toolchain that
 # links through a GNU-style driver would read `/OUT:app.exe` as an input file.
@@ -274,7 +292,7 @@ def _direct_pinvokes(link_inputs):
 
     return sorted(names)
 
-def _aot_closure(assembly_info, transitive_runtime_deps):
+def _aot_closure(label, assembly_info, transitive_runtime_deps):
     """Everything a NativeAOT publish has to account for.
 
     Native libraries are still loaded at runtime, so they travel
@@ -287,7 +305,7 @@ def _aot_closure(assembly_info, transitive_runtime_deps):
         native = [file for part in parts for file in part.native],
         data = [file for part in parts for file in part.data],
         appsetting_files = assembly_info.appsetting_files.to_list(),
-        content_files = list(assembly_info.content_files),
+        content_files = publish_content_files(label, assembly_info, transitive_runtime_deps),
     )
 
 def _aot_link_libraries(aot):
@@ -295,13 +313,14 @@ def _aot_link_libraries(aot):
     link_inputs = aot.pack.link_inputs
 
     if aot.os == "windows":
-        basenames = _AOT_WINDOWS_LINK_INPUTS + (_AOT_WINDOWS_X64_LINK_INPUTS if aot.arch == "x64" else [])
-        missing = [basename for basename in basenames if basename not in link_inputs]
+        missing = [basename for basename in _AOT_WINDOWS_LINK_INPUTS if basename not in link_inputs]
 
         if missing:
             fail("The NativeAOT pack for {} does not ship {}".format(aot.rid, ", ".join(missing)))
 
-        return [link_inputs[basename] for basename in basenames]
+        optional = [basename for basename in _AOT_WINDOWS_OPTIONAL_LINK_INPUTS if basename in link_inputs]
+
+        return [link_inputs[basename] for basename in _AOT_WINDOWS_LINK_INPUTS + optional]
 
     libraries = []
 
@@ -348,10 +367,8 @@ def _ilc_compile(ctx, dll, closure, aot):
     if not is_windows:
         args.add("--dehydrate")
     args.add(exports_file, format = "--exportsfile:%s")
-    if is_windows:
-        args.add("--export-dynamic-symbol:DotNetRuntimeDebugHeader,DATA")
-    else:
-        args.add("--export-dynamic-symbol:DotNetRuntimeDebugHeader")
+    # A PE export has to say that it is data rather than code.
+    args.add("--export-dynamic-symbol:" + aot.debugger_contract + (",DATA" if is_windows else ""))
     args.add_all(_AOT_INIT_ASSEMBLIES, format_each = "--initassembly:%s")
 
     # The bootstrapper calls into the class library through a fixed set of
@@ -372,7 +389,7 @@ def _ilc_compile(ctx, dll, closure, aot):
             args.add("--runtimeknob:" + setting)
 
     args.add("--runtimeknob:RUNTIME_IDENTIFIER=" + aot.rid)
-    args.add("--stacktracedata")
+    args.add(aot.stack_trace_data)
     args.add("--scanreflection")
     args.add("--methodbodyfolding:generic")
     if is_windows:
@@ -452,11 +469,13 @@ def _ilc_link(ctx, compiled, aot):
     ))
     args.add(compiled.object_file)
 
+    extra_inputs = []
+
     if is_windows:
         args.add(executable, format = "/OUT:%s")
         args.add(compiled.exports_file, format = "/DEF:%s")
         args.add_all(libraries)
-        args.add_all(_AOT_SYSTEM_LIBS[aot.os], format_each = "%s.lib")
+        args.add_all(_AOT_SYSTEM_LIBS[aot.os] + aot.windows_system_libs, format_each = "%s.lib")
         args.add("/NOLOGO")
         args.add("/MANIFEST:NO")
         args.add("/MERGE:.managedcode=.text")
@@ -485,15 +504,26 @@ def _ilc_link(ctx, compiled, aot):
     else:
         args.add("-o", executable)
 
+        # Exports the runtime's contract with debuggers and dump tools, which look
+        # it up among the executable's exports, as the SDK does. On Apple that is
+        # the list ilc wrote, which also keeps everything else unexported.
         if is_apple:
-            # Exports only what ilc listed and drops the rest. There is no Linux
-            # counterpart: the runtime relies on sections a GC-ing linker cannot
-            # prove are reachable.
             args.add("-exported_symbols_list", compiled.exports_file)
+        else:
+            # The SDK hands GNU ld ilc's version script, but lld refuses one: it
+            # hides symbols a shared library refers to, such as glibc's
+            # _IO_stdin_used. A dynamic list exports the contract alone and hides
+            # nothing, with GNU ld, gold and lld alike.
+            dynamic_list = ctx.actions.declare_file(aot.prefix + ".dynamic-list")
+            ctx.actions.write(dynamic_list, "{\n    %s;\n};\n" % aot.debugger_contract)
+            args.add(dynamic_list, format = "-Wl,--dynamic-list=%s")
+            extra_inputs.append(dynamic_list)
 
         args.add_all(libraries)
 
         if not is_apple:
+            if aot.pull_debugger_contract:
+                args.add("-Wl,-u," + aot.debugger_contract)
             args.add("-Wl,--build-id=sha1")
             args.add("-Wl,--as-needed")
             args.add("-pthread")
@@ -514,7 +544,7 @@ def _ilc_link(ctx, compiled, aot):
         executable = linker,
         arguments = [args],
         inputs = depset(
-            [compiled.object_file, compiled.exports_file] + libraries,
+            [compiled.object_file, compiled.exports_file] + libraries + extra_inputs,
             transitive = [cc_toolchain.all_files],
         ),
         outputs = [executable],
@@ -529,14 +559,19 @@ def _ilc_link(ctx, compiled, aot):
 
     return executable
 
-def _native_aot_executable(ctx, dll, closure, runtime_identifier, target_framework):
-    """Compiles the managed closure to native code and links it into one executable."""
+def _native_aot_executable(ctx, dll, closure, runtime_identifier, target_framework, compiler_framework):
+    """Compiles the managed closure to native code and links it into one executable.
+
+    `compiler_framework` is the framework the binary is built for, whose band
+    ilc comes from. It can be lower than the `target_framework` published for.
+    """
     pack = _native_tools(ctx).nativeaot_pack
 
     if not pack.libs:
         fail("NativeAOT is not available for {} on {}".format(target_framework, runtime_identifier))
 
     (target_os, target_arch) = native_target(runtime_identifier)
+    net11 = tfm_version(compiler_framework)[0] >= _AOT_NET11_MAJOR_VERSION
 
     if target_os not in _AOT_SYSTEM_LIBS:
         fail("NativeAOT cannot target {} yet".format(target_os))
@@ -548,6 +583,12 @@ def _native_aot_executable(ctx, dll, closure, runtime_identifier, target_framewo
         os = target_os,
         arch = target_arch,
         name = name,
+        # `frames`, the method names, is what the switch emitted, and what the
+        # SDK asks for unless line numbers are asked for as well.
+        stack_trace_data = "--stacktracedata:frames" if net11 else "--stacktracedata",
+        debugger_contract = "DotNetRuntimeContractDescriptor" if net11 else "DotNetRuntimeDebugHeader",
+        pull_debugger_contract = net11,
+        windows_system_libs = _AOT_WINDOWS_NET11_SYSTEM_LIBS if net11 else [],
         # The executable's path; the object and the export list sit beside it
         # under their own extensions.
         prefix = "{}/aot/{}/{}".format(ctx.label.name, runtime_identifier, name),
@@ -1138,13 +1179,14 @@ def _publish_binary_impl(ctx):
     if ctx.attr.native_aot:
         # Nothing managed survives into the output, so none of the publish
         # layout below applies: no deps.json, no runtimeconfig, no apphost.
-        closure = _aot_closure(assembly_runtime_info, transitive_runtime_deps)
+        closure = _aot_closure(ctx.label, assembly_runtime_info, transitive_runtime_deps)
         executable = _native_aot_executable(
             ctx,
             binary_info.dll,
             closure,
             runtime_identifier,
             target_framework,
+            assembly_compile_info.target_framework,
         )
 
         # A NativeAOT publish keeps nothing managed, but it still serves the
@@ -1196,7 +1238,7 @@ def _publish_binary_impl(ctx):
         binary_info.framework_version,
     )
 
-    assembly_files = collect_assembly_files(assembly_runtime_info, transitive_runtime_deps, depsjson_struct)
+    assembly_files = collect_assembly_files(ctx.label, assembly_runtime_info, transitive_runtime_deps, depsjson_struct)
     runtime_pack_files = _runtime_pack_files(runtime_pack_info, depsjson_struct)
 
     layout = publish_layout(runtime_identifier, binary_info, assembly_files, runtime_pack_files, is_self_contained)
