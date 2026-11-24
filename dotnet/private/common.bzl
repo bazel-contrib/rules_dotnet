@@ -5,6 +5,7 @@ Rules for compatability resolution of dependencies for .NET frameworks.
 load("@bazel_skylib//lib:sets.bzl", "sets")
 load("@bazel_skylib//lib:shell.bzl", "shell")
 load("@bazel_skylib//rules:common_settings.bzl", "BuildSettingInfo")
+load("//dotnet/private:nuget_version.bzl", "nuget_version")
 load(
     "//dotnet/private:providers.bzl",
     "DotnetAssemblyCompileInfo",
@@ -13,7 +14,6 @@ load(
     "DotnetTargetingPackInfo",
     "NuGetInfo",
 )
-load("//dotnet/private:nuget_version.bzl", "nuget_version")
 load("//dotnet/private:semver.bzl", "semver")
 load(
     "//dotnet/private/sdk:frameworks.bzl",
