@@ -32,6 +32,7 @@ bzl_library(
     srcs = ["common.bzl"],
     visibility = ["//dotnet:__subpackages__"],
     deps = [
+        ":nuget_version",
         ":providers",
         ":semver",
         "//dotnet/private/sdk:frameworks",

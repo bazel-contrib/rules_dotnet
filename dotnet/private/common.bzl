@@ -13,6 +13,7 @@ load(
     "DotnetTargetingPackInfo",
     "NuGetInfo",
 )
+load("//dotnet/private:nuget_version.bzl", "nuget_version")
 load("//dotnet/private:semver.bzl", "semver")
 load(
     "//dotnet/private/sdk:frameworks.bzl",
@@ -344,13 +345,14 @@ def collect_compile_info(name, deps, targeting_pack, exports, strict_deps):
         add_to_output = True
         if minimum_version != None:
             # An explicit dependency newer than the minimum supersedes the pack's
-            # own reference assembly, which has to go to avoid a conflict. The
-            # pop() is a no-op when `framework_list` never contributed one: not
-            # every assembly with a minimum version is in it for every
-            # `project_sdk`. System.Security.Cryptography.Xml, for example, has a
-            # minimum version for net8.0 but is only contributed by the
+            # own reference assembly, which has to go to avoid a conflict. One
+            # that sets no version is never newer. The pop() is a no-op when
+            # `framework_list` never contributed one: not every assembly with a
+            # minimum version is in it for every `project_sdk`.
+            # System.Security.Cryptography.Xml, for example, has a minimum
+            # version for net8.0 but is only contributed by the
             # `project_sdk = "web"` (ASP.NET) framework.
-            add_to_output = semver.to_comparable(assembly.version) > semver.to_comparable(minimum_version, relaxed = True)
+            add_to_output = nuget_version.is_newer(assembly.version, minimum_version)
             if add_to_output:
                 if not narrowed:
                     framework_list = dict(framework_list)
@@ -1010,9 +1012,10 @@ def generate_depsjson(
         ]
         deps = [dep for dep in transitive_runtime_deps if dep.name.lower() in runtime_dlls]
         for dep in deps:
-            # We can use the first assembly_runtime_info since all assembly_runtime_infos since all assembly_runtime_infos will
-            # have the same version for the same runtime pack.
-            if semver.to_comparable(dep.version) > semver.to_comparable(runtime_pack_info.assembly_runtime_infos[0].version, relaxed = True):
+            # We can use the first assembly_runtime_info since all assembly_runtime_infos will
+            # have the same version for the same runtime pack. A dependency that sets no
+            # version is never newer.
+            if nuget_version.is_newer(dep.version, runtime_pack_info.assembly_runtime_infos[0].version):
                 dep_overrides.append(dep.name.lower())
             else:
                 runtime_pack_overrides.append(dep.name.lower())

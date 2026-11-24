@@ -1,4 +1,4 @@
-"""Unit tests of the pure functions `nuget_pack` and the `version` attribute build on.
+"""Unit tests of the pure functions `nuget_pack`, the `version` attribute and dependency resolution build on.
 
 Tables of inputs and what each gives. What a whole package comes out as is
 `nuget_pack_test_suite`'s business, over real targets; the one case here that
@@ -56,6 +56,53 @@ _INVALID_VERSIONS = [
     "-1.2.3",
 ]
 
+# (older, newer) pairs: NuGet orders `newer` after `older`.
+_ORDERINGS = [
+    ("1.2.3", "1.2.4"),
+    ("9.0.0", "10.0.0"),
+    # A missing component is zero.
+    ("1.2", "1.2.0.1"),
+    ("10.0.14", "10.0.14.1"),
+    ("1.2.3.4", "1.2.4"),
+    ("8.0.0.0", "8.0.1"),
+    ("01.02.003", "1.2.4"),
+    # A package version can go past what an AssemblyVersion stores.
+    ("1.0.65535", "1.0.70000"),
+    # A release comes after its pre-releases.
+    ("11.0.0-rc.2", "11.0"),
+    ("11.0.0-rc.2.25502.107", "11.0.0"),
+    ("10.0.0", "11.0.0-preview.1"),
+    # SemVer's own example of precedence.
+    ("1.0.0-alpha", "1.0.0-alpha.1"),
+    ("1.0.0-alpha.1", "1.0.0-alpha.beta"),
+    ("1.0.0-alpha.beta", "1.0.0-beta"),
+    ("1.0.0-beta", "1.0.0-beta.2"),
+    ("1.0.0-beta.2", "1.0.0-beta.11"),
+    ("1.0.0-beta.11", "1.0.0-rc.1"),
+    ("1.0.0-rc.1", "1.0.0"),
+    # Labels are compared without regard to case, unlike in ASCII order.
+    ("1.0.0-alpha", "1.0.0-Beta"),
+    ("1.0.0-RC.1", "1.0.0-rc.2"),
+]
+
+# Pairs of which neither is newer: one version spelled two ways, or a side that
+# is not a version at all, such as the empty one of an `import_dll` that sets
+# none.
+_UNORDERED = [
+    ("10.0.14", "10.0.14.0"),
+    ("11.0", "11.0.0.0"),
+    ("01.2", "1.2.0"),
+    ("1.0.0-RC.1", "1.0.0-rc.1"),
+    ("1.2.3+abc", "1.2.3+def"),
+    ("1.2.3-beta+abc", "1.2.3-beta"),
+    ("", "10.0.0"),
+    ("", ""),
+    ("1", "0.1"),
+    ("1.2.3.4.5", "1.0"),
+    ("v2.0", "1.0"),
+    ("2.0-", "1.0"),
+]
+
 def _valid_versions_test_impl(ctx):
     env = unittest.begin(ctx)
     for (version, (assembly_version, normalized)) in _VALID_VERSIONS.items():
@@ -69,6 +116,16 @@ def _invalid_versions_test_impl(ctx):
     for version in _INVALID_VERSIONS:
         error = nuget_version.error(version)
         asserts.true(env, error != None and error != "", version)
+    return unittest.end(env)
+
+def _orderings_test_impl(ctx):
+    env = unittest.begin(ctx)
+    for (older, newer) in _ORDERINGS:
+        asserts.true(env, nuget_version.is_newer(newer, older), "{} is newer than {}".format(newer, older))
+        asserts.false(env, nuget_version.is_newer(older, newer), "{} is not newer than {}".format(older, newer))
+    for (a, b) in _UNORDERED:
+        asserts.false(env, nuget_version.is_newer(a, b), "{} is not newer than {}".format(repr(a), repr(b)))
+        asserts.false(env, nuget_version.is_newer(b, a), "{} is not newer than {}".format(repr(b), repr(a)))
     return unittest.end(env)
 
 # --- Frameworks --------------------------------------------------------------
@@ -153,6 +210,7 @@ def _without_ref_assembly_test_impl(ctx):
 
 valid_versions_test = unittest.make(_valid_versions_test_impl)
 invalid_versions_test = unittest.make(_invalid_versions_test_impl)
+orderings_test = unittest.make(_orderings_test_impl)
 spellings_test = unittest.make(_spellings_test_impl)
 round_trip_test = unittest.make(_round_trip_test_impl)
 framework_reference_test = unittest.make(_framework_reference_test_impl)
@@ -164,6 +222,7 @@ def unit_test_suite(name):
         name,
         valid_versions_test,
         invalid_versions_test,
+        orderings_test,
         spellings_test,
         round_trip_test,
         framework_reference_test,
