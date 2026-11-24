@@ -29,6 +29,7 @@ load(
 load(
     "//dotnet/private/rules/common:publish_layout.bzl",
     "collect_assembly_files",
+    "publish_content_files",
     "publish_layout",
     "reject_conflicting_paths",
 )
@@ -236,27 +237,20 @@ def _direct_pinvokes(link_inputs):
 
     return sorted(names)
 
-def _aot_closure(assembly_info, transitive_runtime_deps):
+def _aot_closure(label, assembly_info, transitive_runtime_deps):
     """Everything a NativeAOT publish has to account for.
 
     Native libraries are still loaded at runtime, so they travel
     beside the executable.
     """
     parts = [assembly_info] + transitive_runtime_deps
-    content_files = []
-    seen_dests = {f.basename: True for f in assembly_info.appsetting_files.to_list()}
-    for part in parts:
-        for entry in part.content_files:
-            if entry.dest not in seen_dests:
-                seen_dests[entry.dest] = True
-                content_files.append(entry)
 
     return struct(
         libs = [file for part in parts for file in part.libs],
         native = [file for part in parts for file in part.native],
         data = [file for part in parts for file in part.data],
         appsetting_files = assembly_info.appsetting_files.to_list(),
-        content_files = content_files,
+        content_files = publish_content_files(label, assembly_info, transitive_runtime_deps),
     )
 
 def _aot_link_libraries(link_inputs):
@@ -1061,7 +1055,7 @@ def _publish_binary_impl(ctx):
     if ctx.attr.native_aot:
         # Nothing managed survives into the output, so none of the publish
         # layout below applies: no deps.json, no runtimeconfig, no apphost.
-        closure = _aot_closure(assembly_runtime_info, transitive_runtime_deps)
+        closure = _aot_closure(ctx.label, assembly_runtime_info, transitive_runtime_deps)
         executable = _native_aot_executable(
             ctx,
             binary_info.dll,
@@ -1120,7 +1114,7 @@ def _publish_binary_impl(ctx):
         binary_info.framework_version,
     )
 
-    assembly_files = collect_assembly_files(assembly_runtime_info, transitive_runtime_deps, depsjson_struct)
+    assembly_files = collect_assembly_files(ctx.label, assembly_runtime_info, transitive_runtime_deps, depsjson_struct)
     runtime_pack_files = _runtime_pack_files(runtime_pack_info, depsjson_struct)
 
     layout = publish_layout(runtime_identifier, binary_info, assembly_files, runtime_pack_files, is_self_contained)

@@ -118,8 +118,8 @@ def resolve_content_file_mappings(content_targets, package):
 
     Targets providing `DotnetContentFilesInfo` (i.e. `dotnet_content_files`) contribute their
     explicit destination paths. Plain file targets fall back to their path relative to `package`
-    (the consuming target's Bazel package, or the file's owning package) via
-    `package_relative_path`, preserving the package-relative directory structure.
+    (the consuming target's Bazel package) via `package_relative_path`, preserving the
+    package-relative directory structure.
 
     Args:
         content_targets: The list of `Target`s from the `content_files` attribute.

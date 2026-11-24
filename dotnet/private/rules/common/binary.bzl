@@ -6,6 +6,7 @@ load("@bazel_lib//lib:expand_make_vars.bzl", "expand_locations", "expand_variabl
 load("@bazel_skylib//rules:common_settings.bzl", "BuildSettingInfo")
 load(
     "//dotnet/private:common.bzl",
+    "collect_transitive_content_files",
     "collect_transitive_runfiles",
     "generate_depsjson",
     "generate_runtimeconfig",
@@ -120,22 +121,24 @@ def build_binary(ctx, compile_action, toolchain, runtime_toolchain = None):
     framework_version = None
     transitive_runtime_deps = runtime_provider.deps.to_list()
 
+    # A library's content files are staged next to the library, but the app looks
+    # for them under its own `AppContext.BaseDirectory`, so they are staged again here.
     out_dir = "{}/{}".format(ctx.label.name, tfm)
-    seen_staged_paths = {dll.basename: True}
-    for f in appsetting_files:
-        seen_staged_paths[f.basename] = True
-    for entry in runtime_provider.content_files:
-        seen_staged_paths[entry.dest] = True
-
-    for dep in transitive_runtime_deps:
-        for entry in dep.content_files:
-            if entry.dest in seen_staged_paths:
-                continue
-            seen_staged_paths[entry.dest] = True
-            staged = ctx.actions.declare_file("{}/{}".format(out_dir, entry.dest))
-            ctx.actions.symlink(output = staged, target_file = entry.file)
-            default_info_files.append(staged)
-            additional_runfiles.append(staged)
+    assembly_name = ctx.attr.out or ctx.attr.name
+    inherited_content_files = collect_transitive_content_files(
+        ctx.label,
+        runtime_provider,
+        transitive_runtime_deps,
+        reserved = [dll.basename] + [f.basename for f in appsetting_files] + [
+            assembly_name + ".runtimeconfig.json",
+            assembly_name + ".deps.json",
+        ],
+    )
+    for entry in inherited_content_files:
+        staged = ctx.actions.declare_file("{}/{}".format(out_dir, entry.dest))
+        ctx.actions.symlink(output = staged, target_file = entry.file)
+        default_info_files.append(staged)
+        additional_runfiles.append(staged)
 
     if is_core_framework(tfm):
         framework_version = shared_framework_version(tfm, toolchain.dotnetinfo.runtime_version)
