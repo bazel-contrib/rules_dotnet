@@ -3,6 +3,7 @@ using System.IO;
 using System.IO.Compression;
 using System.Linq;
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 using System.Text;
 
 namespace AotZstd
@@ -48,6 +49,14 @@ namespace AotZstd
                     Console.WriteLine("the stack trace does not name the method that threw");
                     return 2;
                 }
+            }
+
+            // Debuggers and dump tools find the runtime through this symbol, which
+            // they look up among the executable's exports.
+            if (!NativeLibrary.TryGetExport(NativeLibrary.GetMainProgramHandle(), "DotNetRuntimeContractDescriptor", out _))
+            {
+                Console.WriteLine("the executable does not export DotNetRuntimeContractDescriptor");
+                return 3;
             }
 
             return 0;

@@ -379,11 +379,21 @@ def _ilc_link(ctx, compiled, aot):
     args.add(compiled.object_file)
     args.add("-o", executable)
 
+    # Exports the runtime's contract with debuggers and dump tools, which look
+    # it up among the executable's exports, as the SDK does. On Apple that is
+    # the list ilc wrote, which also keeps everything else unexported.
+    extra_inputs = []
     if is_apple:
-        # Exports only what ilc listed and drops the rest. There is no Linux
-        # counterpart: the runtime relies on sections a GC-ing linker cannot
-        # prove are reachable.
         args.add("-exported_symbols_list", compiled.exports_file)
+    else:
+        # The SDK hands GNU ld ilc's version script, but lld refuses one: it
+        # hides symbols a shared library refers to, such as glibc's
+        # _IO_stdin_used. A dynamic list exports the contract alone and hides
+        # nothing, with GNU ld, gold and lld alike.
+        dynamic_list = ctx.actions.declare_file(aot.prefix + ".dynamic-list")
+        ctx.actions.write(dynamic_list, "{\n    %s;\n};\n" % aot.debugger_contract)
+        args.add(dynamic_list, format = "-Wl,--dynamic-list=%s")
+        extra_inputs.append(dynamic_list)
 
     args.add_all(libraries)
 
@@ -410,7 +420,7 @@ def _ilc_link(ctx, compiled, aot):
         executable = linker,
         arguments = [args],
         inputs = depset(
-            [compiled.object_file, compiled.exports_file] + libraries,
+            [compiled.object_file, compiled.exports_file] + libraries + extra_inputs,
             transitive = [cc_toolchain.all_files],
         ),
         outputs = [executable],
