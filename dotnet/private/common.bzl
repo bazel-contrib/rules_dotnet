@@ -496,13 +496,11 @@ def get_highest_compatible_target_framework(incoming_tfm, tfms):
     if compatible == None:
         fail("Target framework moniker is not supported/valid: {}".format(incoming_tfm))
 
-    # A target built directly, in a configuration no transition has touched,
-    # builds for the newest framework it lists.
+    # Without a transition, pick the newest framework the target lists.
     untouched = incoming_tfm == DEFAULT_TFM
 
-    # Newest first. A Windows specific framework listed before `incoming_tfm`,
-    # such as `net7.0-windows` before `net8.0`, is only one it can consume if
-    # it is Windows specific itself.
+    # Newest first. `net7.0-windows` sorts before `net8.0`, but only Windows
+    # specific frameworks can consume it.
     incoming_tfm_index = FRAMEWORK_COMPATIBILITY.keys().index(incoming_tfm)
     for tfm in reversed(FRAMEWORK_COMPATIBILITY.keys()[:incoming_tfm_index]):
         if tfm in tfms and (untouched or not framework_platform(tfm) or sets.contains(compatible, tfm)):
@@ -539,8 +537,7 @@ def nuget_framework_to_tfm(framework):
     if framework in FRAMEWORK_COMPATIBILITY:
         return framework
 
-    # A platform specific framework spelled out in full. `net8.0-windows7.0`,
-    # the one platform rules_dotnet supports, is handled above.
+    # A platform specific framework whose base is spelled out in full.
     (base, separator, platform) = framework.partition("-")
     if separator and platform and not base.startswith(".netportable"):
         base_tfm = _nuget_framework_to_tfm(base)
@@ -631,8 +628,7 @@ def tfm_to_nuget_framework(tfm):
     if tfm.startswith("netcoreapp"):
         return ".NETCoreApp" + tfm[len("netcoreapp"):]
 
-    # As `dotnet pack` writes it: with the version of Windows the framework
-    # targets.
+    # `dotnet pack` includes the Windows version: `net8.0-windows7.0`.
     if framework_platform(tfm) == WINDOWS_PLATFORM:
         return "{}-{}{}".format(base_framework(tfm), WINDOWS_PLATFORM, WINDOWS_PLATFORM_VERSION)
 
@@ -885,10 +881,9 @@ def _compute_framework_preprocessor_symbols(tfm):
         if candidate_version <= version:
             defines.append(symbol)
 
-    # GenerateTargetPlatformDefineConstants and
-    # GeneratePlatformCompatibleDefineConstants: the platform, the platform at
-    # its version, and every version of the platform up to that one, of which
-    # 7.0 is the first the SDK knows for Windows.
+    # As the SDK's GenerateTargetPlatformDefineConstants and
+    # GeneratePlatformCompatibleDefineConstants. 7.0 is the first Windows
+    # version the SDK knows, so there are no lower `_OR_GREATER` symbols.
     if framework_platform(tfm) == WINDOWS_PLATFORM and is_net5_or_greater:
         platform = WINDOWS_PLATFORM.upper()
         platform_version = WINDOWS_PLATFORM_VERSION.replace(".", "_")
@@ -1198,15 +1193,13 @@ def shared_framework_version(target_framework, runtime_version):
     return runtime_version if runtime_version.startswith(version + "-") else version
 
 def target_platform(tfm):
-    """The platform a framework targets, as the SDK's assembly attributes name it.
+    """The platform for the `TargetPlatform` and `SupportedOSPlatform` assembly attributes.
 
     Args:
         tfm: The target framework moniker.
 
     Returns:
-        `Windows7.0` for a Windows specific framework from .NET 5 on, which is
-        what the SDK passes `TargetPlatformAttribute` and
-        `SupportedOSPlatformAttribute`; None otherwise.
+        `Windows7.0` for a Windows specific framework, None otherwise.
     """
     if framework_platform(tfm) != WINDOWS_PLATFORM or not is_core_framework(tfm) or tfm_version(tfm) < [5]:
         return None
@@ -1214,11 +1207,10 @@ def target_platform(tfm):
     return "{}{}".format(WINDOWS_PLATFORM.capitalize(), WINDOWS_PLATFORM_VERSION)
 
 def applicable_frameworks(tfm, frameworks):
-    """The shared frameworks a target references, for the framework it is built for.
+    """The shared frameworks that apply to the target framework.
 
-    `<UseWPF>` and `<UseWindowsForms>` leave a .NET Standard build alone, so
-    that a library can target .NET Standard beside a Windows specific
-    framework; on .NET Framework, Windows Forms and WPF are the framework's own.
+    Windows Forms and WPF are ignored on .NET Standard and .NET Framework, so
+    that a library can also target those.
 
     Args:
         tfm: The target framework.
@@ -1233,11 +1225,7 @@ def applicable_frameworks(tfm, frameworks):
     return {framework: profiles for (framework, profiles) in frameworks.items() if framework not in WINDOWS_ONLY_FRAMEWORKS}
 
 def check_windows_frameworks(label, tfm, frameworks, transitively = False):
-    """Fails if Windows Forms or WPF are referenced for a framework that is not Windows specific.
-
-    The SDK's NETSDK1136: from .NET 5 on, a project that uses them, or that
-    references a project or package that does, has to target a Windows specific
-    framework, such as `net8.0-windows`.
+    """Fails if Windows Forms or WPF are used without a Windows specific framework, like NETSDK1136.
 
     Args:
         label: The label of the target, for the message.
@@ -1264,10 +1252,8 @@ _FRAMEWORK_REFERENCES_BY_LOWER_NAME = {name.lower(): value for (name, value) in 
 def runtime_frameworks(assembly_runtime_info, transitive_runtime_deps):
     """The shared frameworks an application runs on, beyond Microsoft.NETCore.App.
 
-    As NuGet and MSBuild hand framework references on through every project
-    and package reference, an application runs on the shared frameworks of
-    every assembly it carries. A framework reference rules_dotnet does not know,
-    which only a NuGet package can make, is left out.
+    These are the framework references of every assembly it carries. Unknown
+    references, which only NuGet packages can make, are ignored.
 
     Args:
         assembly_runtime_info: The application's own DotnetAssemblyRuntimeInfo.
@@ -1309,16 +1295,14 @@ def generate_runtimeconfig(target_framework, frameworks, is_self_contained, roll
 
     base = {
         "runtimeOptions": {
-            # The SDK writes the framework without its platform: `net8.0`
-            # for `net8.0-windows`.
+            # `net8.0` for `net8.0-windows`, as the SDK writes it.
             "tfm": base_framework(target_framework),
             "rollForward": roll_forward_behavior,
         },
     }
 
     if is_self_contained:
-        # As the SDK writes them: the shared frameworks the runtime packs
-        # carry, by the name the host knows them by.
+        # Named as the host knows them: `Microsoft.NETCore.App`, not the runtime pack.
         base["runtimeOptions"]["includedFrameworks"] = [
             {"name": _shared_framework_of_runtime_pack(assembly_runtime_info.name), "version": assembly_runtime_info.version}
             for assembly_runtime_info in runtime_pack_info.assembly_runtime_infos

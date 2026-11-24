@@ -469,9 +469,8 @@ def _ilc_link(ctx, compiled, aot):
         variables = link_variables,
     )
 
-    # The subsystem is the executable's own, which the link below sets as the
-    # SDK does. Bazel's MSVC toolchain sets `/SUBSYSTEM:CONSOLE` on every
-    # executable, which would leave a Windows GUI one with two.
+    # Bazel's MSVC toolchain adds `/SUBSYSTEM:CONSOLE` to every executable;
+    # the subsystem is set below.
     if is_windows:
         toolchain_args = [arg for arg in toolchain_args if not arg.upper().lstrip("/-").startswith("SUBSYSTEM:")]
 
@@ -491,9 +490,7 @@ def _ilc_link(ctx, compiled, aot):
         args.add("/MERGE:hydrated=.bss")
         args.add("/INCREMENTAL:NO")
 
-        # As the SDK's Microsoft.NETCore.Native.Windows.targets has it, a
-        # WinExe gets the Windows GUI subsystem and keeps the console entry
-        # point, which starts the managed Main either way.
+        # As in the SDK, a WinExe keeps the console entry point.
         args.add("/SUBSYSTEM:WINDOWS" if aot.windows_gui else "/SUBSYSTEM:CONSOLE")
         args.add("/ENTRY:wmainCRTStartup")
         args.add("/NOEXP")
@@ -1217,10 +1214,8 @@ def _publish_binary_impl(ctx):
             ctx.attr.runtime_identifier or "<host>",
         ))
 
-    # The binary's runtime pack carries the shared frameworks it references
-    # itself. One a dependency needs, which its runtimeconfig.json asks for,
-    # would be missing from a self-contained publish, and from what ReadyToRun
-    # compiles every assembly against.
+    # The runtime pack only carries the shared frameworks the binary
+    # references itself.
     missing = [framework for framework in binary_info.runtime_frameworks if framework not in binary_info.packed_frameworks]
     if (is_self_contained or ctx.attr.ready_to_run) and missing:
         fail("{}: {} runs on {}, which one of its dependencies references, but a {} publish only takes the runtime packs of the shared frameworks the binary references itself. Add {} to the `framework_references` of {}.".format(

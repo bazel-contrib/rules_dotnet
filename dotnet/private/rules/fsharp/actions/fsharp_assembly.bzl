@@ -113,8 +113,7 @@ def _write_assembly_info_fsharp(actions, label_name, dll_name, version, user_sec
             "[<assembly: Microsoft.Extensions.Configuration.UserSecrets.UserSecretsIdAttribute(\"%s\")>]" % escaped,
         )
     if platform:
-        # As the SDK's GenerateAssemblyInfo writes them for a platform
-        # specific framework.
+        # As the SDK writes them for a platform specific framework.
         lines.extend([
             "[<assembly: System.Runtime.Versioning.TargetPlatform(\"%s\")>]" % platform,
             "[<assembly: System.Runtime.Versioning.SupportedOSPlatform(\"%s\")>]" % platform,

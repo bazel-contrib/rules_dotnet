@@ -48,8 +48,7 @@ _HISTORICAL_BANDS = {
         "rids": _PRE_NET6_RIDS,
         # ASP.NET Core did not ship a win-arm64 runtime pack for 3.0.
         "web_rids": [rid for rid in _PRE_NET6_RIDS if rid != "win-arm64"],
-        # The WindowsDesktop30RuntimePackRids the .NET SDK lists, less win-x86,
-        # which rules_dotnet does not publish for.
+        # The SDK's WindowsDesktop30RuntimePackRids, without win-x86.
         "windowsdesktop_rids": ["win-x64"],
         # crossgen2 first shipped as a package in .NET 5.
         "crossgen2_rids": [],

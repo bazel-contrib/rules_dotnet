@@ -8,8 +8,7 @@ public static class Program
     [System.STAThread]
     public static int Main()
     {
-        // A WPF type and a Windows Forms one, so that the app compiles against
-        // both halves of Microsoft.WindowsDesktop.App.
+        // Uses both WPF and Windows Forms types.
         var thickness = new Thickness(1, 2, 3, 4);
         using var button = new Button { Text = "OK" };
 

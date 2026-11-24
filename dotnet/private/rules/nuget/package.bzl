@@ -19,19 +19,13 @@ load("//dotnet/private/sdk:frameworks.bzl", "framework_platform")
 def _branches(values_by_tfm, groups):
     """The `tfm_*` branches a select needs to give every framework its value.
 
-    A configuration matches the branch of every framework its own is
-    compatible with, and the select takes the most specific. A framework that
-    resolves to no value therefore still needs a branch, or a more general
-    framework's would apply. One whose only predecessor resolves the same needs
-    none: the most specific branch left resolves as it does.
+    A configuration matches the branch of every framework it is compatible
+    with, and select takes the most specific. So a framework needs a branch
+    unless its only predecessor resolves the same.
 
-    A Windows specific framework has two predecessors, `net8.0-windows` both
-    `net8.0` and `net7.0-windows`, which a configuration can match without
-    either being more specific than the other. Where the package has no
-    Windows specific group, no Windows specific framework gets a branch: then
-    none of them resolves unlike the framework it is specific to, whose
-    branches decide alone. Where it has one, every one of them gets a branch,
-    so that the configuration's own always decides.
+    `net8.0-windows` has two predecessors, `net8.0` and `net7.0-windows`, that
+    select cannot rank. So either every Windows specific framework gets a
+    branch, if the package has a Windows specific group, or none does.
 
     Args:
       values_by_tfm: What every framework resolves to.
@@ -105,8 +99,7 @@ def deps_by_tfm(dependency_groups, packages):
 def framework_references_by_tfm(framework_reference_groups):
     """Maps every supported TFM onto the shared frameworks a package needs for it.
 
-    Like dependencies, a package's framework references come in groups per
-    framework, of which the consumer takes the nearest it is compatible with.
+    As for dependencies, a consumer takes the nearest compatible group.
 
     Args:
       framework_reference_groups: Framework reference names keyed by target

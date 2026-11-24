@@ -1,6 +1,5 @@
-# WPF XAML: an application and a control library, compiled with the SDK's own
-# PresentationBuildTasks. `App.xaml` at the root of the package is the
-# application definition, as in a C# project.
+# A WPF application and control library. `App.xaml` at the package root is the
+# application definition.
 
 load("//dotnet:defs.bzl", "csharp_binary", "csharp_library", "csharp_nunit_test")
 
@@ -15,8 +14,7 @@ csharp_library(
     target_frameworks = ["net10.0-windows"],
 )
 
-# A generated page and resource are named by their path in the package, as
-# their sources would be.
+# Generated files are named by their path in the package.
 genrule(
     name = "generated_theme",
     outs = ["Themes/Generated.xaml"],
@@ -33,7 +31,7 @@ genrule(
     cmd = "echo generated > $@",
 )
 
-# WPF resources without any XAML, which MSBuild embeds all the same.
+# WPF resources without XAML.
 csharp_library(
     name = "icons",
     srcs = ["icons/Icons.cs"],

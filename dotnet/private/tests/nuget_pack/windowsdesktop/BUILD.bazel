@@ -1,8 +1,6 @@
-# A WPF library package: consumers get WPF through its framework reference, and
-# its assemblies sit under the folder `dotnet pack` names after the version of
-# Windows the framework targets. Like `dotnet pack`, the package has a group of
-# framework references for every framework once one has any, and the
-# .NET Standard build, which WPF leaves alone, has an empty one.
+# A WPF library package. As with `dotnet pack`, its folders are named
+# `net10.0-windows7.0`, and its .NET Standard build has an empty framework
+# reference group.
 #
 # NU5131 is as for every package with a `ref/` folder.
 
@@ -50,8 +48,7 @@ nuget_pack_test(
     warnings = ["NU5131"],
 )
 
-# A library that references no shared framework, with the WPF library copied
-# in: the package references WPF for it.
+# Bundles the WPF library, so the package references WPF.
 csharp_library(
     name = "shell",
     srcs = ["Shell.cs"],

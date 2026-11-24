@@ -4,8 +4,7 @@ using NUnit.Framework;
 
 namespace WindowsDesktopTests;
 
-// Runs on the Windows Forms and WPF the SDK in use carries, which only a
-// Windows one does.
+// Runs Windows Forms and WPF, which needs Windows.
 [TestFixture]
 public sealed class RunTests
 {

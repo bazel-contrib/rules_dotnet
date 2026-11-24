@@ -39,7 +39,7 @@ DotnetAssemblyRuntimeInfo = provider(
         "appsetting_files": "depset[File]: Appsetting files staged next to the assembly, flattened to their basename.",
         "content_files": "list[struct(file, dest, src)]: Content files staged next to the assembly, where `dest` is each file's path relative to the output directory and `src` is the file it was staged from. Consumers reproduce this layout (e.g. in runfiles or the publish folder).",
         "nuget_info": "NugetInfo",
-        "framework_references": "list[string]: The framework references, such as `Microsoft.AspNetCore.App`, the assembly needs at run time: its own, not its dependencies'. An application runs on the shared frameworks of every assembly it carries.",
+        "framework_references": "list[string]: The framework references of the assembly itself, such as `Microsoft.AspNetCore.App`.",
         "deps": "depset[DotnetAssemblyRuntimeInfo]: The direct and transitive runtime dependencies of the assembly",
         "direct_deps_depsjson_fragment": "struct: A struct containing the direct deps of the target. This is used during deps.json generation and is generated in the provider to avoid making the provider too bloated and thus making analysis slower.",
         "ready_to_run": """list[struct]: The ReadyToRun images of `libs`, when a publish asked for them, or None. Each carries
@@ -95,7 +95,7 @@ NuGetInfo = provider(
     fields = {
         "targeting_pack_overrides": "map[string, string]: Targeting packs like e.g. Microsoft.NETCore.App.Ref have a PackageOverride.txt that includes a list of NuGet packages that should be omitted in a compiliation because they are included in the targeting pack",
         "framework_list": "map[string, string]: Targeting packs like e.g. Microsoft.NETCore.App.Ref have a FrameworkList.xml that includes a list of the DLLs in the targeting pack, and runtime packs a RuntimeList.xml that does the same. This is used for selecting the correct DLL versions during compilation and runtime.",
-        "framework_list_file_versions": "map[string, string]: The file version of each assembly in `framework_list`, which settles a tie between two packs shipping the same assembly version.",
+        "framework_list_file_versions": "map[string, string]: The file version of each assembly in `framework_list`, for breaking ties in assembly version.",
         "framework_list_profiles": "map[string, string]: The `;` separated profiles of each assembly in `framework_list` that is in any, such as `WPF` or `WindowsForms`.",
         "framework_list_analyzer_profiles": "map[string, string]: The `;` separated profiles of each analyzer the FrameworkList.xml lists, keyed by its path inside the package.",
         "sha512": "string: the SHA512 SRI string for the package",
@@ -176,8 +176,8 @@ binary, so a publish copies these rather than laying the tree out a second time.
         "apphost_pack_info": "DotnetApphostPackInfo: The apphost pack for the binary",
         "runtime_pack_info": "DotnetRuntimePackInfo: The runtime pack for the binary",
         "framework_version": "string: The version of the shared frameworks the binary asks for when it is not self-contained",
-        "runtime_frameworks": "list[string]: The shared frameworks beyond Microsoft.NETCore.App the binary runs on: those it references, and those its dependencies do.",
-        "packed_frameworks": "list[string]: The shared frameworks beyond Microsoft.NETCore.App that `runtime_pack_info` carries: those the binary itself references.",
+        "runtime_frameworks": "list[string]: The shared frameworks beyond Microsoft.NETCore.App that the binary and its dependencies reference.",
+        "packed_frameworks": "list[string]: The shared frameworks beyond Microsoft.NETCore.App that the binary itself references, which `runtime_pack_info` carries.",
         "winexe": "bool: True if the binary is a Windows GUI executable (Subsystem.WindowsGui)",
     },
 )

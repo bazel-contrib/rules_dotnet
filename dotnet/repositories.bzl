@@ -135,9 +135,8 @@ filegroup(
     visibility = ["//visibility:public"],
 )
 
-# The tasks that compile WPF XAML, and what they load from the SDK itself rather
-# than from beside them. The net472 copies are for MSBuild.exe on .NET
-# Framework; ours run on the .NET host.
+# PresentationBuildTasks and the assemblies it loads from the SDK. The net472
+# copies are for MSBuild.exe on .NET Framework.
 filegroup(
     name = "wpf_build_tasks",
     srcs = glob(

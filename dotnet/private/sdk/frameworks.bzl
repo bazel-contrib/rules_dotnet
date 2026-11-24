@@ -64,16 +64,13 @@ SDK_NETCOREAPP_FRAMEWORKS = [
 # framework, so that nothing but the SDK limits what a target can build for.
 DEFAULT_TARGET_FRAMEWORK = SDK_NETCOREAPP_FRAMEWORKS[-1]
 
-# The platform of the Windows specific frameworks, and the version of Windows
-# they target: what `-windows` means in a target framework, as the SDK has it.
-# A framework for a later version of Windows, such as
-# `net8.0-windows10.0.19041.0`, compiles against the Windows SDK projections,
-# which rules_dotnet does not provide, so only this one is supported.
+# `-windows` means Windows 7.0. Frameworks for later versions, such as
+# `net8.0-windows10.0.19041.0`, need the Windows SDK projections and are not
+# supported.
 WINDOWS_PLATFORM = "windows"
 WINDOWS_PLATFORM_VERSION = "7.0"
 
-# The Windows specific framework of each .NET release, from .NET 5, which
-# introduced platform specific frameworks: `net8.0-windows`.
+# The Windows specific framework of each .NET release since .NET 5.
 SDK_WINDOWS_FRAMEWORKS = [
     "{}-{}".format(tfm, WINDOWS_PLATFORM)
     for tfm in SDK_NETCOREAPP_FRAMEWORKS
@@ -81,23 +78,18 @@ SDK_WINDOWS_FRAMEWORKS = [
 ]
 
 def base_framework(tfm):
-    """The framework a platform specific one, such as `net8.0-windows`, is specific to.
+    """The target framework without its platform: `net8.0` for `net8.0-windows`.
 
     Args:
       tfm: A target framework moniker.
 
     Returns:
-      The moniker without its platform: `net8.0` for `net8.0-windows`, and
-      any other moniker as it is.
+      The moniker without its platform.
     """
     return tfm.partition("-")[0]
 
 def normalize_platform_framework(tfm):
-    """Spells a Windows specific framework the way rules_dotnet does.
-
-    NuGet writes the platform version a framework targets, `net8.0-windows7.0`;
-    a project leaves it at its default, `net8.0-windows`. Both are the same
-    framework.
+    """Normalizes `net8.0-windows7.0`, as NuGet writes it, to `net8.0-windows`.
 
     Args:
       tfm: A lower cased target framework moniker.
@@ -112,14 +104,13 @@ def normalize_platform_framework(tfm):
     return tfm
 
 def framework_platform(tfm):
-    """The platform a platform specific framework, such as `net8.0-windows`, is for.
+    """The platform of a target framework: `windows` for `net8.0-windows`.
 
     Args:
       tfm: A target framework moniker.
 
     Returns:
-      The platform, `windows` for `net8.0-windows`, or "" for a framework
-      that is not platform specific.
+      The platform, or "" if there is none.
     """
     return tfm.partition("-")[2]
 
@@ -191,12 +182,11 @@ def _compatibility(families):
     return compatibility
 
 def _with_windows_frameworks(compatibility):
-    """Puts each Windows specific framework right after the one it is specific to.
+    """Inserts each Windows specific framework right after its base framework.
 
-    `net8.0-windows` can consume what `net8.0` and `net7.0-windows` can, and
-    nothing `net8.0` can consume can consume it. Placed between `net8.0` and
-    `net9.0`, it sorts the way NuGet ranks the assets of a package for it:
-    `net8.0-windows`, `net8.0`, `net7.0-windows`, `net7.0` and so on.
+    `net8.0-windows` can consume `net8.0` and `net7.0-windows`. The order is
+    the one NuGet prefers package assets in: `net8.0-windows`, `net8.0`,
+    `net7.0-windows`, `net7.0` and so on.
     """
     result = {}
     previous = None

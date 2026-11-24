@@ -1,12 +1,9 @@
-"""What the packs' FrameworkList.xml and RuntimeList.xml say about their assemblies.
+"""Reads the FrameworkList.xml and RuntimeList.xml metadata of packs.
 
-A shared framework can ship an assembly that Microsoft.NETCore.App ships too:
-Microsoft.WindowsDesktop.App's `System.Drawing.dll` and `Microsoft.VisualBasic.dll`
-are the Windows Forms versions of facades Microsoft.NETCore.App also carries.
-The SDK settles which one a compilation and a publish get with its conflict
-resolution, which keeps the higher assembly version, then the higher file
-version. These helpers do the same, so that a compilation and the publish of
-it agree on the file.
+Microsoft.WindowsDesktop.App ships newer copies of some assemblies that
+Microsoft.NETCore.App also ships, such as `System.Drawing.dll`. As in the SDK's
+conflict resolution, the copy with the higher assembly version, then file
+version, wins.
 """
 
 def _version_key(version):
@@ -43,8 +40,7 @@ def framework_assembly_key(nuget_info, name):
 def in_profiles(entry_profiles, profiles):
     """Whether a FrameworkList entry belongs to any of the profiles referenced.
 
-    As the SDK's ResolveTargetingPackAssets has it, an entry in no profile is
-    only part of the whole framework.
+    An entry without a profile is only part of the whole framework.
 
     Args:
       entry_profiles: The entry's `Profile` attribute, `;` separated, or "".

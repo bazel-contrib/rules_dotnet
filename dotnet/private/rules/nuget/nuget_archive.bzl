@@ -851,11 +851,9 @@ def _tfm_alias(name, targets_by_tfm, default_target):
       The alias.
     """
 
-    # A Windows specific framework has two predecessors, `net8.0-windows` both
-    # `net8.0` and `net7.0-windows`, so a configuration for `net9.0-windows`
-    # matches the branches of a package's `net9.0` and `net8.0-windows` alike,
-    # neither more specific than the other. A branch for every framework of
-    # .NET Core resolved as NuGet would leaves its own as the most specific.
+    # `net9.0-windows` matches the branches of both `net9.0` and
+    # `net8.0-windows`, which select cannot rank, so every .NET Core framework
+    # gets a branch, resolved as NuGet would.
     if any([framework_platform(tfm) for tfm in targets_by_tfm]):
         resolved = {}
         for tfm in COR_FRAMEWORKS:

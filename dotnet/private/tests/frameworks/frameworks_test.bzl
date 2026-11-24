@@ -91,8 +91,7 @@ def _compatibility_test_impl(ctx):
     asserts.equals(env, keys.index("net481") + 1, keys.index("netcoreapp1.0"))
     asserts.equals(env, SDK_NETCOREAPP_FRAMEWORKS[-1] + "-windows", keys[-1])
 
-    # A Windows specific framework sits right after the one it is specific to,
-    # so that the table ranks a package's assets as NuGet does.
+    # A Windows specific framework comes right after its base framework.
     for tfm in SDK_WINDOWS_FRAMEWORKS:
         asserts.equals(env, keys.index(base_framework(tfm)) + 1, keys.index(tfm), tfm)
     asserts.equals(env, ["net5.0"], FRAMEWORK_COMPATIBILITY["net5.0-windows"])
@@ -167,7 +166,7 @@ def _windows_frameworks_test_impl(ctx):
     asserts.equals(env, None, get_highest_compatible_target_framework("net9.0", ["net8.0-windows"]))
     asserts.equals(env, "net8.0", get_highest_compatible_target_framework("net9.0", ["net8.0-windows", "net8.0"]))
 
-    # Built directly, a target builds for the newest it lists.
+    # Without a transition, the newest listed framework.
     asserts.equals(env, "net8.0-windows", get_highest_compatible_target_framework(DEFAULT_TARGET_FRAMEWORK, ["net8.0-windows"]))
 
     return unittest.end(env)

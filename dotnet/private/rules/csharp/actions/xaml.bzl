@@ -1,25 +1,17 @@
-"""WPF XAML: pages and an application definition compiled into the assembly.
+"""Compiles WPF XAML with the SDK's PresentationBuildTasks, as Microsoft.WinFX.targets does.
 
-`//dotnet/private/tools/xaml` runs the SDK's own PresentationBuildTasks the way
-Microsoft.WinFX.targets does:
-
-1. MarkupCompilePass1 generates the code behind every XAML file, and compiles
-   to BAML every one that names no type of the assembly being built.
-2. If any does, the sources are compiled into a temporary assembly together
-   with that code, as GenerateTemporaryTargetAssembly does, and
-   MarkupCompilePass2 compiles the rest against it.
-3. ResourcesGenerator embeds every BAML file and WPF resource in
+1. MarkupCompilePass1 generates the code behind each XAML file, and BAML for
+   those that name no type of the assembly being built.
+2. The sources and that code are compiled into a temporary assembly, which
+   MarkupCompilePass2 compiles the remaining XAML against. Whether it is needed
+   is only known after pass1, so it is always compiled.
+3. ResourcesGenerator embeds the BAML and WPF resources in
    `<assembly name>.g.resources`.
-
-The compilation then takes the generated code as sources and embeds the
-resources. Whether a project needs the temporary assembly only shows once pass1
-has run, so it is always compiled.
 """
 
 load("//dotnet/private/sdk:packs.bzl", "WINDOWSDESKTOP_FRAMEWORK")
 
-# What MSBuild calls the application definition a C# project picks up by
-# itself: the `App.xaml` at the root of the project.
+# The application definition a C# project picks up implicitly.
 _APPLICATION_DEFINITION = "App.xaml"
 
 _TASKS_ASSEMBLY = "PresentationBuildTasks.dll"
@@ -38,7 +30,7 @@ def _build_tasks(toolchain, label):
         if file.basename == _TASKS_ASSEMBLY:
             tasks = file
         else:
-            # What the tasks load from the SDK rather than from beside them.
+            # Assemblies the tasks load from the SDK.
             dependencies.append(file)
 
     if tasks == None:
@@ -83,12 +75,9 @@ def check_wpf(label, frameworks, target_framework_is_core, what):
         )
 
 def package_path(file, label):
-    """A file's path relative to the target's package: MSBuild's path relative to the project.
+    """A file's path relative to the package, or its file name if it is outside it.
 
-    It names the file's BAML or resource, and the URI WPF loads it by. A file
-    generated into the package is named as its source would be. One from
-    outside the package is named by its file name, as MSBuild names a file
-    from outside the project.
+    It names the file's BAML or resource, and the URI WPF loads it by.
 
     Args:
       file: A XAML source or WPF resource.
@@ -149,12 +138,10 @@ def xaml_plan(label, xaml_srcs, frameworks, target_framework_is_core):
     return struct(application = application, pages = pages)
 
 def _compiled_path(file, label):
-    """Where the markup compiler puts a XAML file's BAML and code, without extension.
+    """Where the markup compiler writes a XAML file's output, lowercased and without extension.
 
-    As `GetResolvedFilePath` in PresentationBuildTasks: at the file's path
-    relative to the directory the tasks run in, or at its file name if it is
-    outside it. Lowercased, as a Windows file system and the resource names
-    compare them.
+    A file outside the directory the tasks run in, such as a generated one, is
+    written by its file name alone.
     """
     project_dir = _project_dir(label)
     if project_dir == ".":
@@ -235,10 +222,9 @@ def xaml_pass1(actions, label, plan, srcs, out_dir, assembly_name, root_namespac
     return output
 
 def xaml_pass2(actions, label, plan, pass1, temporary_assembly, wpf_resources, out_dir, assembly_name, root_namespace, target, references, tool, toolchain):
-    """Runs MarkupCompilePass2 where pass1 asks for it, then ResourcesGenerator.
+    """Runs MarkupCompilePass2 if pass1 needs it, then ResourcesGenerator.
 
-    Without XAML, only ResourcesGenerator runs, as MSBuild embeds `<Resource>`
-    items whether or not there is any.
+    Without XAML, only ResourcesGenerator runs.
 
     Args:
       actions: The rule's `ctx.actions`.

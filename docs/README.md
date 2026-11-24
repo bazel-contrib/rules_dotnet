@@ -226,8 +226,8 @@ packages from .NET 10 onwards.
 
 ## Shared frameworks
 
-A target references Microsoft.NETCore.App by default. `framework_references`
-adds the other shared frameworks, as MSBuild's `<FrameworkReference>` items do:
+Every target references Microsoft.NETCore.App. `framework_references` adds
+other shared frameworks, like MSBuild's `<FrameworkReference>`:
 
 ```python
 csharp_library(
@@ -238,32 +238,26 @@ csharp_library(
 )
 ```
 
-| Reference | MSBuild |
+| `framework_references` | MSBuild |
 | --- | --- |
-| `Microsoft.AspNetCore.App` | `<FrameworkReference Include="Microsoft.AspNetCore.App" />`, which `project_sdk = "web"` implies |
+| `Microsoft.AspNetCore.App` | `<FrameworkReference Include="Microsoft.AspNetCore.App" />`, implied by `project_sdk = "web"` |
 | `Microsoft.WindowsDesktop.App.WPF` | `<UseWPF>true</UseWPF>` |
 | `Microsoft.WindowsDesktop.App.WindowsForms` | `<UseWindowsForms>true</UseWindowsForms>` |
-| `Microsoft.WindowsDesktop.App` | both, with the assemblies that integrate WPF and Windows Forms |
+| `Microsoft.WindowsDesktop.App` | `<UseWPF>` and `<UseWindowsForms>` together |
 
-A target compiles against the reference assemblies and analyzers of the
-frameworks it references itself, narrowed to the WPF or Windows Forms profile
-where one is named, as in MSBuild. List a framework on every target whose code
-uses it.
+A target only compiles against the frameworks it lists itself, so list a
+framework on every target whose code uses it. A binary runs on the frameworks
+of all its dependencies, NuGet packages included. A self-contained
+`publish_binary` only bundles the frameworks the binary lists, and fails if a
+dependency needs another one.
 
-An application runs on the shared frameworks of everything it carries: its own,
-its dependencies' and those NuGet packages declare in their `.nuspec`. Its
-`runtimeconfig.json` asks for all of them, as MSBuild's does. A self-contained
-`publish_binary` carries the runtime packs of the frameworks the binary itself
-references, so it fails, naming the framework, if a dependency needs one the
-binary does not list.
-
-`nuget_pack` writes a library's framework references into the package, so
-that its consumers get them too.
+`nuget_pack` records a library's framework references in the package, so that
+its consumers get them too.
 
 ## Windows Forms and WPF
 
-From .NET 5 on, Windows Forms and WPF need a Windows specific target framework,
-`net11.0-windows`, as in MSBuild:
+Windows Forms and WPF need a Windows specific target framework, such as
+`net11.0-windows`:
 
 ```python
 csharp_binary(
@@ -276,53 +270,30 @@ csharp_binary(
 )
 ```
 
-A `-windows` framework behaves as it does in MSBuild:
+As in MSBuild, a `-windows` target can depend on targets and NuGet packages
+built for the plain framework, defines the `WINDOWS` preprocessor symbol, and
+cannot be a dependency of a plain framework target. Target frameworks for a
+specific Windows version, such as `net8.0-windows10.0.19041.0`, are not
+supported.
 
-- It can consume what the framework it is specific to can, and NuGet assets for
-  either, preferring `lib/net8.0-windows7.0` to `lib/net8.0` and a newer release
-  to an older Windows specific one.
-- It defines `WINDOWS`, `WINDOWS7_0` and `WINDOWS7_0_OR_GREATER`, and marks the
-  assembly `[TargetPlatform("Windows7.0")]` and `[SupportedOSPlatform("Windows7.0")]`.
-- A plain framework cannot consume it.
+Windows Forms and WPF code builds on any host, but running and publishing it
+needs Windows: `publish_binary` needs a `win-*` `runtime_identifier`. They do
+not support trimming, so `native_aot` cannot publish them.
 
-Only Windows 7.0, the version `-windows` stands for, is supported. A framework
-for a later version, such as `net8.0-windows10.0.19041.0`, compiles against the
-Windows SDK projections, which these rules do not provide, so NuGet assets for
-one are passed over.
-
-Windows Forms and WPF compile on any host: the reference packs are plain NuGet
-packages, as MSBuild's `EnableWindowsTargeting` has it. Running them, and
-publishing them, takes Windows: `publish_binary` needs a `win-*`
-`runtime_identifier`. They do not support trimming, so they cannot be published
-with `native_aot`.
-
-`winexe = True` builds a Windows GUI executable, MSBuild's
-`<OutputType>WinExe</OutputType>`: the assembly, and the apphost, single-file
-host or NativeAOT executable a publish creates for Windows, get the Windows GUI
-subsystem, so that starting the application opens no console window. As in the
-SDK since .NET 6, referencing Windows Forms or WPF does not imply it.
+`winexe = True` builds a GUI application, MSBuild's
+`<OutputType>WinExe</OutputType>`, which starts without a console window. As in
+MSBuild, referencing Windows Forms or WPF does not imply it.
 
 ### XAML
 
-`.xaml` files in `srcs` are compiled with the SDK's own PresentationBuildTasks,
-as `Microsoft.WinFX.targets` compiles them. An `App.xaml` at the root of the
-target's package is the application definition, which generates the
-application's `Main`; every other `.xaml` file is a page. `wpf_resources` are
-MSBuild's `<Resource>` items: embedded in `<assembly name>.g.resources` with the
-compiled XAML, or on their own in a target with none, and addressed by their
-path relative to the package. A generated page or resource is named by its path
-in the package too, and one from outside the package by its file name, as
-MSBuild names a file from outside the project. The markup compiler writes the
-compiled form of a generated page by its file name alone, though, so two
-generated pages of one target, or a generated page and a page at the root of
-the package, cannot share a file name.
+`.xaml` files in `srcs` are compiled as in MSBuild. `App.xaml` at the root of
+the package is the application definition, and every other `.xaml` file is a
+page. `wpf_resources` are MSBuild's `<Resource>` items. Pages and resources are
+addressed by their path relative to the package, including generated ones, and
+by their file name when they come from another package.
 
-XAML that names a type of the assembly being built, such as a value converter
-it declares, is compiled against a temporary assembly of the sources, as MSBuild
-does when it needs one. Here the temporary assembly is always compiled, since
-whether it is needed only shows once the XAML has been read.
-
-Only C# compiles XAML.
+Only C# targets compile XAML, and the generated `.xaml` files of a target need
+distinct file names.
 
 ## Unsupported workloads
 

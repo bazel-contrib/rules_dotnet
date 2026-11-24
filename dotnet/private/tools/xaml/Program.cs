@@ -1,18 +1,12 @@
-// Compiles WPF XAML with the SDK's own PresentationBuildTasks, as the targets in
-// Microsoft.WinFX.targets run them:
+// Compiles WPF XAML with the SDK's PresentationBuildTasks, as Microsoft.WinFX.targets does.
 //
-//   xaml pass1 @<params>  MarkupCompilePass1: the code behind every page, and
-//                         the BAML of every page that names no type of the
-//                         assembly being built.
-//   xaml pass2 @<params>  MarkupCompilePass2, given the temporary assembly
-//                         compiled from the sources and pass1's code: the BAML
-//                         of the pages that do. Then ResourcesGenerator: every
-//                         BAML file and WPF resource into <assembly>.g.resources.
+//   xaml pass1 @<params>  MarkupCompilePass1: the code behind every XAML file,
+//                         and BAML for those that name no local type.
+//   xaml pass2 @<params>  MarkupCompilePass2 against the temporary assembly,
+//                         then ResourcesGenerator.
 //
-// MSBuild runs both in one project directory. Here they are separate actions,
-// each in a sandbox of its own, so pass1's hand-off to pass2, the .lref file,
-// is stored with the execution root and pass1's output directory as
-// placeholders, and pass2 puts its own back.
+// The passes run as separate actions, so the absolute paths in the .lref file
+// that pass1 hands to pass2 are stored as placeholders.
 
 using System;
 using System.Collections.Generic;
@@ -80,9 +74,8 @@ internal static class Program
     private const string ExecRootPlaceholder = "<rules_dotnet:execroot>";
     private const string OutputDirPlaceholder = "<rules_dotnet:output>";
 
-    // What the tasks keep for an incremental build, after the assembly name,
-    // as PresentationBuildTasks names them. The .lref file is also pass1's
-    // hand-off to pass2.
+    // State files the tasks write, after the assembly name. The .lref file is
+    // also pass1's hand-off to pass2.
     private const string StateFile = "_MarkupCompile.cache";
     private const string LocalTypeCacheFile = "_MarkupCompile.lref";
     private static readonly string[] IntellisenseStateFiles = { "_MarkupCompile.i.cache", "_MarkupCompile.i.lref" };
@@ -98,15 +91,15 @@ internal static class Program
         var arguments = args[1].StartsWith('@') ? File.ReadAllLines(args[1][1..]).Where(line => line != "") : new[] { args[1] };
         var options = Options.Parse(arguments);
 
-        // What the tasks load from the SDK rather than from beside them, such
-        // as System.Reflection.MetadataLoadContext.
+        // Assemblies the tasks load from the SDK, such as
+        // System.Reflection.MetadataLoadContext.
         foreach (var dependency in options.TaskDependencies)
         {
             Tasks.Load(dependency);
         }
 
-        // Every path is relative to the execution root, which the tasks are
-        // not run in: they take the directory they run in as the project's.
+        // Paths are relative to the execution root, but the tasks run in the
+        // project directory.
         var execRoot = Directory.GetCurrentDirectory();
         string Absolute(string path) => Path.GetFullPath(path, execRoot);
         options.Tasks = Absolute(options.Tasks);
@@ -125,19 +118,17 @@ internal static class Program
     private static string WithSeparator(string directory) =>
         directory.EndsWith(Path.DirectorySeparatorChar) ? directory : directory + Path.DirectorySeparatorChar;
 
-    // A XAML file or resource, as `<path>|<name>`: the name is its path relative
-    // to the package, which names its BAML or resource and the URI its code
-    // behind loads it from. MSBuild derives it from the item's path relative to
-    // the project, which a generated file under bazel-out has none of, so it is
-    // given as LogicalName, which the tasks take as it is.
+    // A XAML file or resource as `<path>|<name>`. The name, the path relative to
+    // the package, names its BAML or resource and the URI WPF loads it by. It is
+    // passed as LogicalName, since a generated file is outside the project.
     private static (string Path, string Name) Named(string value)
     {
         var separator = value.LastIndexOf('|');
         return (value[..separator], value[(separator + 1)..]);
     }
 
-    // The item the tasks get: named relative to the project where it is in it,
-    // as MSBuild names an item, and by its full path otherwise.
+    // Relative to the project if it is inside it, as MSBuild names items, and
+    // absolute otherwise.
     private static ITaskItem ProjectItem(string value, string projectDir, Func<string, string> absolute)
     {
         var (path, name) = Named(value);
@@ -149,10 +140,8 @@ internal static class Program
         return item;
     }
 
-    // Where pass1 or pass2 writes a XAML file's BAML: under the output directory,
-    // at its path relative to the project, or at its file name if it is
-    // outside it. Keyed to the name its source gives it, so that the BAML file
-    // is named as its source.
+    // Maps where each XAML file's BAML is written to the name it is embedded
+    // under. A file outside the project is written by its file name alone.
     private static Dictionary<string, string> BamlNames(IEnumerable<string> pages, string projectDir, string outputDir, Func<string, string> absolute)
     {
         var names = new Dictionary<string, string>(StringComparer.Ordinal);
@@ -208,13 +197,10 @@ internal static class Program
 
         Tasks.Run(task, "MarkupCompilePass1");
 
-        // Pass1's state for an incremental build holds absolute paths, which
-        // would make what reads this directory miss the cache each time.
-        // Pass2 does not need it.
+        // Holds absolute paths, and pass2 does not need it.
         DeleteState(outputDir, options.AssemblyName, StateFile);
 
-        // Pass2 runs in a sandbox of its own, with its own output directory.
-        // The output directory is inside the execution root, so it goes first.
+        // The output directory is inside the execution root, so it is replaced first.
         Relocate(outputDir + options.AssemblyName + LocalTypeCacheFile, (outputDir, OutputDirPlaceholder), (WithSeparator(execRoot), ExecRootPlaceholder + Path.DirectorySeparatorChar));
 
         return 0;
@@ -226,8 +212,7 @@ internal static class Program
         var outputDir = WithSeparator(absolute(options.OutputDir));
         Directory.CreateDirectory(outputDir);
 
-        // Pass2 adds to what pass1 left, and an action's outputs are its own.
-        // Without XAML there is no pass1, and only the resources are embedded.
+        // Pass2 adds to a copy of pass1's output. Without XAML there is no pass1.
         if (options.Pass1Dir != "")
         {
             CopyDirectory(absolute(options.Pass1Dir), outputDir);
@@ -243,8 +228,7 @@ internal static class Program
         Directory.CreateDirectory(projectDir);
         Directory.SetCurrentDirectory(projectDir);
 
-        // Only a project whose XAML names its own types needs pass2, which
-        // pass1 says by leaving the .lref file.
+        // Pass1 only leaves the .lref file if some XAML names a local type.
         if (File.Exists(outputDir + options.AssemblyName + LocalTypeCacheFile))
         {
             var task = Task(options.Tasks, "MarkupCompilePass2");
@@ -261,12 +245,10 @@ internal static class Program
             Tasks.Run(task, "MarkupCompilePass2");
         }
 
-        // What pass1 and pass2 leave for an incremental build means nothing to
-        // the compilation, and holds absolute paths.
+        // Incremental build state, with absolute paths.
         DeleteState(outputDir, options.AssemblyName, new[] { StateFile, LocalTypeCacheFile }.Concat(IntellisenseStateFiles).ToArray());
 
-        // MainResourcesGeneration: in a stable order, so that the resources file
-        // is too. Each BAML file is named as the XAML it was compiled from.
+        // Sorted, so that the resources file is deterministic.
         var baml = Directory.EnumerateFiles(outputDir, "*.baml", SearchOption.AllDirectories)
             .Select(file =>
             {
@@ -283,8 +265,7 @@ internal static class Program
         Directory.CreateDirectory(Path.GetDirectoryName(resourcesFile)!);
         if (embedded.Length == 0)
         {
-            // Nothing to embed, as for an application definition that holds no
-            // resources. The compilation still embeds the file it was promised.
+            // The compilation embeds the file even when it is empty.
             using var writer = new ResourceWriter(resourcesFile);
             writer.Generate();
             return 0;
@@ -300,8 +281,7 @@ internal static class Program
         return 0;
     }
 
-    // Only the files the tasks name: a XAML file can be named like them, and
-    // its BAML or code must stay.
+    // Exact names, since a XAML file's output can be named like them.
     private static void DeleteState(string outputDir, string assemblyName, params string[] suffixes)
     {
         foreach (var suffix in suffixes)
@@ -334,8 +314,8 @@ internal static class Program
             var target = Path.Combine(to, Path.GetRelativePath(from, file));
             Directory.CreateDirectory(Path.GetDirectoryName(target)!);
 
-            // By content: a copy would keep the read-only mode of an output of
-            // another action, and pass2 writes to these.
+            // By content: File.Copy would keep the read-only mode of another
+            // action's output, and pass2 writes to these.
             File.WriteAllBytes(target, File.ReadAllBytes(file));
         }
     }

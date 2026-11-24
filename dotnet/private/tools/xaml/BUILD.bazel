@@ -3,7 +3,7 @@ load(
     "bootstrap_tool_binary",
 )
 
-# Compiles WPF XAML with the SDK's own PresentationBuildTasks. See Program.cs.
+# Compiles WPF XAML. See Program.cs.
 bootstrap_tool_binary(
     name = "xaml",
     srcs = [

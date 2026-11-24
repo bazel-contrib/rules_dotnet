@@ -106,14 +106,13 @@ def _framework_reference_test_impl(ctx):
     asserts.equals(env, web, framework_reference_group("netcoreapp3.1", web).frameworkReferences)
     asserts.equals(env, "net9.0", framework_reference_group("net9.0", web).targetFramework)
 
-    # Every framework has a group, which is empty where nothing is referenced
-    # or nothing can be.
+    # Empty where nothing is or can be referenced.
     asserts.equals(env, [], framework_reference_group("net9.0", []).frameworkReferences)
     asserts.equals(env, ".NETStandard2.0", framework_reference_group("netstandard2.0", web).targetFramework)
     asserts.equals(env, [], framework_reference_group("netstandard2.0", web).frameworkReferences)
     asserts.equals(env, [], framework_reference_group("netcoreapp2.1", web).frameworkReferences)
 
-    # A reference reached twice, as NuGet compares them, is one.
+    # Deduplicated case-insensitively, as NuGet compares them.
     asserts.equals(env, web, framework_reference_group("net9.0", web + ["microsoft.aspnetcore.app"]).frameworkReferences)
 
     # As the SDK packs them: profiles and all, in a stable order.

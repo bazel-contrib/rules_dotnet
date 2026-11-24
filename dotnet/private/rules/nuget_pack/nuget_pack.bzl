@@ -321,8 +321,7 @@ def _nuget_pack_impl(ctx):
 
         group = dependency_group(tfm, plan.dependencies)
 
-        # What is copied in runs on the shared frameworks it references, which
-        # no package dependency hands on.
+        # Bundled assemblies have no package of their own to declare theirs.
         references = framework_reference_group(tfm, [
             reference
             for info in [runtime_info] + plan.bundled
@@ -404,6 +403,8 @@ def _nuget_pack_impl(ctx):
         metadata = _metadata(ctx, package_id, version),
         packageTypes = [_DOTNET_TOOL_PACKAGE_TYPE] if is_tool else [],
         dependencyGroups = [groups[tfm] for tfm in sorted(groups.keys())],
+        # As in `dotnet pack`, every framework gets a group once any has
+        # references, so that NuGet cannot fall back to another framework's.
         frameworkReferenceGroups = [reference_groups[tfm] for tfm in sorted(reference_groups.keys())] if any([
             reference_group.frameworkReferences
             for reference_group in reference_groups.values()

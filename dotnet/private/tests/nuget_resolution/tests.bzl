@@ -670,8 +670,7 @@ TESTS = [
     ),
     nuget_resolution_test(
         name = "a_windows_framework_takes_a_newer_release_over_older_windows_assets",
-        # Neither framework is more specific than the other for net9.0-windows,
-        # which a select over the two alone could not choose between.
+        # A select could not rank these two for net9.0-windows.
         files = [
             "lib/net8.0-windows7.0/A.dll",
             "lib/net9.0/A.dll",
@@ -692,7 +691,7 @@ TESTS = [
     ),
     nuget_resolution_test(
         name = "a_later_windows_version_is_not_targetable",
-        # It needs the Windows SDK projections, which rules_dotnet does not provide.
+        # Needs the Windows SDK projections, which are not supported.
         files = [
             "lib/net8.0/A.dll",
             "lib/net8.0-windows10.0.19041.0/A.dll",

@@ -68,8 +68,8 @@ _failure_test = analysistest.make(
 def _unit_test_impl(ctx):
     env = unittest.begin(ctx)
 
-    # A file's name in the assembly is its path relative to the package, from
-    # another repository too, and its file name from outside the package.
+    # The path relative to the package, also in another repository, and the
+    # file name outside the package.
     def file(short_path, path = None):
         if path == None:
             path = "external/" + short_path[len("../"):] if short_path.startswith("../") else short_path
@@ -78,7 +78,7 @@ def _unit_test_impl(ctx):
     def generated(short_path):
         return file(short_path, "bazel-out/k8-fastbuild/bin/" + short_path)
 
-    # What `package_path` reads of a label, for this repository and another.
+    # Labels in this repository and in another.
     here = struct(repo_name = "", package = "app", workspace_root = "")
     there = struct(repo_name = "other", package = "app", workspace_root = "external/other")
     asserts.equals(env, "App.xaml", package_path(file("app/App.xaml"), here))
@@ -87,16 +87,15 @@ def _unit_test_impl(ctx):
     asserts.equals(env, "Shared.xaml", package_path(file("lib/Themes/Shared.xaml"), here))
     asserts.equals(env, "Shared.xaml", package_path(file("../other/lib/Shared.xaml"), there))
 
-    # An App.xaml at the root of the package is the application definition,
-    # whichever repository the package is in.
+    # App.xaml at the package root is the application definition, in any repository.
     plan = xaml_plan(there, [file("../other/app/App.xaml"), file("../other/app/Page.xaml")], {"Microsoft.WindowsDesktop.App": ["WPF"]}, True)
     asserts.equals(env, "../other/app/App.xaml", plan.application.short_path)
     asserts.equals(env, ["../other/app/Page.xaml"], [page.short_path for page in plan.pages])
     outside = xaml_plan(here, [file("lib/App.xaml")], {"Microsoft.WindowsDesktop.App": None}, True)
     asserts.equals(env, None, outside.application, "only the package's own App.xaml")
 
-    # Generated XAML is compiled at its file name, which is no collision with a
-    # source file of the same name below the package root.
+    # A generated file does not collide with a source file of the same name
+    # below the package root.
     distinct = xaml_plan(here, [file("app/Themes/Theme.xaml"), generated("app/Themes/Theme.xaml")], {"Microsoft.WindowsDesktop.App": None}, True)
     asserts.equals(env, 2, len(distinct.pages))
 
@@ -117,8 +116,7 @@ _unit_test = unittest.make(_unit_test_impl)
 # buildifier: disable=function-docstring
 # buildifier: disable=unnamed-macro
 def windowsdesktop_tests():
-    # An app on all of Microsoft.WindowsDesktop.App, as `<UseWPF>` and
-    # `<UseWindowsForms>` together have it.
+    # Both WPF and Windows Forms.
     csharp_binary(
         name = "app",
         srcs = ["app/Program.cs"],
@@ -160,7 +158,7 @@ def windowsdesktop_tests():
         analyzers = ["System.Windows.Forms.Analyzers.CSharp.dll"],
     )
 
-    # WPF alone, as `<UseWPF>` has it: none of Windows Forms.
+    # WPF only.
     csharp_library(
         name = "wpf",
         srcs = ["wpf/Wpf.cs"],
@@ -181,7 +179,7 @@ def windowsdesktop_tests():
         ],
     )
 
-    # Windows Forms alone, as `<UseWindowsForms>` has it: none of WPF.
+    # Windows Forms only.
     csharp_library(
         name = "winforms",
         srcs = ["winforms/WinForms.cs"],
@@ -208,8 +206,8 @@ def windowsdesktop_tests():
         deps = [":wpf"],
     )
 
-    # WPF leaves a .NET Standard build alone, so a library can target it
-    # beside a Windows specific framework, and a plain app can use that build.
+    # WPF is ignored on .NET Standard, so a plain app can use that build of a
+    # WPF library.
     csharp_library(
         name = "multi",
         srcs = ["multi/Multi.cs"],
@@ -316,7 +314,7 @@ def windowsdesktop_tests():
         deps = ["//tools/runfiles"],
     )
 
-    # Runs Windows Forms and WPF, which only a Windows SDK carries.
+    # Windows only: runs Windows Forms and WPF.
     csharp_nunit_test(
         name = "run_test",
         srcs = ["RunTests.cs"],
@@ -422,8 +420,7 @@ def windowsdesktop_tests():
         expected_message_fragments = ["a ReadyToRun publish", "Microsoft.WindowsDesktop.App", "framework_references"],
     )
 
-    # The markup compiler places generated XAML by its file name alone, so two
-    # of the same name would overwrite each other's BAML and code.
+    # Generated XAML files are compiled by file name, so two with the same name collide.
     for theme in ["Light", "Dark"]:
         native.genrule(
             name = "colliding_{}_theme".format(theme.lower()),

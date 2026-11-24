@@ -225,10 +225,7 @@ Empty for `_content/<library_name>`, MSBuild's default.""",
             default = {},
         ),
         "framework_references": attr.string_list(
-            doc = """The shared frameworks the package needs, from the `<frameworkReferences>` of its `.nuspec`.
-
-            Every application that carries the package runs on them, as NuGet
-            hands them on to every project that consumes the package.""",
+            doc = """The shared frameworks the package needs, from the `<frameworkReferences>` of its `.nuspec`.""",
             default = [],
         ),
         "sha512": attr.string(

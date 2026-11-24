@@ -231,11 +231,7 @@ Carries the scoped CSS implementation: `ComputeCssScope`, `RewriteCss` and
             cfg = "exec",
         ),
         "wpf_build_tasks": attr.label(
-            doc = """`PresentationBuildTasks` from `Microsoft.NET.Sdk.WindowsDesktop`, and the
-`System.Reflection.MetadataLoadContext` it loads from the SDK.
-
-Compiles WPF XAML: `MarkupCompilePass1`, `MarkupCompilePass2` and
-`ResourcesGenerator`.""",
+            doc = """The SDK's `PresentationBuildTasks`, which compile WPF XAML, and the assemblies they load from the SDK.""",
             mandatory = False,
             allow_files = True,
             cfg = "exec",

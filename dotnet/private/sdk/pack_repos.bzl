@@ -178,7 +178,7 @@ def _targeting(pack_sets):
                 targets.append(("targeting_pack", {
                     "name": tfm,
                     "packs": [nuget_package_label(id, version) for (id, version) in packs],
-                    # `pack id:profile`, as a dict would render as a select.
+                    # As strings: a dict would render as a select.
                     "profiles": [
                         "{}:{}".format(id, profile)
                         for (id, profiles) in targeting_pack_profiles(tfm, frameworks).items()

@@ -4,7 +4,7 @@ using NUnit.Framework;
 
 namespace XamlTests;
 
-// Loads the compiled XAML, which only a Windows SDK's WPF can.
+// Loads the compiled XAML, which needs Windows.
 [TestFixture]
 public sealed class RunXamlTests
 {
@@ -14,8 +14,7 @@ public sealed class RunXamlTests
         string? text = null;
         Exception? failure = null;
 
-        // WPF needs a single-threaded apartment. What the thread throws fails
-        // the test rather than the test process.
+        // WPF needs an STA thread. Its exceptions are reported as test failures.
         var thread = new Thread(() =>
         {
             try

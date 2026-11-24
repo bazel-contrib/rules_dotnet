@@ -9,8 +9,7 @@ def _impl(settings, attr):
     frameworks = resolve_framework_references(attr.project_sdk, getattr(attr, "framework_references", []))
     incoming_target_framework = settings["//dotnet:target_framework"]
 
-    # A platform specific framework, such as `net8.0-windows`, compiles
-    # against the packs of the framework it is specific to.
+    # `net8.0-windows` compiles against the packs of `net8.0`.
     targeting_pack = TARGETING_PACK_LOOKUP_TABLE[attr._pack_set].get(frameworks_key(frameworks), {}).get(base_framework(incoming_target_framework))
     if targeting_pack:
         return dicts.add({"//dotnet/private/sdk/targeting_packs:targeting_pack": targeting_pack}, NO_READY_TO_RUN)

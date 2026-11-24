@@ -177,8 +177,7 @@ def build_binary(ctx, compile_action, toolchain, runtime_toolchain = None, winex
         default_info_files.append(staged)
         additional_runfiles.append(staged)
 
-    # NuGet packages hand their framework references on, so a dependency can
-    # bring Windows Forms or WPF to a binary that does not reference them.
+    # A dependency can bring in Windows Forms or WPF.
     binary_frameworks = runtime_frameworks(runtime_provider, transitive_runtime_deps)
     check_windows_frameworks(ctx.label, tfm, binary_frameworks, transitively = True)
 

@@ -9,8 +9,8 @@ using NUnit.Framework;
 
 namespace XamlTests;
 
-// Reads what the XAML compilation embeds. Nothing here runs WPF, so it checks
-// the compilation on any host.
+// Checks what the XAML compilation embeds without running WPF, so it runs on
+// any host.
 [TestFixture]
 public sealed class XamlResourceTests
 {

@@ -350,8 +350,7 @@ def _framework_references_by_tfm_test_impl(ctx):
 
     actual = framework_references_by_tfm(parse_nuspec(_FRAMEWORK_REFERENCES_NUSPEC).framework_reference_groups)
 
-    # Every framework gets its nearest group, Windows specific ones included,
-    # with no select ambiguous between a release and an older Windows one.
+    # Every framework gets its nearest group, without ambiguous select branches.
     for (tfm, expected) in {
         "net8.0-windows": ["Microsoft.WindowsDesktop.App.WPF"],
         "net6.0-windows": ["Microsoft.WindowsDesktop.App.WPF"],
@@ -365,8 +364,7 @@ def _framework_references_by_tfm_test_impl(ctx):
 
     asserts.equals(env, {"//conditions:default": []}, framework_references_by_tfm({}))
 
-    # Without a Windows specific group, no Windows specific framework needs a
-    # branch: the plain ones decide alone.
+    # Without a Windows specific group, Windows specific frameworks need no branches.
     plain = framework_references_by_tfm({"net6.0": ["Microsoft.AspNetCore.App"]})
     asserts.equals(env, [], [condition for condition in plain if "-windows" in condition])
     asserts.equals(env, ["Microsoft.AspNetCore.App"], _selected(env, plain, "net9.0-windows"))

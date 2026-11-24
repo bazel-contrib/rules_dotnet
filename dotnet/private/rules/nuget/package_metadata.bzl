@@ -74,8 +74,7 @@ def parse_nuspec(content):
             if tfm != None:
                 _add_dependencies(dependency_groups, tfm, group)
 
-    # The shared frameworks a package needs, which NuGet hands on to every
-    # project that consumes it, directly or not.
+    # Framework references flow to every direct and transitive consumer.
     framework_reference_groups = {}
     for group in xml.children(xml.child(metadata, "frameworkReferences"), "group"):
         tfm = nuget_framework_to_tfm(xml.attr(group, "targetFramework") or "")
@@ -117,8 +116,8 @@ def parse_framework_list_metadata(content):
       A struct with, each a dict keyed by lower cased assembly name unless
       said otherwise:
         assemblies: The assembly version of each managed assembly.
-        file_versions: The file version of each managed assembly, which
-          settles a tie between two packs shipping the same assembly version.
+        file_versions: The file version of each managed assembly, for
+          breaking ties in assembly version.
         profiles: The `;` separated profiles of each managed assembly that is
           in any. One in none is only part of the whole framework.
         analyzer_profiles: The `;` separated profiles of each analyzer, keyed

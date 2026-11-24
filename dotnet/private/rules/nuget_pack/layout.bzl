@@ -225,8 +225,7 @@ def library_layout(tfm, rid, compile_info, runtime_info, bundled, symbols, refer
       A struct of `files` and `symbol_files`, each a list of `(path, File)` pairs.
     """
 
-    # As `dotnet pack` names the folder of a Windows specific framework: with
-    # the version of Windows it targets, `net8.0-windows7.0`.
+    # `dotnet pack` names the folder `net8.0-windows7.0`.
     folder = tfm_to_nuget_framework(tfm) if framework_platform(tfm) else tfm
     lib_dir = "lib/" + folder if rid == None else "runtimes/{}/lib/{}".format(rid, folder)
     ref_dir = "ref/" + folder
@@ -518,14 +517,7 @@ def dependency_group(tfm, dependencies):
     )
 
 def framework_reference_group(tfm, framework_references):
-    """The shared frameworks a library's consumers need, for one framework.
-
-    As the SDK packs a project's `<FrameworkReference>` items, profiles and
-    all, so that NuGet hands them on to every project consuming the package.
-    Like `dotnet pack`, a package with any framework references has a group
-    for every framework, empty where it has none: NuGet takes the nearest
-    group a consumer is compatible with, which would otherwise be that of
-    another framework.
+    """The framework reference group of a package for one framework, possibly empty.
 
     Args:
       tfm: The target framework moniker.

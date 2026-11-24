@@ -10,8 +10,8 @@ using NUnit.Framework;
 
 namespace WindowsDesktopTests;
 
-// Reads what the publishes of a Windows Forms and WPF app produce. Nothing here
-// runs the app, so it checks the Windows publishes on any host.
+// Checks the publish output of a Windows Forms and WPF app without running it,
+// so it runs on any host.
 [TestFixture]
 public sealed class PublishTests
 {
@@ -35,8 +35,7 @@ public sealed class PublishTests
     private static string[] FrameworkNames(JsonElement frameworks) =>
         frameworks.EnumerateArray().Select(framework => framework.GetProperty("name").GetString()!).ToArray();
 
-    // The value the SDK's GenerateAssemblyInfo passes an assembly attribute
-    // with one string argument, such as TargetPlatformAttribute.
+    // The string argument of an assembly attribute, such as TargetPlatformAttribute.
     private static string? AssemblyAttribute(string path, string attribute)
     {
         using var stream = File.OpenRead(path);
@@ -116,8 +115,8 @@ public sealed class PublishTests
             Is.EquivalentTo(new[] { "Microsoft.NETCore.App", "Microsoft.WindowsDesktop.App" }));
     }
 
-    // Both shared frameworks ship these two facades. The SDK keeps the higher
-    // assembly version, Windows Forms' own, and so does the compile.
+    // Both shared frameworks ship these facades; the higher assembly version,
+    // Windows Forms', wins.
     [TestCase("System.Drawing.dll", "10.0.0.0")]
     [TestCase("Microsoft.VisualBasic.dll", "10.1.0.0")]
     public void ASelfContainedPublishCarriesTheNewerOfTwoFrameworksFacades(string file, string version)

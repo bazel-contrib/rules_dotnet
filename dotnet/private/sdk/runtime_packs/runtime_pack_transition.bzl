@@ -26,11 +26,9 @@ def _impl(settings, attr):
         if runtime_pack:
             return dicts.add({"//dotnet/private/sdk/runtime_packs:runtime_pack": runtime_pack}, NO_READY_TO_RUN)
 
-        # A Windows only framework has no runtime pack for any other runtime
-        # identifier, but an application on it still builds anywhere, as it
-        # does with the SDK's EnableWindowsTargeting: it only takes a runtime
-        # pack to publish it self-contained, which `publish_binary` asks a
-        # Windows runtime identifier for.
+        # Windows only frameworks have no runtime packs for other runtime
+        # identifiers, but their applications still build there.
+        # `publish_binary` requires a Windows runtime identifier.
         if [framework for framework in frameworks if framework in WINDOWS_ONLY_FRAMEWORKS]:
             return dicts.add({"//dotnet/private/sdk/runtime_packs:runtime_pack": _EMPTY_PACK}, NO_READY_TO_RUN)
 

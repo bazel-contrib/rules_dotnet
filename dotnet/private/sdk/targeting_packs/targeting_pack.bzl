@@ -15,11 +15,7 @@ def _parse_profiles(entries):
     return profiles
 
 def _narrow_analyzers(analyzers, nuget_info, profiles):
-    """The analyzers of a pack narrowed to the profiles referenced.
-
-    As the SDK's ResolveTargetingPackAssets has it, an analyzer the pack's
-    FrameworkList.xml lists is kept only if it belongs to a referenced profile.
-    """
+    """The analyzers of a pack that belong to the referenced profiles."""
     if profiles == None or not nuget_info.framework_list_analyzer_profiles:
         return analyzers
 
@@ -48,9 +44,7 @@ def _targeting_pack_impl(ctx):
     targeting_pack_overrides = {}
     framework_list = {}
 
-    # The key of the copy of each assembly in `framework_list`, so that of two
-    # packs shipping it the newer one wins, as the SDK's conflict resolution has
-    # it, rather than whichever is listed last.
+    # When two packs ship an assembly, the newer copy wins.
     framework_list_keys = {}
     framework_files = []
     analyzers = []
@@ -123,12 +117,10 @@ targeting_pack = rule(
             doc = "List of .Net Targeting Packs that make this pack",
         ),
         "profiles": attr.string_list(
-            doc = """The profiles a pack is narrowed to, as `<pack id>:<profile>` entries.
+            doc = """The profiles to narrow packs to, as `<pack id>:<profile>` entries.
 
-            A pack with none keeps all its reference assemblies and analyzers;
-            one with some keeps those its FrameworkList.xml marks for any of
-            them, as a FrameworkReference to a profile, such as
-            Microsoft.WindowsDesktop.App.WPF, does in the SDK.""",
+            A pack without profiles keeps all its reference assemblies and
+            analyzers.""",
             default = [],
         ),
         "target_framework": attr.string(

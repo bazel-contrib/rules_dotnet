@@ -119,8 +119,7 @@ _FRAMEWORK_TFMS = {
         "netcoreapp3.0",
         "netcoreapp3.1",
     ],
-    # And every .NET Framework, whose own reference assemblies carry Windows
-    # Forms and WPF, and .NET Standard, which they leave alone.
+    # Windows Forms and WPF add no pack on .NET Framework and .NET Standard.
     WINDOWSDESKTOP_FRAMEWORK: [
         "net10.0",
         "net5.0",
@@ -473,8 +472,8 @@ def _framework_references_test_impl(ctx):
     asserts.equals(env, _WEB, resolve_framework_references("default", ["Microsoft.AspNetCore.App"]))
     asserts.equals(env, _WPF, resolve_framework_references("default", ["Microsoft.WindowsDesktop.App.WPF"]))
 
-    # References to one framework add up: profiles to the union of them, and
-    # one without a profile to the whole framework.
+    # References to one framework combine; one without a profile takes the
+    # whole framework.
     asserts.equals(
         env,
         {WINDOWSDESKTOP_FRAMEWORK: ["WPF", "WindowsForms"]},
@@ -486,8 +485,7 @@ def _framework_references_test_impl(ctx):
         resolve_framework_references("default", ["Microsoft.WindowsDesktop.App.WPF", "Microsoft.WindowsDesktop.App"]),
     )
 
-    # Packages are keyed by the frameworks, in a fixed order, profiles only
-    # where they narrow the targeting packs.
+    # Frameworks in a fixed order, with profiles only for targeting packs.
     asserts.equals(env, "default", frameworks_key({}))
     asserts.equals(env, "aspnetcore_windowsdesktop.wpf.windowsforms", frameworks_key(_WEB | {WINDOWSDESKTOP_FRAMEWORK: ["WPF", "WindowsForms"]}))
     asserts.equals(env, "aspnetcore_windowsdesktop", frameworks_key(_WEB | _WPF, profiles = False))

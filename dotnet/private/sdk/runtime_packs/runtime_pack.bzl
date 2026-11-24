@@ -10,11 +10,8 @@ def _assembly_name(file):
 def _without_shadowed_assemblies(runtime_infos, nuget_infos):
     """Drops each assembly that another of the packs ships a newer copy of.
 
-    Every pack lands in the same directory of a self-contained publish, so two
-    copies of an assembly cannot both be there. The SDK keeps the higher
-    assembly version, then the higher file version, as the RuntimeList.xml of
-    each pack gives them; so does this, so that a self-contained publish runs
-    the copy its compilation referenced.
+    All packs share one directory in a self-contained publish. As in the SDK,
+    the copy with the higher assembly version, then file version, wins.
     """
     if len(runtime_infos) < 2:
         return runtime_infos

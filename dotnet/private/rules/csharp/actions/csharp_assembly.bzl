@@ -113,8 +113,7 @@ def _write_assembly_info_csharp(actions, label_name, dll_name, version, user_sec
             "[assembly: Microsoft.Extensions.Configuration.UserSecrets.UserSecretsIdAttribute(\"%s\")]" % escaped,
         )
     if platform:
-        # As the SDK's GenerateAssemblyInfo writes them for a platform
-        # specific framework.
+        # As the SDK writes them for a platform specific framework.
         lines.extend([
             "[assembly: System.Runtime.Versioning.TargetPlatform(\"%s\")]" % platform,
             "[assembly: System.Runtime.Versioning.SupportedOSPlatform(\"%s\")]" % platform,
@@ -553,9 +552,8 @@ def AssemblyAction(
             irefs = irefs,
             framework_files = framework_files,
             resources = resources,
-            # Like the ref-only compile, the temporary assembly reports no
-            # diagnostics, so it skips the SDK's analyzers and keeps the rest,
-            # source generators included.
+            # As in the ref-only compile: no diagnostics, so no SDK analyzers,
+            # but source generators still run.
             analyzers = compile_analyzers,
             analyzers_csharp = ref_only_analyzers_csharp,
             analyzer_configs = analyzer_configs,
@@ -576,7 +574,7 @@ def AssemblyAction(
             toolchain = toolchain,
         )
     elif wpf_resources:
-        # MSBuild embeds `<Resource>` items whether or not there is XAML.
+        # Resources are embedded even without XAML.
         check_wpf(label, frameworks, is_core_framework(target_framework), "`wpf_resources`")
         xaml = xaml_pass2(
             actions,
@@ -842,9 +840,8 @@ def _compile_xaml(
         toolchain = toolchain,
     )
 
-    # GenerateTemporaryTargetAssembly: the sources and pass1's code, with the
-    # source generators, which can define the types the XAML names. Its
-    # diagnostics are the compilation's own, so it reports none.
+    # Like GenerateTemporaryTargetAssembly: the sources and pass1's code, for
+    # pass2 to resolve the types the XAML names.
     temporary_dir = "{}/xaml/temporary".format(out_dir)
     temporary = actions.declare_file("{}/{}.dll".format(temporary_dir, assembly_name))
     _compile(
@@ -1048,8 +1045,8 @@ def _compile(
     # .cs files
     args.add_all(srcs, format_each = "\"%s\"")
 
-    # The code behind XAML, and its BAML and WPF resources under the name WPF
-    # loads them by.
+    # The generated code behind, and `<assembly>.g.resources`, which WPF loads
+    # by that name.
     if xaml:
         if xaml.code:
             args.add_all([xaml.code], map_each = generated_code, format_each = "\"%s\"", expand_directories = True)
