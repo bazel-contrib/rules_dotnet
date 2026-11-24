@@ -50,6 +50,10 @@ set RUNFILES_MANIFEST_ONLY=1
 set DOTNET_MULTILEVEL_LOOKUP="false"
 set DOTNET_NOLOGO="1"
 set DOTNET_CLI_TELEMETRY_OPTOUT="1"
+rem Windows gives every process windir, the Windows directory, which Bazel
+rem leaves out of the environment of a test and of an action. WPF finds the
+rem system fonts by it, and fails to start without it.
+if not defined windir if defined SystemRoot set "windir=!SystemRoot!"
 TEMPLATED_environment
 
 set dotnet_executable="TEMPLATED_dotnet"

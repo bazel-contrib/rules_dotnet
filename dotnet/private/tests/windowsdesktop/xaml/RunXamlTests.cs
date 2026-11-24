@@ -1,3 +1,4 @@
+using System;
 using System.Threading;
 using NUnit.Framework;
 
@@ -11,11 +12,26 @@ public sealed class RunXamlTests
     public void AControlLoadsItsCompiledXaml()
     {
         string? text = null;
-        var thread = new Thread(() => text = new XamlControls.Badge().Text);
+        Exception? failure = null;
+
+        // WPF needs a single-threaded apartment. What the thread throws fails
+        // the test rather than the test process.
+        var thread = new Thread(() =>
+        {
+            try
+            {
+                text = new XamlControls.Badge().Text;
+            }
+            catch (Exception e)
+            {
+                failure = e;
+            }
+        });
         thread.SetApartmentState(ApartmentState.STA);
         thread.Start();
         thread.Join();
 
+        Assert.That(failure, Is.Null, failure?.ToString() ?? "");
         Assert.That(text, Is.EqualTo(XamlControls.Badge.DefaultText));
     }
 }
