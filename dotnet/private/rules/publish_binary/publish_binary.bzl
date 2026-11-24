@@ -367,6 +367,7 @@ def _ilc_compile(ctx, dll, closure, aot):
     if not is_windows:
         args.add("--dehydrate")
     args.add(exports_file, format = "--exportsfile:%s")
+
     # A PE export has to say that it is data rather than code.
     args.add("--export-dynamic-symbol:" + aot.debugger_contract + (",DATA" if is_windows else ""))
     args.add_all(_AOT_INIT_ASSEMBLIES, format_each = "--initassembly:%s")
