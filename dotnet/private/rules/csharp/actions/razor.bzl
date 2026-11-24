@@ -8,9 +8,10 @@ configs. Roslyn forces the split:
     take absolute section names, which are unknown at analysis time.
   * an `.editorconfig` with the per-file `build_metadata.*` settings. It only
     applies to files below its own directory, so the sources are staged there,
-    which also stands in for the `.csproj` directory: a file's `TargetPath`
-    (from which Razor derives its namespace and `@page` route) is its path
-    relative to the package.
+    which also stands in for the `.csproj` directory: a file's `TargetPath` is
+    its path relative to the package. Razor derives a component's namespace
+    from it, and a Razor Page's (`.cshtml`) route; a component's route is the
+    one its `@page` directive states.
 """
 
 load("@bazel_lib//lib:base64.bzl", "base64")
@@ -101,7 +102,8 @@ def target_path(short_path, label):
     """The path of a Razor file relative to the package that declares the target.
 
     This is the Bazel stand-in for a file's path relative to its `.csproj`, and
-    the generator turns it into the component's namespace suffix and route.
+    the generator turns it into a component's namespace suffix and a Razor
+    Page's route.
 
     Args:
       short_path: The `short_path` of the Razor source.
@@ -121,7 +123,7 @@ def target_path(short_path, label):
     if not short_path.startswith(prefix) or path.startswith("../"):
         fail(
             "the Razor source %s is outside the package of %s.\n" % (short_path, label) +
-            "Razor derives a component's namespace and route from its path relative to the " +
+            "Razor derives a component's namespace and a page's route from its path relative to the " +
             "package that compiles it, so the file has to live in that package or below it. " +
             "Move the file, or compile it with a target in its own package and depend on that.",
         )
@@ -233,8 +235,25 @@ def razor_compile_inputs(
 
     staged = []
     sections = []
+    by_target_path = {}
     for src in razor_srcs:
         relative_path = target_path(src.short_path, label)
+
+        # `srcs` holds each file once, so two sources share a `TargetPath` only
+        # when one file is built in two configurations.
+        other = by_target_path.get(relative_path)
+        if other != None:
+            fail(
+                "two Razor sources in %s have the TargetPath %r: %s and %s.\n" % (
+                    label,
+                    relative_path,
+                    other.path,
+                    src.path,
+                ) +
+                "They are one file built in two configurations, and Razor names a component " +
+                "after that path. List the file in one configuration only.",
+            )
+        by_target_path[relative_path] = src
 
         # Symlinked rather than copied: staging costs nothing.
         staged_file = actions.declare_file("%s/%s/%s" % (out_dir, RAZOR_STAGING_DIR, relative_path))

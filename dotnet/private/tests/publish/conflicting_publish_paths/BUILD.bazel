@@ -1,4 +1,5 @@
-load("//dotnet:defs.bzl", "csharp_binary", "csharp_library", "import_library", "publish_binary")
+load("//dotnet:defs.bzl", "csharp_binary", "csharp_library", "dotnet_content_files", "import_library", "nuget_pack", "publish_binary")
+load("//dotnet/private/tests/nuget_pack:nuget_pack_test.bzl", "fails_with_test")
 load(":tests.bzl", "one_file_per_path_test", "publish_conflict_test", "publish_succeeds_test")
 
 # `lib_one` and `lib_two` both build `lib.dll`, and `a` and `b` each see only
@@ -234,4 +235,89 @@ one_file_per_path_test(
     basename = "Shared.dll",
     mnemonic = "Crossgen2Composite",
     target_under_test = ":duplicate_packaged_assemblies_composite",
+)
+
+# A content file's path was chosen, so a package's assembly there is a mistake
+# rather than a duplicate to resolve by order: the content file would silently
+# take the assembly's place, even after a composite image was compiled from the
+# assembly.
+dotnet_content_files(
+    name = "shared_dll_content",
+    srcs = ["pkg_two/lib/net10.0/Shared.dll"],
+    strip_prefix = "pkg_two/lib/net10.0",
+)
+
+csharp_library(
+    name = "with_shared_dll_content",
+    srcs = ["Two.cs"],
+    content_files = [":shared_dll_content"],
+    target_frameworks = ["net10.0"],
+)
+
+csharp_binary(
+    name = "content_over_package_app",
+    srcs = ["NativeMain.cs"],
+    target_frameworks = ["net10.0"],
+    deps = [
+        ":packaged_one",
+        ":with_shared_dll_content",
+    ],
+)
+
+publish_binary(
+    name = "content_over_package_assembly",
+    binary = ":content_over_package_app",
+    tags = ["manual"],
+    target_framework = "net10.0",
+)
+
+publish_conflict_test(
+    name = "content_over_package_assembly_test",
+    size = "small",
+    expected_message_fragments = [
+        "the content file dotnet/private/tests/publish/conflicting_publish_paths/pkg_two/lib/net10.0/Shared.dll of ",
+        ":with_shared_dll_content would be published as \"Shared.dll\", but so would ",
+        "pkg_one/lib/net10.0/Shared.dll.",
+    ],
+    target_under_test = ":content_over_package_assembly",
+)
+
+publish_binary(
+    name = "content_over_package_assembly_composite",
+    binary = ":content_over_package_app",
+    ready_to_run = True,
+    ready_to_run_composite = True,
+    self_contained = True,
+    tags = ["manual"],
+    target_framework = "net10.0",
+)
+
+publish_conflict_test(
+    name = "content_over_package_assembly_composite_test",
+    size = "small",
+    expected_message_fragments = [
+        ":with_shared_dll_content would be published as \"Shared.dll\", but so would ",
+        "pkg_one/lib/net10.0/Shared.dll.",
+    ],
+    target_under_test = ":content_over_package_assembly_composite",
+)
+
+# A tool package ships the binary's publish, so the same clash fails packing.
+nuget_pack(
+    name = "content_over_package_assembly_tool",
+    authors = ["rules_dotnet"],
+    binary = ":content_over_package_app",
+    description = "d",
+    tags = ["manual"],
+    target_frameworks = ["net10.0"],
+)
+
+fails_with_test(
+    name = "content_over_package_assembly_tool_test",
+    size = "small",
+    expected_message_fragments = [
+        ":with_shared_dll_content would be packed as \"tools/net10.0/any/Shared.dll\", but so would ",
+        "pkg_one/lib/net10.0/Shared.dll.",
+    ],
+    target_under_test = ":content_over_package_assembly_tool",
 )

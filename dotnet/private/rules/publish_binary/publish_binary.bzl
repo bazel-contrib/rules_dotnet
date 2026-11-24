@@ -4,7 +4,7 @@ Rule for assembling the publish output of a .NET binary.
 
 load("@bazel_skylib//lib:dicts.bzl", "dicts")
 load("@bazel_skylib//lib:paths.bzl", "paths")
-load("//dotnet/private:common.bzl", "generate_depsjson", "generate_runtimeconfig", "is_from_nuget_package", "netframework_runtime_identifier", "tfm_to_semver", "tfm_version", "to_rlocation_path")
+load("//dotnet/private:common.bzl", "generate_depsjson", "generate_runtimeconfig", "is_from_nuget_package", "netframework_runtime_identifier", "select_runtime_variants", "tfm_to_semver", "tfm_version", "to_rlocation_path")
 load(
     "//dotnet/private:providers.bzl",
     "DotnetAssemblyCompileInfo",
@@ -120,7 +120,9 @@ def _publish_inputs(ctx):
     return struct(
         binary_info = binary_info,
         assembly_info = binary[DotnetAssemblyRuntimeInfo],
-        transitive_runtime_deps = binary_info.transitive_runtime_deps,
+        # One configuration of each library, the one the deps.json lists, so
+        # that a library built for two frameworks is published once.
+        transitive_runtime_deps = select_runtime_variants(binary_info.transitive_runtime_deps),
         # The framework the binary is built for, and so runs on, whatever
         # framework the publish asked for.
         binary_framework = compile_info.target_framework,
@@ -182,17 +184,18 @@ def _native_aot_publish(ctx, publish):
 
     # Nothing managed survives the compile: no deps.json, runtimeconfig or
     # apphost. Native libraries are still loaded at run time.
+    content_files = publish_content_files(ctx.label, assembly_info, publish.transitive_runtime_deps)
     beside = [(file.basename, file) for part in parts for file in part.native] + [
         (file.basename, file)
         for file in assembly_info.appsetting_files.to_list()
     ] + [
         (entry.dest, entry.file)
-        for entry in publish_content_files(ctx.label, assembly_info, publish.transitive_runtime_deps)
+        for entry in content_files
     ] + [
         (entry.publish_path, entry.file)
         for entry in publish.binary_info.static_web_files
     ]
-    reject_conflicting_paths(beside, ctx.label)
+    reject_conflicting_paths(beside, ctx.label, content_files = content_files)
 
     # The runtime is compiled into the executable, so its layer stays empty.
     return _executable_publish(
@@ -246,7 +249,7 @@ def _managed_files(ctx, publish):
 
     # Before any ReadyToRun or copy action is declared, so that a collision
     # names the targets at fault rather than surfacing as conflicting actions.
-    reject_conflicting_paths(layout, ctx.label)
+    reject_conflicting_paths(layout, ctx.label, content_files = assembly_files.content_files)
 
     ready_to_run = _NO_READY_TO_RUN
     if ctx.attr.ready_to_run:

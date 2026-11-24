@@ -176,8 +176,8 @@ collide. A binary's own assets are served from the root.
 `app.MapStaticAssets()` finds them under `bazel run` with no further setup.
 
 Static web assets that come with a NuGet package, such as a packed Razor class
-library, are served from `_content/<package id>`. Referencing the package is all
-that is needed.
+library, are served from `_content/<package id>`, unless the package declares a
+base path of its own. Referencing the package is all that is needed.
 
 ## Blazor WebAssembly
 

@@ -395,6 +395,37 @@ def _own_conflict_test_impl(env, target):
         matching.str_matches("*would stage both*/content/settings.json*/conflict/settings.json*\"settings.json\"*"),
     )
 
+def _conflicting_normalized_destinations(name):
+    # `config/./settings.json` is `config/settings.json`, so two files staged
+    # there must fail rather than overwrite one another.
+    for (suffix, directory, prefix) in [("_a", "content", "config/."), ("_b", "conflict", "config")]:
+        dotnet_content_files(
+            name = name + suffix + "_content",
+            srcs = [directory + "/settings.json"],
+            prefix = prefix,
+            strip_prefix = directory,
+        )
+
+    util.helper_target(
+        csharp_library,
+        name = name + "_target_under_test",
+        srcs = ["Main.cs"],
+        content_files = [name + "_a_content", name + "_b_content"],
+        target_frameworks = ["net6.0"],
+    )
+
+    analysis_test(
+        name = name,
+        impl = _normalized_conflict_test_impl,
+        target = name + "_target_under_test",
+        expect_failure = True,
+    )
+
+def _normalized_conflict_test_impl(env, target):
+    env.expect.that_target(target).failures().contains_predicate(
+        matching.str_matches("*would stage both*/content/settings.json*/conflict/settings.json*\"config/settings.json\"*"),
+    )
+
 def _conflicting_with_binary(name):
     # A library's content file must not silently lose to the binary's own.
     dotnet_content_files(
@@ -494,6 +525,7 @@ def content_files_test_suite(name):
             _shared_content_file,
             _conflicting_libraries,
             _conflicting_own_content_files,
+            _conflicting_normalized_destinations,
             _conflicting_with_binary,
             _cross_package,
             _content_files_rule_csharp,

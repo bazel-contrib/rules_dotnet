@@ -217,14 +217,17 @@ def _pack_tool_frameworks(ctx, split):
 
     files = []
     symbol_files = []
+    content_files = []
     for tfm in tfms:
         layout = _pack_tool(ctx, tfm, split[tfm])
         files += layout.files
         symbol_files += layout.symbol_files
+        content_files += layout.content_files
 
     return struct(
         files = files,
         symbol_files = symbol_files,
+        content_files = content_files,
         # A tool depends on nothing, but an empty group still says which frameworks it runs on.
         target_frameworks = tfms,
         dependency_groups = [dependency_group(tfm, []) for tfm in tfms],
@@ -437,7 +440,7 @@ def _nuget_pack_impl(ctx):
     files = packed.files
     if not is_tool and not packs_analyzer:
         files += _pack_static_web_assets(ctx, first_split, identity.name, package_id, packed.bundled_names)
-    reject_conflicting_paths(files, ctx.label, what = "packed")
+    reject_conflicting_paths(files, ctx.label, what = "packed", content_files = packed.content_files if is_tool else [])
 
     content = content_files_layout(ctx.attr.content_files, ctx.label)
     placed = _placed_files(ctx, content)

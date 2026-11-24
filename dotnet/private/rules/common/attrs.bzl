@@ -40,9 +40,9 @@ COMMON_ATTRS = {
     "content_files": attr.label_list(
         doc = """Data files copied next to the assembly, where the app finds them relative to `AppContext.BaseDirectory`.
 
-        Each file keeps its path relative to this target's package; a file from another package
-        keeps only its file name. To choose the destination paths, list a
-        [`dotnet_content_files`](#dotnet_content_files) target instead.
+        A file in this package's directory or below, a subpackage's included, keeps its path
+        relative to the package; any other file keeps only its file name. To choose the destination
+        paths, list a [`dotnet_content_files`](#dotnet_content_files) target instead.
 
         A library's content files are also copied next to every binary, test and publish that
         depends on it, at the same paths. The build fails if two different files would land on
@@ -63,10 +63,10 @@ COMMON_ATTRS = {
     "resources": attr.label_list(
         doc = """Files to embed in the assembly.
 
-        A file is embedded as `<assembly name>.<path>`, where `<path>` is its path relative to this
-        target's package with `/` replaced by `.`; a file from another package keeps only its file
-        name. `.resx` files are compiled, and culture ones (`Strings.fr.resx`) go into satellite
-        assemblies, as in MSBuild.""",
+        A file is embedded as `<assembly name>.<path>`. For a file in this package's directory or
+        below, a subpackage's included, `<path>` is its path relative to the package with `/`
+        replaced by `.`; for any other file it is the file name. `.resx` files are compiled, and
+        culture ones (`Strings.fr.resx`) go into satellite assemblies, as in MSBuild.""",
         allow_files = True,
         cfg = default_transition,
     ),

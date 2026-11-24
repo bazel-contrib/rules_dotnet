@@ -1,4 +1,4 @@
-load("//dotnet:defs.bzl", "csharp_library")
+load("//dotnet:defs.bzl", "csharp_library", "import_library")
 load(":tests.bzl", "framework_selection_test_suite")
 
 csharp_library(
@@ -31,6 +31,30 @@ csharp_library(
     srcs = ["Consumer.cs"],
     target_frameworks = ["net48"],
     deps = [":net48_and_netstandard"],
+)
+
+csharp_library(
+    name = "windows_only",
+    srcs = ["Lib.cs"],
+    target_frameworks = ["net8.0-windows"],
+)
+
+# Data has no .NET consumer: a library there builds for its newest framework,
+# as on the command line, and not for one the default framework can use.
+import_library(
+    name = "import_with_data",
+    data = [
+        ":net48_and_netstandard",
+        ":windows_only",
+    ],
+    library_name = "ImportWithData",
+)
+
+csharp_library(
+    name = "import_consumer",
+    srcs = ["Consumer.cs"],
+    target_frameworks = ["net8.0"],
+    deps = [":import_with_data"],
 )
 
 framework_selection_test_suite(name = "framework_selection_test")

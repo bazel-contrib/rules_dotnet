@@ -69,6 +69,33 @@ _fails_test = analysistest.make(
     },
 )
 
+def _distinct_files_test_impl(ctx):
+    env = analysistest.begin(ctx)
+
+    # `/resource:"<file>","<manifest name>"`
+    files = {}
+    for action in analysistest.target_actions(env):
+        if action.mnemonic != "CSharpCompile":
+            continue
+        for arg in action.argv:
+            for name in ctx.attr.manifest_names:
+                suffix = "\",\"{}\"".format(name)
+                if arg.startswith("/resource:\"") and arg.endswith(suffix):
+                    files[name] = arg[len("/resource:\""):-len(suffix)]
+
+    asserts.equals(env, sorted(ctx.attr.manifest_names), sorted(files.keys()))
+    asserts.equals(env, len(files), len({file.lower(): None for file in files.values()}), "each resource is compiled to its own file: {}".format(files))
+
+    return analysistest.end(env)
+
+_distinct_files_test = analysistest.make(
+    _distinct_files_test_impl,
+    doc = "Asserts that the C# compile embeds each manifest name from a file of its own, whatever the case.",
+    attrs = {
+        "manifest_names": attr.string_list(),
+    },
+)
+
 def _file(short_path):
     return struct(short_path = short_path, basename = short_path.rpartition("/")[2])
 
@@ -158,6 +185,23 @@ def resx_tests():
         target_under_test = ":duplicate_names",
         expected_message = "would both be embedded as duplicate_names.Strings.resources",
     )
+
+    _distinct_files_test(
+        name = "similar_names_test",
+        target_under_test = ":similar_names",
+        manifest_names = [
+            "similar_names.collide.A+B.resources",
+            "similar_names.collide.A_B.resources",
+            "similar_names.collide.a_b.resources",
+        ],
+    )
+
+    for (attribute, path) in [("logical_name", "resources/Messages.resx"), ("culture", "resources/Messages.fr.resx")]:
+        _fails_test(
+            name = "{}_by_file_name_test".format(attribute),
+            target_under_test = ":{}_by_file_name".format(attribute),
+            expected_message = "use \"{}\"".format(path),
+        )
 
     _fails_test(
         name = "logical_name_of_a_culture_test",

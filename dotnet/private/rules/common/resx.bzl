@@ -180,8 +180,25 @@ def _tasks_assembly(toolchain, label):
         "The SDK is expected to carry it in its own directory.",
     )
 
-def _output_name(manifest_name):
-    return "".join([c if c.isalnum() or c in "._-" else "_" for c in manifest_name.elems()])
+def _output_names(resources):
+    """A distinct file name for each compiled resource, after its manifest name.
+
+    Replacing the characters a file name should not hold can give two manifest
+    names one file name (`A+B`, `A_B`), as can a file system that ignores case
+    (`Strings`, `strings`): a later one is numbered.
+    """
+    names = []
+    taken = {}
+    for resource in resources:
+        stem = "".join([c if c.isalnum() or c in "._-" else "_" for c in resource.manifest_name[:-len(".resources")].elems()])
+        name = stem
+        for number in range(1, len(resources) + 1):
+            if name.lower() not in taken:
+                break
+            name = "{}_{}".format(stem, number)
+        taken[name.lower()] = True
+        names.append(name + ".resources")
+    return names
 
 def _satellite_attributes(culture, version):
     lines = [
@@ -221,8 +238,8 @@ def _generate_resources(actions, label, resx, out_dir, toolchain, references):
     ]
 
     compiled = [
-        (resource, actions.declare_file("{}/resx/{}".format(out_dir, _output_name(resource.manifest_name))))
-        for resource in resx.resources
+        (resource, actions.declare_file("{}/resx/{}".format(out_dir, name)))
+        for (resource, name) in zip(resx.resources, _output_names(resx.resources))
     ]
 
     request = actions.declare_file("{}/resx/request.json".format(out_dir))
@@ -369,12 +386,22 @@ def _satellite_assembly(
 
     return satellite
 
+def _check_key(label, sources, attribute, path):
+    """Fails unless `path`, a key of `attribute`, is the path of one of `sources`."""
+    if path in sources:
+        return
+
+    # Keys of files in a subdirectory of another repository's package used to
+    # be bare file names.
+    matches = [source for source in sources if source.rpartition("/")[2] == path]
+    hint = " Keys are paths relative to the package: use {}.".format(repr(matches[0])) if len(matches) == 1 else ""
+    fail("{}: `{}` names {}, which is not in `srcs`.{}".format(label, attribute, path, hint))
+
 def _resx_resource_impl(ctx):
     sources = {package_relative_path(src, ctx.label): src for src in ctx.files.srcs}
 
     for path, culture in ctx.attr.cultures.items():
-        if path not in sources:
-            fail("{}: `cultures` names {}, which is not in `srcs`.".format(ctx.label, path))
+        _check_key(ctx.label, sources, "cultures", path)
         if culture:
             _check_culture(culture, "`cultures` of {}".format(ctx.label))
 
@@ -387,8 +414,7 @@ def _resx_resource_impl(ctx):
     logical_names = {}
     names = {}
     for path, logical_name in ctx.attr.logical_names.items():
-        if path not in resources:
-            fail("{}: `logical_names` names {}, which is not in `srcs`.".format(ctx.label, path))
+        _check_key(ctx.label, sources, "logical_names", path)
         if logical_name.endswith(".resources"):
             fail("{}: the `logical_names` entry {} ends in `.resources`, which is added to it.".format(ctx.label, logical_name))
         resource = resources[path]

@@ -84,8 +84,9 @@ bool_flag(
 )
 
 # Whether every .NET process the rules start, compilers, tools, binaries and
-# tests alike, runs in globalization-invariant mode.
-# See docs/README.md#globalization-and-icu.
+# tests alike, runs in globalization-invariant mode. A binary, test or tool
+# keeps a DOTNET_SYSTEM_GLOBALIZATION_INVARIANT already in its environment, such
+# as one from `envs` or `--test_env`. See docs/README.md#globalization-and-icu.
 bool_flag(
     name = "invariant_globalization",
     build_setting_default = False,

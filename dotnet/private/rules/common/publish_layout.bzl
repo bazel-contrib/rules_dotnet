@@ -5,7 +5,7 @@ Shared by `publish_binary`, which copies the layout into a directory, and
 package.
 """
 
-load("//dotnet/private:common.bzl", "collect_transitive_content_files", "get_portable_assets", "runtime_target_path")
+load("//dotnet/private:common.bzl", "collect_transitive_content_files", "get_portable_assets", "runtime_target_path", "select_runtime_variants")
 
 def publish_layout(runtime_identifier, binary_info, assembly_files, runtime_pack_files, is_self_contained):
     """Every published file paired with the path it takes inside the publish directory.
@@ -67,20 +67,38 @@ def publish_layout(runtime_identifier, binary_info, assembly_files, runtime_pack
 
     return layout
 
-def reject_conflicting_paths(layout, label, what = "published"):
+def reject_conflicting_paths(layout, label, what = "published", content_files = []):
     """Fails when two files the build produces would take the same path.
 
     Only built files can be renamed. Package files that collide are resolved by
-    order, as the compile actions resolve a duplicate assembly identity.
+    order, as the compile actions resolve a duplicate assembly identity. A
+    content file's path was chosen, though, so any other file there, from a
+    package or not, is a mistake: one of the two would silently replace the
+    other, even an assembly a ReadyToRun image was compiled from.
 
     Args:
       layout: A list of `(path, File)` pairs.
       label: The label of the target being laid out, for the message.
       what: The verb for the message: the files are both "published" or "packed".
+      content_files: The content files in `layout`, as `struct(file, dest, src)`.
     """
+    content = {entry.dest: entry for entry in content_files}
     built = {}
 
     for (path, file) in layout:
+        entry = content.get(path)
+        if entry and entry.file.path != file.path:
+            fail(("{}: the content file {} of {} would be {} as \"{}\", but so would {}.\n\n" +
+                  "Only one file can take a path. Give the content file another " +
+                  "destination, for example with `dotnet_content_files`.").format(
+                label,
+                entry.src.short_path,
+                entry.file.owner,
+                what,
+                path,
+                file.short_path,
+            ))
+
         if file.is_source:
             continue
 
@@ -132,6 +150,9 @@ def collect_assembly_files(label, assembly_info, transitive_runtime_deps, deps_j
     runtime_target_files = []
     data = list(assembly_info.data)
     targets = deps_json_struct["targets"].values()[0]
+
+    # The configuration of each library that the deps.json lists, and no other.
+    transitive_runtime_deps = select_runtime_variants(transitive_runtime_deps)
 
     for dep in transitive_runtime_deps:
         # A file missing from the deps.json is not published: the runtime pack

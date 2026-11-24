@@ -1,5 +1,6 @@
 """The `dotnet_content_files` rule, and resolving the `content_files` attribute to destination paths."""
 
+load("@bazel_skylib//lib:paths.bzl", "paths")
 load("//dotnet/private:common.bzl", "package_relative_path")
 load("//dotnet/private:providers.bzl", "DotnetContentFilesInfo")
 
@@ -26,7 +27,8 @@ def _dotnet_content_files_impl(ctx):
     mappings = []
     seen = {}
     for f in ctx.files.srcs:
-        dest = _remap(package_relative_path(f, ctx.label), strip_prefix, prefix)
+        # Normalized, as Bazel's output paths are: `config/./x` is `config/x`.
+        dest = paths.normalize(_remap(package_relative_path(f, ctx.label), strip_prefix, prefix))
         if dest in seen:
             fail("dotnet_content_files %s: sources %s and %s both map to destination %r; adjust `srcs`, `strip_prefix`, or `prefix` to disambiguate." % (ctx.label, seen[dest], f.short_path, dest))
         seen[dest] = f.short_path
@@ -45,7 +47,7 @@ Reference the target from the `content_files` attribute of a `csharp_library`, `
 `csharp_test`, `fsharp_library`, `fsharp_binary`, or `fsharp_test`. Each file's destination,
 relative to the assembly's directory (`AppContext.BaseDirectory` at run time), is its path
 relative to this target's package with `strip_prefix` removed and `prefix` prepended. A file
-from another package starts from its file name.
+outside this package's directory starts from its file name.
 
 Like the `Link` metadata of an MSBuild
 [`Content`](https://learn.microsoft.com/en-us/visualstudio/msbuild/common-msbuild-project-items#content)

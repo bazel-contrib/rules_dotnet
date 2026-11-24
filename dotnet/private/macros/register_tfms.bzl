@@ -33,9 +33,14 @@ def register_tfms():
         )
 
         # A framework's condition requires every framework it is compatible
-        # with, so that among the frameworks a NuGet package has assets for,
-        # `select` picks the closest: {net6.0, net5.0, ...} is a superset of,
-        # and so takes precedence over, {net5.0, ...}.
+        # with, so that of two matching conditions where one's set contains the
+        # other's, `select` picks the closer: {net6.0, net5.0, ...} takes
+        # precedence over {net5.0, ...}. Sets that are not nested, such as
+        # netcoreapp2.2's and netstandard2.1's for netcoreapp3.0, or
+        # net9.0's and net8.0-windows's for net9.0-windows, make a flat
+        # `select` ambiguous: `_tfm_alias` in nuget_archive.bzl selects within
+        # one framework family at a time and resolves `-windows` frameworks
+        # itself.
         tfm_flags = {":framework_compatible_%s" % f: repr(True) for f in sets.to_list(TRANSITIVE_FRAMEWORK_COMPATIBILITY[framework])}
 
         native.config_setting(

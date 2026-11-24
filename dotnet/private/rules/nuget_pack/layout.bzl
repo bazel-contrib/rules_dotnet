@@ -475,9 +475,14 @@ def tool_layout(tfm, binary_info, runtime_info, assembly_files, depsjson, runtim
         they stay beside the assemblies.
 
     Returns:
-      A struct of `files` and `symbol_files`, each a list of `(path, File)` pairs.
+      A struct of `files` and `symbol_files`, each a list of `(path, File)`
+      pairs, and the `content_files` among `files`, at their package paths.
     """
     prefix = tool_directory(tfm) + "/"
+    content_files = [
+        struct(file = entry.file, dest = prefix + entry.dest, src = entry.src)
+        for entry in assembly_files.content_files
+    ]
 
     files = [
         (prefix + path, file)
@@ -495,8 +500,8 @@ def tool_layout(tfm, binary_info, runtime_info, assembly_files, depsjson, runtim
     ]
 
     if symbols == "snupkg":
-        return struct(files = files, symbol_files = pdbs)
-    return struct(files = files + pdbs, symbol_files = [])
+        return struct(files = files, symbol_files = pdbs, content_files = content_files)
+    return struct(files = files + pdbs, symbol_files = [], content_files = content_files)
 
 def dependency_group(tfm, dependencies):
     """A dependency group of the manifest, as the packer wants it.

@@ -1,13 +1,13 @@
 """Tests the path a Razor component is named after.
 
 `TargetPath` is the source's path relative to the package that compiles it,
-base64-encoded. The generator decodes it and derives the component's namespace
-and `@page` route from it, so both halves are a contract with MSBuild rather
-than an internal detail.
+base64-encoded. The generator decodes it and derives a component's namespace
+and a Razor Page's route from it, so both halves are a contract with MSBuild
+rather than an internal detail.
 """
 
 load("@bazel_lib//lib:base64.bzl", "base64")
-load("@bazel_skylib//lib:unittest.bzl", "asserts", "unittest")
+load("@bazel_skylib//lib:unittest.bzl", "analysistest", "asserts", "unittest")
 load("//dotnet/private/rules/csharp/actions:razor.bzl", "escape_section_name", "razor_lang_version", "target_path")
 
 # `target_path` reads only these two fields off the label.
@@ -85,6 +85,18 @@ def _section_name_test_impl(ctx):
     return unittest.end(env)
 
 section_name_test = unittest.make(_section_name_test_impl)
+
+def _fails_test_impl(ctx):
+    env = analysistest.begin(ctx)
+    asserts.expect_failure(env, ctx.attr.expected_message)
+    return analysistest.end(env)
+
+# Asserts that the target under test fails analysis with `expected_message`.
+fails_test = analysistest.make(
+    _fails_test_impl,
+    expect_failure = True,
+    attrs = {"expected_message": attr.string(mandatory = True)},
+)
 
 def target_path_test_suite(name):
     unittest.suite(

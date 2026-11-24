@@ -1062,19 +1062,99 @@ def _depsjson_runtime_asset(version):
 def _lib_assembly_name(file):
     return file.basename.lower().replace(".dll", "")
 
-def _runtime_pack_conflicts(runtime_pack_info, transitive_runtime_deps):
-    """Decides, for each dependency the runtime pack also ships, which copy the app gets.
+# A .NET application ranks the frameworks it can use in the same order whatever
+# its own version, so the newest framework, which can use them all, ranks a
+# library's configurations for any application. FRAMEWORK_COMPATIBILITY lists
+# it last.
+_ANY_APPLICATION = FRAMEWORK_COMPATIBILITY.keys()[-1]
 
-    As in MSBuild, the dependency wins only when it is newer than the runtime
-    pack. One that sets no version is never newer.
+def _library_identity(dep):
+    """What every configuration of one library shares: its package or its target."""
+    if is_from_nuget_package(dep):
+        return dep.nuget_info.nupkg.path
+    files = dep.libs + dep.native
+    return str(files[0].owner) if files else None
+
+def _variant_framework(dep):
+    """The framework a configuration was built, or its package's assets picked, for.
+
+    Read off the assembly's folder, `<target>/<tfm>/` or a package's `lib/<tfm>/`.
+    """
+    if not dep.libs:
+        return None
+    folder = dep.libs[0].dirname.rpartition("/")[2]
+    return folder if folder in FRAMEWORK_COMPATIBILITY else None
+
+def _preferred_variant(variants):
+    """The position of the configuration an application loads, as NuGet would pick its assets."""
+    by_framework = {}
+    for (position, dep) in enumerate(variants):
+        framework = _variant_framework(dep)
+        if framework:
+            by_framework.setdefault(framework, position)
+
+    chosen = get_dependency_target_framework(_ANY_APPLICATION, by_framework.keys())
+    return by_framework[chosen] if chosen else 0
+
+def select_runtime_variants(transitive_runtime_deps):
+    """Keeps one configuration of each library: the one the application loads.
+
+    A library is built once per framework its consumers ask for, so a .NET
+    application can reach a multi-targeted library both as `netstandard2.0`
+    and, through a .NET Framework library, as `net48`. Only one `Shared.dll`
+    can be loaded or published, and deps.json and the publish have to agree on
+    it: the nearest framework, .NET Framework only when nothing else fits.
+
+    Different targets that build the same assembly are all kept, for the
+    publish to report.
+
+    Args:
+        transitive_runtime_deps: The application's `DotnetAssemblyRuntimeInfo`s.
+
+    Returns:
+        `transitive_runtime_deps`, in order, without the other configurations.
+    """
+    by_library = {}
+    for (index, dep) in enumerate(transitive_runtime_deps):
+        by_library.setdefault("{}/{}".format(dep.name, dep.version), []).append(index)
+
+    dropped = {}
+    for indices in by_library.values():
+        if len(indices) == 1:
+            continue
+
+        by_identity = {}
+        for index in indices:
+            identity = _library_identity(transitive_runtime_deps[index])
+            if identity != None:
+                by_identity.setdefault(identity, []).append(index)
+
+        for variants in by_identity.values():
+            kept = variants[_preferred_variant([transitive_runtime_deps[index] for index in variants])]
+            for index in variants:
+                if index != kept:
+                    dropped[index] = None
+
+    if not dropped:
+        return transitive_runtime_deps
+    return [dep for (index, dep) in enumerate(transitive_runtime_deps) if index not in dropped]
+
+def _runtime_pack_conflicts(runtime_pack_info, transitive_runtime_deps):
+    """Decides, for each assembly the runtime pack and a dependency both ship, which copy the app gets.
+
+    One copy per name, the newest. As in MSBuild, a dependency replaces the
+    pack's copy only when it is newer, and one that sets no version is never
+    newer. Of several dependencies of that name, the newest replaces the others
+    too, so that exactly one copy is published.
 
     Args:
         runtime_pack_info: The `DotnetRuntimePackInfo` of a self-contained app.
         transitive_runtime_deps: The app's `DotnetAssemblyRuntimeInfo`s.
 
     Returns:
-        A pair of dicts keyed by lower-cased assembly name: the dependencies
-        that replace the pack's copy, and those the pack's copy replaces.
+        A dict keyed by the lower-cased name of every such assembly: the
+        `<name>/<version>` of the dependency whose copy the app loads, or None
+        when it loads the pack's.
     """
 
     # Every pack of a runtime release shares the release's version.
@@ -1085,18 +1165,18 @@ def _runtime_pack_conflicts(runtime_pack_info, transitive_runtime_deps):
         for lib in info.libs
     }
 
-    dependency_wins = {}
-    pack_wins = {}
+    winners = {}
+    newest = {}
     for dep in transitive_runtime_deps:
         name = dep.name.lower()
         if name not in pack_assemblies:
             continue
-        if nuget_version.is_newer(dep.version, pack_version):
-            dependency_wins[name] = None
-        else:
-            pack_wins[name] = None
+        winners.setdefault(name, None)
+        if nuget_version.is_newer(dep.version, newest.get(name, pack_version)):
+            newest[name] = dep.version
+            winners[name] = "{}/{}".format(dep.name, dep.version)
 
-    return (dependency_wins, pack_wins)
+    return winners
 
 def _depsjson_library(runtime_dep, library_name, use_relative_paths):
     """The `libraries` entry of a dependency."""
@@ -1216,9 +1296,11 @@ def generate_depsjson(
         "libraries": libraries,
     }
 
-    pack_wins = {}
+    transitive_runtime_deps = select_runtime_variants(transitive_runtime_deps)
+
+    pack_conflicts = {}
     if is_self_contained:
-        (dependency_wins, pack_wins) = _runtime_pack_conflicts(runtime_pack_info, transitive_runtime_deps)
+        pack_conflicts = _runtime_pack_conflicts(runtime_pack_info, transitive_runtime_deps)
 
         for assembly_runtime_info in runtime_pack_info.assembly_runtime_infos:
             runtime_pack_name = "runtimepack.{}/{}".format(assembly_runtime_info.name, assembly_runtime_info.version)
@@ -1228,7 +1310,7 @@ def generate_depsjson(
                 "sha512": "",
             }
             targets[runtime_pack_name] = {
-                "runtime": {dll.basename: {} for dll in assembly_runtime_info.libs if _lib_assembly_name(dll) not in dependency_wins},
+                "runtime": {dll.basename: {} for dll in assembly_runtime_info.libs if pack_conflicts.get(_lib_assembly_name(dll)) == None},
                 "native": {native_file.basename: {} for native_file in assembly_runtime_info.native},
             }
 
@@ -1242,15 +1324,15 @@ def generate_depsjson(
     for runtime_dep in [target_assembly_runtime_info] + transitive_runtime_deps:
         library_name = "{}/{}".format(runtime_dep.name, runtime_dep.version)
 
-        # The same library can be reached more than once, e.g. built for two
-        # frameworks. The first in depset order is the most compatible with the
-        # rest of the graph, since the transitions only allow compatible ones.
+        # Two targets can build the same assembly. Only the first is listed; a
+        # publish fails on the pair.
         if library_name in libraries:
             continue
 
         libraries[library_name] = _depsjson_library(runtime_dep, library_name, use_relative_paths)
-        if runtime_dep.name.lower() in pack_wins:
-            # The runtime pack's copy is the one the app loads.
+        name = runtime_dep.name.lower()
+        if name in pack_conflicts and pack_conflicts[name] != library_name:
+            # The app loads the runtime pack's copy, or a newer dependency's.
             targets[library_name] = {"dependencies": runtime_dep.direct_deps_depsjson_fragment}
         else:
             targets[library_name] = _depsjson_target(ctx, runtime_dep, is_self_contained, use_relative_paths, portable)
@@ -1625,8 +1707,8 @@ def embedded_resource_name(file, target_label, out_dll):
     """The manifest name a resource file is embedded under, as MSBuild names it.
 
     `<assembly name>.<path>`, where `<path>` is the file's path relative to the
-    target's package with `/` replaced by `.`. A file from another package or
-    repository keeps only its basename.
+    target's package directory with `/` replaced by `.`; a subpackage's file
+    counts. A file outside that directory keeps only its basename.
 
     Args:
         file: (File) The file to embed.

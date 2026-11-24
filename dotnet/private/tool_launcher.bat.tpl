@@ -56,6 +56,9 @@ rem Unquoted: cmd keeps quotes as part of the value.
 set DOTNET_MULTILEVEL_LOOKUP=false
 set DOTNET_NOLOGO=1
 set DOTNET_CLI_TELEMETRY_OPTOUT=1
+rem The toolchain carries one runtime, so a tool built for an older major
+rem release runs on it, as `dotnet tool install --allow-roll-forward` lets it.
+if not defined DOTNET_ROLL_FORWARD set DOTNET_ROLL_FORWARD=Major
 TEMPLATED_environment
 
 call :rlocation "TEMPLATED_dotnet" dotnet_executable

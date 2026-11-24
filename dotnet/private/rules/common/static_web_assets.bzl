@@ -1,8 +1,8 @@
 """Static web assets: the files a web target serves.
 
 As in MSBuild, an asset under `wwwroot` is served at its path relative to it,
-and a library's assets are served under `_content/<assembly name>` while an
-application's sit at the root.
+and an application's assets sit at the root while a library's are served under
+its base path: `_content/<assembly name>` unless a package declares its own.
 
 A binary materializes its transitive assets into a `wwwroot` tree, the layout
 `dotnet publish` produces, rather than a `staticwebassets.runtime.json` pointing

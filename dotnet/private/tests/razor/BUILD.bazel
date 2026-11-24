@@ -3,7 +3,8 @@ load(
     "csharp_library",
     "csharp_test",
 )
-load(":target_path_test.bzl", "target_path_test_suite")
+load(":target_path_test.bzl", "fails_test", "target_path_test_suite")
+load(":two_configurations.bzl", "in_two_configurations")
 
 # `Widget.razor` and `Pages/Widget.razor` share a file name and differ only by
 # directory: an editorconfig section that is not anchored to the config's own
@@ -68,3 +69,33 @@ csharp_test(
 )
 
 target_path_test_suite(name = "target_path_test")
+
+# The same generated component built in two configurations: two files with one
+# `TargetPath`.
+genrule(
+    name = "generated_widget",
+    outs = ["Generated.razor"],
+    cmd = "echo '<p>generated</p>' > $@",
+    tags = ["manual"],
+)
+
+in_two_configurations(
+    name = "generated_widget_twice",
+    src = ":generated_widget",
+    other = ":generated_widget",
+    tags = ["manual"],
+)
+
+csharp_library(
+    name = "same_target_path",
+    srcs = [":generated_widget_twice"],
+    project_sdk = "razor",
+    tags = ["manual"],
+    target_frameworks = ["net10.0"],
+)
+
+fails_test(
+    name = "same_target_path_test",
+    expected_message = 'have the TargetPath "Generated.razor"',
+    target_under_test = ":same_target_path",
+)

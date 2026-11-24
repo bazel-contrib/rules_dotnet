@@ -97,13 +97,19 @@ dotnet_tool = rule(
 
 `bazel run` runs the tool in the directory it was invoked from.
 
+The tool runs on the one .NET runtime the toolchain carries, for the newest of
+its frameworks that is no newer than that runtime. A tool for an older major
+release rolls forward onto the runtime, as `dotnet tool install
+--allow-roll-forward` lets it (`DOTNET_ROLL_FORWARD=Major`), unless
+`DOTNET_ROLL_FORWARD` is already set in the environment.
+
 Prefer adding the tool to `paket.dependencies`: every dotnet tool in a
 dependency group is then available as `@paket.<group>//<package>/tools:<command>`
 without declaring this rule.
 """,
     attrs = {
         "target_frameworks": attr.string_list(
-            doc = "The frameworks the package ships the tool for. The newest one the toolchain's runtime can run is used.",
+            doc = "The frameworks the package ships the tool for. The newest one no newer than the toolchain's runtime is used.",
             mandatory = True,
         ),
         "entrypoint": attr.string_dict(

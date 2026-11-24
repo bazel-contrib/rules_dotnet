@@ -38,6 +38,11 @@ def _batch_stops_on_failure_test_impl(ctx):
         directories = ["out/empty"],
     )
 
+    # So that a script missing its commands cannot pass: four directories, for
+    # `out/empty`, `out`, `out/sub` and the tree, and three copies.
+    asserts.equals(env, 4, len([line for line in lines if "mkdir " in line]), "mkdir commands")
+    asserts.equals(env, 3, len([line for line in lines if "copy /Y " in line]), "copy commands")
+
     for line in lines[1:]:
         asserts.true(env, line.endswith(" || exit /b 1"), "does not stop on failure: " + line)
 
