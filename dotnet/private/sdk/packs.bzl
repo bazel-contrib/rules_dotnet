@@ -351,6 +351,29 @@ def nativeaot_pack(tfm, rid, *, bands):
         bands[tfm]["ilcompiler"],
     )
 
+def ilcompiler_build_pack(tfm, rid, *, bands):
+    """Returns the package holding what the SDK's own build feeds ilc.
+
+    ilc and the runtime ship per runtime identifier; the MSBuild targets that
+    drive them, and the data files those targets hand to ilc, ship once in a
+    package of their own. Only a Windows publish reads anything from it: the
+    list of Windows APIs that are safe to bind directly.
+
+    Args:
+      tfm: The target framework.
+      rid: The runtime identifier being published for.
+      bands: The bands to take versions from: `PACK_BANDS` where only which
+        packs exist matters.
+
+    Returns:
+      A (package id, version) tuple, or None if the publish needs nothing
+      from the package.
+    """
+    if rid not in aot_pack_rids(tfm) or not rid.startswith("win-"):
+        return None
+
+    return ("Microsoft.DotNet.ILCompiler", bands[tfm]["ilcompiler"])
+
 def runtime_pack_rids(tfm, project_sdk = DEFAULT_SDK):
     """Returns the runtime identifiers a target framework shipped packs for.
 

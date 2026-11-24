@@ -244,15 +244,15 @@ toolchain is resolved through Bazel's standard mechanism and requested
 optionally, so a build that never publishes NativeAOT does not need one to
 exist.
 
-The binary has to be built for .NET 10 or later, and Windows AOT is not supported yet.
+The binary has to be built for .NET 10 or later.
 
 ### Recommended: a hermetic toolchain
 
 The [`llvm`](https://registry.bazel.build/modules/llvm) module supplies a
 hermetic LLVM toolchain and downloads Apple's official SDK for Apple targets, so
-NativeAOT builds the same way on every machine and can cross-compile — a
+NativeAOT builds the same way on Linux and macOS and can cross-compile — a
 `linux-x64` binary from macOS, say, with nothing installed on the host. It is
-what `rules_dotnet` uses for its own test suite.
+what `rules_dotnet` uses for its own test suite on Unix.
 
 ```starlark
 bazel_dep(name = "llvm", version = "0.8.19")
@@ -281,8 +281,13 @@ osx_sysroot.frameworks(names = [
 Any registered C/C++ toolchain works, including the one Bazel auto-configures
 from the host compiler. That needs a working toolchain on every machine that
 publishes NativeAOT — Xcode's command line tools on macOS, clang or gcc on
-Linux — and it cannot cross-compile, because a host toolchain only targets its
-own platform.
+Linux, or Visual Studio's C++ build tools on Windows — and it cannot
+cross-compile, because a host toolchain only targets its own platform.
+
+A Windows publish is linked the way the .NET SDK links it, so the toolchain has
+to link with `link.exe` or `lld-link`: MSVC or clang-cl, not MinGW. The
+executable links the C runtime statically and needs no Visual C++
+redistributable, whichever compilation mode Bazel builds in.
 
 ## Single-file executables
 
