@@ -10,13 +10,14 @@ that framework that ships it.
 load("@bazel_skylib//lib:dicts.bzl", "dicts")
 load("//dotnet/private:common.bzl", "FRAMEWORK_COMPATIBILITY", "get_highest_compatible_runtime_identifier")
 load("//dotnet/private:providers.bzl", "DotnetAssemblyRuntimeInfo", "DotnetRuntimePackInfo", "DotnetToolPackInfo")
+load("//dotnet/private/sdk:frameworks.bzl", "base_framework")
 load("//dotnet/private/sdk:packs.bzl", "RUNTIME_PACK_LOOKUP_TABLE")
 load(
     "//dotnet/private/transitions:common.bzl",
     "FRAMEWORK_COMPATABILITY_TRANSITION_OUTPUTS",
     "NO_READY_TO_RUN",
     "READY_TO_RUN_FRAMEWORK",
-    "READY_TO_RUN_PROJECT_SDK",
+    "READY_TO_RUN_SHARED_FRAMEWORKS",
 )
 
 DotnetReadyToRunToolsInfo = provider(
@@ -237,6 +238,7 @@ def with_ready_to_run_images(ctx, runtime_info):
         appsetting_files = runtime_info.appsetting_files,
         content_files = runtime_info.content_files,
         nuget_info = runtime_info.nuget_info,
+        framework_references = getattr(runtime_info, "framework_references", None) or [],
         deps = runtime_info.deps,
         direct_deps_depsjson_fragment = runtime_info.direct_deps_depsjson_fragment,
         ready_to_run = compile_ready_to_run_images(ctx.actions, tools, ctx.label, runtime_info.libs, runtime_info.deps),
@@ -275,14 +277,14 @@ _pin_framework = transition(
 )
 
 def _runtime_pack_impl(settings, _attr):
-    project_sdk = settings[READY_TO_RUN_PROJECT_SDK]
+    shared_frameworks = settings[READY_TO_RUN_SHARED_FRAMEWORKS]
     target_framework = settings["//dotnet:target_framework"]
-    by_rid = RUNTIME_PACK_LOOKUP_TABLE.get(project_sdk, {}).get(target_framework, {})
+    by_rid = RUNTIME_PACK_LOOKUP_TABLE.get(shared_frameworks, {}).get(base_framework(target_framework), {})
     pack = by_rid.get(get_highest_compatible_runtime_identifier(settings["//dotnet:rid"], by_rid.keys()))
 
     if not pack:
         fail("No runtime pack to compile ReadyToRun images against for {}/{}/{}".format(
-            project_sdk,
+            shared_frameworks,
             target_framework,
             settings["//dotnet:rid"],
         ))
@@ -291,7 +293,7 @@ def _runtime_pack_impl(settings, _attr):
 
 _runtime_pack_transition = transition(
     implementation = _runtime_pack_impl,
-    inputs = [READY_TO_RUN_PROJECT_SDK, "//dotnet:target_framework", "//dotnet:rid"],
+    inputs = [READY_TO_RUN_SHARED_FRAMEWORKS, "//dotnet:target_framework", "//dotnet:rid"],
     outputs = ["//dotnet/private/sdk/runtime_packs:runtime_pack"] + NO_READY_TO_RUN.keys(),
 )
 

@@ -2,6 +2,7 @@
 Rule for compiling F# binaries.
 """
 
+load("@bazel_skylib//lib:dicts.bzl", "dicts")
 load("@bazel_skylib//rules:common_settings.bzl", "BuildSettingInfo")
 load(
     "//dotnet/private:common.bzl",
@@ -11,11 +12,12 @@ load(
     "is_debug",
     "targets_windows",
 )
-load("//dotnet/private/rules/common:attrs.bzl", "FSHARP_BINARY_COMMON_ATTRS")
+load("//dotnet/private/rules/common:attrs.bzl", "FSHARP_BINARY_COMMON_ATTRS", "WINEXE_ATTRS")
 load("//dotnet/private/rules/common:binary.bzl", "BINARY_OUTPUT_GROUPS_DOC", "build_binary")
 load("//dotnet/private/rules/common:resx.bzl", "split_resources")
 load("//dotnet/private/rules/content_files:content_files.bzl", "resolve_content_file_mappings")
 load("//dotnet/private/rules/fsharp/actions:fsharp_assembly.bzl", "AssemblyAction")
+load("//dotnet/private/sdk:packs.bzl", "resolve_framework_references")
 load("//dotnet/private/transitions:tfm_transition.bzl", "tfm_transition")
 
 def _compile_action(ctx, tfm, toolchain):
@@ -43,7 +45,7 @@ def _compile_action(ctx, tfm, toolchain):
         content_file_mappings = resolve_content_file_mappings(ctx.attr.content_files, ctx.label.package),
         compile_data = ctx.files.compile_data,
         out = ctx.attr.out,
-        target = "exe",
+        target = "winexe" if ctx.attr.winexe else "exe",
         target_name = ctx.attr.name,
         target_framework = tfm,
         version = ctx.attr.version,
@@ -58,17 +60,18 @@ def _compile_action(ctx, tfm, toolchain):
         nowarn = ctx.attr.nowarn,
         nullable = ctx.attr.nullable,
         project_sdk = ctx.attr.project_sdk,
+        frameworks = resolve_framework_references(ctx.attr.project_sdk, getattr(ctx.attr, "framework_references", [])),
         compiler_options = ctx.attr.compiler_options,
         is_windows = targets_windows(ctx),
     )
 
 def _binary_private_impl(ctx):
-    return build_binary(ctx, _compile_action, get_toolchain(ctx))
+    return build_binary(ctx, _compile_action, get_toolchain(ctx), winexe = ctx.attr.winexe)
 
 fsharp_binary = rule(
     _binary_private_impl,
     doc = """Compile a F# exe""" + BINARY_OUTPUT_GROUPS_DOC,
-    attrs = FSHARP_BINARY_COMMON_ATTRS,
+    attrs = dicts.add(FSHARP_BINARY_COMMON_ATTRS, WINEXE_ATTRS),
     executable = True,
     toolchains = [
         "//dotnet/toolchain:toolchain_type",

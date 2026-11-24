@@ -6,7 +6,7 @@ load(
     "FRAMEWORK_COMPATIBILITY",
     "get_highest_compatible_target_framework",
 )
-load("//dotnet/private/sdk:packs.bzl", "normalize_project_sdk")
+load("//dotnet/private/sdk:packs.bzl", "frameworks_key", "resolve_framework_references")
 load(
     "//dotnet/private/transitions:common.bzl",
     "FRAMEWORK_COMPATABILITY_TRANSITION_OUTPUTS",
@@ -14,7 +14,7 @@ load(
     "NO_READY_TO_RUN",
     "PUBLISHED",
     "READY_TO_RUN_FRAMEWORK",
-    "READY_TO_RUN_PROJECT_SDK",
+    "READY_TO_RUN_SHARED_FRAMEWORKS",
     "TFM_RID_TRANSITION_OUTPUTS",
     "TRIMMED",
     "platform_to_rid",
@@ -26,7 +26,7 @@ def _ready_to_run(settings, attr, transitioned_tfm):
 
     The published binary keeps the native compiler its publish asked for and
     whether the publish trims it, and names the runtime the images below it are
-    compiled against: its own framework and project SDK. Everything else passes
+    compiled against: its own framework and shared frameworks. Everything else passes
     the framework on.
     """
 
@@ -39,14 +39,17 @@ def _ready_to_run(settings, attr, transitioned_tfm):
     if not settings[PUBLISHED]:
         return dicts.add(NO_READY_TO_RUN, {
             READY_TO_RUN_FRAMEWORK: framework,
-            READY_TO_RUN_PROJECT_SDK: settings[READY_TO_RUN_PROJECT_SDK],
+            READY_TO_RUN_SHARED_FRAMEWORKS: settings[READY_TO_RUN_SHARED_FRAMEWORKS],
         })
 
     return dicts.add(NO_READY_TO_RUN, {
         NATIVE_COMPILER: settings[NATIVE_COMPILER],
         TRIMMED: settings[TRIMMED],
         READY_TO_RUN_FRAMEWORK: transitioned_tfm if framework else "",
-        READY_TO_RUN_PROJECT_SDK: normalize_project_sdk(attr.project_sdk) if framework else "",
+        READY_TO_RUN_SHARED_FRAMEWORKS: frameworks_key(
+            resolve_framework_references(attr.project_sdk, getattr(attr, "framework_references", [])),
+            profiles = False,
+        ) if framework else "",
     })
 
 def _impl(settings, attr):

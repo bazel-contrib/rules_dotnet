@@ -621,7 +621,7 @@ TESTS = [
         # than offered and failing when the tool is run.
         files = [
             "tools/net8.0/any/Tool.dll",
-            "tools/net8.0-windows/any/Windows.dll",
+            "tools/net8.0-android/any/Android.dll",
         ],
         expected_tools = {"net8.0": ["tools/net8.0/any/Tool.dll"]},
     ),
@@ -638,8 +638,67 @@ TESTS = [
     ),
     nuget_resolution_test(
         name = "a_package_of_only_untargetable_frameworks_is_incompatible",
-        files = ["lib/net8.0-windows/A.dll"],
+        files = ["lib/net8.0-android/A.dll"],
         expect_incompatible = True,
+    ),
+    nuget_resolution_test(
+        name = "a_package_of_only_windows_frameworks_is_incompatible_with_a_plain_one",
+        files = ["lib/net8.0-windows7.0/A.dll"],
+        expect_incompatible = True,
+    ),
+    # NuGet ranks a package's assets for a Windows specific framework by
+    # release first: net8.0-windows, net8.0, net7.0-windows, net7.0.
+    nuget_resolution_test(
+        name = "a_windows_framework_takes_its_own_assets",
+        files = [
+            "lib/net8.0/A.dll",
+            "lib/net8.0-windows7.0/A.dll",
+        ],
+        target_framework = "net8.0-windows",
+        expected_refs = ["lib/net8.0-windows7.0/A.dll"],
+        expected_libs = ["lib/net8.0-windows7.0/A.dll"],
+    ),
+    nuget_resolution_test(
+        name = "a_windows_framework_takes_an_older_release_s_windows_assets",
+        files = [
+            "lib/net6.0/A.dll",
+            "lib/net6.0-windows7.0/A.dll",
+        ],
+        target_framework = "net8.0-windows",
+        expected_refs = ["lib/net6.0-windows7.0/A.dll"],
+        expected_libs = ["lib/net6.0-windows7.0/A.dll"],
+    ),
+    nuget_resolution_test(
+        name = "a_windows_framework_takes_a_newer_release_over_older_windows_assets",
+        # A select could not rank these two for net9.0-windows.
+        files = [
+            "lib/net8.0-windows7.0/A.dll",
+            "lib/net9.0/A.dll",
+        ],
+        target_framework = "net9.0-windows",
+        expected_refs = ["lib/net9.0/A.dll"],
+        expected_libs = ["lib/net9.0/A.dll"],
+    ),
+    nuget_resolution_test(
+        name = "a_plain_framework_passes_over_windows_assets",
+        files = [
+            "lib/net6.0/A.dll",
+            "lib/net8.0-windows7.0/A.dll",
+        ],
+        target_framework = "net9.0",
+        expected_refs = ["lib/net6.0/A.dll"],
+        expected_libs = ["lib/net6.0/A.dll"],
+    ),
+    nuget_resolution_test(
+        name = "a_later_windows_version_is_not_targetable",
+        # Needs the Windows SDK projections, which are not supported.
+        files = [
+            "lib/net8.0/A.dll",
+            "lib/net8.0-windows10.0.19041.0/A.dll",
+        ],
+        target_framework = "net8.0-windows",
+        expected_refs = ["lib/net8.0/A.dll"],
+        expected_libs = ["lib/net8.0/A.dll"],
     ),
     nuget_resolution_test(
         name = "a_package_resolves_in_the_default_configuration",

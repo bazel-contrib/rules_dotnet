@@ -224,6 +224,77 @@ blazor_devserver(
 `net10.0` or later is required: the WebAssembly toolchain only ships as NuGet
 packages from .NET 10 onwards.
 
+## Shared frameworks
+
+Every target references Microsoft.NETCore.App. `framework_references` adds
+other shared frameworks, like MSBuild's `<FrameworkReference>`:
+
+```python
+csharp_library(
+    name = "middleware",
+    srcs = glob(["**/*.cs"]),
+    framework_references = ["Microsoft.AspNetCore.App"],
+    target_frameworks = ["net11.0"],
+)
+```
+
+| `framework_references` | MSBuild |
+| --- | --- |
+| `Microsoft.AspNetCore.App` | `<FrameworkReference Include="Microsoft.AspNetCore.App" />`, implied by `project_sdk = "web"` |
+| `Microsoft.WindowsDesktop.App.WPF` | `<UseWPF>true</UseWPF>` |
+| `Microsoft.WindowsDesktop.App.WindowsForms` | `<UseWindowsForms>true</UseWindowsForms>` |
+| `Microsoft.WindowsDesktop.App` | `<UseWPF>` and `<UseWindowsForms>` together |
+
+A target only compiles against the frameworks it lists itself, so list a
+framework on every target whose code uses it. A binary runs on the frameworks
+of all its dependencies, NuGet packages included. A self-contained
+`publish_binary` only bundles the frameworks the binary lists, and fails if a
+dependency needs another one.
+
+`nuget_pack` records a library's framework references in the package, so that
+its consumers get them too.
+
+## Windows Forms and WPF
+
+Windows Forms and WPF need a Windows specific target framework, such as
+`net11.0-windows`:
+
+```python
+csharp_binary(
+    name = "app",
+    srcs = glob(["**/*.cs", "**/*.xaml"]),
+    framework_references = ["Microsoft.WindowsDesktop.App.WPF"],
+    target_frameworks = ["net11.0-windows"],
+    winexe = True,
+    wpf_resources = glob(["Assets/**"]),
+)
+```
+
+As in MSBuild, a `-windows` target can depend on targets and NuGet packages
+built for the plain framework, defines the `WINDOWS` preprocessor symbol, and
+cannot be a dependency of a plain framework target. Target frameworks for a
+specific Windows version, such as `net8.0-windows10.0.19041.0`, are not
+supported.
+
+Windows Forms and WPF code builds on any host, but running and publishing it
+needs Windows: `publish_binary` needs a `win-*` `runtime_identifier`. They do
+not support trimming, so `native_aot` cannot publish them.
+
+`winexe = True` builds a GUI application, MSBuild's
+`<OutputType>WinExe</OutputType>`, which starts without a console window. As in
+MSBuild, referencing Windows Forms or WPF does not imply it.
+
+### XAML
+
+`.xaml` files in `srcs` are compiled as in MSBuild. `App.xaml` at the root of
+the package is the application definition, and every other `.xaml` file is a
+page. `wpf_resources` are MSBuild's `<Resource>` items. Pages and resources are
+addressed by their path relative to the package, including generated ones, and
+by their file name when they come from another package.
+
+Only C# targets compile XAML, and the generated `.xaml` files of a target need
+distinct file names.
+
 ## Unsupported workloads
 
 The following workloads are not supported by these rules at this given time:

@@ -11,10 +11,10 @@ string_setting(
     visibility = ["//visibility:public"],
 )
 
-# The project SDK of the published binary, which decides whether that
-# framework includes ASP.NET Core.
+# The `frameworks_key` of the published binary's runtime packs, which ReadyToRun
+# compiles against.
 string_setting(
-    name = "project_sdk",
+    name = "shared_frameworks",
     build_setting_default = "",
     scope = "target",
     visibility = ["//visibility:public"],

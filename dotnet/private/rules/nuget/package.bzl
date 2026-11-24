@@ -14,6 +14,39 @@ load(
 load("//dotnet/private/rules/nuget:dotnet_tool.bzl", "dotnet_tool")
 load("//dotnet/private/rules/nuget:imports.bzl", "import_library")
 load("//dotnet/private/rules/nuget:package_metadata.bzl", "ANY_FRAMEWORK")
+load("//dotnet/private/sdk:frameworks.bzl", "framework_platform")
+
+def _branches(values_by_tfm, groups):
+    """The `tfm_*` branches a select needs to give every framework its value.
+
+    A configuration matches the branch of every framework it is compatible
+    with, and select takes the most specific. So a framework needs a branch
+    unless its only predecessor resolves the same.
+
+    `net8.0-windows` has two predecessors, `net8.0` and `net7.0-windows`, that
+    select cannot rank. So either every Windows specific framework gets a
+    branch, if the package has a Windows specific group, or none does.
+
+    Args:
+      values_by_tfm: What every framework resolves to.
+      groups: The frameworks the package declares groups for.
+
+    Returns:
+      A dict of `tfm_*` condition to value.
+    """
+    windows_groups = any([framework_platform(group) for group in groups])
+
+    branches = {}
+    for (tfm, value) in values_by_tfm.items():
+        if framework_platform(tfm):
+            if windows_groups:
+                branches[tfm] = value
+            continue
+
+        if len(FRAMEWORK_COMPATIBILITY[tfm]) != 1 or value != values_by_tfm[FRAMEWORK_COMPATIBILITY[tfm][0]]:
+            branches[tfm] = value
+
+    return {"@rules_dotnet//dotnet:tfm_{}".format(tfm): value for (tfm, value) in branches.items()}
 
 def deps_by_tfm(dependency_groups, packages):
     """Maps every supported TFM onto the labels of the deps it should use.
@@ -58,19 +91,35 @@ def deps_by_tfm(dependency_groups, packages):
     if not any(labels_by_tfm.values()):
         return {"//conditions:default": []}
 
-    # A configuration matches the branch of every framework its own is
-    # compatible with, and the select takes the most specific. A framework that
-    # resolves to no dependencies therefore still needs a branch, or a more
-    # general framework's would apply. One whose only predecessor resolves the
-    # same needs none: the most specific branch left resolves as it does.
-    deps = {
-        "@rules_dotnet//dotnet:tfm_{}".format(tfm): labels
-        for (tfm, labels) in labels_by_tfm.items()
-        if len(FRAMEWORK_COMPATIBILITY[tfm]) != 1 or labels != labels_by_tfm[FRAMEWORK_COMPATIBILITY[tfm][0]]
-    }
+    deps = _branches(labels_by_tfm, frameworks)
     deps["//conditions:default"] = []
 
     return deps
+
+def framework_references_by_tfm(framework_reference_groups):
+    """Maps every supported TFM onto the shared frameworks a package needs for it.
+
+    As for dependencies, a consumer takes the nearest compatible group.
+
+    Args:
+      framework_reference_groups: Framework reference names keyed by target
+        framework, from the package's `.nuspec`.
+
+    Returns:
+      A dict suitable for `select()`, mapping a TFM config setting to names.
+    """
+    if not framework_reference_groups:
+        return {"//conditions:default": []}
+
+    by_tfm = {}
+    for tfm in FRAMEWORK_COMPATIBILITY:
+        nearest = get_nearest_compatible_target_framework(tfm, framework_reference_groups.keys())
+        by_tfm[tfm] = framework_reference_groups[nearest] if nearest != None else []
+
+    references = _branches(by_tfm, framework_reference_groups.keys())
+    references["//conditions:default"] = []
+
+    return references
 
 # buildifier: disable=function-docstring-args
 # buildifier: disable=unnamed-macro
@@ -83,6 +132,8 @@ def nuget_package(
         sha512 = "",
         dependency_groups = {},
         framework_list = {},
+        framework_list_metadata = {},
+        framework_reference_groups = {},
         targeting_pack_overrides = {},
         tools = {},
         static_web_assets_base_path = "",
@@ -101,7 +152,12 @@ def nuget_package(
       sha512: The subresource integrity of the `.nupkg`, or "" if the feed did
         not publish one.
       dependency_groups: Dependency package ids keyed by target framework.
-      framework_list: Assembly versions shipped by a targeting pack.
+      framework_list: Assembly versions shipped by a targeting or runtime pack.
+      framework_list_metadata: The rest of what a pack's FrameworkList.xml or
+        RuntimeList.xml says: `file_versions`, `profiles` and
+        `analyzer_profiles`.
+      framework_reference_groups: The shared frameworks the package needs,
+        keyed by target framework.
       targeting_pack_overrides: Package versions superseded by a targeting pack.
       tools: Dotnet tool entrypoints, keyed by tool name and target framework.
       static_web_assets_base_path: Where the package's manifest says its static
@@ -116,6 +172,10 @@ def nuget_package(
         analyzers_vb = ["{}:analyzers_vb".format(archive)],
         data = ["{}:data".format(archive)],
         framework_list = framework_list,
+        framework_list_analyzer_profiles = framework_list_metadata.get("analyzer_profiles", {}),
+        framework_list_file_versions = framework_list_metadata.get("file_versions", {}),
+        framework_list_profiles = framework_list_metadata.get("profiles", {}),
+        framework_references = select(framework_references_by_tfm(framework_reference_groups)),
         library_name = library_name,
         libs = ["{}:libs".format(archive)],
         native = ["{}:native".format(archive)],

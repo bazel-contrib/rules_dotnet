@@ -72,15 +72,18 @@ def partition_srcs(srcs, label):
 
     Returns:
       A struct of the `compile` sources `csc` is handed, the `razor` sources the
-      generator reads, and the `scoped_css` stylesheets.
+      generator reads, the `scoped_css` stylesheets and the `xaml` WPF compiles.
     """
     compile_srcs = []
     razor_srcs = []
     scoped_css_srcs = []
+    xaml_srcs = []
     stray_css = []
     for src in srcs:
         if src.extension in _RAZOR_EXTENSIONS:
             razor_srcs.append(src)
+        elif src.extension == "xaml":
+            xaml_srcs.append(src)
         elif src.basename.endswith(_SCOPED_CSS_SUFFIX):
             scoped_css_srcs.append(src)
         elif src.extension == "css":
@@ -102,6 +105,7 @@ def partition_srcs(srcs, label):
         compile = compile_srcs,
         razor = razor_srcs,
         scoped_css = scoped_css_srcs,
+        xaml = xaml_srcs,
     )
 
 def target_path(short_path, label):

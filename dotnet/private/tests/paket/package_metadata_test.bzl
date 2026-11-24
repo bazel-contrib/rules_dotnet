@@ -10,11 +10,12 @@ load(
     "nuget_framework_to_tfm",
 )
 load("//dotnet/private:xml.bzl", "xml")
-load("//dotnet/private/rules/nuget:package.bzl", "deps_by_tfm")
+load("//dotnet/private/rules/nuget:package.bzl", "deps_by_tfm", "framework_references_by_tfm")
 load(
     "//dotnet/private/rules/nuget:package_metadata.bzl",
     "parse_dotnet_tool_settings",
     "parse_framework_list",
+    "parse_framework_list_metadata",
     "parse_nuspec",
     "parse_package_overrides",
 )
@@ -59,6 +60,35 @@ _TOOL_NUSPEC = """\
     </packageTypes>
   </metadata>
 </package>
+"""
+
+_FRAMEWORK_REFERENCES_NUSPEC = """\
+<package>
+  <metadata>
+    <id>WpfControls</id>
+    <frameworkReferences>
+      <group targetFramework="net6.0-windows7.0">
+        <frameworkReference name="Microsoft.WindowsDesktop.App.WPF" />
+      </group>
+      <group targetFramework=".NETCoreApp3.1">
+        <frameworkReference name="Microsoft.WindowsDesktop.App.WPF" />
+        <frameworkReference name="Microsoft.AspNetCore.App" />
+      </group>
+      <group targetFramework="net8.0-android34.0">
+        <frameworkReference name="Microsoft.Android" />
+      </group>
+    </frameworkReferences>
+  </metadata>
+</package>
+"""
+
+_WINDOWSDESKTOP_FRAMEWORK_LIST = """\
+<FileList TargetFrameworkIdentifier=".NETCoreApp" FrameworkName="Microsoft.WindowsDesktop.App">
+  <File Type="Analyzer" Path="analyzers/dotnet/cs/System.Windows.Forms.Analyzers.CSharp.dll" Language="cs" AssemblyName="System.Windows.Forms.Analyzers.CSharp" AssemblyVersion="10.0.15.0" FileVersion="10.0.1526.53008" Profile="WindowsForms" />
+  <File Type="Managed" Path="ref/net10.0/System.Drawing.dll" AssemblyName="System.Drawing" AssemblyVersion="10.0.0.0" FileVersion="10.0.1526.53008" Profile="WindowsForms" />
+  <File Type="Managed" Path="ref/net10.0/System.Drawing.Common.dll" AssemblyName="System.Drawing.Common" AssemblyVersion="10.0.0.0" FileVersion="10.0.1526.53008" Profile="WindowsForms;WPF" />
+  <File Type="Managed" Path="ref/net10.0/WindowsFormsIntegration.dll" AssemblyName="WindowsFormsIntegration" AssemblyVersion="10.0.0.0" FileVersion="10.0.1526.53008" />
+</FileList>
 """
 
 _LEGACY_NUSPEC = """\
@@ -201,6 +231,17 @@ def _parse_nuspec_test_impl(ctx):
         "groups for unsupported frameworks are dropped",
     )
 
+    asserts.equals(env, {}, nuspec.framework_reference_groups, "a package without framework references has none")
+    asserts.equals(
+        env,
+        {
+            "net6.0-windows": ["Microsoft.WindowsDesktop.App.WPF"],
+            "netcoreapp3.1": ["Microsoft.WindowsDesktop.App.WPF", "Microsoft.AspNetCore.App"],
+        },
+        parse_nuspec(_FRAMEWORK_REFERENCES_NUSPEC).framework_reference_groups,
+        "groups for unsupported frameworks are dropped",
+    )
+
     asserts.true(env, parse_nuspec(_TOOL_NUSPEC).is_dotnet_tool)
     asserts.equals(
         env,
@@ -304,6 +345,34 @@ def _deps_by_tfm_test_impl(ctx):
 
 _deps_by_tfm_test = unittest.make(_deps_by_tfm_test_impl)
 
+def _framework_references_by_tfm_test_impl(ctx):
+    env = unittest.begin(ctx)
+
+    actual = framework_references_by_tfm(parse_nuspec(_FRAMEWORK_REFERENCES_NUSPEC).framework_reference_groups)
+
+    # Every framework gets its nearest group, without ambiguous select branches.
+    for (tfm, expected) in {
+        "net8.0-windows": ["Microsoft.WindowsDesktop.App.WPF"],
+        "net6.0-windows": ["Microsoft.WindowsDesktop.App.WPF"],
+        "net5.0-windows": ["Microsoft.WindowsDesktop.App.WPF", "Microsoft.AspNetCore.App"],
+        "net8.0": ["Microsoft.WindowsDesktop.App.WPF", "Microsoft.AspNetCore.App"],
+        "netcoreapp3.1": ["Microsoft.WindowsDesktop.App.WPF", "Microsoft.AspNetCore.App"],
+        "netcoreapp3.0": [],
+        "net48": [],
+    }.items():
+        asserts.equals(env, expected, _selected(env, actual, tfm), tfm)
+
+    asserts.equals(env, {"//conditions:default": []}, framework_references_by_tfm({}))
+
+    # Without a Windows specific group, Windows specific frameworks need no branches.
+    plain = framework_references_by_tfm({"net6.0": ["Microsoft.AspNetCore.App"]})
+    asserts.equals(env, [], [condition for condition in plain if "-windows" in condition])
+    asserts.equals(env, ["Microsoft.AspNetCore.App"], _selected(env, plain, "net9.0-windows"))
+
+    return unittest.end(env)
+
+_framework_references_by_tfm_test = unittest.make(_framework_references_by_tfm_test_impl)
+
 def _framework_test_impl(ctx):
     env = unittest.begin(ctx)
 
@@ -341,6 +410,20 @@ def _package_files_test_impl(ctx):
         parse_framework_list(_FRAMEWORK_LIST),
         "only managed assemblies are part of the framework list",
     )
+    metadata = parse_framework_list_metadata(_WINDOWSDESKTOP_FRAMEWORK_LIST)
+    asserts.equals(
+        env,
+        {"system.drawing": "WindowsForms", "system.drawing.common": "WindowsForms;WPF"},
+        metadata.profiles,
+        "an assembly in no profile is only part of the whole framework",
+    )
+    asserts.equals(env, "10.0.1526.53008", metadata.file_versions["system.drawing"])
+    asserts.equals(
+        env,
+        {"analyzers/dotnet/cs/System.Windows.Forms.Analyzers.CSharp.dll": "WindowsForms"},
+        metadata.analyzer_profiles,
+    )
+
     asserts.equals(
         env,
         {"microsoft.csharp": "4.4.0", "microsoft.win32.primitives": "4.3.0"},
@@ -360,6 +443,7 @@ def package_metadata_test_suite(name):
     unittest.suite(
         name,
         _deps_by_tfm_test,
+        _framework_references_by_tfm_test,
         _framework_test,
         _package_files_test,
         _parse_nuspec_test,

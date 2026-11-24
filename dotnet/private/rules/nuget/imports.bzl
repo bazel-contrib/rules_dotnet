@@ -53,6 +53,9 @@ def _import_library(ctx):
     nuget_info = NuGetInfo(
         targeting_pack_overrides = ctx.attr.targeting_pack_overrides,
         framework_list = ctx.attr.framework_list,
+        framework_list_file_versions = ctx.attr.framework_list_file_versions,
+        framework_list_profiles = ctx.attr.framework_list_profiles,
+        framework_list_analyzer_profiles = ctx.attr.framework_list_analyzer_profiles,
         sha512 = ctx.attr.sha512,
         nupkg = ctx.file.nupkg,
         portable_assets = ctx.attr.portable_assets[NuGetPortableAssetsInfo] if ctx.attr.portable_assets else None,
@@ -95,6 +98,7 @@ def _import_library(ctx):
         data = ctx.files.data,
         content_files = [],
         nuget_info = nuget_info,
+        framework_references = ctx.attr.framework_references,
         deps = runtime_deps,
         direct_deps_depsjson_fragment = {dep[DotnetAssemblyRuntimeInfo].name: dep[DotnetAssemblyRuntimeInfo].version for dep in ctx.attr.deps},
         ready_to_run = compile_ready_to_run_images(ctx.actions, get_ready_to_run_tools(ctx), ctx.label, ctx.files.libs, runtime_deps),
@@ -207,6 +211,22 @@ Empty for `_content/<library_name>`, MSBuild's default.""",
         "framework_list": attr.string_dict(
             doc = "Targeting packs like e.g. Microsoft.NETCore.App.Ref have a PlatformManifest.txt that includes all the DLLs that are included in the targeting pack. This is used to determine which version of a DLL should be used during compilation or runtime.",
             default = {},
+        ),
+        "framework_list_file_versions": attr.string_dict(
+            doc = "The file version of each assembly in `framework_list`.",
+            default = {},
+        ),
+        "framework_list_profiles": attr.string_dict(
+            doc = "The `;` separated profiles of each assembly in `framework_list` that is in any.",
+            default = {},
+        ),
+        "framework_list_analyzer_profiles": attr.string_dict(
+            doc = "The `;` separated profiles of each analyzer the pack's FrameworkList.xml lists, keyed by its path inside the package.",
+            default = {},
+        ),
+        "framework_references": attr.string_list(
+            doc = """The shared frameworks the package needs, from the `<frameworkReferences>` of its `.nuspec`.""",
+            default = [],
         ),
         "sha512": attr.string(
             doc = "The SHA512 sum of the NuGet package",

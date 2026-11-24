@@ -41,7 +41,7 @@ load(
     "ready_to_run_framework",
     "ready_to_run_references",
 )
-load("//dotnet/private/sdk:packs.bzl", "WASM_RID")
+load("//dotnet/private/sdk:packs.bzl", "WASM_RID", "WINDOWS_ONLY_FRAMEWORKS")
 load("//dotnet/private/transitions:tfm_transition.bzl", "publish_binary_transition", "tfm_transition")
 
 # How many sources one `cp` invocation takes. A self-contained publish copies
@@ -463,11 +463,18 @@ def _ilc_link(ctx, compiled, aot):
     # on a hermetic toolchain, the SDK path on Apple. These arrive as plain
     # strings, some of them output paths, which is why this action cannot opt
     # in to path mapping the way `Ilc` does.
-    args.add_all(cc_common.get_memory_inefficient_command_line(
+    toolchain_args = cc_common.get_memory_inefficient_command_line(
         feature_configuration = feature_configuration,
         action_name = CPP_LINK_EXECUTABLE_ACTION_NAME,
         variables = link_variables,
-    ))
+    )
+
+    # Bazel's MSVC toolchain adds `/SUBSYSTEM:CONSOLE` to every executable;
+    # the subsystem is set below.
+    if is_windows:
+        toolchain_args = [arg for arg in toolchain_args if not arg.upper().lstrip("/-").startswith("SUBSYSTEM:")]
+
+    args.add_all(toolchain_args)
     args.add(compiled.object_file)
 
     extra_inputs = []
@@ -482,7 +489,9 @@ def _ilc_link(ctx, compiled, aot):
         args.add("/MERGE:.managedcode=.text")
         args.add("/MERGE:hydrated=.bss")
         args.add("/INCREMENTAL:NO")
-        args.add("/SUBSYSTEM:CONSOLE")
+
+        # As in the SDK, a WinExe keeps the console entry point.
+        args.add("/SUBSYSTEM:WINDOWS" if aot.windows_gui else "/SUBSYSTEM:CONSOLE")
         args.add("/ENTRY:wmainCRTStartup")
         args.add("/NOEXP")
         args.add("/NOIMPLIB")
@@ -560,11 +569,12 @@ def _ilc_link(ctx, compiled, aot):
 
     return executable
 
-def _native_aot_executable(ctx, dll, closure, runtime_identifier, target_framework, compiler_framework):
+def _native_aot_executable(ctx, dll, closure, runtime_identifier, target_framework, compiler_framework, winexe):
     """Compiles the managed closure to native code and links it into one executable.
 
     `compiler_framework` is the framework the binary is built for, whose band
     ilc comes from. It can be lower than the `target_framework` published for.
+    `winexe` gives a Windows executable the Windows GUI subsystem.
     """
     pack = _native_tools(ctx).nativeaot_pack
 
@@ -590,6 +600,7 @@ def _native_aot_executable(ctx, dll, closure, runtime_identifier, target_framewo
         debugger_contract = "DotNetRuntimeContractDescriptor" if net11 else "DotNetRuntimeDebugHeader",
         pull_debugger_contract = net11,
         windows_system_libs = _AOT_WINDOWS_NET11_SYSTEM_LIBS if net11 else [],
+        windows_gui = winexe and target_os == "windows",
         # The executable's path; the object and the export list sit beside it
         # under their own extensions.
         prefix = "{}/aot/{}/{}".format(ctx.label.name, runtime_identifier, name),
@@ -954,7 +965,7 @@ def _executable_name(dll, runtime_identifier):
     """The name of the executable that starts `dll` on `runtime_identifier`."""
     return paths.replace_extension(dll.basename, ".exe" if runtime_identifier.startswith("win") else "")
 
-def _stamp_host(ctx, host, dll, output, runtime_identifier, mnemonic, progress_message):
+def _stamp_host(ctx, host, dll, output, runtime_identifier, winexe, mnemonic, progress_message):
     """Copies a host from its pack to `output`, set to start `dll` from beside it.
 
     Args:
@@ -963,6 +974,7 @@ def _stamp_host(ctx, host, dll, output, runtime_identifier, mnemonic, progress_m
         dll: The assembly the host starts.
         output: The File to write the host to.
         runtime_identifier: The runtime identifier published for.
+        winexe: True if the host should receive the Windows GUI PE subsystem.
         mnemonic: The action's mnemonic.
         progress_message: The action's progress message.
     """
@@ -970,7 +982,7 @@ def _stamp_host(ctx, host, dll, output, runtime_identifier, mnemonic, progress_m
         mnemonic = mnemonic,
         progress_message = progress_message,
         executable = ctx.attr._apphost_shimmer.files_to_run,
-        arguments = [host.path, dll.basename, output.path, runtime_identifier],
+        arguments = [host.path, dll.basename, output.path, runtime_identifier, "true" if winexe else "false"],
         # The host only records the assembly's name, as it sits beside it.
         # Depending on the assembly would tie the host, and so the app layer,
         # to the action copying the whole publish.
@@ -979,7 +991,7 @@ def _stamp_host(ctx, host, dll, output, runtime_identifier, mnemonic, progress_m
         outputs = [output],
     )
 
-def _create_shim_exe(ctx, apphost_pack_info, dll, runtime_identifier):
+def _create_shim_exe(ctx, apphost_pack_info, dll, runtime_identifier, winexe = False):
     output = ctx.actions.declare_file(_executable_name(dll, runtime_identifier), sibling = dll)
 
     _stamp_host(
@@ -988,6 +1000,7 @@ def _create_shim_exe(ctx, apphost_pack_info, dll, runtime_identifier):
         dll,
         output,
         runtime_identifier,
+        winexe,
         "DotnetApphostShim",
         "Creating apphost shim for %{label}",
     )
@@ -998,7 +1011,7 @@ def _bundle_spec(entry):
     (path, file) = entry
     return "{}={}".format(path, file.path)
 
-def _create_single_file(ctx, apphost_pack_info, dll, runtime_identifier, runtime_pack_info, target_framework, bundle):
+def _create_single_file(ctx, apphost_pack_info, dll, runtime_identifier, runtime_pack_info, target_framework, bundle, winexe = False):
     """Bundles files into a copy of `singlefilehost` that starts `dll`.
 
     Args:
@@ -1011,6 +1024,7 @@ def _create_single_file(ctx, apphost_pack_info, dll, runtime_identifier, runtime
         target_framework: The framework the binary runs on, which decides the
             bundle's format.
         bundle: The File to bundle at each path.
+        winexe: True if the host should receive the Windows GUI PE subsystem.
 
     Returns:
         The executable.
@@ -1031,6 +1045,7 @@ def _create_single_file(ctx, apphost_pack_info, dll, runtime_identifier, runtime
         dll,
         host,
         runtime_identifier,
+        winexe,
         "DotnetSingleFileHost",
         "Creating single-file host for %{label}",
     )
@@ -1114,8 +1129,8 @@ def _executable_publish(ctx, executable, beside, data, dependency_layers):
         OutputGroupInfo(**output_groups),
     ]
 
-def _generate_runtimeconfig(ctx, output, target_framework, project_sdk, is_self_contained, roll_forward_behavior, runtime_pack_info, framework_version):
-    runtimeconfig_struct = generate_runtimeconfig(target_framework, project_sdk, is_self_contained, roll_forward_behavior, runtime_pack_info, framework_version)
+def _generate_runtimeconfig(ctx, output, target_framework, frameworks, is_self_contained, roll_forward_behavior, runtime_pack_info, framework_version):
+    runtimeconfig_struct = generate_runtimeconfig(target_framework, frameworks, is_self_contained, roll_forward_behavior, runtime_pack_info, framework_version)
 
     ctx.actions.write(
         output = output,
@@ -1172,9 +1187,45 @@ def _publish_binary_impl(ctx):
     if (ctx.attr.include_native_libraries_for_self_extract or ctx.attr.enable_compression_in_single_file) and not ctx.attr.single_file:
         fail("include_native_libraries_for_self_extract and enable_compression_in_single_file require single_file")
 
+    windows_only = [framework for framework in binary_info.runtime_frameworks if framework in WINDOWS_ONLY_FRAMEWORKS]
+
+    # The SDK refuses to trim Windows Forms and WPF, and NativeAOT trims.
+    if ctx.attr.native_aot and windows_only:
+        fail("{}: native_aot cannot publish {}, which runs on {}: Windows Forms and WPF do not support trimming, which NativeAOT implies.".format(
+            ctx.label,
+            _binary(ctx).label,
+            ", ".join(windows_only),
+        ))
+
     assembly_name = assembly_runtime_info.name
     runtime_pack_info = binary_info.runtime_pack_info if is_self_contained else None
     runtime_identifier = ctx.attr.runtime_identifier if ctx.attr.runtime_identifier else binary_info.runtime_pack_info.runtime_identifier
+
+    if windows_only and not (runtime_identifier or "").startswith("win"):
+        fail("{}: {} runs on {}, which only exists on Windows. Set `runtime_identifier` to a Windows one, such as win-x64.".format(
+            ctx.label,
+            _binary(ctx).label,
+            ", ".join(windows_only),
+        ))
+
+    if not runtime_identifier or (is_self_contained and not runtime_pack_info.assembly_runtime_infos):
+        fail("No runtime pack found for target framework {} and runtime identifier {}".format(
+            target_framework,
+            ctx.attr.runtime_identifier or "<host>",
+        ))
+
+    # The runtime pack only carries the shared frameworks the binary
+    # references itself.
+    missing = [framework for framework in binary_info.runtime_frameworks if framework not in binary_info.packed_frameworks]
+    if (is_self_contained or ctx.attr.ready_to_run) and missing:
+        fail("{}: {} runs on {}, which one of its dependencies references, but a {} publish only takes the runtime packs of the shared frameworks the binary references itself. Add {} to the `framework_references` of {}.".format(
+            ctx.label,
+            _binary(ctx).label,
+            ", ".join(missing),
+            "self-contained" if is_self_contained else "ReadyToRun",
+            " and ".join(["\"{}\"".format(framework) for framework in missing]),
+            _binary(ctx).label,
+        ))
     roll_forward_behavior = ctx.attr.roll_forward_behavior
 
     if ctx.attr.native_aot:
@@ -1188,6 +1239,7 @@ def _publish_binary_impl(ctx):
             runtime_identifier,
             target_framework,
             assembly_compile_info.target_framework,
+            binary_info.winexe,
         )
 
         # A NativeAOT publish keeps nothing managed, but it still serves the
@@ -1232,7 +1284,7 @@ def _publish_binary_impl(ctx):
         ctx,
         runtimeconfig,
         target_framework,
-        assembly_compile_info.project_sdk,
+        binary_info.runtime_frameworks,
         is_self_contained,
         roll_forward_behavior,
         runtime_pack_info,
@@ -1302,6 +1354,7 @@ def _publish_binary_impl(ctx):
                 _publish_entries([(path, file) for (path, file) in layout if file in bundled], ready_to_run),
                 {file.basename: file for file in [runtimeconfig, depsjson]},
             ),
+            binary_info.winexe,
         )
 
         return _executable_publish(
@@ -1315,7 +1368,7 @@ def _publish_binary_impl(ctx):
     entries = _publish_entries(layout, ready_to_run)
     (main_dll, outputs) = _copy_to_publish(ctx, runtime_identifier, entries, binary_info)
 
-    apphost_shim = _create_shim_exe(ctx, binary_info.apphost_pack_info, main_dll, runtime_identifier)
+    apphost_shim = _create_shim_exe(ctx, binary_info.apphost_pack_info, main_dll, runtime_identifier, binary_info.winexe)
 
     output_groups = _publish_layers(
         ctx,

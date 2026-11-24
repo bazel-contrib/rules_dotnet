@@ -1,0 +1,84 @@
+# A WPF application and control library. `App.xaml` at the package root is the
+# application definition.
+
+load("//dotnet:defs.bzl", "csharp_binary", "csharp_library", "csharp_nunit_test")
+
+csharp_library(
+    name = "controls",
+    srcs = [
+        "controls/Badge.xaml",
+        "controls/Badge.xaml.cs",
+    ],
+    out = "XamlControls",
+    framework_references = ["Microsoft.WindowsDesktop.App.WPF"],
+    target_frameworks = ["net10.0-windows"],
+)
+
+# Generated files are named by their path in the package.
+genrule(
+    name = "generated_theme",
+    outs = ["Themes/Generated.xaml"],
+    cmd = """cat > $@ <<'EOF'
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation">
+  <SolidColorBrush x:Key="Generated" Color="Green" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" />
+</ResourceDictionary>
+EOF""",
+)
+
+genrule(
+    name = "generated_asset",
+    outs = ["Assets/generated.txt"],
+    cmd = "echo generated > $@",
+)
+
+# WPF resources without XAML.
+csharp_library(
+    name = "icons",
+    srcs = ["icons/Icons.cs"],
+    out = "XamlIcons",
+    framework_references = ["Microsoft.WindowsDesktop.App.WPF"],
+    target_frameworks = ["net10.0-windows"],
+    wpf_resources = ["icons/Icons/app.txt"],
+)
+
+csharp_binary(
+    name = "xaml_app",
+    srcs = [
+        "App.xaml",
+        "App.xaml.cs",
+        "Converters.cs",
+        "Views/MainWindow.xaml",
+        "Views/MainWindow.xaml.cs",
+        ":generated_theme",
+    ],
+    framework_references = ["Microsoft.WindowsDesktop.App.WPF"],
+    target_frameworks = ["net10.0-windows"],
+    winexe = True,
+    wpf_resources = [
+        "Assets/greeting.txt",
+        ":generated_asset",
+    ],
+    deps = [":controls"],
+)
+
+csharp_nunit_test(
+    name = "xaml_resources_test",
+    srcs = ["XamlTests.cs"],
+    data = [
+        ":controls",
+        ":icons",
+        ":xaml_app",
+    ],
+    target_frameworks = ["net10.0"],
+    deps = ["//tools/runfiles"],
+)
+
+csharp_nunit_test(
+    name = "run_xaml_test",
+    srcs = ["RunXamlTests.cs"],
+    framework_references = ["Microsoft.WindowsDesktop.App.WPF"],
+    nullable = "enable",
+    target_compatible_with = ["@platforms//os:windows"],
+    target_frameworks = ["net10.0-windows"],
+    deps = [":controls"],
+)

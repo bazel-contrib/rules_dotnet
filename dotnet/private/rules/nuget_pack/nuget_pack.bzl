@@ -117,7 +117,7 @@ def _check_built_framework(ctx, target, compile_info, tfm):
     if built != tfm:
         _fail_wrong_framework(ctx.label, target.label, tfm, "{} for it".format(built))
 
-def _pack_tool(ctx, tfm, target, compile_info, runtime_info):
+def _pack_tool(ctx, tfm, target, runtime_info):
     """The files of a tool package for one framework, and where they go."""
     if not is_core_framework(tfm):
         fail("{}: a .NET tool runs on .NET; {} is not a .NET framework".format(ctx.label, tfm))
@@ -145,7 +145,7 @@ def _pack_tool(ctx, tfm, target, compile_info, runtime_info):
     runtimeconfig = ctx.actions.declare_file("{}/{}/{}.runtimeconfig.json".format(ctx.label.name, tfm, name))
     ctx.actions.write(runtimeconfig, json.encode(generate_runtimeconfig(
         target_framework = tfm,
-        project_sdk = compile_info.project_sdk,
+        frameworks = binary_info.runtime_frameworks,
         is_self_contained = False,
         roll_forward_behavior = ctx.attr.roll_forward_behavior,
         framework_version = binary_info.framework_version,
@@ -262,7 +262,7 @@ def _nuget_pack_impl(ctx):
     entries = []
     symbol_entries = []
     groups = {}
-    framework_references = []
+    reference_groups = {}
     copied_names = {}
     tool_directories = []
     identity = None
@@ -289,7 +289,7 @@ def _nuget_pack_impl(ctx):
                   "one id and one version").format(ctx.label, target.label, runtime_info.name, runtime_info.version, tfm, identity.name, identity.version))
 
         if is_tool:
-            entries += _pack_tool(ctx, tfm, target, compile_info, runtime_info)
+            entries += _pack_tool(ctx, tfm, target, runtime_info)
             tool_directories.append(tool_directory(tfm))
             groups[tfm] = dependency_group(tfm, [])
             continue
@@ -320,14 +320,22 @@ def _nuget_pack_impl(ctx):
         symbol_entries += layout.symbol_files
 
         group = dependency_group(tfm, plan.dependencies)
+
+        # Bundled assemblies have no package of their own to declare theirs.
+        references = framework_reference_group(tfm, [
+            reference
+            for info in [runtime_info] + plan.bundled
+            for reference in getattr(info, "framework_references", None) or []
+        ])
         if first_of_tfm:
             groups[tfm] = group
-            references = framework_reference_group(tfm, compile_info.project_sdk)
-            if references != None:
-                framework_references.append(references)
+            reference_groups[tfm] = references
         elif groups[tfm] != group:
             fail(("{}: the dependencies of {} differ between runtime identifiers for {}; " +
                   "NuGet declares dependencies per framework, not per runtime identifier").format(ctx.label, target.label, tfm))
+        elif reference_groups[tfm] != references:
+            fail(("{}: the framework references of {} differ between runtime identifiers for {}; " +
+                  "NuGet declares framework references per framework, not per runtime identifier").format(ctx.label, target.label, tfm))
 
         for info in plan.bundled:
             copied_names[info.name] = True
@@ -395,7 +403,12 @@ def _nuget_pack_impl(ctx):
         metadata = _metadata(ctx, package_id, version),
         packageTypes = [_DOTNET_TOOL_PACKAGE_TYPE] if is_tool else [],
         dependencyGroups = [groups[tfm] for tfm in sorted(groups.keys())],
-        frameworkReferenceGroups = framework_references,
+        # As in `dotnet pack`, every framework gets a group once any has
+        # references, so that NuGet cannot fall back to another framework's.
+        frameworkReferenceGroups = [reference_groups[tfm] for tfm in sorted(reference_groups.keys())] if any([
+            reference_group.frameworkReferences
+            for reference_group in reference_groups.values()
+        ]) else [],
         contentFiles = [
             struct(
                 include = include,

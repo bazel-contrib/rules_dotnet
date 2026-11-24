@@ -15,7 +15,7 @@ load(
     "PACKAGE_CONTENT_ROOT",
     "base_path",
 )
-load("//dotnet/private/sdk:packs.bzl", "WEB_SDK", "normalize_project_sdk")
+load("//dotnet/private/sdk:frameworks.bzl", "framework_platform")
 
 # `dotnet pack`'s default for every dependency: the consumer takes its
 # assemblies but not its build logic or analyzers.
@@ -27,8 +27,7 @@ FIRST_PARTY_BUNDLE = "bundle"
 FIRST_PARTY_ERROR = "error"
 FIRST_PARTY_DEPS = [FIRST_PARTY_REFERENCE, FIRST_PARTY_BUNDLE, FIRST_PARTY_ERROR]
 
-# The shared framework a web project compiles against, from .NET Core 3.0 on.
-_ASPNETCORE_FRAMEWORK_REFERENCE = "Microsoft.AspNetCore.App"
+# Shared frameworks, and so framework references, start with .NET Core 3.0.
 _FIRST_FRAMEWORK_REFERENCE_TFM = "netcoreapp3.0"
 
 # Where NuGet looks for analyzers and source generators: `analyzers/dotnet` for
@@ -225,8 +224,11 @@ def library_layout(tfm, rid, compile_info, runtime_info, bundled, symbols, refer
     Returns:
       A struct of `files` and `symbol_files`, each a list of `(path, File)` pairs.
     """
-    lib_dir = "lib/" + tfm if rid == None else "runtimes/{}/lib/{}".format(rid, tfm)
-    ref_dir = "ref/" + tfm
+
+    # `dotnet pack` names the folder `net8.0-windows7.0`.
+    folder = tfm_to_nuget_framework(tfm) if framework_platform(tfm) else tfm
+    lib_dir = "lib/" + folder if rid == None else "runtimes/{}/lib/{}".format(rid, folder)
+    ref_dir = "ref/" + folder
 
     # Docs travel with whichever folder a compile consults.
     doc_dir = lib_dir if rid == None else ref_dir
@@ -514,25 +516,26 @@ def dependency_group(tfm, dependencies):
         ],
     )
 
-def framework_reference_group(tfm, project_sdk):
-    """The shared framework a web library's consumers need, if any.
+def framework_reference_group(tfm, framework_references):
+    """The framework reference group of a package for one framework, possibly empty.
 
     Args:
       tfm: The target framework moniker.
-      project_sdk: The `project_sdk` the library was compiled with.
+      framework_references: The framework references of the library and of
+        every assembly bundled with it, from their DotnetAssemblyRuntimeInfo.
 
     Returns:
-      A struct for the request, or None when the framework is implied.
+      A struct for the request.
     """
-    if normalize_project_sdk(project_sdk) != WEB_SDK:
-        return None
-
-    if not is_core_framework(tfm) or not is_greater_or_equal_framework(tfm, _FIRST_FRAMEWORK_REFERENCE_TFM):
-        return None
+    references = {}
+    if is_core_framework(tfm) and is_greater_or_equal_framework(tfm, _FIRST_FRAMEWORK_REFERENCE_TFM):
+        for reference in framework_references:
+            # NuGet compares framework reference names case-insensitively.
+            references.setdefault(reference.lower(), reference)
 
     return struct(
         targetFramework = tfm_to_nuget_framework(tfm),
-        frameworkReferences = [_ASPNETCORE_FRAMEWORK_REFERENCE],
+        frameworkReferences = sorted(references.values()),
     )
 
 def _check_package_path(path, label):

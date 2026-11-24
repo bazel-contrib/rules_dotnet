@@ -1,0 +1,86 @@
+# A WPF library package. As with `dotnet pack`, its folders are named
+# `net10.0-windows7.0`, and its .NET Standard build has an empty framework
+# reference group.
+#
+# NU5131 is as for every package with a `ref/` folder.
+
+load("//dotnet:defs.bzl", "csharp_library", "nuget_pack")
+load("//dotnet/private/tests/nuget_pack:nuget_pack_test.bzl", "nuget_pack_test")
+
+csharp_library(
+    name = "controls",
+    srcs = ["Controls.cs"],
+    out = "RulesDotnet.Tests.WpfControls",
+    framework_references = ["Microsoft.WindowsDesktop.App.WPF"],
+    target_frameworks = [
+        "netstandard2.0",
+        "net10.0-windows",
+    ],
+    version = "1.0.0",
+)
+
+nuget_pack(
+    name = "controls_pack",
+    authors = ["rules_dotnet"],
+    description = "A WPF library packed by rules_dotnet's own tests.",
+    library = ":controls",
+    package_id = "RulesDotnet.Tests.WpfControls",
+    target_frameworks = [
+        "netstandard2.0",
+        "net10.0-windows",
+    ],
+)
+
+nuget_pack_test(
+    name = "controls_pack_test",
+    contents = {
+        "expected/controls_pack.nuspec": "RulesDotnet.Tests.WpfControls.nuspec",
+    },
+    files = [
+        "lib/net10.0-windows7.0/RulesDotnet.Tests.WpfControls.dll",
+        "lib/net10.0-windows7.0/RulesDotnet.Tests.WpfControls.xml",
+        "lib/netstandard2.0/RulesDotnet.Tests.WpfControls.dll",
+        "lib/netstandard2.0/RulesDotnet.Tests.WpfControls.xml",
+        "ref/net10.0-windows7.0/RulesDotnet.Tests.WpfControls.dll",
+        "ref/netstandard2.0/RulesDotnet.Tests.WpfControls.dll",
+    ],
+    package = ":controls_pack",
+    warnings = ["NU5131"],
+)
+
+# Bundles the WPF library, so the package references WPF.
+csharp_library(
+    name = "shell",
+    srcs = ["Shell.cs"],
+    out = "RulesDotnet.Tests.WpfShell",
+    target_frameworks = ["net10.0-windows"],
+    version = "1.0.0",
+    deps = [":controls"],
+)
+
+nuget_pack(
+    name = "shell_pack",
+    authors = ["rules_dotnet"],
+    description = "A library bundling a WPF library, packed by rules_dotnet's own tests.",
+    first_party_deps = "bundle",
+    library = ":shell",
+    package_id = "RulesDotnet.Tests.WpfShell",
+    target_frameworks = ["net10.0-windows"],
+)
+
+nuget_pack_test(
+    name = "shell_pack_test",
+    contents = {
+        "expected/shell_pack.nuspec": "RulesDotnet.Tests.WpfShell.nuspec",
+    },
+    files = [
+        "lib/net10.0-windows7.0/RulesDotnet.Tests.WpfControls.dll",
+        "lib/net10.0-windows7.0/RulesDotnet.Tests.WpfControls.xml",
+        "lib/net10.0-windows7.0/RulesDotnet.Tests.WpfShell.dll",
+        "lib/net10.0-windows7.0/RulesDotnet.Tests.WpfShell.xml",
+        "ref/net10.0-windows7.0/RulesDotnet.Tests.WpfControls.dll",
+        "ref/net10.0-windows7.0/RulesDotnet.Tests.WpfShell.dll",
+    ],
+    package = ":shell_pack",
+    warnings = ["NU5131"],
+)

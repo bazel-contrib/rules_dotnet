@@ -102,11 +102,25 @@ def _round_trip_test_impl(ctx):
 
 def _framework_reference_test_impl(ctx):
     env = unittest.begin(ctx)
-    asserts.equals(env, None, framework_reference_group("net9.0", "default"))
-    asserts.equals(env, None, framework_reference_group("netstandard2.0", "web"))
-    asserts.equals(env, None, framework_reference_group("netcoreapp2.1", "web"))
-    asserts.equals(env, ["Microsoft.AspNetCore.App"], framework_reference_group("netcoreapp3.1", "web").frameworkReferences)
-    asserts.equals(env, "net9.0", framework_reference_group("net9.0", "razor").targetFramework)
+    web = ["Microsoft.AspNetCore.App"]
+    asserts.equals(env, web, framework_reference_group("netcoreapp3.1", web).frameworkReferences)
+    asserts.equals(env, "net9.0", framework_reference_group("net9.0", web).targetFramework)
+
+    # Empty where nothing is or can be referenced.
+    asserts.equals(env, [], framework_reference_group("net9.0", []).frameworkReferences)
+    asserts.equals(env, ".NETStandard2.0", framework_reference_group("netstandard2.0", web).targetFramework)
+    asserts.equals(env, [], framework_reference_group("netstandard2.0", web).frameworkReferences)
+    asserts.equals(env, [], framework_reference_group("netcoreapp2.1", web).frameworkReferences)
+
+    # Deduplicated case-insensitively, as NuGet compares them.
+    asserts.equals(env, web, framework_reference_group("net9.0", web + ["microsoft.aspnetcore.app"]).frameworkReferences)
+
+    # As the SDK packs them: profiles and all, in a stable order.
+    asserts.equals(
+        env,
+        ["Microsoft.AspNetCore.App", "Microsoft.WindowsDesktop.App.WPF"],
+        framework_reference_group("net8.0", ["Microsoft.WindowsDesktop.App.WPF", "Microsoft.AspNetCore.App"]).frameworkReferences,
+    )
     return unittest.end(env)
 
 # --- Package ids -------------------------------------------------------------

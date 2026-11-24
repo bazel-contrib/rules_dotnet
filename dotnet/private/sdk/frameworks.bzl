@@ -64,6 +64,56 @@ SDK_NETCOREAPP_FRAMEWORKS = [
 # framework, so that nothing but the SDK limits what a target can build for.
 DEFAULT_TARGET_FRAMEWORK = SDK_NETCOREAPP_FRAMEWORKS[-1]
 
+# `-windows` means Windows 7.0. Frameworks for later versions, such as
+# `net8.0-windows10.0.19041.0`, need the Windows SDK projections and are not
+# supported.
+WINDOWS_PLATFORM = "windows"
+WINDOWS_PLATFORM_VERSION = "7.0"
+
+# The Windows specific framework of each .NET release since .NET 5.
+SDK_WINDOWS_FRAMEWORKS = [
+    "{}-{}".format(tfm, WINDOWS_PLATFORM)
+    for tfm in SDK_NETCOREAPP_FRAMEWORKS
+    if not tfm.startswith("netcoreapp")
+]
+
+def base_framework(tfm):
+    """The target framework without its platform: `net8.0` for `net8.0-windows`.
+
+    Args:
+      tfm: A target framework moniker.
+
+    Returns:
+      The moniker without its platform.
+    """
+    return tfm.partition("-")[0]
+
+def normalize_platform_framework(tfm):
+    """Normalizes `net8.0-windows7.0`, as NuGet writes it, to `net8.0-windows`.
+
+    Args:
+      tfm: A lower cased target framework moniker.
+
+    Returns:
+      `net8.0-windows` for either spelling, and any other moniker as it is.
+    """
+    (base, separator, platform) = tfm.partition("-")
+    if separator and platform in [WINDOWS_PLATFORM, WINDOWS_PLATFORM + WINDOWS_PLATFORM_VERSION]:
+        return "{}-{}".format(base, WINDOWS_PLATFORM)
+
+    return tfm
+
+def framework_platform(tfm):
+    """The platform of a target framework: `windows` for `net8.0-windows`.
+
+    Args:
+      tfm: A target framework moniker.
+
+    Returns:
+      The platform, or "" if there is none.
+    """
+    return tfm.partition("-")[2]
+
 def _dotted_version(tfm, prefix):
     return [int(part) for part in tfm[len(prefix):].split(".")]
 
@@ -87,7 +137,8 @@ SDK_LANG_VERSIONS = (
         for tfm in SDK_NETSTANDARD_FRAMEWORKS
     } |
     {tfm: "7.3" for tfm in SDK_NETFRAMEWORK_FRAMEWORKS} |
-    {tfm: _netcoreapp_lang_version(tfm) for tfm in SDK_NETCOREAPP_FRAMEWORKS}
+    {tfm: _netcoreapp_lang_version(tfm) for tfm in SDK_NETCOREAPP_FRAMEWORKS} |
+    {tfm: _netcoreapp_lang_version(base_framework(tfm)) for tfm in SDK_WINDOWS_FRAMEWORKS}
 )
 
 # Monikers rules_dotnet accepts that the SDK's lists omit, by the framework
@@ -130,11 +181,32 @@ def _compatibility(families):
 
     return compatibility
 
+def _with_windows_frameworks(compatibility):
+    """Inserts each Windows specific framework right after its base framework.
+
+    `net8.0-windows` can consume `net8.0` and `net7.0-windows`. The order is
+    the one NuGet prefers package assets in: `net8.0-windows`, `net8.0`,
+    `net7.0-windows`, `net7.0` and so on.
+    """
+    result = {}
+    previous = None
+
+    for (tfm, compatible) in compatibility.items():
+        result[tfm] = compatible
+
+        windows = "{}-{}".format(tfm, WINDOWS_PLATFORM)
+        if windows in SDK_WINDOWS_FRAMEWORKS:
+            result[windows] = [tfm] + ([previous] if previous else [])
+            previous = windows
+
+    return result
+
 # Each framework mapped to the frameworks it can directly compile against.
 # The relationship is transitive. Order matters: netstandard first, and
-# within a family oldest to newest.
-FRAMEWORK_COMPATIBILITY = _compatibility([
+# within a family oldest to newest, a Windows specific framework right after
+# the one it is specific to.
+FRAMEWORK_COMPATIBILITY = _with_windows_frameworks(_compatibility([
     SDK_NETSTANDARD_FRAMEWORKS,
     SDK_NETFRAMEWORK_FRAMEWORKS,
     SDK_NETCOREAPP_FRAMEWORKS,
-])
+]))

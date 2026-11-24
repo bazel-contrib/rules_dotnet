@@ -135,6 +135,22 @@ filegroup(
     visibility = ["//visibility:public"],
 )
 
+# PresentationBuildTasks and the assemblies it loads from the SDK. The net472
+# copies are for MSBuild.exe on .NET Framework.
+filegroup(
+    name = "wpf_build_tasks",
+    srcs = glob(
+        [
+            "sdk/{sdk_version}/Sdks/Microsoft.NET.Sdk.WindowsDesktop/tools/*/PresentationBuildTasks.dll",
+            "sdk/{sdk_version}/System.CodeDom.dll",
+            "sdk/{sdk_version}/System.Reflection.MetadataLoadContext.dll",
+        ],
+        exclude = ["**/net472/**"],
+        allow_empty = True,
+    ),
+    visibility = ["//visibility:public"],
+)
+
 # The tasks that implement scoped CSS, and the CSS parser they use. The net472
 # copies are for MSBuild.exe on .NET Framework; ours run on the .NET host.
 filegroup(
@@ -242,6 +258,7 @@ dotnet_toolchain(
     web_sdk_analyzers = ":web_sdk_analyzers",
     static_web_assets_tasks = ":static_web_assets_tasks",
     msbuild_tasks = ":msbuild_tasks",
+    wpf_build_tasks = ":wpf_build_tasks",
     msbuild_dlls = [":msbuild_framework", ":msbuild_utilities", ":msbuild_string_tools"],
     os = "{os}",
     sdk_version = "{sdk_version}",

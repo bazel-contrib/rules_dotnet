@@ -7,6 +7,8 @@ load(
     "//dotnet/private:common.bzl",
     "add_resource_args",
     "add_resx_resource_args",
+    "applicable_frameworks",
+    "check_windows_frameworks",
     "collect_compile_info",
     "copy_appsettings_to_dir",
     "copy_content_to_dir",
@@ -18,6 +20,7 @@ load(
     "get_framework_version_info",
     "is_core_framework",
     "is_standard_framework",
+    "target_platform",
     "use_highentropyva",
 )
 load("//dotnet/private:nuget_version.bzl", "DEFAULT_ASSEMBLY_VERSION", "nuget_version")
@@ -28,6 +31,7 @@ load(
 )
 load("//dotnet/private/icu:settings.bzl", "globalization_env", "icu_wrapper_arguments")
 load("//dotnet/private/rules/common:resx.bzl", "resx_compile")
+load("//dotnet/private/sdk:packs.bzl", "framework_references_of")
 
 def _format_targetprofile(tfm):
     if is_standard_framework(tfm):
@@ -73,8 +77,8 @@ do()
 
     return output
 
-def _write_assembly_info_fsharp(actions, label_name, dll_name, version, user_secrets_id = ""):
-    """Write a .fs file carrying the assembly version and user-secrets attributes.
+def _write_assembly_info_fsharp(actions, label_name, dll_name, version, user_secrets_id = "", platform = None):
+    """Write a .fs file carrying the assembly version, user-secrets and platform attributes.
 
     Args:
       actions: An actions module, usually from ctx.actions.
@@ -82,11 +86,12 @@ def _write_assembly_info_fsharp(actions, label_name, dll_name, version, user_sec
       dll_name: The assembly name.
       version: The target's `version` attribute; "" when unset.
       user_secrets_id: The target's `user_secrets_id` attribute; "" when unset.
+      platform: The platform the target framework targets, from `target_platform`, or None.
 
     Returns:
       A File object for a generated .fs file, or None when no attributes are set.
     """
-    if not version and not user_secrets_id:
+    if not version and not user_secrets_id and not platform:
         return None
 
     lines = [
@@ -107,6 +112,12 @@ def _write_assembly_info_fsharp(actions, label_name, dll_name, version, user_sec
         lines.append(
             "[<assembly: Microsoft.Extensions.Configuration.UserSecrets.UserSecretsIdAttribute(\"%s\")>]" % escaped,
         )
+    if platform:
+        # As the SDK writes them for a platform specific framework.
+        lines.extend([
+            "[<assembly: System.Runtime.Versioning.TargetPlatform(\"%s\")>]" % platform,
+            "[<assembly: System.Runtime.Versioning.SupportedOSPlatform(\"%s\")>]" % platform,
+        ])
     lines.extend(["do ()", ""])
 
     output = actions.declare_file("%s/%s/assemblyinfo.fs" % (label_name, dll_name))
@@ -159,7 +170,8 @@ def AssemblyAction(
         project_sdk,
         compiler_options,
         is_windows,
-        user_secrets_id = ""):
+        user_secrets_id = "",
+        frameworks = {}):
     """Creates an action that runs the F# compiler with the specified inputs.
 
     This macro aims to match the [F# compiler](https://docs.microsoft.com/en-us/dotnet/fsharp/language-reference/compiler-options), with the inputs mapping to compiler options.
@@ -203,6 +215,7 @@ def AssemblyAction(
         compiler_options: Additional compiler options to pass to the compiler.
         is_windows: Whether or not the target is running on Windows.
         user_secrets_id: The user secrets ID (`<UserSecretsId>` in MSBuild), or "" for none.
+        frameworks: The shared frameworks the assembly references beyond Microsoft.NETCore.App, as `resolve_framework_references` returns them.
 
     Returns:
         The compile and runtime providers, and the static web assets the compile
@@ -210,6 +223,8 @@ def AssemblyAction(
     """
 
     assembly_name = target_name if out == "" else out
+    frameworks = applicable_frameworks(target_framework, frameworks)
+    check_windows_frameworks(label, target_framework, frameworks)
     subsystem_version = get_framework_version_info(target_framework)
     (
         irefs,
@@ -237,7 +252,7 @@ def AssemblyAction(
 
         defines = defines + ["NULLABLE"]
 
-    assembly_info_fs = _write_assembly_info_fsharp(actions, target_name, assembly_name, version, user_secrets_id)
+    assembly_info_fs = _write_assembly_info_fsharp(actions, target_name, assembly_name, version, user_secrets_id, target_platform(target_framework))
     if assembly_info_fs:
         # First rather than last: a binary's entry point has to be in the last file.
         srcs = [assembly_info_fs] + srcs
@@ -420,6 +435,7 @@ def AssemblyAction(
         native = [],
         deps = depset([dep[DotnetAssemblyRuntimeInfo] for dep in deps], transitive = [dep[DotnetAssemblyRuntimeInfo].deps for dep in deps]),
         nuget_info = None,
+        framework_references = framework_references_of(frameworks),
         direct_deps_depsjson_fragment = {dep[DotnetAssemblyRuntimeInfo].name: dep[DotnetAssemblyRuntimeInfo].version for dep in deps},
     ), [])
 
