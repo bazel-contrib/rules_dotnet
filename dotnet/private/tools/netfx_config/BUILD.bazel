@@ -3,12 +3,24 @@ load(
     "bootstrap_tool_binary",
 )
 
-# Generates a .NET Framework `<exe>.config` file with `<bindingRedirect>`
-# entries for all strong-named assemblies staged alongside the executable.
+# The tool's logic, without its entry point, for the tests to compile against.
+filegroup(
+    name = "srcs",
+    srcs = ["NetFxConfig.cs"],
+    visibility = ["//dotnet/private/tests/netframework_binary:__pkg__"],
+)
+
+# Finishes the output directory of a .NET Framework application: picks the
+# copy of an assembly it ships when its dependencies bring several, and writes
+# its `<exe>.config` with `<supportedRuntime>` and binding redirects. See
+# NetFxConfig.cs.
 bootstrap_tool_binary(
     name = "netfx_config",
-    srcs = ["Program.cs"],
+    srcs = [
+        "NetFxConfig.cs",
+        "Program.cs",
+    ],
     nullable = "enable",
-    target_frameworks = ["net10.0"],
+    target_frameworks = ["net11.0"],
     visibility = ["//visibility:public"],
 )

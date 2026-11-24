@@ -5,6 +5,7 @@ bzl_library(
     srcs = ["binary.bzl"],
     visibility = ["//dotnet:__subpackages__"],
     deps = [
+        ":netfx",
         ":static_web_assets",
         "//dotnet/private:common",
         "//dotnet/private:providers",
@@ -12,6 +13,12 @@ bzl_library(
         "//dotnet/private/rules/ready_to_run",
         "@bazel_skylib//rules:common_settings",
     ],
+)
+
+bzl_library(
+    name = "netfx",
+    srcs = ["netfx.bzl"],
+    visibility = ["//dotnet:__subpackages__"],
 )
 
 bzl_library(

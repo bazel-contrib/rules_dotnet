@@ -1154,6 +1154,66 @@ def _generate_depsjson(
 
     return depsjson_struct
 
+# What says how a .NET application is hosted, which a .NET Framework one is
+# not: the framework installed in Windows runs it.
+_NOT_FOR_NETFX = [
+    "self_contained",
+    "ready_to_run",
+    "ready_to_run_composite",
+    "native_aot",
+    "single_file",
+    "include_native_libraries_for_self_extract",
+    "enable_compression_in_single_file",
+]
+
+def _netfx_publish(ctx, binary_info, assembly_runtime_info, transitive_runtime_deps):
+    """Publishes a .NET Framework binary.
+
+    As `dotnet publish` does for .NET Framework, the publish is the binary's
+    output directory as it is, less the PDBs: the executable, its
+    `<exe>.config`, and the assemblies and native libraries beside it. There
+    is no deps.json, runtimeconfig.json or apphost.
+
+    Args:
+        ctx: The rule context.
+        binary_info: The binary's DotnetBinaryInfo.
+        assembly_runtime_info: The binary's DotnetAssemblyRuntimeInfo.
+        transitive_runtime_deps: The DotnetAssemblyRuntimeInfo of everything it depends on.
+
+    Returns:
+        The DefaultInfo and OutputGroupInfo of the publish.
+    """
+    for attribute in _NOT_FOR_NETFX:
+        if getattr(ctx.attr, attribute):
+            fail(("{}: `{}` does not apply to {}, which targets .NET Framework: the framework " +
+                  "installed in Windows runs it.").format(ctx.label, attribute, _binary(ctx).label))
+
+    runtime_identifier = ctx.attr.runtime_identifier
+    if not runtime_identifier:
+        fail("{}: set `runtime_identifier` to name the directory the publish goes in.".format(ctx.label))
+
+    layout = binary_info.netfx_layout
+    reject_conflicting_paths(layout, ctx.label)
+
+    entries = _publish_entries(layout)
+    (executable, outputs) = _copy_to_publish(ctx, runtime_identifier, entries, binary_info)
+    data = assembly_runtime_info.data + [file for dep in transitive_runtime_deps for file in dep.data]
+
+    output_groups = _publish_layers(
+        ctx,
+        dicts.add(entries, _runfiles_entries(ctx, executable, data)),
+        _dependency_layers(transitive_runtime_deps, None),
+    )
+
+    return [
+        DefaultInfo(
+            executable = executable,
+            files = depset(outputs),
+            runfiles = ctx.runfiles(files = data),
+        ),
+        OutputGroupInfo(**output_groups),
+    ]
+
 def _publish_binary_impl(ctx):
     assembly_compile_info = _binary(ctx)[DotnetAssemblyCompileInfo]
     assembly_runtime_info = _binary(ctx)[DotnetAssemblyRuntimeInfo]
@@ -1161,6 +1221,9 @@ def _publish_binary_impl(ctx):
     transitive_runtime_deps = binary_info.transitive_runtime_deps
     target_framework = ctx.attr.target_framework
     is_self_contained = ctx.attr.self_contained
+
+    if binary_info.netfx_layout != None:
+        return _netfx_publish(ctx, binary_info, assembly_runtime_info, transitive_runtime_deps)
 
     if ctx.attr.ready_to_run_composite and not (ctx.attr.ready_to_run and is_self_contained):
         fail("ready_to_run_composite requires ready_to_run and self_contained")
@@ -1412,7 +1475,11 @@ the publish directory:
   `runtimeconfig.json`, app settings and static web assets.
 
 Together they also hold the runfiles tree Bazel lays out beside the
-executable, each data file in the layer of the target it belongs to.""",
+executable, each data file in the layer of the target it belongs to.
+
+A .NET Framework binary is published as its output directory, less the PDBs:
+the executable, its `<exe>.config` and the files beside it, with no
+`deps.json`, `runtimeconfig.json` or apphost.""",
     # Read by the C/C++ toolchain a NativeAOT publish links with.
     fragments = ["cpp"],
     attrs = {

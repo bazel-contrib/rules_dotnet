@@ -6,6 +6,7 @@ load(
     "csharp_test",
     "fsharp_binary",
     "import_library",
+    "publish_binary",
 )
 
 csharp_binary(
@@ -87,20 +88,119 @@ fsharp_binary(
     ],
 )
 
+# Compiled against SharedDep 2.0.0.0, for the netfx_config tests: a reference
+# newer than the SharedDep 1.0.0.0 that Consumer brings.
+csharp_library(
+    name = "uses_v2",
+    srcs = ["UsesV2.cs"],
+    generate_documentation_file = False,
+    target_frameworks = ["net48"],
+    deps = [":shared_dep_v2"],
+)
+
+# Consumer brings SharedDep 1.0.0.0 and the binary SharedDep 2.0.0.0. As
+# MSBuild's ResolveAssemblyReference does, the application ships the highest
+# version, wherever each comes in the dependency graph, and redirects Consumer's
+# reference to it.
+_CONFLICT_DEPS = [
+    ":consumer_compiled",
+    ":shared_dep_v2",
+]
+
+csharp_binary(
+    name = "conflict_app",
+    srcs = ["ConflictApp.cs"],
+    target_frameworks = ["net48"],
+    deps = _CONFLICT_DEPS,
+)
+
+csharp_test(
+    name = "conflict_runtime_test",
+    size = "small",
+    srcs = ["ConflictApp.cs"],
+    target_compatible_with = ["@platforms//os:windows"],
+    target_frameworks = ["net48"],
+    deps = _CONFLICT_DEPS,
+)
+
+# The user's App.config, which the generated redirects and <supportedRuntime>
+# are merged into.
+csharp_binary(
+    name = "app_config_app",
+    srcs = ["AppConfigApp.cs"],
+    app_config = "App.config",
+    target_frameworks = ["net48"],
+    deps = [":consumer"],
+)
+
+csharp_test(
+    name = "app_config_runtime_test",
+    size = "small",
+    srcs = ["AppConfigApp.cs"],
+    app_config = "App.config",
+    target_compatible_with = ["@platforms//os:windows"],
+    target_frameworks = ["net48"],
+    deps = [":consumer"],
+)
+
+publish_binary(
+    name = "app_publish",
+    binary = ":app",
+    target_framework = "net48",
+)
+
+# Every file of the publish: `$(rootpaths)` of the publish itself names only its
+# executable.
+filegroup(
+    name = "app_publish_files",
+    srcs = [":app_publish"],
+)
+
 csharp_nunit_test(
     name = "netfx_output_test",
     size = "small",
     srcs = ["NetFxOutputTests.cs"],
     data = [
         ":app",
+        ":app_config_app",
+        ":app_publish_files",
+        ":conflict_app",
         ":fsharp_app",
     ],
     envs = {
+        "APP_CONFIG_APP_FILES": "$(rootpaths :app_config_app)",
+        "CONFLICT_APP_FILES": "$(rootpaths :conflict_app)",
         "CSHARP_APP_FILES": "$(rootpaths :app)",
+        "CSHARP_APP_LAUNCHER": "$(rootpath :app)",
         "FSHARP_APP_FILES": "$(rootpaths :fsharp_app)",
+        "PUBLISH_FILES": "$(rootpaths :app_publish_files)",
     },
     nullable = "enable",
     target_frameworks = ["net8.0"],
+)
+
+# Runs the tool's logic in process, on assemblies built here.
+csharp_nunit_test(
+    name = "netfx_config_test",
+    size = "small",
+    srcs = [
+        "NetFxConfigTests.cs",
+        "//dotnet/private/tools/netfx_config:srcs",
+    ],
+    data = [
+        ":consumer_compiled",
+        ":shared_dep_v1",
+        ":shared_dep_v2",
+        ":uses_v2",
+    ],
+    envs = {
+        "CONSUMER_FILES": "$(rootpaths :consumer_compiled)",
+        "SHARED_DEP_V1_FILES": "$(rootpaths :shared_dep_v1)",
+        "SHARED_DEP_V2_FILES": "$(rootpaths :shared_dep_v2)",
+        "USES_V2_FILES": "$(rootpaths :uses_v2)",
+    },
+    nullable = "enable",
+    target_frameworks = ["net10.0"],
 )
 
 csharp_test(

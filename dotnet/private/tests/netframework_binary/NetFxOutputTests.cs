@@ -1,6 +1,8 @@
 using System;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Reflection;
 using System.Reflection.Metadata;
 using System.Reflection.PortableExecutable;
 using System.Xml.Linq;
@@ -8,17 +10,52 @@ using NUnit.Framework;
 
 namespace NetFxBinaryTests;
 
+/// <summary>
+/// Checks the output directories of .NET Framework binaries, which every
+/// platform can build even though only Windows can run them.
+/// </summary>
 [TestFixture]
 public sealed class NetFxOutputTests
 {
-    private static string FindOutputDir(string envVar)
+    private static readonly XNamespace Asm = "urn:schemas-microsoft-com:asm.v1";
+
+    private static string[] Files(string envVar)
     {
         string raw = Environment.GetEnvironmentVariable(envVar) ?? "";
-        string? rel = raw
-            .Split(' ', StringSplitOptions.RemoveEmptyEntries)
-            .FirstOrDefault(p => p.Replace('\\', '/').Contains("/net48/"));
-        Assert.That(rel, Is.Not.Null, $"Expected /net48/ path in {envVar} ({raw})");
-        return Path.GetDirectoryName(Path.GetFullPath(rel!))!;
+        return raw.Split(' ', StringSplitOptions.RemoveEmptyEntries).Select(Path.GetFullPath).ToArray();
+    }
+
+    private static string FindOutputDir(string envVar, string marker = "/net48/")
+    {
+        string? file = Files(envVar).FirstOrDefault(p => p.Replace('\\', '/').Contains(marker));
+        Assert.That(file, Is.Not.Null, $"Expected a {marker} path in {envVar}");
+        return Path.GetDirectoryName(file!)!;
+    }
+
+    private static Version AssemblyVersion(string path) => AssemblyName.GetAssemblyName(path).Version!;
+
+    private static (string? Token, string? OldVersion, string? NewVersion)? Redirect(XDocument config, string name)
+    {
+        XElement? dependentAssembly = config
+            .Descendants(Asm + "dependentAssembly")
+            .SingleOrDefault(d => (string?)d.Element(Asm + "assemblyIdentity")?.Attribute("name") == name);
+        if (dependentAssembly is null)
+        {
+            return null;
+        }
+
+        return (
+            (string?)dependentAssembly.Element(Asm + "assemblyIdentity")?.Attribute("publicKeyToken"),
+            (string?)dependentAssembly.Element(Asm + "bindingRedirect")?.Attribute("oldVersion"),
+            (string?)dependentAssembly.Element(Asm + "bindingRedirect")?.Attribute("newVersion"));
+    }
+
+    private static void AssertSupportedRuntime(XDocument config)
+    {
+        XElement? supportedRuntime = config.Root!.Element("startup")?.Element("supportedRuntime");
+        Assert.That(supportedRuntime, Is.Not.Null, "Expected <startup><supportedRuntime>");
+        Assert.That((string?)supportedRuntime!.Attribute("version"), Is.EqualTo("v4.0"));
+        Assert.That((string?)supportedRuntime.Attribute("sku"), Is.EqualTo(".NETFramework,Version=v4.8"));
     }
 
     [Test]
@@ -27,17 +64,20 @@ public sealed class NetFxOutputTests
         string outDir = FindOutputDir("CSHARP_APP_FILES");
         string exePath = Path.Combine(outDir, "app.exe");
         string configPath = Path.Combine(outDir, "app.exe.config");
-        string sharedDepPath = Path.Combine(outDir, "SharedDep.dll");
-        string consumerPath = Path.Combine(outDir, "Consumer.dll");
-        string unsignedDepPath = Path.Combine(outDir, "unsigned_dep.dll");
 
-        Assert.That(File.Exists(exePath), Is.True);
-        Assert.That(File.Exists(configPath), Is.True);
-        Assert.That(File.Exists(sharedDepPath), Is.True);
-        Assert.That(File.Exists(consumerPath), Is.True);
-        Assert.That(File.Exists(unsignedDepPath), Is.True);
+        foreach (string name in new[] { "app.exe", "app.exe.config", "SharedDep.dll", "Consumer.dll", "unsigned_dep.dll" })
+        {
+            Assert.That(File.Exists(Path.Combine(outDir, name)), Is.True, name);
+        }
 
-        // Verify the embedded resource inside app.exe received the assembly-prefixed manifest name.
+        // The PDBs of dependencies sit beside them, for line numbers in stack traces.
+        Assert.That(File.Exists(Path.Combine(outDir, "SharedDep.pdb")), Is.True);
+        Assert.That(File.Exists(Path.Combine(outDir, "unsigned_dep.pdb")), Is.True);
+
+        // .NET Framework does not look in runtimes/<rid>/native.
+        Assert.That(Directory.Exists(Path.Combine(outDir, "runtimes")), Is.False);
+
+        // The embedded resource inside app.exe has the assembly-prefixed manifest name.
         using (var stream = File.OpenRead(exePath))
         using (var peReader = new PEReader(stream))
         {
@@ -48,47 +88,103 @@ public sealed class NetFxOutputTests
             Assert.That(resourceNames, Does.Contain("app.resource.txt"));
         }
 
-        // Verify app.exe.config contains a bindingRedirect for strong-named SharedDep (2.0.0.0)
-        // and omits unsigned_dep.
-        XDocument doc = XDocument.Load(configPath);
-        XNamespace asmNs = "urn:schemas-microsoft-com:asm.v1";
-        var identities = doc
-            .Descendants(asmNs + "dependentAssembly")
-            .Select(d => new
-            {
-                Name = d.Element(asmNs + "assemblyIdentity")?.Attribute("name")?.Value,
-                Token = d.Element(asmNs + "assemblyIdentity")?.Attribute("publicKeyToken")?.Value,
-                OldVersion = d.Element(asmNs + "bindingRedirect")?.Attribute("oldVersion")?.Value,
-                NewVersion = d.Element(asmNs + "bindingRedirect")?.Attribute("newVersion")?.Value,
-            })
-            .ToList();
+        XDocument config = XDocument.Load(configPath);
+        AssertSupportedRuntime(config);
 
-        var sharedRedirect = identities.SingleOrDefault(i => i.Name == "SharedDep");
-        Assert.That(sharedRedirect, Is.Not.Null, "Expected bindingRedirect for SharedDep");
-        Assert.That(sharedRedirect!.Token, Is.Not.Null.And.Length.EqualTo(16));
-        Assert.That(sharedRedirect.OldVersion, Is.EqualTo("0.0.0.0-2.0.0.0"));
-        Assert.That(sharedRedirect.NewVersion, Is.EqualTo("2.0.0.0"));
+        // Consumer references SharedDep 1.0.0.0 and the application ships 2.0.0.0.
+        Assert.That(AssemblyVersion(Path.Combine(outDir, "SharedDep.dll")), Is.EqualTo(new Version(2, 0, 0, 0)));
+        var sharedRedirect = Redirect(config, "SharedDep");
+        Assert.That(sharedRedirect, Is.Not.Null, "Expected a bindingRedirect for SharedDep");
+        Assert.That(sharedRedirect!.Value.Token, Has.Length.EqualTo(16));
+        Assert.That(sharedRedirect.Value.OldVersion, Is.EqualTo("0.0.0.0-2.0.0.0"));
+        Assert.That(sharedRedirect.Value.NewVersion, Is.EqualTo("2.0.0.0"));
 
-        Assert.That(identities.Any(i => i.Name == "unsigned_dep"), Is.False);
+        // An assembly without a strong name binds by name alone.
+        Assert.That(Redirect(config, "unsigned_dep"), Is.Null);
     }
 
     [Test]
-    public void FSharpNet48BinaryProducesExeAndBindingRedirects()
+    public void FSharpNet48BinaryProducesExeAndNoRedirectWithoutAConflict()
     {
         string outDir = FindOutputDir("FSHARP_APP_FILES");
-        string exePath = Path.Combine(outDir, "fsharp_app.exe");
-        string configPath = Path.Combine(outDir, "fsharp_app.exe.config");
-        string fsharpCorePath = Path.Combine(outDir, "FSharp.Core.dll");
 
-        Assert.That(File.Exists(exePath), Is.True);
-        Assert.That(File.Exists(configPath), Is.True);
-        Assert.That(File.Exists(fsharpCorePath), Is.True);
+        Assert.That(File.Exists(Path.Combine(outDir, "fsharp_app.exe")), Is.True);
+        Assert.That(File.Exists(Path.Combine(outDir, "FSharp.Core.dll")), Is.True);
 
-        XDocument doc = XDocument.Load(configPath);
-        XNamespace asmNs = "urn:schemas-microsoft-com:asm.v1";
-        var fsharpCoreIdentity = doc
-            .Descendants(asmNs + "assemblyIdentity")
-            .FirstOrDefault(e => e.Attribute("name")?.Value == "FSharp.Core");
-        Assert.That(fsharpCoreIdentity, Is.Not.Null, "Expected bindingRedirect for FSharp.Core");
+        // FSharp.Core is referenced at the version the application ships, so,
+        // as with MSBuild, nothing needs redirecting.
+        XDocument config = XDocument.Load(Path.Combine(outDir, "fsharp_app.exe.config"));
+        AssertSupportedRuntime(config);
+        Assert.That(Redirect(config, "FSharp.Core"), Is.Null);
+    }
+
+    [Test]
+    public void TheHighestVersionOfAnAssemblyIsShippedWhereverItComesInTheGraph()
+    {
+        // SharedDep 1.0.0.0 comes in through Consumer, ahead of the binary's own
+        // dependency on SharedDep 2.0.0.0.
+        string outDir = FindOutputDir("CONFLICT_APP_FILES");
+
+        Assert.That(AssemblyVersion(Path.Combine(outDir, "SharedDep.dll")), Is.EqualTo(new Version(2, 0, 0, 0)));
+        Assert.That(File.Exists(Path.Combine(outDir, "SharedDep.pdb")), Is.True);
+
+        XDocument config = XDocument.Load(Path.Combine(outDir, "conflict_app.exe.config"));
+        var redirect = Redirect(config, "SharedDep");
+        Assert.That(redirect, Is.Not.Null, "Expected a bindingRedirect for SharedDep");
+        Assert.That(redirect!.Value.OldVersion, Is.EqualTo("0.0.0.0-2.0.0.0"));
+        Assert.That(redirect.Value.NewVersion, Is.EqualTo("2.0.0.0"));
+    }
+
+    [Test]
+    public void TheGeneratedRedirectsAreMergedIntoAppConfig()
+    {
+        string outDir = FindOutputDir("APP_CONFIG_APP_FILES");
+        XDocument config = XDocument.Load(Path.Combine(outDir, "app_config_app.exe.config"));
+
+        // What the user wrote is kept...
+        XElement? setting = config.Root!.Element("appSettings")?.Elements("add")
+            .SingleOrDefault(e => (string?)e.Attribute("key") == "greeting");
+        Assert.That((string?)setting?.Attribute("value"), Is.EqualTo("hello-from-app-config"));
+        Assert.That(Redirect(config, "Unrelated")?.NewVersion, Is.EqualTo("9.0.0.0"));
+
+        // ...and the build adds to it.
+        AssertSupportedRuntime(config);
+        Assert.That(Redirect(config, "SharedDep")?.NewVersion, Is.EqualTo("2.0.0.0"));
+    }
+
+    [Test]
+    public void APublishIsTheOutputDirectoryWithoutPdbs()
+    {
+        string[] files = Files("PUBLISH_FILES");
+        string[] names = files.Select(Path.GetFileName).ToArray()!;
+
+        Assert.That(names, Is.SupersetOf(new[] { "app.exe", "app.exe.config", "SharedDep.dll", "Consumer.dll", "unsigned_dep.dll" }));
+        Assert.That(names.Where(n => n.EndsWith(".pdb", StringComparison.OrdinalIgnoreCase)), Is.Empty);
+        Assert.That(names.Where(n => n.EndsWith(".deps.json") || n.EndsWith(".runtimeconfig.json")), Is.Empty);
+        Assert.That(files.Select(Path.GetDirectoryName).Distinct().Count(), Is.EqualTo(1), "A publish is one flat directory");
+
+        string configPath = files.Single(f => Path.GetFileName(f) == "app.exe.config");
+        Assert.That(Redirect(XDocument.Load(configPath), "SharedDep")?.NewVersion, Is.EqualTo("2.0.0.0"));
+    }
+
+    [Test]
+    public void TheLauncherSaysANetFrameworkBinaryOnlyRunsOnWindows()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            Assert.Ignore("Windows runs .NET Framework binaries: net48_runtime_test covers it.");
+        }
+
+        string launcher = Path.GetFullPath(Environment.GetEnvironmentVariable("CSHARP_APP_LAUNCHER")!);
+        using Process process = Process.Start(new ProcessStartInfo(launcher)
+        {
+            RedirectStandardError = true,
+            UseShellExecute = false,
+        })!;
+        string error = process.StandardError.ReadToEnd();
+        process.WaitForExit();
+
+        Assert.That(process.ExitCode, Is.EqualTo(1));
+        Assert.That(error, Does.Contain("targets .NET Framework (net48), which only runs on Windows"));
     }
 }

@@ -30,6 +30,10 @@ def publish_layout(runtime_identifier, binary_info, assembly_files, runtime_pack
     for file in assembly_files.libs + assembly_files.appsetting_files:
         layout.append((file.basename, file))
 
+    # `app_config`, as `<assembly>.dll.config`.
+    if binary_info.app_config:
+        layout.append((binary_info.app_config.basename, binary_info.app_config))
+
     # Content files carry their destination path relative to the assembly
     # directory, preserving any subdirectory structure under the publish root.
     for entry in assembly_files.content_files:
