@@ -7,7 +7,7 @@ configuration goes - is the same, and lives here.
 """
 
 load("@bazel_skylib//lib:dicts.bzl", "dicts")
-load("//dotnet/private:common.bzl", "get_toolchain")
+load("//dotnet/private:common.bzl", "get_toolchain", "is_newer_version")
 load(
     "//dotnet/private:providers.bzl",
     "BlazorWasmSiteInfo",
@@ -45,9 +45,12 @@ def _is_published_native(basename):
 def _managed_assemblies(runtime_info, pack):
     """Every assembly the browser loads, keyed by file name.
 
-    The runtime pack carries a whole framework; the application and its
-    dependencies override any of it they replace, which is what a `deps.json`
-    would resolve at run time on any other platform.
+    The runtime pack carries a whole framework. A dependency replaces an
+    assembly of it only when the dependency is newer, as MSBuild resolves the
+    conflict and as a self-contained publish's `deps.json` does: a package
+    from an older release, such as one a library still asks for after the
+    framework took it in, would otherwise replace the assembly the framework's
+    own assemblies were built against, and they would fail to load it.
 
     Args:
       runtime_info: The application's `DotnetAssemblyRuntimeInfo`.
@@ -57,19 +60,26 @@ def _managed_assemblies(runtime_info, pack):
       A dict of file name to `File`.
     """
     assemblies = {}
+    pack_versions = {}
 
     for info in pack.assembly_runtime_infos:
         for lib in info.libs:
             assemblies[lib.basename] = lib
+            pack_versions[lib.basename] = info.version
 
         # The Mono pack keeps `System.Private.CoreLib.dll` among its native
         # files, but it is managed like any other.
         for native in info.native:
             if native.basename.endswith(".dll"):
                 assemblies[native.basename] = native
+                pack_versions[native.basename] = info.version
 
     for dep in runtime_info.deps.to_list():
         for lib in dep.libs:
+            pack_version = pack_versions.get(lib.basename)
+            if pack_version and not is_newer_version(dep.version, pack_version):
+                continue
+
             assemblies[lib.basename] = lib
 
     for lib in runtime_info.libs:

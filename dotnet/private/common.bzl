@@ -137,6 +137,18 @@ def fsharp_checks_nullness(sdk_version):
     """
     return int(sdk_version.split(".")[0]) >= _FSHARP_NULLNESS_CHECKING_SDK_MAJOR
 
+def is_newer_version(version, other):
+    """Whether one NuGet version is newer than another.
+
+    Args:
+        version: The version to compare, such as `10.0.12`.
+        other: The version to compare it with, such as `11.0.0`.
+
+    Returns:
+        True if `version` is the newer of the two.
+    """
+    return semver.to_comparable(version, relaxed = True) > semver.to_comparable(other, relaxed = True)
+
 def get_toolchain(ctx):
     """The .Net toolchain a target compiles with.
 
