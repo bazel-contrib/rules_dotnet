@@ -120,9 +120,13 @@ COMMON_ATTRS = {
         default = "",
     ),
     "target_frameworks": attr.string_list(
-        doc = "The target frameworks the target supports, such as `net8.0` or `netstandard2.0`. " +
-              "It is built for the one that best matches the framework of the target that depends on it. " +
-              "See https://learn.microsoft.com/en-us/dotnet/standard/frameworks",
+        doc = """The target frameworks the target supports, such as `net8.0` or `netstandard2.0`.
+        See https://learn.microsoft.com/en-us/dotnet/standard/frameworks
+
+        The target is built for one of them. As a dependency, it is the one NuGet would pick for
+        the depending target: the nearest compatible framework, or, for a .NET (Core) target with
+        none compatible, a .NET Framework one (`AssetTargetFallback`). Built on its own, it is the
+        newest, with .NET ahead of .NET Framework ahead of .NET Standard.""",
         mandatory = True,
         allow_empty = False,
     ),

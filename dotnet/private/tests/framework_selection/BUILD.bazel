@@ -1,0 +1,36 @@
+load("//dotnet:defs.bzl", "csharp_library")
+load(":tests.bzl", "framework_selection_test_suite")
+
+csharp_library(
+    name = "net48_and_netstandard",
+    srcs = ["Lib.cs"],
+    target_frameworks = [
+        "net48",
+        "netstandard2.0",
+    ],
+)
+
+csharp_library(
+    name = "net48_only",
+    srcs = ["Lib.cs"],
+    target_frameworks = ["net48"],
+)
+
+csharp_library(
+    name = "net8_consumer",
+    srcs = ["Consumer.cs"],
+    target_frameworks = ["net8.0"],
+    deps = [
+        ":net48_and_netstandard",
+        ":net48_only",
+    ],
+)
+
+csharp_library(
+    name = "net48_consumer",
+    srcs = ["Consumer.cs"],
+    target_frameworks = ["net48"],
+    deps = [":net48_and_netstandard"],
+)
+
+framework_selection_test_suite(name = "framework_selection_test")

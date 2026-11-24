@@ -495,34 +495,6 @@ def get_framework_version_info(tfm):
     """The PE subsystem version to compile `tfm` with, or None to leave it to the compiler."""
     return _subsystem_version.get(tfm)
 
-def get_highest_compatible_target_framework(incoming_tfm, tfms):
-    """Returns the highest compatible framework version for the incoming_tfm.
-
-    Args:
-      incoming_tfm: The target framework of the incoming binary
-      tfms: A list of target frameworks
-    Returns:
-        The highest compatible framework version
-    """
-    if incoming_tfm in tfms:
-        return incoming_tfm
-
-    compatible = TRANSITIVE_FRAMEWORK_COMPATIBILITY.get(incoming_tfm)
-    if compatible == None:
-        fail("Target framework moniker is not supported/valid: {}".format(incoming_tfm))
-
-    # Without a transition, pick the newest framework the target lists.
-    untouched = incoming_tfm == DEFAULT_TFM
-
-    # Newest first. `net7.0-windows` sorts before `net8.0`, but only Windows
-    # specific frameworks can consume it.
-    incoming_tfm_index = FRAMEWORK_COMPATIBILITY.keys().index(incoming_tfm)
-    for tfm in reversed(FRAMEWORK_COMPATIBILITY.keys()[:incoming_tfm_index]):
-        if tfm in tfms and (untouched or not framework_platform(tfm) or sets.contains(compatible, tfm)):
-            return tfm
-
-    return None
-
 _NUGET_FRAMEWORK_IDENTIFIERS = {
     ".netcoreapp": "netcoreapp",
     ".netframework": "net",
@@ -674,6 +646,73 @@ def get_nearest_compatible_target_framework(incoming_tfm, tfms):
     # the last compatible entry is the most specific match.
     for tfm in reversed(FRAMEWORK_COMPATIBILITY.keys()):
         if tfm in tfms and sets.contains(compatible, tfm):
+            return tfm
+
+    return None
+
+# The .NET Framework versions a .NET Core 2.0 or later target falls back to when
+# a dependency has nothing compatible, in the order NuGet tries them. The SDK's
+# `AssetTargetFallback`, from Microsoft.NET.TargetFrameworkInference.targets.
+_ASSET_TARGET_FALLBACK = ["net461", "net462", "net47", "net471", "net472", "net48", "net481"]
+
+def get_dependency_target_framework(consumer_tfm, tfms):
+    """Returns the entry of `tfms` that a target built for `consumer_tfm` uses.
+
+    As NuGet picks a project reference's framework: the nearest compatible one,
+    else, for .NET Core 2.0 and later, a .NET Framework one through
+    `AssetTargetFallback` (where MSBuild warns with NU1702).
+
+    Args:
+      consumer_tfm: The target framework of the depending target.
+      tfms: The frameworks the dependency can be built for.
+
+    Returns:
+      The framework to build the dependency for, or None if none is usable.
+    """
+    nearest = get_nearest_compatible_target_framework(consumer_tfm, tfms)
+    if nearest or not sets.contains(TRANSITIVE_FRAMEWORK_COMPATIBILITY[consumer_tfm], "netcoreapp2.0"):
+        return nearest
+
+    for fallback in _ASSET_TARGET_FALLBACK:
+        nearest = get_nearest_compatible_target_framework(fallback, tfms)
+        if nearest:
+            return nearest
+
+    return None
+
+def get_newest_target_framework(requested_tfm, tfms):
+    """Returns the newest entry of `tfms` up to `requested_tfm`, in any framework family.
+
+    What a target builds for when no .NET target depends on it, as on the
+    command line, so that a .NET Framework target still builds on its own. .NET
+    ranks above .NET Framework, which ranks above .NET Standard, and `-windows`
+    counts as the release it is specific to.
+
+    Args:
+      requested_tfm: The configuration's target framework.
+      tfms: The frameworks the target can be built for.
+
+    Returns:
+      The framework to build the target for, or None if none qualifies.
+    """
+    if requested_tfm in tfms:
+        return requested_tfm
+
+    if requested_tfm not in FRAMEWORK_COMPATIBILITY:
+        fail("Target framework moniker is not supported/valid: {}".format(requested_tfm))
+
+    # FRAMEWORK_COMPATIBILITY lists .NET Standard, then .NET Framework, then
+    # .NET, each oldest to newest, with a Windows specific framework right
+    # after the release it is specific to and so no newer than.
+    frameworks = FRAMEWORK_COMPATIBILITY.keys()
+    end = frameworks.index(requested_tfm) + 1
+    for tfm in frameworks[end:]:
+        if base_framework(tfm) != base_framework(requested_tfm):
+            break
+        end += 1
+
+    for tfm in reversed(frameworks[:end]):
+        if tfm in tfms:
             return tfm
 
     return None

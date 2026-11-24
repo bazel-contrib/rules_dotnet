@@ -10,6 +10,7 @@ load("//dotnet/private/sdk:packs.bzl", "WASM_RID")
 load(
     "//dotnet/private/transitions:common.bzl",
     "FRAMEWORK_COMPATABILITY_TRANSITION_OUTPUTS",
+    "FRAMEWORK_FROM_CONSUMER",
     "NO_READY_TO_RUN",
     "TFM_RID_TRANSITION_OUTPUTS",
     "rid_compatability_transition_outputs",
@@ -20,6 +21,7 @@ def _impl(_settings, attr):
         {
             "//dotnet:target_framework": attr.target_framework,
             "//dotnet:rid": WASM_RID,
+            FRAMEWORK_FROM_CONSUMER: True,
         },
         FRAMEWORK_COMPATABILITY_TRANSITION_OUTPUTS[attr.target_framework],
         rid_compatability_transition_outputs(WASM_RID),

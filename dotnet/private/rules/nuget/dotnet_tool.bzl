@@ -1,6 +1,6 @@
 """Rule that allows running .NET command-line tools hermetically within Bazel."""
 
-load("//dotnet/private:common.bzl", "get_highest_compatible_target_framework", "get_toolchain", "to_rlocation_path")
+load("//dotnet/private:common.bzl", "get_nearest_compatible_target_framework", "get_toolchain", "to_rlocation_path")
 load("//dotnet/private/icu:settings.bzl", "icu_files", "icu_launcher_environment")
 
 DotnetToolInfo = provider(
@@ -45,7 +45,7 @@ def _dotnet_tool_impl(ctx):
     runtime = toolchain.runtime
     dotnet_info = toolchain.dotnetinfo
 
-    framework = get_highest_compatible_target_framework(dotnet_info.runtime_tfm, ctx.attr.target_frameworks)
+    framework = get_nearest_compatible_target_framework(dotnet_info.runtime_tfm, ctx.attr.target_frameworks)
     if framework == None:
         fail("The current .NET runtime ({}) does not support any of the target frameworks specified for this tool: {}".format(dotnet_info.runtime_tfm, ctx.attr.target_frameworks))
 

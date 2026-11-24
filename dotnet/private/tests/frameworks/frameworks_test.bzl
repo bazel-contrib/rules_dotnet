@@ -8,8 +8,9 @@ load("@bazel_skylib//lib:unittest.bzl", "asserts", "unittest")
 load(
     "//dotnet/private:common.bzl",
     "framework_preprocessor_symbols",
-    "get_highest_compatible_target_framework",
+    "get_dependency_target_framework",
     "get_nearest_compatible_target_framework",
+    "get_newest_target_framework",
     "nuget_framework_to_tfm",
     "shared_framework_version",
     "target_platform",
@@ -161,23 +162,68 @@ def _windows_frameworks_test_impl(ctx):
     asserts.equals(env, "net7.0", get_nearest_compatible_target_framework("net8.0", ["net7.0", "net7.0-windows"]))
 
     # What a dependency builds for.
-    asserts.equals(env, "net8.0", get_highest_compatible_target_framework("net8.0-windows", ["net8.0", "net9.0"]))
-    asserts.equals(env, "net8.0-windows", get_highest_compatible_target_framework("net9.0-windows", ["net8.0-windows", "net8.0"]))
-    asserts.equals(env, None, get_highest_compatible_target_framework("net9.0", ["net8.0-windows"]))
-    asserts.equals(env, "net8.0", get_highest_compatible_target_framework("net9.0", ["net8.0-windows", "net8.0"]))
+    asserts.equals(env, "net8.0", get_dependency_target_framework("net8.0-windows", ["net8.0", "net9.0"]))
+    asserts.equals(env, "net8.0-windows", get_dependency_target_framework("net9.0-windows", ["net8.0-windows", "net8.0"]))
+    asserts.equals(env, None, get_dependency_target_framework("net9.0", ["net8.0-windows"]))
+    asserts.equals(env, "net8.0", get_dependency_target_framework("net9.0", ["net8.0-windows", "net8.0"]))
 
-    # Without a transition, the newest listed framework.
-    asserts.equals(env, "net8.0-windows", get_highest_compatible_target_framework(DEFAULT_TARGET_FRAMEWORK, ["net8.0-windows"]))
+    # Built on its own, the newest listed framework, a Windows specific one
+    # being no newer than the release it is specific to.
+    asserts.equals(env, "net8.0-windows", get_newest_target_framework(DEFAULT_TARGET_FRAMEWORK, ["net8.0-windows"]))
+    asserts.equals(env, DEFAULT_TARGET_FRAMEWORK + "-windows", get_newest_target_framework(DEFAULT_TARGET_FRAMEWORK, [DEFAULT_TARGET_FRAMEWORK + "-windows"]))
+    asserts.equals(env, "net8.0-windows", get_newest_target_framework("net8.0", ["net8.0-windows", "net9.0"]))
 
     return unittest.end(env)
 
 _windows_frameworks_test = unittest.make(_windows_frameworks_test_impl)
 
+def _dependency_target_framework_test_impl(ctx):
+    env = unittest.begin(ctx)
+
+    # The nearest compatible framework wins, never one of another family.
+    asserts.equals(env, "netstandard2.0", get_dependency_target_framework("net8.0", ["net48", "netstandard2.0"]))
+    asserts.equals(env, "net6.0", get_dependency_target_framework("net8.0", ["net48", "netstandard2.0", "net6.0", "net10.0"]))
+    asserts.equals(env, "net461", get_dependency_target_framework("net48", ["netstandard2.0", "net461"]))
+    asserts.equals(env, "netstandard2.0", get_dependency_target_framework("net48", ["netstandard2.1", "netstandard2.0"]))
+
+    # Failing that, .NET Core 2.0 and later fall back to .NET Framework, trying
+    # net461 first as NuGet does.
+    asserts.equals(env, "net48", get_dependency_target_framework("net8.0", ["net48"]))
+    asserts.equals(env, "net472", get_dependency_target_framework("net8.0", ["net472", "net48"]))
+    asserts.equals(env, "net48", get_dependency_target_framework("netcoreapp2.0", ["net48"]))
+
+    # Nothing else falls back.
+    asserts.equals(env, None, get_dependency_target_framework("netcoreapp1.1", ["net48"]))
+    asserts.equals(env, None, get_dependency_target_framework("netstandard2.0", ["net48"]))
+    asserts.equals(env, None, get_dependency_target_framework("net48", ["netstandard2.1", "net8.0"]))
+    asserts.equals(env, None, get_dependency_target_framework("net6.0", ["net8.0"]))
+
+    return unittest.end(env)
+
+_dependency_target_framework_test = unittest.make(_dependency_target_framework_test_impl)
+
+def _newest_target_framework_test_impl(ctx):
+    env = unittest.begin(ctx)
+
+    asserts.equals(env, "net8.0", get_newest_target_framework("net8.0", ["net6.0", "net8.0"]))
+    asserts.equals(env, "net8.0", get_newest_target_framework(DEFAULT_TARGET_FRAMEWORK, ["net48", "net6.0", "net8.0"]))
+
+    # A target nothing depends on builds on its own whatever its family.
+    asserts.equals(env, "net48", get_newest_target_framework(DEFAULT_TARGET_FRAMEWORK, ["net472", "net48", "netstandard2.0"]))
+    asserts.equals(env, "netstandard2.1", get_newest_target_framework(DEFAULT_TARGET_FRAMEWORK, ["netstandard2.0", "netstandard2.1"]))
+    asserts.equals(env, None, get_newest_target_framework("net6.0", ["net8.0"]))
+
+    return unittest.end(env)
+
+_newest_target_framework_test = unittest.make(_newest_target_framework_test_impl)
+
 def frameworks_test_suite(name):
     unittest.suite(
         name,
         _compatibility_test,
+        _dependency_target_framework_test,
         _windows_frameworks_test,
         _lang_versions_test,
+        _newest_target_framework_test,
         _shared_framework_version_test,
     )

@@ -1,4 +1,14 @@
 load("@bazel_lib//:bzl_library.bzl", "bzl_library")
+load("@bazel_skylib//rules:common_settings.bzl", "bool_setting")
+
+# Set on the edges from a .NET target to its dependencies, so that each picks
+# the framework its consumer can use. See tfm_transition.bzl.
+bool_setting(
+    name = "framework_from_consumer",
+    build_setting_default = False,
+    scope = "target",
+    visibility = ["//visibility:public"],
+)
 
 bzl_library(
     name = "common",

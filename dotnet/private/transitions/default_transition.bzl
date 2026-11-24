@@ -14,6 +14,7 @@ load(
 load(
     "//dotnet/private/transitions:common.bzl",
     "FRAMEWORK_COMPATABILITY_TRANSITION_OUTPUTS",
+    "FRAMEWORK_FROM_CONSUMER",
     "NO_READY_TO_RUN",
     "TFM_RID_TRANSITION_OUTPUTS",
     "rid_compatability_transition_outputs",
@@ -22,7 +23,7 @@ load(
 # The settings an untouched configuration starts with, compatibility settings
 # included. Built once at load time.
 DEFAULT_OUTPUTS = dicts.add(
-    {"//dotnet:target_framework": DEFAULT_TFM, "//dotnet:rid": DEFAULT_RID},
+    {"//dotnet:target_framework": DEFAULT_TFM, "//dotnet:rid": DEFAULT_RID, FRAMEWORK_FROM_CONSUMER: False},
     FRAMEWORK_COMPATABILITY_TRANSITION_OUTPUTS[DEFAULT_TFM],
     rid_compatability_transition_outputs(DEFAULT_RID),
     NO_READY_TO_RUN,

@@ -10,6 +10,7 @@ load("@bazel_skylib//lib:dicts.bzl", "dicts")
 load(
     "//dotnet/private/transitions:common.bzl",
     "FRAMEWORK_COMPATABILITY_TRANSITION_OUTPUTS",
+    "FRAMEWORK_FROM_CONSUMER",
     "NO_READY_TO_RUN",
     "TFM_RID_TRANSITION_OUTPUTS",
     "rid_compatability_transition_outputs",
@@ -62,7 +63,7 @@ def _impl(settings, attr):
         for rid in rids:
             resolved = rid or incoming_rid
             splits[split_key(tfm, rid)] = dicts.add(
-                {"//dotnet:target_framework": tfm, "//dotnet:rid": resolved},
+                {"//dotnet:target_framework": tfm, "//dotnet:rid": resolved, FRAMEWORK_FROM_CONSUMER: True},
                 FRAMEWORK_COMPATABILITY_TRANSITION_OUTPUTS[tfm],
                 # Fails on an unknown runtime identifier, as tfm_transition does.
                 rid_compatability_transition_outputs(resolved),

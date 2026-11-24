@@ -24,8 +24,13 @@ TRIMMED = "//dotnet/private/rules/publish_binary:trimmed"
 # What every transition but the publish's leaves them at.
 NO_READY_TO_RUN = {READY_TO_RUN_FRAMEWORK: "", READY_TO_RUN_SHARED_FRAMEWORKS: "", NATIVE_COMPILER: "", PUBLISHED: False, TRIMMED: False}
 
+# Whether //dotnet:target_framework is the framework of a .NET target that
+# depends on this one, rather than the command line's or a reset default. It
+# decides how tfm_transition picks a target's framework.
+FRAMEWORK_FROM_CONSUMER = "//dotnet/private/transitions:framework_from_consumer"
+
 # Every transition that moves the TFM/RID graph writes the same settings.
-TFM_RID_TRANSITION_OUTPUTS = ["//dotnet:target_framework", "//dotnet:rid"] + \
+TFM_RID_TRANSITION_OUTPUTS = ["//dotnet:target_framework", "//dotnet:rid", FRAMEWORK_FROM_CONSUMER] + \
                              ["//dotnet:framework_compatible_%s" % framework for framework in FRAMEWORK_COMPATIBILITY.keys()] + \
                              ["//dotnet:rid_compatible_%s" % rid for rid in PORTABLE_RUNTIME_GRAPH.keys()] + \
                              NO_READY_TO_RUN.keys()

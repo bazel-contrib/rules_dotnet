@@ -10,6 +10,7 @@ load("@bazel_skylib//lib:dicts.bzl", "dicts")
 load(
     "//dotnet/private/transitions:common.bzl",
     "FRAMEWORK_COMPATABILITY_TRANSITION_OUTPUTS",
+    "FRAMEWORK_FROM_CONSUMER",
     "NO_READY_TO_RUN",
     "TFM_RID_TRANSITION_OUTPUTS",
     "platform_to_rid",
@@ -23,7 +24,7 @@ def _impl(_settings, attr):
     tfm = attr.target_frameworks[0]
     rid = platform_to_rid()
     return dicts.add(
-        {"//dotnet:target_framework": tfm, "//dotnet:rid": rid},
+        {"//dotnet:target_framework": tfm, "//dotnet:rid": rid, FRAMEWORK_FROM_CONSUMER: True},
         FRAMEWORK_COMPATABILITY_TRANSITION_OUTPUTS[tfm],
         rid_compatability_transition_outputs(rid),
         NO_READY_TO_RUN,
