@@ -57,8 +57,7 @@ def _render_copy_script(copies, is_windows, directories = []):
     Each directory is created once instead, and the files that keep their name
     are copied in batches.
 
-    A source that is a directory, a tree artifact, is copied as its contents,
-    which are flat.
+    A directory source is copied as its flat contents.
 
     Args:
         copies: The (source, destination path) pairs to copy, one pair per destination.
@@ -1179,8 +1178,7 @@ def _generate_depsjson(
 
     return depsjson_struct
 
-# What says how a .NET application is hosted, which a .NET Framework one is
-# not: the framework installed in Windows runs it.
+# Publish settings that only apply to .NET.
 _NOT_FOR_NETFX = [
     "self_contained",
     "ready_to_run",
@@ -1192,12 +1190,7 @@ _NOT_FOR_NETFX = [
 ]
 
 def _netfx_publish(ctx, binary_info, assembly_runtime_info, transitive_runtime_deps):
-    """Publishes a .NET Framework binary.
-
-    As `dotnet publish` does for .NET Framework, the publish is the binary's
-    output directory as it is, less the PDBs: the executable, its
-    `<exe>.config`, and the assemblies and native libraries beside it. There
-    is no deps.json, runtimeconfig.json or apphost.
+    """Publishes a .NET Framework binary: its output directory, without PDBs.
 
     Args:
         ctx: The rule context.
@@ -1213,8 +1206,7 @@ def _netfx_publish(ctx, binary_info, assembly_runtime_info, transitive_runtime_d
             fail(("{}: `{}` does not apply to {}, which targets .NET Framework: the framework " +
                   "installed in Windows runs it.").format(ctx.label, attribute, _binary(ctx).label))
 
-    # As the transition does for the binary: the target platform's runtime
-    # identifier, which the macro fills in, gives way to Windows.
+    # The runtime identifier the binary was built for.
     runtime_identifier = ctx.attr.runtime_identifier
     if ctx.attr.runtime_identifier_from_platform:
         runtime_identifier = netframework_runtime_identifier(runtime_identifier)
@@ -1230,9 +1222,7 @@ def _netfx_publish(ctx, binary_info, assembly_runtime_info, transitive_runtime_d
     (executable, outputs) = _copy_to_publish(ctx, runtime_identifier, entries, binary_info)
     data = assembly_runtime_info.data + [file for dep in transitive_runtime_deps for file in dep.data]
 
-    # The executable loads what is beside it, so that is in its runfiles too,
-    # as with a single-file or NativeAOT publish: a target that runs the
-    # publish from its own runfiles tree finds the whole application there.
+    # Run from runfiles, the executable needs the files beside it there too.
     beside = [(path, file) for (path, file) in entries.items() if path != executable.basename]
 
     output_groups = _publish_layers(
@@ -1513,9 +1503,7 @@ the publish directory:
 Together they also hold the runfiles tree Bazel lays out beside the
 executable, each data file in the layer of the target it belongs to.
 
-A .NET Framework binary is published as its output directory, less the PDBs:
-the executable, its `<exe>.config` and the files beside it, with no
-`deps.json`, `runtimeconfig.json` or apphost.""",
+A .NET Framework binary is published as its output directory, without PDBs.""",
     # Read by the C/C++ toolchain a NativeAOT publish links with.
     fragments = ["cpp"],
     attrs = {
@@ -1549,9 +1537,7 @@ the executable, its `<exe>.config` and the files beside it, with no
             mandatory = False,
         ),
         "runtime_identifier_from_platform": attr.bool(
-            doc = """Set by the `publish_binary` macro when `runtime_identifier` is the
-target platform's because none was given. A .NET Framework binary, which only runs
-on Windows, is then published for Windows on the same architecture.""",
+            doc = "Set by the `publish_binary` macro when it fills in `runtime_identifier` from the target platform.",
             default = False,
         ),
         "roll_forward_behavior": attr.string(

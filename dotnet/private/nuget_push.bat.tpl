@@ -39,8 +39,7 @@ if not exist "%MF%" (
   exit 1
 )
 set runfile_path=%~1
-rem The first token is the runfiles path and the rest of the line its
-rem destination, which keeps any spaces it has.
+rem The destination is the rest of the line, spaces included.
 for /F "tokens=1* usebackq" %%i in (`%SYSTEMROOT%\system32\findstr.exe /l /c:"!runfile_path! " "%MF%"`) do (
   set abs_path=%%j
 )

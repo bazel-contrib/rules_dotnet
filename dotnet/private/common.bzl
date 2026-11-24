@@ -103,14 +103,12 @@ def is_netframework(tfm):
     return _tfm_family(tfm) == _NETFRAMEWORK
 
 def netframework_runtime_identifier(runtime_identifier):
-    """The runtime identifier a .NET Framework application runs on, for one that was not chosen for it.
+    """The Windows runtime identifier with the architecture of `runtime_identifier`.
 
-    .NET Framework only runs on Windows, so an application whose runtime
-    identifier comes from another platform runs on Windows on the same
-    architecture: `linux-x64` gives `win-x64`.
+    .NET Framework only runs on Windows: `linux-x64` gives `win-x64`.
 
     Args:
-        runtime_identifier: The runtime identifier of the platform being built on or for.
+        runtime_identifier: A runtime identifier.
 
     Returns:
         The Windows runtime identifier of the same architecture.
@@ -1602,8 +1600,8 @@ def embedded_resource_name(file, target_label, out_dll):
         return simple_resource_name
 
     if not target_label.package:
-        # Everything in the repository is in its root package: the path is
-        # relative to it already, past the `../<repo>/` of an external one.
+        # The path is relative to the root package already, after an external
+        # repository's `../<repo>/`.
         relative_path = file.short_path.split("/", 2)[2] if file.short_path.startswith("../") else file.short_path
     elif not file.short_path.startswith(target_label.package):
         # Fallback to the basename if the file is not in the target's package, because

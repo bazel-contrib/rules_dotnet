@@ -24,7 +24,7 @@ genrule(
     tools = [":keygen"],
 )
 
-# A second key, for an assembly that shares SharedDep's name but is not it.
+# A second key, for a different assembly that is also named SharedDep.
 genrule(
     name = "generate_other_snk",
     outs = ["other.snk"],
@@ -46,8 +46,8 @@ csharp_library(
     srcs = ["SharedDep.cs"],
     out = "SharedDep",
     keyfile = ":test.snk",
-    # Its satellite assemblies carry the library's version. Each version has
-    # a culture the other lacks.
+    # Satellites carry the library's version. v1 and v2 each have a culture
+    # the other lacks.
     resources = [
         "Strings.de.resx",
         "Strings.es.resx",
@@ -71,8 +71,8 @@ csharp_library(
     version = "2.0.0",
 )
 
-# Compiled against SharedDep 1.0.0.0, but paired at runtime with SharedDep 2.0.0.0
-# so the .NET Framework CLR requires a <bindingRedirect> in <exe>.config.
+# Compiled against SharedDep 1.0.0.0 but run with 2.0.0.0, which needs a
+# binding redirect.
 csharp_library(
     name = "consumer_compiled",
     srcs = ["Consumer.cs"],
@@ -118,8 +118,7 @@ fsharp_binary(
     ],
 )
 
-# Compiled against SharedDep 2.0.0.0, for the netfx_config tests: a reference
-# newer than the SharedDep 1.0.0.0 that Consumer brings.
+# References SharedDep 2.0.0.0, newer than Consumer's 1.0.0.0.
 csharp_library(
     name = "uses_v2",
     srcs = ["UsesV2.cs"],
@@ -128,10 +127,8 @@ csharp_library(
     deps = [":shared_dep_v2"],
 )
 
-# Consumer brings SharedDep 1.0.0.0 and the binary SharedDep 2.0.0.0. As
-# MSBuild's ResolveAssemblyReference does, the application ships the highest
-# version, wherever each comes in the dependency graph, and redirects Consumer's
-# reference to it.
+# Consumer brings SharedDep 1.0.0.0 and the binary 2.0.0.0: the highest ships,
+# and Consumer's reference is redirected to it.
 _CONFLICT_DEPS = [
     ":consumer_compiled",
     ":shared_dep_v2",
@@ -153,8 +150,7 @@ csharp_test(
     deps = _CONFLICT_DEPS,
 )
 
-# The user's App.config, which the generated redirects and <supportedRuntime>
-# are merged into.
+# Generated redirects and <supportedRuntime> are merged into the user's App.config.
 csharp_binary(
     name = "app_config_app",
     srcs = ["AppConfigApp.cs"],
@@ -179,8 +175,7 @@ publish_binary(
     target_framework = "net48",
 )
 
-# Every file of the publish: `$(rootpaths)` of the publish itself names only its
-# executable.
+# All publish files: `$(rootpaths)` of the publish names only its executable.
 filegroup(
     name = "app_publish_files",
     srcs = [":app_publish"],
@@ -211,7 +206,7 @@ csharp_nunit_test(
     target_frameworks = ["net8.0"],
 )
 
-# A publish copies the satellite directories of the conflict app too.
+# Publishes the conflict app's satellite directories.
 publish_binary(
     name = "conflict_publish",
     binary = ":conflict_app",
@@ -235,7 +230,7 @@ publish_runfiles_test(
     target_under_test = ":app_publish",
 )
 
-# Runs the tool's logic in process, on assemblies built here.
+# Runs the tool's logic in process.
 csharp_nunit_test(
     name = "netfx_config_test",
     size = "small",

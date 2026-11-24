@@ -9,9 +9,7 @@ namespace NetFxBinaryTests
         public static string GetVersion() =>
             typeof(SharedDep).Assembly.GetName().Version.ToString();
 
-        // From the satellite assembly of `culture`, if the application has one
-        // that matches this assembly, and from this assembly's own resources
-        // otherwise.
+        // Falls back to the neutral resources without a matching satellite assembly.
         public static string Greeting(string culture)
         {
             var assembly = typeof(SharedDep).Assembly;

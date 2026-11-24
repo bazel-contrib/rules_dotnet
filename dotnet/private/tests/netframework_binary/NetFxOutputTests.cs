@@ -70,11 +70,11 @@ public sealed class NetFxOutputTests
             Assert.That(File.Exists(Path.Combine(outDir, name)), Is.True, name);
         }
 
-        // The PDBs of dependencies sit beside them, for line numbers in stack traces.
+        // Dependency PDBs, for line numbers in stack traces.
         Assert.That(File.Exists(Path.Combine(outDir, "SharedDep.pdb")), Is.True);
         Assert.That(File.Exists(Path.Combine(outDir, "unsigned_dep.pdb")), Is.True);
 
-        // With one copy of SharedDep, its satellite assemblies are where MSBuild puts them.
+        // One copy of SharedDep: its satellite assemblies are at the usual paths.
         foreach (string culture in new[] { "de", "fr" })
         {
             Assert.That(AssemblyVersion(Path.Combine(outDir, culture, "SharedDep.resources.dll")), Is.EqualTo(new Version(2, 0, 0, 0)), culture);
@@ -117,8 +117,7 @@ public sealed class NetFxOutputTests
         Assert.That(File.Exists(Path.Combine(outDir, "fsharp_app.exe")), Is.True);
         Assert.That(File.Exists(Path.Combine(outDir, "FSharp.Core.dll")), Is.True);
 
-        // FSharp.Core is referenced at the version the application ships, so,
-        // as with MSBuild, nothing needs redirecting.
+        // FSharp.Core is referenced at the shipped version, so needs no redirect.
         XDocument config = XDocument.Load(Path.Combine(outDir, "fsharp_app.exe.config"));
         AssertSupportedRuntime(config);
         Assert.That(Redirect(config, "FSharp.Core"), Is.Null);
@@ -127,17 +126,14 @@ public sealed class NetFxOutputTests
     [Test]
     public void TheHighestVersionOfAnAssemblyIsShippedWhereverItComesInTheGraph()
     {
-        // SharedDep 1.0.0.0 comes in through Consumer, ahead of the binary's own
-        // dependency on SharedDep 2.0.0.0.
+        // SharedDep 1.0.0.0 comes through Consumer, ahead of the binary's 2.0.0.0.
         string outDir = FindOutputDir("CONFLICT_APP_FILES");
 
         Assert.That(AssemblyVersion(Path.Combine(outDir, "SharedDep.dll")), Is.EqualTo(new Version(2, 0, 0, 0)));
         Assert.That(File.Exists(Path.Combine(outDir, "SharedDep.pdb")), Is.True);
 
-        // Its satellite assemblies come from the same copy, in a directory of
-        // their name that .NET Framework probes, since which copy that is is
-        // only known once the build runs: German, which both have, and French,
-        // which only 2.0.0.0 has. 1.0.0.0's Spanish one does not ship.
+        // The shipped copy's satellite assemblies: German, which both have, and
+        // French, which only 2.0.0.0 has. 1.0.0.0's Spanish one does not ship.
         foreach (string culture in new[] { "de", "fr" })
         {
             string satellite = Path.Combine(outDir, culture, "SharedDep.resources", "SharedDep.resources.dll");
@@ -182,8 +178,7 @@ public sealed class NetFxOutputTests
         Assert.That(names.Where(n => n.EndsWith(".pdb", StringComparison.OrdinalIgnoreCase)), Is.Empty);
         Assert.That(names.Where(n => n.EndsWith(".deps.json") || n.EndsWith(".runtimeconfig.json")), Is.Empty);
 
-        // Published for Windows, the only platform .NET Framework runs on,
-        // wherever it is built: flat, but for satellite assemblies.
+        // Published for Windows, flat except for satellite assemblies.
         string root = Path.GetDirectoryName(files.Single(f => Path.GetFileName(f) == "app.exe"))!;
         Assert.That(Path.GetFileName(root), Does.StartWith("win-"));
         Assert.That(files.Select(Path.GetDirectoryName).Distinct(), Is.EquivalentTo(new[] { root, Path.Combine(root, "de"), Path.Combine(root, "fr") }));

@@ -3,17 +3,14 @@ load(
     "bootstrap_tool_binary",
 )
 
-# The tool's logic, without its entry point, for the tests to compile against.
+# The tool without its entry point, for the tests.
 filegroup(
     name = "srcs",
     srcs = ["NetFxConfig.cs"],
     visibility = ["//dotnet/private/tests/netframework_binary:__pkg__"],
 )
 
-# Finishes the output directory of a .NET Framework application: picks the
-# copy of an assembly it ships when its dependencies bring several, and writes
-# its `<exe>.config` with `<supportedRuntime>` and binding redirects. See
-# NetFxConfig.cs.
+# Writes a .NET Framework application's `<exe>.config`. See NetFxConfig.cs.
 bootstrap_tool_binary(
     name = "netfx_config",
     srcs = [

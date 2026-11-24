@@ -7,7 +7,7 @@ namespace NetFxBinaryTests
     {
         public static int Main()
         {
-            // From the user's App.config, which the build merged its redirects into.
+            // From the user's App.config.
             string greeting = ConfigurationManager.AppSettings["greeting"];
             if (greeting != "hello-from-app-config")
             {

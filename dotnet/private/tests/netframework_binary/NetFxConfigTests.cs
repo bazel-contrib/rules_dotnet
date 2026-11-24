@@ -10,9 +10,8 @@ using RulesDotnet.Tools.NetFxConfig;
 namespace NetFxBinaryTests;
 
 /// <summary>
-/// Runs netfx_config's logic on assemblies built for .NET Framework:
-/// SharedDep at 1.0.0.0 and 2.0.0.0, Consumer compiled against SharedDep
-/// 1.0.0.0, and UsesV2 compiled against SharedDep 2.0.0.0.
+/// Runs netfx_config on SharedDep 1.0.0.0 and 2.0.0.0, Consumer (built against
+/// 1.0.0.0) and UsesV2 (built against 2.0.0.0).
 /// </summary>
 [TestFixture]
 public sealed class NetFxConfigTests
@@ -188,7 +187,7 @@ public sealed class NetFxConfigTests
     [Test]
     public void AReferenceNewerThanTheFrameworksCopyFailsTheBuild()
     {
-        // The framework provides SharedDep 1.0.0.0 as well, which is no newer.
+        // The framework's SharedDep is 1.0.0.0 too.
         int exitCode = Run("--main", UsesV2, "--assembly", SharedDepV1, "--framework", SharedDepV1);
 
         Assert.That(exitCode, Is.EqualTo(1));
@@ -350,8 +349,7 @@ public sealed class NetFxConfigTests
     [Test]
     public void AnAssemblyTheFrameworkProvidesAtThatVersionIsNotRedirected()
     {
-        // Stands in for a framework assembly that a package also ships, such as
-        // System.Net.Http: the CLR unifies references onto the framework's copy.
+        // Like System.Net.Http, which packages also ship.
         int exitCode = Run("--main", Consumer, "--assembly", SharedDepV2, "--framework", SharedDepV2);
 
         Assert.That(exitCode, Is.EqualTo(0), _error.ToString());

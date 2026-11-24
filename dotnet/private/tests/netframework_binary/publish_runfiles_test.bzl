@@ -6,8 +6,7 @@ def _publish_runfiles_test_impl(ctx):
     env = analysistest.begin(ctx)
     publish = analysistest.target_under_test(env)
 
-    # What a target running the publish as a tool, from its runfiles, gets:
-    # the executable loads what is beside it from there.
+    # What a target running the publish as a tool gets.
     runfiles = [file.basename for file in publish[DefaultInfo].default_runfiles.files.to_list()]
     for name in ctx.attr.expected:
         asserts.true(env, name in runfiles, "{} is not in the runfiles of {}: {}".format(name, publish.label, sorted(runfiles)))

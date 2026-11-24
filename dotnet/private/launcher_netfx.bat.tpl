@@ -34,8 +34,7 @@ if not exist "%MF%" (
   exit 1
 )
 set runfile_path=%~1
-rem The first token is the runfiles path and the rest of the line its
-rem destination, which keeps any spaces it has.
+rem The destination is the rest of the line, spaces included.
 for /F "tokens=1* usebackq" %%i in (`%SYSTEMROOT%\system32\findstr.exe /l /c:"!runfile_path! " "%MF%"`) do (
   set abs_path=%%j
 )
@@ -49,13 +48,11 @@ exit /b 0
 :: End of rlocation
 
 
-rem Starts a .NET Framework executable. It needs no .NET host: the CLR finds the
-rem assemblies and the configuration file staged beside it.
+rem A .NET Framework executable needs no .NET host.
 
 set RUNFILES_MANIFEST_ONLY=1
 
-rem `bazel test` hands a test only a few environment variables. The CLR, and the
-rem folders Environment.GetFolderPath returns, read these.
+rem `bazel test` leaves these unset, and .NET Framework reads them.
 if not defined WINDIR if defined SystemRoot set "WINDIR=%SystemRoot%"
 if not defined USERPROFILE if defined TEST_TMPDIR set "USERPROFILE=!TEST_TMPDIR:/=\!"
 if not defined LOCALAPPDATA if defined TEST_TMPDIR set "LOCALAPPDATA=!TEST_TMPDIR:/=\!"

@@ -76,15 +76,14 @@ def _impl(settings, attr):
     if hasattr(attr, "runtime_identifier") and attr.runtime_identifier != "":
         runtime_identifier = attr.runtime_identifier
 
-        # `publish_binary` names the target platform's when none is given.
+        # A default from the target platform; .NET Framework only runs on Windows.
         if getattr(attr, "runtime_identifier_from_platform", False) and is_netframework(transitioned_tfm):
             runtime_identifier = netframework_runtime_identifier(runtime_identifier)
     elif runtime_identifier == "base":
         # If the runtime_identifier attribute is not set and the incoming value is "base", we will use the platform to determine the rid since no upstream target has set the runtime identifier
         runtime_identifier = platform_to_rid()
 
-        # .NET Framework only runs on Windows, so its NuGet packages' native
-        # libraries and RID-specific assemblies are Windows ones, wherever it is built.
+        # .NET Framework only runs on Windows, whatever platform builds it.
         if is_netframework(transitioned_tfm):
             runtime_identifier = netframework_runtime_identifier(runtime_identifier)
 
@@ -99,9 +98,8 @@ tfm_transition = transition(
 def _publish_binary_impl(settings, attr):
     binary = _impl(settings, attr)
 
-    # Nothing is compiled ahead of time for .NET Framework, which the publish
-    # rejects itself, naming the setting, rather than the binary failing to
-    # find a runtime pack to compile against.
+    # Nothing is compiled ahead of time for .NET Framework; the publish
+    # rejects those settings itself.
     if not is_core_framework(binary["//dotnet:target_framework"]):
         return {"binary": dicts.add(binary, {PUBLISHED: True})}
 

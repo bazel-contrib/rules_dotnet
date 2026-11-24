@@ -13,23 +13,11 @@ using System.Xml.Linq;
 namespace RulesDotnet.Tools.NetFxConfig;
 
 /// <summary>
-/// Finishes the output directory of a .NET Framework application: picks the
-/// copy of an assembly it ships when its dependencies bring several, and
-/// writes its <c>&lt;exe&gt;.config</c>.
+/// Picks which copy of an assembly a .NET Framework application ships when
+/// several dependencies bring one, and writes its <c>&lt;exe&gt;.config</c>, as
+/// MSBuild's ResolveAssemblyReference and GenerateBindingRedirects and the
+/// .NET SDK's GenerateSupportedRuntime do.
 /// </summary>
-/// <remarks>
-/// MSBuild spreads this over three steps, which this follows:
-/// <list type="bullet">
-/// <item>ResolveAssemblyReference unifies a dependency referenced at several
-/// versions on the highest of them, and warns (MSB3277) when a reference asks
-/// for a version newer than any it can find.</item>
-/// <item>GenerateBindingRedirects writes a binding redirect for each assembly
-/// that is referenced at a version other than the one shipped, and merges them
-/// into the application's own App.config, keeping a redirect it already has.</item>
-/// <item>The SDK's GenerateSupportedRuntime target names the framework the
-/// application targets in <c>&lt;startup&gt;</c>, unless App.config does.</item>
-/// </list>
-/// </remarks>
 internal static class NetFxConfig
 {
     private static readonly XNamespace Asm = "urn:schemas-microsoft-com:asm.v1";
@@ -130,18 +118,12 @@ internal static class NetFxConfig
         return expanded;
     }
 
-    // ResolveAssemblyReference unifies on the highest version, so that is the
-    // copy the application ships. Equal versions keep the first candidate, in
-    // the order the rule gave them.
-    //
-    // Returns why it cannot choose, or null.
+    // Picks the highest version, as ResolveAssemblyReference does; a tie keeps
+    // the first. Returns why it cannot pick, or null.
     private static string? Select(Selection selection)
     {
-        // Copies of one assembly differ only in version. Files of one name that
-        // are different assemblies, signed with different keys say, cannot
-        // stand in for each other, and only one of them fits beside the
-        // executable. MSBuild picks one arbitrarily (MSB3243); the references
-        // to the other then fail to load.
+        // Same-named files that are different assemblies, e.g. signed with
+        // different keys, cannot stand in for each other.
         var assemblies = selection.Candidates
             .Select(candidate => (candidate.Assembly, Metadata: TryReadAssembly(candidate.Assembly)))
             .Where(candidate => candidate.Metadata is not null)
@@ -176,9 +158,8 @@ internal static class NetFxConfig
             Copy(chosen.Pdb!, selection.PdbOutput);
         }
 
-        // Satellite assemblies only match the assembly they were built with,
-        // so only the chosen copy's go in. A culture it has none of keeps its
-        // directory empty.
+        // Satellite assemblies only match their own assembly. A culture the
+        // chosen copy lacks leaves its directory empty.
         for (int i = 0; i < selection.SatelliteOutputs.Count; i++)
         {
             Directory.CreateDirectory(selection.SatelliteOutputs[i]);
@@ -201,9 +182,7 @@ internal static class NetFxConfig
         Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(destination))!);
         File.Copy(source, destination, overwrite: true);
 
-        // On Windows a copy keeps the source's read-only attribute, which every
-        // Bazel output has. The copy is an output of its own, which Bazel
-        // makes read-only itself once the action is done.
+        // On Windows a copy keeps the read-only attribute of Bazel's inputs.
         File.SetAttributes(destination, File.GetAttributes(destination) & ~FileAttributes.ReadOnly);
     }
 
@@ -216,15 +195,13 @@ internal static class NetFxConfig
         var shipped = new Dictionary<string, AssemblyMetadata>(StringComparer.OrdinalIgnoreCase);
         foreach (string path in shippedPaths)
         {
-            // Native libraries beside the executable have no metadata.
+            // Native libraries have no metadata.
             if (TryReadAssembly(path) is { } assembly)
             {
                 shipped.TryAdd(assembly.Identity.Name, assembly);
             }
         }
 
-        // What the framework itself provides, by the identities its reference
-        // assemblies carry.
         var inBox = new List<Identity>();
         foreach (string path in frameworkPaths)
         {
@@ -261,9 +238,7 @@ internal static class NetFxConfig
                     .Select(reference => (Referrer: referrer, reference.Version)))
                 .ToList();
 
-            // The framework's own copy, from the GAC, serves any reference it
-            // is new enough for, if it is the same assembly: one of the same
-            // name signed with another key is not.
+            // The framework's copy, from the GAC, serves references it is new enough for.
             Version? frameworkVersion = inBox
                 .Where(framework => IsSameAssembly(framework, identity))
                 .Select(framework => framework.Version)
@@ -275,8 +250,6 @@ internal static class NetFxConfig
             var tooNew = requests.Where(request => request.Version > newest).ToList();
             if (tooNew.Count > 0)
             {
-                // A <bindingRedirect> in App.config whose range takes in the
-                // version referenced is the user's answer to it.
                 string source = frameworkIsNewest ? "from .NET Framework" : Path.GetFileName(assembly.Path);
                 foreach (var (referrer, version) in tooNew)
                 {
@@ -294,10 +267,8 @@ internal static class NetFxConfig
                 continue;
             }
 
-            // An assembly the framework carries at this version or newer is
-            // unified onto the framework's copy, which is what the SDK's
-            // conflict resolution picks as well. Redirecting it would pull its
-            // references onto the copy shipped here instead.
+            // The CLR unifies references onto the framework's copy; a redirect
+            // would pull them onto the shipped one instead.
             if (frameworkIsNewest)
             {
                 continue;
@@ -317,8 +288,7 @@ internal static class NetFxConfig
         string.Equals(reference.PublicKeyToken, identity.PublicKeyToken, StringComparison.OrdinalIgnoreCase) &&
         string.Equals(reference.Culture, identity.Culture, StringComparison.OrdinalIgnoreCase);
 
-    // As the SDK's WriteAppConfigWithSupportedRuntime task does: an App.config
-    // that already names a runtime keeps it.
+    // Like the .NET SDK, keeps a <supportedRuntime> App.config already has.
     private static void AddSupportedRuntime(XElement configuration, string version, string? sku)
     {
         XElement? startup = configuration.Element("startup");
@@ -343,9 +313,8 @@ internal static class NetFxConfig
     }
 
     /// <summary>
-    /// The <c>&lt;dependentAssembly&gt;</c> elements App.config has for the
-    /// runtime the application runs on: an <c>&lt;assemblyBinding&gt;</c>
-    /// whose <c>appliesTo</c> names another version of the CLR is for that one.
+    /// App.config's <c>&lt;dependentAssembly&gt;</c> elements, except those an
+    /// <c>appliesTo</c> scopes to another version of the CLR.
     /// </summary>
     private static List<XElement> DependentAssemblies(XElement configuration, string? runtimeVersion) =>
         configuration
@@ -386,11 +355,6 @@ internal static class NetFxConfig
             string.Equals(culture, identity.Culture, StringComparison.OrdinalIgnoreCase);
     }
 
-    /// <summary>
-    /// The <c>&lt;dependentAssembly&gt;</c> App.config has for an assembly,
-    /// with or without a <c>&lt;bindingRedirect&gt;</c>. As for the CLR, it
-    /// describes the assembly by its name, public key token and culture.
-    /// </summary>
     private static XElement? FindDependentAssembly(IEnumerable<XElement> dependentAssemblies, Identity identity, bool withRedirect) =>
         dependentAssemblies.FirstOrDefault(dependentAssembly =>
             Describes(dependentAssembly, identity) &&
@@ -405,9 +369,7 @@ internal static class NetFxConfig
         var generated = new List<Identity>();
         foreach (Identity redirect in redirects)
         {
-            // Only a <bindingRedirect> App.config writes itself takes
-            // precedence, as with MSBuild. MSBuild's MSB3836 warns when it
-            // disagrees with the one the build would write.
+            // App.config's own redirect wins, as with MSBuild (MSB3836 when they differ).
             if (FindDependentAssembly(dependentAssemblies, redirect, withRedirect: true) is { } redirected)
             {
                 string? explicitVersion = (string?)redirected.Element(Asm + "bindingRedirect")!.Attribute("newVersion");
@@ -420,8 +382,7 @@ internal static class NetFxConfig
                 continue;
             }
 
-            // A <dependentAssembly> that only says where to find the assembly,
-            // with <codeBase>, gains the redirect.
+            // A <dependentAssembly> without one, e.g. with only a <codeBase>, gains it.
             if (FindDependentAssembly(dependentAssemblies, redirect, withRedirect: false) is { } described)
             {
                 described.Add(BindingRedirect(redirect));
@@ -443,8 +404,7 @@ internal static class NetFxConfig
             configuration.Add(runtime);
         }
 
-        // One scoped to a framework version with `appliesTo` would not apply
-        // to every runtime.
+        // One with `appliesTo` only applies to that runtime.
         XElement? assemblyBinding = runtime
             .Elements(Asm + "assemblyBinding")
             .FirstOrDefault(element => element.Attribute("appliesTo") is null);

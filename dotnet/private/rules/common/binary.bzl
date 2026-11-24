@@ -59,11 +59,10 @@ def _collect_native_dlls(assembly_runtime_info, deps):
     return result
 
 def _reserved_paths(dll, runtime_provider, appsetting_files, inherited_content_files):
-    """What a binary writes beside its assembly itself, before anything else is staged there.
+    """The paths a binary writes in its output directory itself.
 
     Returns:
-        A dict of each path relative to the output directory, lower-cased as
-        Windows compares them, to what it is.
+        A dict of each path, lower-cased as Windows compares them, to what it is.
     """
     reserved = {dll.basename: "the application's own assembly"}
     for file in runtime_provider.pdbs + runtime_provider.xml_docs:
@@ -81,8 +80,7 @@ def _create_launcher(ctx, executable, toolchain, tfm):
     launcher = ctx.actions.declare_file("{}.{}".format(executable.basename, "bat" if is_windows else "sh"), sibling = executable)
 
     if is_netframework(tfm):
-        # A .NET Framework executable starts itself and needs no .NET host,
-        # but only Windows can run it: elsewhere the launcher says so.
+        # No .NET host. Outside Windows the launcher reports it cannot run.
         ctx.actions.expand_template(
             template = ctx.file._launcher_netfx_bat if is_windows else ctx.file._launcher_netfx_sh,
             output = launcher,
@@ -175,8 +173,6 @@ def build_binary(ctx, compile_action, toolchain, runtime_toolchain = None, winex
     if is_standard_framework(tfm):
         fail("It doesn't make sense to build an executable for " + tfm)
 
-    # .NET Framework rather than .NET: an `.exe` the CLR in Windows starts,
-    # with its dependencies beside it rather than in a deps.json.
     is_netfx = is_netframework(tfm)
 
     (compile_provider, runtime_provider, generated_assets) = compile_action(ctx, tfm, toolchain)
@@ -274,8 +270,7 @@ def build_binary(ctx, compile_action, toolchain, runtime_toolchain = None, winex
             content = json.encode(depsjson_struct),
         )
 
-        # MSBuild copies App.config beside the assembly as `<assembly>.dll.config`,
-        # which System.Configuration.ConfigurationManager reads.
+        # Where MSBuild puts App.config, for System.Configuration.ConfigurationManager.
         if app_config:
             owner = reserved.get(app_config_name.lower())
             if owner:
@@ -299,7 +294,7 @@ def build_binary(ctx, compile_action, toolchain, runtime_toolchain = None, winex
         default_info_files.extend(netfx_staged.files)
         additional_runfiles.extend(netfx_staged.files)
 
-        # What a publish copies: the same directory, less the PDBs.
+        # Published without PDBs.
         netfx_layout = [(dll.basename, dll)] + [
             (f.basename, f)
             for f in appsetting_files
@@ -317,8 +312,7 @@ def build_binary(ctx, compile_action, toolchain, runtime_toolchain = None, winex
     if depsjson != None:
         additional_runfiles.append(depsjson)
 
-    # A .NET Framework executable runs on the framework installed in Windows,
-    # so it needs neither the toolchain's runtime nor its ICU.
+    # .NET Framework executables run on the framework installed in Windows.
     runtime_files = []
     if not is_netfx:
         runtime_files = [runtime_toolchain.dotnetinfo.runtime_files, icu_files(runtime_toolchain)]
@@ -349,8 +343,7 @@ def build_binary(ctx, compile_action, toolchain, runtime_toolchain = None, winex
     # Due to how the .Net runtime loads native DLLs we need make the native
     # DLLs available in the application root directory with the folder structure:
     # runtimes/{rid}/native/{dlls}
-    # .NET Framework does not look there: its native libraries are staged
-    # beside the executable instead.
+    # .NET Framework loads them from beside the executable instead.
     native_dlls = _collect_native_dlls(runtime_provider, ctx.attr.deps) if not is_netfx else {}
     native_symlinks = []
     for (rid, native_files) in native_dlls.items():
@@ -409,7 +402,7 @@ def build_binary(ctx, compile_action, toolchain, runtime_toolchain = None, winex
         default_info_files.extend(served)
         runfiles = runfiles.merge(ctx.runfiles(files = served))
 
-    # The .NET Framework launcher outside Windows only reports that it cannot run.
+    # Only the .NET launcher uses the Bash runfiles library.
     if not is_netfx and not ctx.target_platform_has_constraint(ctx.attr._windows_constraint[platform_common.ConstraintValueInfo]):
         runfiles = runfiles.merge(ctx.attr._bash_runfiles[DefaultInfo].default_runfiles)
     default_info = DefaultInfo(

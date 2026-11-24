@@ -24,8 +24,7 @@ public sealed class AppConfigTest
     [Test]
     public void TheBinaryHasItsAppConfigBesideTheAssembly()
     {
-        // `$(rootpaths)` of a binary names its launcher, which sits beside the
-        // assembly; the configuration file is one of its runfiles.
+        // `$(rootpaths)` of a binary names its launcher, beside the assembly.
         string launcher = Files("APP_FILES").Single();
         string config = Path.Combine(Path.GetDirectoryName(launcher)!, "app.dll.config");
         Assert.That(File.ReadAllText(config), Does.Contain("hello-from-app-config"));

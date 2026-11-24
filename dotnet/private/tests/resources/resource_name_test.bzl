@@ -13,7 +13,7 @@ def _file(short_path, owner):
 def _root_package_test_impl(ctx):
     env = unittest.begin(ctx)
 
-    # A target in the root package used to lose the first character of the path.
+    # In the root package the whole path is relative to the package.
     asserts.equals(
         env,
         "app.resource.txt",

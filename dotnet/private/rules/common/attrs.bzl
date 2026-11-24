@@ -269,22 +269,15 @@ BINARY_COMMON_ATTRS = dicts.add(STATIC_WEB_ASSETS_ATTRS, {
     "app_config": attr.label(
         doc = """The application configuration file, MSBuild's `App.config`.
 
-For .NET Framework it becomes the `<assembly>.exe.config` beside the executable,
-with a `<supportedRuntime>` for the target framework unless it names one, and
-the binding redirects the build generates (see `auto_generate_binding_redirects`).
-A redirect it has already keeps precedence. For .NET it is copied beside the
-assembly as `<assembly>.dll.config`, which
-`System.Configuration.ConfigurationManager` reads.""",
+It is copied next to the assembly as `<assembly>.exe.config` for .NET Framework,
+with `<supportedRuntime>` and generated binding redirects added, or as
+`<assembly>.dll.config` for .NET.""",
         allow_single_file = [".config"],
     ),
     "auto_generate_binding_redirects": attr.bool(
-        doc = """Generate binding redirects for a .NET Framework executable.
-
-MSBuild's `AutoGenerateBindingRedirects`. A strong-named assembly referenced at a
-version other than the one the application ships is redirected to that one, unless
-the framework itself provides it at that version or later. A reference to a
-version newer than any the application ships fails the build. Write the redirects
-in `app_config` yourself instead by setting this to False. Has no effect on .NET.""",
+        doc = """Add binding redirects to a .NET Framework executable's configuration file, as
+MSBuild's `AutoGenerateBindingRedirects` does. When false, write them in `app_config`.
+Has no effect on .NET.""",
         default = True,
     ),
     "appsetting_files": attr.label_list(
@@ -322,7 +315,7 @@ in `app_config` yourself instead by setting this to False. Has no effect on .NET
         allow_single_file = True,
     ),
     "_launcher_netfx_sh": attr.label(
-        doc = "The launcher of a .NET Framework executable on Linux/MacOS, which cannot run it",
+        doc = "A template file for the launcher of a .NET Framework executable on Linux/MacOS",
         default = "//dotnet/private:launcher_netfx.sh.tpl",
         allow_single_file = True,
     ),

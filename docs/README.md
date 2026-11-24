@@ -386,75 +386,58 @@ which produces a single executable already.
 
 ## .NET Framework
 
-Binaries and tests can target .NET Framework (`net48`, `net472`, ...) as well.
-They compile to an `.exe` (or a `winexe` with `winexe = True`) that starts
-itself on the framework installed in Windows, so they need no apphost, no
-`deps.json` and no `runtimeconfig.json`, and they run without the toolchain's
-.NET runtime.
+Binaries and tests can target .NET Framework (`net48`, `net472`, ...). They
+compile to an `.exe` that runs on the .NET Framework installed in Windows, with
+no apphost, `deps.json` or `runtimeconfig.json`. With `winexe = True` it starts
+without a console window.
 
-.NET Framework only loads assemblies from the GAC or from beside the
-executable, so, as MSBuild's copy-local does, everything the application
-depends on is laid out next to the `.exe`: assemblies with their PDBs,
-satellite assemblies in a folder per culture, and native libraries. Where
-several dependencies ship the same assembly, the highest version is the one
-laid out, with its own PDB and satellite assemblies, as MSBuild's
-`ResolveAssemblyReference` picks it, wherever each comes in the dependency
-graph. As that is only known once the build runs, those satellite assemblies
-go in a directory of their name, `de/Foo.resources/Foo.resources.dll`, which
-.NET Framework probes as well. Files of one name that are different
-assemblies, signed with different keys say, fail the build. As it only runs on Windows, a .NET Framework target takes the native
-libraries and runtime-specific assemblies of its NuGet packages for Windows on
-the architecture it is built for, wherever it is built.
+As with MSBuild, the application's dependencies are copied next to the `.exe`:
+assemblies with their PDBs, satellite assemblies and native libraries. When
+several dependencies ship the same assembly, the highest version is used.
+NuGet packages contribute their Windows native libraries and runtime-specific
+assemblies for the target architecture.
 
-Beside the executable goes its `<assembly>.exe.config`. It starts from
-`app_config`, MSBuild's `App.config`, when there is one, and gains:
+### Configuration file
 
-- a `<supportedRuntime>` for the target framework, unless it names one, as the
-  .NET SDK's `GenerateSupportedRuntime` target adds;
+`app_config` is MSBuild's `App.config`. It is copied next to the executable as
+`<assembly>.exe.config`, and the build adds:
+
+- a `<supportedRuntime>` for the target framework, unless one is present;
 - a binding redirect for each strong-named assembly that is referenced at a
-  version other than the one laid out, as MSBuild's
-  `AutoGenerateBindingRedirects` writes them. A `<bindingRedirect>` that
-  `app_config` has already for the assembly (its name, public key token and
-  culture) is kept; a `<dependentAssembly>` with only a `<codeBase>` gains one.
-  An `<assemblyBinding>` whose `appliesTo` names another version of the CLR is
-  left to it. An assembly the framework itself provides at that version or
-  later, signed with the same key, is not redirected: the CLR uses the
-  framework's copy.
+  different version than the one shipped, as MSBuild's
+  `AutoGenerateBindingRedirects` does. Redirects already in `app_config` are
+  kept.
 
-A reference to a version newer than any the application ships or the framework
-provides fails the build, where MSBuild warns (MSB3277) and the application
-fails when it loads the assembly. Depend on a version recent enough, or write
-a redirect in `app_config` whose `oldVersion` takes in the version referenced.
-`auto_generate_binding_redirects = False` leaves every redirect to
-`app_config`.
+A reference to a newer version of an assembly than the application ships fails
+the build, as the application could not load it. Depend on a newer version, or
+add a `<bindingRedirect>` that covers it to `app_config`. Set
+`auto_generate_binding_redirects = False` to write all redirects yourself.
 
-`publish_binary` publishes the same directory, less the PDBs, under
-`publish/<runtime_identifier>`. Without a `runtime_identifier` it publishes for
-Windows on the target platform's architecture, so `win-x64` from an x64 Linux
-machine; a non-Windows one fails. `self_contained`, `single_file`,
-`ready_to_run` and `native_aot` describe how a .NET application is hosted, so
-they do not apply.
+### Publishing
 
-Only Windows runs .NET Framework executables, although every platform can
-build them. Elsewhere `bazel run` and `bazel test` report that instead, so mark
-tests that target .NET Framework with
-`target_compatible_with = ["@platforms//os:windows"]` to skip them there.
+`publish_binary` publishes the output directory, without PDBs, to
+`publish/<runtime_identifier>`. The runtime identifier defaults to Windows on
+the target platform's architecture, such as `win-x64` on x64 Linux.
+`self_contained`, `single_file`, `ready_to_run` and `native_aot` don't apply to
+.NET Framework.
 
-Differences from MSBuild that remain:
+### Running
 
-- From .NET Framework 4.6.1 to 4.7.1, a library built for .NET Standard needs
-  the facades MSBuild adds beside the executable (`netstandard.dll` and the
-  `System.*` facades of `Microsoft.NET.Build.Extensions`). They are not added,
-  so target `net472` or later when depending on .NET Standard libraries.
-- The executable is always AnyCPU. The .NET SDK compiles an executable with
-  native NuGet dependencies for x86 by default, choosing `win-x86` assets to
-  match; here the native libraries are the ones for `//dotnet:rid`, which comes
-  from the target platform, and an AnyCPU process on 64-bit Windows runs as
-  64-bit.
-- A NuGet package's copy of an assembly the framework provides, such as
-  `System.Net.Http`, is still laid out beside the executable. The .NET SDK
-  leaves it out; here it is not redirected to, so the CLR uses the framework's
-  copy all the same.
+Only Windows runs .NET Framework executables, but any platform can build them.
+Mark .NET Framework tests with
+`target_compatible_with = ["@platforms//os:windows"]` to skip them elsewhere.
+
+### Differences from MSBuild
+
+- .NET Framework 4.6.1 to 4.7.1 applications that depend on .NET Standard
+  libraries need facade assemblies, which are not added. Target `net472` or
+  later instead.
+- The executable is always AnyCPU, so it runs as a 64-bit process on 64-bit
+  Windows. The .NET SDK defaults to x86 when NuGet packages have native
+  libraries.
+- NuGet packages' copies of assemblies that .NET Framework provides, such as
+  `System.Net.Http`, are copied next to the executable but not redirected to,
+  so the framework's copy is used. The .NET SDK leaves them out.
 
 ## Container images
 

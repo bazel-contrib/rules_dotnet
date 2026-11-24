@@ -1,10 +1,7 @@
 """The output directory of a .NET Framework application.
 
-.NET Framework has no `deps.json` and no probing paths outside the
-application's own directory: the CLR loads an assembly from the GAC or from
-beside the executable. So, as MSBuild's copy-local does, everything the
-application loads is laid out next to it, with the `<exe>.config` that holds
-its binding redirects.
+The CLR only loads assemblies from the GAC or from beside the executable, so
+dependencies are staged next to it, as MSBuild's copy-local does.
 """
 
 def netfx_supported_runtime(target_framework):
@@ -23,10 +20,10 @@ def netfx_supported_runtime(target_framework):
     return ("v4.0", ".NETFramework,Version=v" + ".".join(digits.elems()))
 
 def satellite_path(file):
-    """Where a satellite assembly goes: a directory named after its culture.
+    """The path of a satellite assembly in an application directory: `<culture>/<name>`.
 
     Args:
-        file: The satellite assembly, which lives in such a directory already.
+        file: The satellite assembly, in a directory named after its culture.
 
     Returns:
         Its path relative to the application's directory.
@@ -68,17 +65,14 @@ def _declare_selected(state, path):
     return output
 
 def _select(state, kind, group, pdb_path, satellite_paths):
-    """Has netfx_config copy the highest version of `group` into the output directory.
+    """Has netfx_config copy the highest version of `group`, with its PDB and satellite assemblies.
 
-    Its PDB and satellite assemblies come from the same copy. Which copy that
-    is is only known once the action runs, so each satellite assembly any copy
-    has gets a directory of its name, `de/Foo.resources/`, which .NET
-    Framework probes for it after `de/Foo.resources.dll`. The chosen copy's
-    goes in it; for a culture that copy has none of, it stays empty and the
-    assembly's own resources serve instead.
+    The chosen copy is only known when the action runs, so its satellite
+    assemblies go in `<culture>/<name>.resources/` directories, which .NET
+    Framework also probes. A culture the chosen copy lacks stays empty.
 
     Returns:
-        A list of the (path, File) pairs it writes, the assembly's first.
+        The (path, File) pairs it writes, the assembly's first.
     """
     output = _declare_selected(state, group.path)
     pdb_output = _declare_selected(state, pdb_path) if pdb_path else None
@@ -103,10 +97,7 @@ def _select(state, kind, group, pdb_path, satellite_paths):
     return [(group.path, output)] + [(path, satellite_outputs[i]) for (i, path) in enumerate(satellite_directories)]
 
 def _pdb_path(taken, group):
-    """Where the PDB of an assembly goes, or None to leave it out.
-
-    The PDB follows its assembly, and only where every copy of it has one.
-    """
+    """Where the PDB of `group` goes, or None unless every copy has one."""
     if not all([candidate.pdb for candidate in group.candidates]):
         return None
 
@@ -127,15 +118,7 @@ def stage_netfx_application(
         framework_files,
         app_config,
         auto_generate_binding_redirects):
-    """Stages a .NET Framework application's dependencies and writes its `<exe>.config`.
-
-    Each assembly, satellite assembly, native library and PDB of the
-    dependencies goes beside the executable. Where several dependencies ship
-    the same assembly, the `netfx_config` tool keeps the highest version, as
-    MSBuild's ResolveAssemblyReference does. It also writes the configuration
-    file: the user's `app_config` if there is one, with `<supportedRuntime>` and
-    a binding redirect for each strong-named assembly that is referenced at a
-    version other than the one shipped.
+    """Stages a .NET Framework application's dependencies beside it and writes its `<exe>.config`.
 
     Args:
         ctx: The rule context.
@@ -145,16 +128,14 @@ def stage_netfx_application(
         transitive_runtime_deps: The `DotnetAssemblyRuntimeInfo`s of its dependencies.
         reserved: The paths, relative to `out_dir`, that the binary writes there
             itself, each with a description of what it is, for error messages.
-        framework_files: A depset of the targeting pack's reference assemblies,
-            which say what the framework itself provides, and at which version.
+        framework_files: A depset of the targeting pack's reference assemblies.
         app_config: The user's `App.config`, or None.
         auto_generate_binding_redirects: Whether to write binding redirects.
 
     Returns:
-        A struct of `files`, everything staged including the configuration file,
-        and `publish_layout`, the `(path, File)` pairs a publish copies: the
-        same files less the PDBs, each pointing at its source where it is a
-        symlink.
+        A struct of `files`, everything staged, and `publish_layout`, the
+        `(path, File)` pairs to publish: the same, without PDBs, with symlinks
+        replaced by their sources.
     """
     label = ctx.label
     config_name = executable.basename + ".config"
@@ -172,8 +153,7 @@ def stage_netfx_application(
     for dep in transitive_runtime_deps:
         pdbs = {_stem(pdb.basename): pdb for pdb in dep.pdbs}
 
-        # A satellite assembly belongs to the assembly of its name in the same
-        # dependency, and travels with it.
+        # Satellite assemblies go with the assembly of their name.
         satellites = {}
         for resource in dep.resource_assemblies:
             stem = resource.basename[:-len(_SATELLITE_SUFFIX)].lower() if resource.basename.lower().endswith(_SATELLITE_SUFFIX) else None
@@ -187,7 +167,7 @@ def stage_netfx_application(
                 owner = dep.name,
             ))
 
-        # Satellite assemblies of no assembly here are shipped on their own.
+        # E.g. a language pack's, which has no assembly of its own.
         for orphans in satellites.values():
             for resource in orphans.values():
                 _add(resources, satellite_path(resource), struct(file = resource, pdb = None, satellites = {}, owner = dep.name))
@@ -200,8 +180,6 @@ def stage_netfx_application(
     args.use_param_file("@%s", use_always = True)
     args.add("--label", str(label))
 
-    # What the loops below build up: the staged files, the netfx_config
-    # arguments and inputs, and the outputs it writes.
     state = struct(
         ctx = ctx,
         out_dir = out_dir,
@@ -212,7 +190,7 @@ def stage_netfx_application(
     )
     publish_layout = []
 
-    # The satellite assemblies that ship with their assembly.
+    # The paths of satellite assemblies that ship with their assembly.
     with_assembly = {}
 
     for group in libs.values():
@@ -235,8 +213,7 @@ def stage_netfx_application(
                 _stage(state, path, satellite)
                 publish_layout.append((path, satellite))
         else:
-            # Only the chosen copy's satellite assemblies match it: every
-            # culture any copy has is made room for. See _select.
+            # Room for every culture any copy has. See _select.
             satellite_paths = {}
             for candidate in group.candidates:
                 for satellite in candidate.satellites.values():
@@ -248,8 +225,7 @@ def stage_netfx_application(
             publish_layout.extend(_select(state, "lib", group, pdb_path, satellite_paths.values()))
 
     for group in resources.values():
-        # A language pack's satellite assembly gives way to the one that
-        # ships with the assembly itself, which matches its version.
+        # The assembly's own satellite wins, as it matches its version.
         if group.path.lower() in with_assembly:
             continue
 
@@ -292,9 +268,7 @@ def stage_netfx_application(
     args.add_all(["--supported-runtime", runtime_version, sku or "-"])
 
     if auto_generate_binding_redirects:
-        # Only the framework's copies of assemblies the application ships
-        # matter, so the tool reads those rather than the whole targeting pack,
-        # which is a few hundred files.
+        # Only the framework assemblies the application also ships matter.
         framework_by_name = {file.basename.lower(): file for file in framework_files.to_list()}
         for name in libs:
             if name in framework_by_name:

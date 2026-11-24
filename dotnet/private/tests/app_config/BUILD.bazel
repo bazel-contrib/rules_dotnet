@@ -1,7 +1,6 @@
 load("//dotnet:defs.bzl", "csharp_binary", "csharp_nunit_test", "publish_binary")
 
-# On .NET, as MSBuild does, `app_config` is copied beside the assembly as
-# `<assembly>.dll.config`, which System.Configuration.ConfigurationManager reads.
+# On .NET, `app_config` is copied next to the assembly as `<assembly>.dll.config`.
 csharp_binary(
     name = "app",
     srcs = ["Main.cs"],
@@ -15,8 +14,7 @@ publish_binary(
     target_framework = "net10.0",
 )
 
-# Every file of the publish: `$(rootpaths)` of the publish itself names only its
-# executable.
+# All publish files: `$(rootpaths)` of the publish names only its executable.
 filegroup(
     name = "app_publish_files",
     srcs = [":app_publish"],
