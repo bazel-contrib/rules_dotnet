@@ -10,7 +10,7 @@ GROUP rules_dotnet_dev_nuget_packages
 RESTRICTION: || (== net9.0) (== netstandard2.0) (== netstandard2.1)
 NUGET
   remote: https://api.nuget.org/v3/index.json
-    FSharp.Core (10.1.401)
+    FSharp.Core (11.0.101)
     FSharp.Data (4.2.7)
       FSharp.Core (>= 4.7.2)
     Humanizer.Core (2.14.1)

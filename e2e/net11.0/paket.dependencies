@@ -1,12 +1,12 @@
-framework: net10.0
+framework: net11.0
 storage: none
 source https://api.nuget.org/v3/index.json
 
-nuget FSharp.Core 10.1.401
+nuget FSharp.Core 11.0.101
 
 group blazor_wasm
     framework: net11.0
     storage: none
     source https://api.nuget.org/v3/index.json
 
-    nuget Microsoft.AspNetCore.Components.WebAssembly 11.0.0-rc.3.26522.148
+    nuget Microsoft.AspNetCore.Components.WebAssembly 11.0.0

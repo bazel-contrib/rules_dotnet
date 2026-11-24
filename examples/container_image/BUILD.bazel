@@ -12,14 +12,14 @@ csharp_library(
     name = "greeting",
     srcs = ["Greeting.cs"],
     data = ["greeting.txt"],
-    target_frameworks = ["net10.0"],
+    target_frameworks = ["net11.0"],
     deps = ["@rules_dotnet//tools/runfiles"],
 )
 
 csharp_binary(
     name = "hello",
     srcs = ["Program.cs"],
-    target_frameworks = ["net10.0"],
+    target_frameworks = ["net11.0"],
     deps = [
         ":greeting",
         "@paket.example_deps//mono.cecil",
@@ -30,7 +30,7 @@ publish_binary(
     name = "publish",
     binary = ":hello",
     self_contained = True,
-    target_framework = "net10.0",
+    target_framework = "net11.0",
 )
 
 platform(

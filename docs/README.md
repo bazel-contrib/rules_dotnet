@@ -30,7 +30,7 @@ Register the SDK to build with in `MODULE.bazel`:
 
 ```starlark
 dotnet = use_extension("@rules_dotnet//dotnet:extensions.bzl", "dotnet")
-dotnet.toolchain(dotnet_version = "10.0.401")
+dotnet.toolchain(dotnet_version = "11.0.100")
 use_repo(dotnet, "dotnet_toolchains")
 
 register_toolchains("@dotnet_toolchains//:all")
@@ -115,7 +115,7 @@ csharp_library(
     srcs = glob(["**/*.cs", "**/*.razor"]),
     project_sdk = "razor",
     root_namespace = "MyApp.Components",
-    target_frameworks = ["net10.0"],
+    target_frameworks = ["net11.0"],
 )
 ```
 
@@ -138,7 +138,7 @@ csharp_library(
     name = "components",
     srcs = glob(["**/*.cs", "**/*.razor", "**/*.razor.css"]),
     project_sdk = "razor",
-    target_frameworks = ["net10.0"],
+    target_frameworks = ["net11.0"],
 )
 ```
 
@@ -181,14 +181,14 @@ csharp_binary(
     srcs = glob(["**/*.cs", "**/*.razor"]),
     project_sdk = "blazorwasm",
     static_web_assets = glob(["wwwroot/**"]),
-    target_frameworks = ["net10.0"],
+    target_frameworks = ["net11.0"],
     deps = ["@paket.main//microsoft.aspnetcore.components.webassembly"],
 )
 
 publish_binary(
     name = "publish",
     binary = ":app",
-    target_framework = "net10.0",
+    target_framework = "net11.0",
     wasm = True,
 )
 ```
@@ -287,7 +287,7 @@ publish_binary(
     binary = ":app",
     self_contained = True,
     single_file = True,
-    target_framework = "net10.0",
+    target_framework = "net11.0",
 )
 ```
 
@@ -321,9 +321,9 @@ Declare your packages in `paket.dependencies`:
 
 ```
 source https://api.nuget.org/v3/index.json
-framework: net10.0
+framework: net11.0
 
-nuget FSharp.Core 10.1.401
+nuget FSharp.Core 11.0.101
 nuget Argu 6.2.3
 ```
 
@@ -354,9 +354,9 @@ If you have the following `paket.dependencies`:
 
 ```text
 source https://api.nuget.org/v3/index.json
-framework: net10.0
+framework: net11.0
 
-nuget System.Text.Json 10.1.201
+nuget System.Text.Json 11.0.0
 
 group iaac
     source https://api.nuget.org/v3/index.json
@@ -372,7 +372,7 @@ in the `deps` attribute of your Bazel targets.
 csharp_binary(
     name = "app",
     srcs = ["Program.cs"],
-    target_frameworks = ["net10.0"],
+    target_frameworks = ["net11.0"],
     deps = ["@paket.main//system.text.json"],
 )
 ```

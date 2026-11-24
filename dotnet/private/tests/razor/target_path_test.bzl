@@ -26,12 +26,13 @@ _CASES = [
 ]
 
 # Derived from the target framework rather than tabulated, so a .NET release
-# needs no change. net11.0 is here to prove that: it has no toolchain yet.
+# needs no change. net12.0 is here to prove that: it has no toolchain yet.
 _LANG_VERSIONS = {
     "net5.0": "5.0",
     "net8.0": "8.0",
     "net10.0": "10.0",
     "net11.0": "11.0",
+    "net12.0": "12.0",
 }
 
 def _lang_version_test_impl(ctx):

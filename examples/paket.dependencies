@@ -1,17 +1,20 @@
 group blazor_deps
-    framework: net10.0
+    framework: net11.0
     storage: none
     source https://api.nuget.org/v3/index.json
 
-    nuget Microsoft.AspNetCore.Components.WebAssembly 10.0.12
+    nuget Microsoft.AspNetCore.Components.WebAssembly 11.0.0
 
 group bolero_deps
-    framework: net10.0
+    framework: net11.0
     storage: none
     source https://api.nuget.org/v3/index.json
 
     nuget Bolero 0.25.65
-    nuget FSharp.Core 10.1.401
+    nuget FSharp.Core 11.0.101
+    # Bolero accepts any release from .NET 10 on, but a .NET 11 application
+    # needs .NET 11's, which ships the script that boots it.
+    nuget Microsoft.AspNetCore.Components.WebAssembly 11.0.0
 
 group example_deps
     framework: net9.0,netstandard2.0
@@ -19,7 +22,7 @@ group example_deps
     source https://api.nuget.org/v3/index.json
 
     nuget Expecto 9.0.4
-    nuget FSharp.Core 10.1.401
+    nuget FSharp.Core 11.0.101
     nuget FSharp.Data 5.0.2
     nuget Microsoft.CodeAnalysis.Common 4.9.2
     nuget Microsoft.CodeAnalysis.Analyzers 3.3.4

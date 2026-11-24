@@ -6,7 +6,7 @@ group rules_dotnet_dev_nuget_packages
     nuget LibGit2Sharp 0.27.0-preview-0182
     nuget LibGit2Sharp.NativeBinaries 2.0.315-alpha.0.9
     nuget FSharp.Data 4.2.7
-    nuget FSharp.Core 10.1.401
+    nuget FSharp.Core 11.0.101
     nuget System.Security.Principal.Windows 5.0.0
     nuget Magick.NET.Core 12.2.2
     nuget System.Memory 4.5.5

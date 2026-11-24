@@ -15,14 +15,14 @@ csharp_library(
     ],
     project_sdk = "razor",
     root_namespace = "Example.Components",
-    target_frameworks = ["net10.0"],
+    target_frameworks = ["net11.0"],
 )
 
 csharp_test(
     name = "components_test",
     srcs = ["ComponentsTest.cs"],
     project_sdk = "razor",
-    target_frameworks = ["net10.0"],
+    target_frameworks = ["net11.0"],
     deps = [":components"],
 )
 
@@ -36,5 +36,5 @@ csharp_library(
     ],
     project_sdk = "web",
     root_namespace = "Example.Web",
-    target_frameworks = ["net10.0"],
+    target_frameworks = ["net11.0"],
 )

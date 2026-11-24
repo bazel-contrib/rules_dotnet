@@ -8,10 +8,10 @@
     <description>An F# library packed by rules_dotnet's own tests.</description>
     <dependencies>
       <group targetFramework="net9.0">
-        <dependency id="FSharp.Core" version="10.1.401" exclude="Build,Analyzers" />
+        <dependency id="FSharp.Core" version="11.0.101" exclude="Build,Analyzers" />
       </group>
       <group targetFramework=".NETStandard2.0">
-        <dependency id="FSharp.Core" version="10.1.401" exclude="Build,Analyzers" />
+        <dependency id="FSharp.Core" version="11.0.101" exclude="Build,Analyzers" />
       </group>
     </dependencies>
   </metadata>
