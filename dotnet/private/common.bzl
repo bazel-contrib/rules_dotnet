@@ -67,6 +67,13 @@ NET_FRAMEWORKS = FRAMEWORK_COMPATIBILITY.keys()[_net:_cor]
 COR_FRAMEWORKS = FRAMEWORK_COMPATIBILITY.keys()[_cor:]
 TRANSITIVE_FRAMEWORK_COMPATIBILITY = _collect_transitive()
 
+# Each framework's compatible frameworks, most specific first. FRAMEWORK_COMPATIBILITY
+# lists each family oldest to newest, so the later a framework, the more specific.
+_NEAREST_FIRST = {
+    tfm: [candidate for candidate in reversed(FRAMEWORK_COMPATIBILITY.keys()) if sets.contains(compatible, candidate)]
+    for (tfm, compatible) in TRANSITIVE_FRAMEWORK_COMPATIBILITY.items()
+}
+
 def tfm_to_semver(tfm):
     """Converts a target framework moniker to a semver version.
 
@@ -638,14 +645,12 @@ def get_nearest_compatible_target_framework(incoming_tfm, tfms):
     Returns:
       The best match, or None if none of `tfms` is compatible.
     """
-    compatible = TRANSITIVE_FRAMEWORK_COMPATIBILITY.get(incoming_tfm)
-    if compatible == None:
+    candidates = _NEAREST_FIRST.get(incoming_tfm)
+    if candidates == None:
         fail("Target framework moniker is not supported/valid: {}".format(incoming_tfm))
 
-    # FRAMEWORK_COMPATIBILITY is ordered oldest to newest within a family, so
-    # the last compatible entry is the most specific match.
-    for tfm in reversed(FRAMEWORK_COMPATIBILITY.keys()):
-        if tfm in tfms and sets.contains(compatible, tfm):
+    for tfm in candidates:
+        if tfm in tfms:
             return tfm
 
     return None

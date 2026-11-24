@@ -37,8 +37,9 @@ def _targeting_pack_impl(ctx):
     targeting_pack_overrides = {}
     framework_list = {}
 
-    # When two packs ship an assembly, the newer copy wins.
-    framework_list_keys = {}
+    # When two packs ship an assembly, the newer copy wins. Only then are
+    # their versions compared: most targets compile against one pack.
+    framework_list_owners = {}
     framework_files = []
     analyzers = []
     analyzers_csharp = []
@@ -61,11 +62,11 @@ def _targeting_pack_impl(ctx):
             if not in_profiles(nuget_info.framework_list_profiles.get(dll_name, ""), profiles):
                 continue
 
-            key = framework_assembly_key(nuget_info, dll_name)
-            if dll_name in framework_list_keys and framework_list_keys[dll_name] >= key:
+            owner = framework_list_owners.get(dll_name)
+            if owner and framework_assembly_key(owner, dll_name) >= framework_assembly_key(nuget_info, dll_name):
                 continue
 
-            framework_list_keys[dll_name] = key
+            framework_list_owners[dll_name] = nuget_info
             framework_list[dll_name] = {"version": dll_version, "file": refs_by_name.get(dll_name)}
 
         if len(nuget_info.framework_list) == 0:
