@@ -129,6 +129,15 @@ def xaml_plan(label, xaml_srcs, frameworks, target_framework_is_core):
     """
     check_wpf(label, frameworks, target_framework_is_core, "XAML sources")
 
+    compiled = {}
+    for src in xaml_srcs:
+        path = _compiled_path(src, label)
+        if path in compiled:
+            fail(("{}: {} and {} would both compile to {}.baml. The markup compiler places a XAML " +
+                  "file from outside the package's source directory, such as a generated one, by " +
+                  "its file name alone; rename one of them.").format(label, compiled[path].short_path, src.short_path, path))
+        compiled[path] = src
+
     application = None
     pages = []
     for src in xaml_srcs:
@@ -138,6 +147,24 @@ def xaml_plan(label, xaml_srcs, frameworks, target_framework_is_core):
             pages.append(src)
 
     return struct(application = application, pages = pages)
+
+def _compiled_path(file, label):
+    """Where the markup compiler puts a XAML file's BAML and code, without extension.
+
+    As `GetResolvedFilePath` in PresentationBuildTasks: at the file's path
+    relative to the directory the tasks run in, or at its file name if it is
+    outside it. Lowercased, as a Windows file system and the resource names
+    compare them.
+    """
+    project_dir = _project_dir(label)
+    if project_dir == ".":
+        path = file.path
+    elif file.path.startswith(project_dir + "/"):
+        path = file.path[len(project_dir) + 1:]
+    else:
+        path = file.basename
+
+    return path.rpartition(".")[0].lower()
 
 def _named(files, label):
     """Each file with the name it takes in the assembly, as the tool reads them."""

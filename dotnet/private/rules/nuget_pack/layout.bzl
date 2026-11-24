@@ -518,28 +518,32 @@ def dependency_group(tfm, dependencies):
     )
 
 def framework_reference_group(tfm, framework_references):
-    """The shared frameworks a library's consumers need, if any.
+    """The shared frameworks a library's consumers need, for one framework.
 
     As the SDK packs a project's `<FrameworkReference>` items, profiles and
     all, so that NuGet hands them on to every project consuming the package.
+    Like `dotnet pack`, a package with any framework references has a group
+    for every framework, empty where it has none: NuGet takes the nearest
+    group a consumer is compatible with, which would otherwise be that of
+    another framework.
 
     Args:
       tfm: The target framework moniker.
-      framework_references: The framework references the library was compiled
-        with, from its DotnetAssemblyRuntimeInfo.
+      framework_references: The framework references of the library and of
+        every assembly bundled with it, from their DotnetAssemblyRuntimeInfo.
 
     Returns:
-      A struct for the request, or None when the framework needs none.
+      A struct for the request.
     """
-    if not framework_references:
-        return None
-
-    if not is_core_framework(tfm) or not is_greater_or_equal_framework(tfm, _FIRST_FRAMEWORK_REFERENCE_TFM):
-        return None
+    references = {}
+    if is_core_framework(tfm) and is_greater_or_equal_framework(tfm, _FIRST_FRAMEWORK_REFERENCE_TFM):
+        for reference in framework_references:
+            # NuGet compares framework reference names case-insensitively.
+            references.setdefault(reference.lower(), reference)
 
     return struct(
         targetFramework = tfm_to_nuget_framework(tfm),
-        frameworkReferences = sorted(framework_references),
+        frameworkReferences = sorted(references.values()),
     )
 
 def _check_package_path(path, label):

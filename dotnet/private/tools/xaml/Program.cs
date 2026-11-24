@@ -80,6 +80,13 @@ internal static class Program
     private const string ExecRootPlaceholder = "<rules_dotnet:execroot>";
     private const string OutputDirPlaceholder = "<rules_dotnet:output>";
 
+    // What the tasks keep for an incremental build, after the assembly name,
+    // as PresentationBuildTasks names them. The .lref file is also pass1's
+    // hand-off to pass2.
+    private const string StateFile = "_MarkupCompile.cache";
+    private const string LocalTypeCacheFile = "_MarkupCompile.lref";
+    private static readonly string[] IntellisenseStateFiles = { "_MarkupCompile.i.cache", "_MarkupCompile.i.lref" };
+
     private static int Main(string[] args)
     {
         if (args.Length != 2 || (args[0] != "pass1" && args[0] != "pass2"))
@@ -204,11 +211,11 @@ internal static class Program
         // Pass1's state for an incremental build holds absolute paths, which
         // would make what reads this directory miss the cache each time.
         // Pass2 does not need it.
-        DeleteState(outputDir, "*_MarkupCompile.cache");
+        DeleteState(outputDir, options.AssemblyName, StateFile);
 
         // Pass2 runs in a sandbox of its own, with its own output directory.
         // The output directory is inside the execution root, so it goes first.
-        Relocate(outputDir, (outputDir, OutputDirPlaceholder), (WithSeparator(execRoot), ExecRootPlaceholder + Path.DirectorySeparatorChar));
+        Relocate(outputDir + options.AssemblyName + LocalTypeCacheFile, (outputDir, OutputDirPlaceholder), (WithSeparator(execRoot), ExecRootPlaceholder + Path.DirectorySeparatorChar));
 
         return 0;
     }
@@ -224,7 +231,7 @@ internal static class Program
         if (options.Pass1Dir != "")
         {
             CopyDirectory(absolute(options.Pass1Dir), outputDir);
-            Relocate(outputDir, (OutputDirPlaceholder, outputDir), (ExecRootPlaceholder + Path.DirectorySeparatorChar, WithSeparator(execRoot)));
+            Relocate(outputDir + options.AssemblyName + LocalTypeCacheFile, (OutputDirPlaceholder, outputDir), (ExecRootPlaceholder + Path.DirectorySeparatorChar, WithSeparator(execRoot)));
         }
 
         var bamlNames = BamlNames(options.Pages, projectDir, outputDir, absolute);
@@ -238,7 +245,7 @@ internal static class Program
 
         // Only a project whose XAML names its own types needs pass2, which
         // pass1 says by leaving the .lref file.
-        if (Directory.EnumerateFiles(outputDir, "*_MarkupCompile.lref").Any())
+        if (File.Exists(outputDir + options.AssemblyName + LocalTypeCacheFile))
         {
             var task = Task(options.Tasks, "MarkupCompilePass2");
 
@@ -256,7 +263,7 @@ internal static class Program
 
         // What pass1 and pass2 leave for an incremental build means nothing to
         // the compilation, and holds absolute paths.
-        DeleteState(outputDir, "*_MarkupCompile.*");
+        DeleteState(outputDir, options.AssemblyName, new[] { StateFile, LocalTypeCacheFile }.Concat(IntellisenseStateFiles).ToArray());
 
         // MainResourcesGeneration: in a stable order, so that the resources file
         // is too. Each BAML file is named as the XAML it was compiled from.
@@ -293,26 +300,31 @@ internal static class Program
         return 0;
     }
 
-    private static void DeleteState(string directory, string pattern)
+    // Only the files the tasks name: a XAML file can be named like them, and
+    // its BAML or code must stay.
+    private static void DeleteState(string outputDir, string assemblyName, params string[] suffixes)
     {
-        foreach (var state in Directory.EnumerateFiles(directory, pattern, SearchOption.TopDirectoryOnly))
+        foreach (var suffix in suffixes)
         {
-            File.Delete(state);
+            File.Delete(outputDir + assemblyName + suffix);
         }
     }
 
-    private static void Relocate(string directory, params (string From, string To)[] replacements)
+    // Pass1 leaves no .lref file when no XAML names a type of the assembly.
+    private static void Relocate(string file, params (string From, string To)[] replacements)
     {
-        foreach (var file in Directory.EnumerateFiles(directory, "*.lref", SearchOption.TopDirectoryOnly))
+        if (!File.Exists(file))
         {
-            var content = File.ReadAllText(file);
-            foreach (var (from, to) in replacements)
-            {
-                content = content.Replace(from, to, StringComparison.Ordinal);
-            }
-
-            File.WriteAllText(file, content, new UTF8Encoding(false));
+            return;
         }
+
+        var content = File.ReadAllText(file);
+        foreach (var (from, to) in replacements)
+        {
+            content = content.Replace(from, to, StringComparison.Ordinal);
+        }
+
+        File.WriteAllText(file, content, new UTF8Encoding(false));
     }
 
     private static void CopyDirectory(string from, string to)

@@ -312,7 +312,10 @@ MSBuild's `<Resource>` items: embedded in `<assembly name>.g.resources` with the
 compiled XAML, or on their own in a target with none, and addressed by their
 path relative to the package. A generated page or resource is named by its path
 in the package too, and one from outside the package by its file name, as
-MSBuild names a file from outside the project.
+MSBuild names a file from outside the project. The markup compiler writes the
+compiled form of a generated page by its file name alone, though, so two
+generated pages of one target, or a generated page and a page at the root of
+the package, cannot share a file name.
 
 XAML that names a type of the assembly being built, such as a value converter
 it declares, is compiled against a temporary assembly of the sources, as MSBuild

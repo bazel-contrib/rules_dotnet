@@ -463,11 +463,19 @@ def _ilc_link(ctx, compiled, aot):
     # on a hermetic toolchain, the SDK path on Apple. These arrive as plain
     # strings, some of them output paths, which is why this action cannot opt
     # in to path mapping the way `Ilc` does.
-    args.add_all(cc_common.get_memory_inefficient_command_line(
+    toolchain_args = cc_common.get_memory_inefficient_command_line(
         feature_configuration = feature_configuration,
         action_name = CPP_LINK_EXECUTABLE_ACTION_NAME,
         variables = link_variables,
-    ))
+    )
+
+    # The subsystem is the executable's own, which the link below sets as the
+    # SDK does. Bazel's MSVC toolchain sets `/SUBSYSTEM:CONSOLE` on every
+    # executable, which would leave a Windows GUI one with two.
+    if is_windows:
+        toolchain_args = [arg for arg in toolchain_args if not arg.upper().lstrip("/-").startswith("SUBSYSTEM:")]
+
+    args.add_all(toolchain_args)
     args.add(compiled.object_file)
 
     extra_inputs = []

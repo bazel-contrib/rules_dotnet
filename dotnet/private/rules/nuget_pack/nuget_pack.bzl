@@ -262,7 +262,7 @@ def _nuget_pack_impl(ctx):
     entries = []
     symbol_entries = []
     groups = {}
-    framework_references = []
+    reference_groups = {}
     copied_names = {}
     tool_directories = []
     identity = None
@@ -320,14 +320,23 @@ def _nuget_pack_impl(ctx):
         symbol_entries += layout.symbol_files
 
         group = dependency_group(tfm, plan.dependencies)
+
+        # What is copied in runs on the shared frameworks it references, which
+        # no package dependency hands on.
+        references = framework_reference_group(tfm, [
+            reference
+            for info in [runtime_info] + plan.bundled
+            for reference in getattr(info, "framework_references", None) or []
+        ])
         if first_of_tfm:
             groups[tfm] = group
-            references = framework_reference_group(tfm, getattr(runtime_info, "framework_references", None) or [])
-            if references != None:
-                framework_references.append(references)
+            reference_groups[tfm] = references
         elif groups[tfm] != group:
             fail(("{}: the dependencies of {} differ between runtime identifiers for {}; " +
                   "NuGet declares dependencies per framework, not per runtime identifier").format(ctx.label, target.label, tfm))
+        elif reference_groups[tfm] != references:
+            fail(("{}: the framework references of {} differ between runtime identifiers for {}; " +
+                  "NuGet declares framework references per framework, not per runtime identifier").format(ctx.label, target.label, tfm))
 
         for info in plan.bundled:
             copied_names[info.name] = True
@@ -395,7 +404,10 @@ def _nuget_pack_impl(ctx):
         metadata = _metadata(ctx, package_id, version),
         packageTypes = [_DOTNET_TOOL_PACKAGE_TYPE] if is_tool else [],
         dependencyGroups = [groups[tfm] for tfm in sorted(groups.keys())],
-        frameworkReferenceGroups = framework_references,
+        frameworkReferenceGroups = [reference_groups[tfm] for tfm in sorted(reference_groups.keys())] if any([
+            reference_group.frameworkReferences
+            for reference_group in reference_groups.values()
+        ]) else [],
         contentFiles = [
             struct(
                 include = include,

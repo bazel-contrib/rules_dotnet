@@ -103,11 +103,18 @@ def _round_trip_test_impl(ctx):
 def _framework_reference_test_impl(ctx):
     env = unittest.begin(ctx)
     web = ["Microsoft.AspNetCore.App"]
-    asserts.equals(env, None, framework_reference_group("net9.0", []))
-    asserts.equals(env, None, framework_reference_group("netstandard2.0", web))
-    asserts.equals(env, None, framework_reference_group("netcoreapp2.1", web))
     asserts.equals(env, web, framework_reference_group("netcoreapp3.1", web).frameworkReferences)
     asserts.equals(env, "net9.0", framework_reference_group("net9.0", web).targetFramework)
+
+    # Every framework has a group, which is empty where nothing is referenced
+    # or nothing can be.
+    asserts.equals(env, [], framework_reference_group("net9.0", []).frameworkReferences)
+    asserts.equals(env, ".NETStandard2.0", framework_reference_group("netstandard2.0", web).targetFramework)
+    asserts.equals(env, [], framework_reference_group("netstandard2.0", web).frameworkReferences)
+    asserts.equals(env, [], framework_reference_group("netcoreapp2.1", web).frameworkReferences)
+
+    # A reference reached twice, as NuGet compares them, is one.
+    asserts.equals(env, web, framework_reference_group("net9.0", web + ["microsoft.aspnetcore.app"]).frameworkReferences)
 
     # As the SDK packs them: profiles and all, in a stable order.
     asserts.equals(

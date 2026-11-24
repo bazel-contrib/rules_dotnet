@@ -8,11 +8,13 @@
     <description>A WPF library packed by rules_dotnet's own tests.</description>
     <dependencies>
       <group targetFramework="net10.0-windows7.0" />
+      <group targetFramework=".NETStandard2.0" />
     </dependencies>
     <frameworkReferences>
       <group targetFramework="net10.0-windows7.0">
         <frameworkReference name="Microsoft.WindowsDesktop.App.WPF" />
       </group>
+      <group targetFramework=".NETStandard2.0" />
     </frameworkReferences>
   </metadata>
 </package>
