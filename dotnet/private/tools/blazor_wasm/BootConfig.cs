@@ -93,10 +93,9 @@ internal static class BootConfig
         Tasks.Set(task, "Endpoints", endpoints.ToArray());
         Tasks.Set(task, "ApplicationEnvironment", request.ApplicationEnvironment);
         Tasks.Set(task, "InvariantGlobalization", request.InvariantGlobalization.ToString().ToLowerInvariant());
-        // A development build says debugging is available - the task turns that
-        // into the `debugLevel` the runtime reads - and admits that nothing was
-        // trimmed, where the release still records that. Caching boot resources
-        // would defeat the point of rebuilding.
+        // A development build enables debugging and records that nothing was
+        // trimmed. It also skips boot resource caching, which would keep
+        // serving assemblies from before a rebuild.
         Tasks.Set(task, "DebugBuild", request.Debug);
         Tasks.SetIfDeclared(task, "LinkerEnabled", !request.Debug);
         Tasks.Set(task, "CacheBootResources", !request.Debug);

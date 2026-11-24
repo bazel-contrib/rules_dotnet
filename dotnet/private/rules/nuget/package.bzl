@@ -16,6 +16,10 @@ load("//dotnet/private/rules/nuget:imports.bzl", "import_library")
 load("//dotnet/private/rules/nuget:package_metadata.bzl", "ANY_FRAMEWORK")
 load("//dotnet/private/sdk:frameworks.bzl", "framework_platform")
 
+# By canonical label, so that the hub repository resolves them whatever name it
+# sees rules_dotnet under.
+_TFM_SETTINGS = {tfm: str(Label("//dotnet:tfm_" + tfm)) for tfm in FRAMEWORK_COMPATIBILITY}
+
 def _branches(values_by_tfm, groups):
     """The `tfm_*` branches a select needs to give every framework its value.
 
@@ -46,7 +50,7 @@ def _branches(values_by_tfm, groups):
         if len(FRAMEWORK_COMPATIBILITY[tfm]) != 1 or value != values_by_tfm[FRAMEWORK_COMPATIBILITY[tfm][0]]:
             branches[tfm] = value
 
-    return {"@rules_dotnet//dotnet:tfm_{}".format(tfm): value for (tfm, value) in branches.items()}
+    return {_TFM_SETTINGS[tfm]: value for (tfm, value) in branches.items()}
 
 def deps_by_tfm(dependency_groups, packages):
     """Maps every supported TFM onto the labels of the deps it should use.
@@ -179,7 +183,9 @@ def nuget_package(
         library_name = library_name,
         libs = ["{}:libs".format(archive)],
         native = ["{}:native".format(archive)],
-        nupkg = "{}:{}.{}.nupkg".format(archive, library_name.lower(), version),
+        # `nuget_archive` names the download after the lower cased id and
+        # version; a pre-release label can carry upper case letters.
+        nupkg = "{}:{}.{}.nupkg".format(archive, library_name.lower(), version.lower()),
         portable_assets = "{}:portable_assets".format(archive),
         refs = ["{}:refs".format(archive)],
         resource_assemblies = ["{}:resource_assemblies".format(archive)],

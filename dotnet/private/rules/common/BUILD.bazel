@@ -11,7 +11,18 @@ bzl_library(
         "//dotnet/private:providers",
         "//dotnet/private/icu:settings",
         "//dotnet/private/rules/ready_to_run",
+        "@bazel_lib//lib:expand_make_vars",
         "@bazel_skylib//rules:common_settings",
+    ],
+)
+
+bzl_library(
+    name = "compiler_action",
+    srcs = ["compiler_action.bzl"],
+    visibility = ["//dotnet:__subpackages__"],
+    deps = [
+        "//dotnet/private/icu:settings",
+        "@bazel_skylib//lib:dicts",
     ],
 )
 
@@ -58,12 +69,11 @@ bzl_library(
     srcs = ["resx.bzl"],
     visibility = ["//dotnet:__subpackages__"],
     deps = [
+        ":compiler_action",
         ":cultures",
         "//dotnet/private:common",
         "//dotnet/private:nuget_version",
         "//dotnet/private:providers",
-        "//dotnet/private/icu:settings",
-        "@bazel_skylib//lib:dicts",
     ],
 )
 
@@ -86,7 +96,6 @@ bzl_library(
         "//dotnet/private/sdk/runtime_packs:runtime_pack_transition",
         "//dotnet/private/sdk/targeting_packs:targeting_pack_transition",
         "//dotnet/private/transitions:default_transition",
-        "@bazel_lib//lib:expand_make_vars",
         "@bazel_skylib//lib:dicts",
     ],
 )

@@ -1,6 +1,6 @@
 ".Net Runtime Pack"
 
-load("//dotnet/private:providers.bzl", "DotnetAssemblyCompileInfo", "DotnetAssemblyRuntimeInfo", "DotnetRuntimePackInfo", "NuGetInfo")
+load("//dotnet/private:providers.bzl", "DotnetAssemblyRuntimeInfo", "DotnetRuntimePackInfo", "NuGetInfo")
 load("//dotnet/private/sdk:framework_list.bzl", "framework_assembly_key")
 load("//dotnet/private/transitions:tfm_transition.bzl", "tfm_transition")
 
@@ -49,20 +49,14 @@ def _without_shadowed_assemblies(runtime_infos, nuget_infos):
     return narrowed
 
 def _runtime_pack_impl(ctx):
-    compile_infos = []
-    runtime_infos = []
-    nuget_infos = []
-    for pack in ctx.attr.packs:
-        if pack[DotnetAssemblyCompileInfo]:
-            compile_infos.append(pack[DotnetAssemblyCompileInfo])
-        if pack[DotnetAssemblyRuntimeInfo]:
-            runtime_infos.append(pack[DotnetAssemblyRuntimeInfo])
-        if pack[NuGetInfo]:
-            nuget_infos.append(pack[NuGetInfo])
+    nuget_infos = [pack[NuGetInfo] for pack in ctx.attr.packs]
 
     return [DotnetRuntimePackInfo(
         runtime_identifier = ctx.attr.runtime_identifier,
-        assembly_runtime_infos = _without_shadowed_assemblies(runtime_infos, nuget_infos),
+        assembly_runtime_infos = _without_shadowed_assemblies(
+            [pack[DotnetAssemblyRuntimeInfo] for pack in ctx.attr.packs],
+            nuget_infos,
+        ),
         nuget_infos = nuget_infos,
     )]
 

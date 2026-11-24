@@ -1,0 +1,55 @@
+load(
+    "//dotnet:defs.bzl",
+    "csharp_library",
+    "csharp_test",
+    "fsharp_library",
+    "fsharp_test",
+)
+
+# A target with `internals_visible_to` compiles twice: to the assembly and the
+# reference assembly its friends see, and then to the reference assembly
+# everyone else sees. Both compiles have to name the resources alike, or two
+# resources sharing a file name collide in the second.
+csharp_library(
+    name = "csharp_lib",
+    srcs = ["Lib.cs"],
+    internals_visible_to = ["friend"],
+    resources = [
+        "first/strings.txt",
+        "second/strings.txt",
+    ],
+    target_frameworks = ["net9.0"],
+)
+
+# Not a friend, so it compiles against the second reference assembly.
+csharp_test(
+    name = "csharp_test",
+    srcs = ["ResourceNames.cs"],
+    target_frameworks = ["net9.0"],
+    deps = [":csharp_lib"],
+)
+
+fsharp_library(
+    name = "fsharp_lib",
+    srcs = ["Lib.fs"],
+    internals_visible_to = ["friend"],
+    resources = [
+        "first/strings.txt",
+        "second/strings.txt",
+    ],
+    target_frameworks = ["net9.0"],
+    deps = ["@paket.rules_dotnet_dev_nuget_packages//fsharp.core"],
+)
+
+# Also has friends itself: fsc wants its `[<EntryPoint>]` in the last file, so
+# the generated `InternalsVisibleTo` file must not come after it.
+fsharp_test(
+    name = "fsharp_test",
+    srcs = ["ResourceNames.fs"],
+    internals_visible_to = ["friend"],
+    target_frameworks = ["net9.0"],
+    deps = [
+        ":fsharp_lib",
+        "@paket.rules_dotnet_dev_nuget_packages//fsharp.core",
+    ],
+)

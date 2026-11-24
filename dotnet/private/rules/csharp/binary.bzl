@@ -48,7 +48,7 @@ def _compile_action(ctx, tfm, toolchain):
         srcs = ctx.files.srcs,
         data = ctx.files.data,
         appsetting_files = ctx.files.appsetting_files,
-        content_file_mappings = resolve_content_file_mappings(ctx.attr.content_files, ctx.label.package),
+        content_file_mappings = resolve_content_file_mappings(ctx.attr.content_files, ctx.label),
         compile_data = ctx.files.compile_data,
         out = ctx.attr.out,
         target = "winexe" if ctx.attr.winexe else "exe",
@@ -126,11 +126,11 @@ _BINARY_ATTRS = dicts.add(
     WINEXE_ATTRS,
     {
         "include_host_model_dll": attr.bool(
-            doc = "Whether to include Microsoft.NET.HostModel from the toolchain. This is only required to build tha apphost shimmer.",
+            doc = "Whether to compile and run against the .NET SDK's Microsoft.NET.HostModel, as the apphost shimmer does.",
             default = False,
         ),
         "include_msbuild_dlls": attr.bool(
-            doc = "Whether to include the MSBuild interfaces from the toolchain. This is only required by tools that run an SDK build task directly.",
+            doc = "Whether to compile and run against the .NET SDK's MSBuild interfaces, as a tool that runs an SDK build task does.",
             default = False,
         ),
         "_trimmed": attr.label(
@@ -142,7 +142,7 @@ _BINARY_ATTRS = dicts.add(
 
 csharp_binary = rule(
     _binary_impl,
-    doc = """Compile a C# exe""" + BINARY_OUTPUT_GROUPS_DOC,
+    doc = """Compiles a C# executable.""" + BINARY_OUTPUT_GROUPS_DOC,
     attrs = _BINARY_ATTRS,
     executable = True,
     toolchains = [
@@ -151,14 +151,11 @@ csharp_binary = rule(
     cfg = tfm_transition,
 )
 
-# The rules below build tools of rules_dotnet's own, so they follow the
-# bootstrap toolchain rather than the user's: its SDK compiles them and its
-# packs are what they compile against. The attributes pointing at rules_dotnet's
-# own tools are stubbed out rather than dropped - a tool cannot depend on
-# itself, and nothing these rules compile has Razor sources, `.resx` resources
-# or web assets, so none of those tools is ever invoked. Nor is a tool ever published, so it takes none
-# of the packs a publish needs, which only the user's SDK has, and only for the
-# frameworks it knows.
+# The rules below build rules_dotnet's own tools with the bootstrap toolchain's
+# SDK and packs. A tool cannot depend on itself, so the attributes naming our
+# tools are stubbed out: nothing these rules compile has Razor sources, `.resx`
+# resources or web assets. Nor is a tool ever published, so it takes none of
+# the packs a publish needs, which only the user's SDK has.
 _BOOTSTRAP_ATTRS = dicts.add(
     _BINARY_ATTRS,
     {

@@ -61,14 +61,15 @@ fail() {
   exit 1
 }
 
-# 1. The target's source and flags, and the API key from the environment.
+# 1. The target's source and flags, and the API key from the environment, by name.
 output="$(RULES_DOTNET_NUGET_PUSH_DRY_RUN=1 NUGET_API_KEY=SECRET run_launcher "$launcher")"
 [[ "$output" == *"nuget push"* ]] || fail "dry run does not push" "$output"
 [[ "$output" == *"RulesDotnet.Tests.Lib.1.2.3-beta.1.nupkg"* ]] || fail "dry run does not name the package" "$output"
-[[ "$output" == *"--source https://example.invalid/never-used/v3/index.json"* ]] || fail "dry run lacks the target's source" "$output"
+[[ "$output" == *"--source https://example.invalid/never%20used/v3/index.json"* ]] || fail "dry run lacks the target's source" "$output"
 [[ "$output" == *"--skip-duplicate"* ]] || fail "dry run lacks --skip-duplicate" "$output"
 [[ "$output" == *"--timeout 42"* ]] || fail "dry run lacks --timeout" "$output"
-[[ "$output" == *"--api-key SECRET"* ]] || fail "dry run lacks the API key from the environment" "$output"
+[[ "$output" == *"--api-key "*"NUGET_API_KEY"* ]] || fail "dry run lacks the API key from the environment" "$output"
+[[ "$output" != *"SECRET"* ]] || fail "dry run prints the API key from the environment" "$output"
 
 # 2. Explicit arguments win, and the target's are left out.
 output="$(RULES_DOTNET_NUGET_PUSH_DRY_RUN=1 NUGET_API_KEY=SECRET run_launcher "$launcher" --api-key OTHER --source /elsewhere)"
@@ -84,10 +85,11 @@ if output="$(RULES_DOTNET_NUGET_PUSH_DRY_RUN=1 run_launcher "$launcher_no_source
 fi
 [[ "$output" == *"no package source"* ]] || fail "a push with no source gave the wrong message" "$output"
 
-# 4. A real push, into a folder: no network, and the whole SDK has to be in the runfiles.
+# 4. A real push, into a folder: no network, and the whole SDK has to be in the
+# runfiles. A folder feed ignores the API key the environment passes along.
 feed="$TEST_TMPDIR/feed"
 mkdir -p "$feed"
-output="$(run_launcher "$launcher" --source "$feed" 2>&1)" || fail "pushing to a folder feed failed" "$output"
+output="$(NUGET_API_KEY=SECRET run_launcher "$launcher" --source "$feed" 2>&1)" || fail "pushing to a folder feed failed" "$output"
 count="$(find "$feed" -name '*.nupkg' | wc -l)"
 [[ "$count" -eq 1 ]] || fail "expected one package in the feed, found $count" "$(find "$feed")"
 

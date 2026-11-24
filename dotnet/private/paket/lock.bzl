@@ -96,6 +96,7 @@ def _new_group(name):
         # remote in a group, but Paket resolves it to a single version.
         "packages": {},
         "sources": [],
+        "unsupported": "",
     }
 
 def _finish(group):
@@ -103,6 +104,7 @@ def _finish(group):
         name = group["name"],
         packages = group["packages"].values(),
         sources = group["sources"],
+        unsupported = group["unsupported"],
     )
 
 def parse_lock(content, path = "paket.lock"):
@@ -118,6 +120,8 @@ def parse_lock(content, path = "paket.lock"):
         sources: The package feeds the group resolves against.
         packages: A list of structs with `id` and `version` fields, in the
           order they appear in the file.
+        unsupported: Where the group first uses a GITHUB, GIT or HTTP
+          section, which rules_dotnet cannot provide, or "".
     """
     groups = []
     group = _new_group(MAIN_GROUP)
@@ -151,12 +155,11 @@ def parse_lock(content, path = "paket.lock"):
 
         if section != _NUGET_SECTION:
             # GITHUB/GIT/HTTP dependencies resolve to source files rather than
-            # packages. Bazel has first class rules for those, so point users
-            # at them instead of silently dropping the entry.
-            fail(
-                "{}:{}: the {} section is not supported by rules_dotnet.".format(path, line_number, section) +
-                " Fetch those sources with http_file/git_repository instead and remove the section from paket.dependencies.",
-            )
+            # packages. Recorded rather than failed on, so that only using the
+            # group is an error.
+            if not group["unsupported"]:
+                group["unsupported"] = "{}:{}: the {} section is not supported by rules_dotnet.".format(path, line_number, section)
+            continue
 
         if stripped.startswith("remote:"):
             remote = stripped[len("remote:"):].strip()
@@ -179,4 +182,4 @@ def parse_lock(content, path = "paket.lock"):
     groups.append(_finish(group))
 
     # Paket always writes the main group first, even when it is empty.
-    return [group for group in groups if group.packages]
+    return [group for group in groups if group.packages or group.unsupported]

@@ -86,7 +86,7 @@ def nuget_resolution_tests():
             continue
 
         nuget_package(
-            version = "fixture_{}".format(test.name),
+            version = "Fixture_{}".format(test.name),
             library_name = "fixture.{}".format(test.name),
             archive = archive,
             packages = {},
@@ -100,7 +100,7 @@ def nuget_resolution_tests():
 
         resolved_package(
             name = "{}_subject".format(test.name),
-            package = ":fixture_{}".format(test.name),
+            package = ":Fixture_{}".format(test.name),
             runtime_identifier = test.runtime_identifier,
             tags = ["manual"],
             target_framework = test.target_framework,

@@ -5,7 +5,8 @@
 # explicit --source or --api-key is passed through and the target's own left
 # out. NUGET_API_KEY (and NUGET_SYMBOL_API_KEY) stand in for a missing
 # --api-key (--symbol-api-key). Set RULES_DOTNET_NUGET_PUSH_DRY_RUN to print
-# the commands instead of running them.
+# the commands instead of running them, with those variables' names in place
+# of the keys.
 
 # --- begin runfiles.bash initialization v3 ---
 # Copy-pasted from the Bazel Bash runfiles library v3.
@@ -69,14 +70,20 @@ if [[ "$has_source" == false ]]; then
   fi
   args+=(--source "$source_from_target")
 fi
-if [[ "$has_api_key" == false && -n "${NUGET_API_KEY:-}" ]]; then
-  args+=(--api-key "$NUGET_API_KEY")
-fi
-if [[ "$has_symbol_api_key" == false && -n "${NUGET_SYMBOL_API_KEY:-}" ]]; then
-  args+=(--symbol-api-key "$NUGET_SYMBOL_API_KEY")
-fi
 if [[ -n "$config_file" ]]; then
   args+=(--configfile "$(rlocation "$config_file")")
+fi
+
+# Kept out of `args`, so that a dry run never prints a key.
+key_args=()
+shown_keys=""
+if [[ "$has_api_key" == false && -n "${NUGET_API_KEY:-}" ]]; then
+  key_args+=(--api-key "$NUGET_API_KEY")
+  shown_keys+='--api-key "$NUGET_API_KEY" '
+fi
+if [[ "$has_symbol_api_key" == false && -n "${NUGET_SYMBOL_API_KEY:-}" ]]; then
+  key_args+=(--symbol-api-key "$NUGET_SYMBOL_API_KEY")
+  shown_keys+='--symbol-api-key "$NUGET_SYMBOL_API_KEY" '
 fi
 
 # `bazel run` starts in the runfiles tree; a relative --source or --configfile
@@ -91,8 +98,8 @@ for package in "${resolved[@]}"; do
   cmd=("$dotnet" nuget push "$package" ${push_args[@]+"${push_args[@]}"} ${args[@]+"${args[@]}"} "$@")
   if [[ -n "${RULES_DOTNET_NUGET_PUSH_DRY_RUN:-}" ]]; then
     printf '%q ' "${cmd[@]}"
-    printf '\n'
+    printf '%s\n' "$shown_keys"
     continue
   fi
-  "${cmd[@]}"
+  "${cmd[@]}" ${key_args[@]+"${key_args[@]}"}
 done

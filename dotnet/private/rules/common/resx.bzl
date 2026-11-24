@@ -4,11 +4,10 @@ Neutral resources are embedded; culture ones (`Strings.fr.resx`) go into
 satellite assemblies. Cultures are recognised from `cultures.bzl`.
 """
 
-load("@bazel_skylib//lib:dicts.bzl", "dicts")
-load("//dotnet/private:common.bzl", "add_resx_resource_args", "format_ref_arg", "get_csharp_compiler_worker")
+load("//dotnet/private:common.bzl", "add_resx_resource_args", "format_ref_arg", "get_csharp_compiler_worker", "package_relative_path")
 load("//dotnet/private:nuget_version.bzl", "nuget_version")
 load("//dotnet/private:providers.bzl", "DotnetResxInfo")
-load("//dotnet/private/icu:settings.bzl", "globalization_env", "icu_wrapper_arguments")
+load("//dotnet/private/rules/common:compiler_action.bzl", "run_compiler")
 load("//dotnet/private/rules/common:cultures.bzl", "CULTURES")
 
 _TASKS_ASSEMBLY = "Microsoft.Build.Tasks.Core.dll"
@@ -60,17 +59,6 @@ def _split_culture(stem):
     if dot and suffix and suffix.lower() in CULTURES:
         return (name, suffix)
     return (stem, None)
-
-def _relative_path(file, label):
-    # Like MSBuild, falls back to the file name outside the project (package).
-    if file.owner != None and file.owner.repo_name != label.repo_name:
-        return file.basename
-
-    prefix = label.package + "/" if label.package else ""
-    if not file.short_path.startswith(prefix):
-        return file.basename
-
-    return file.short_path[len(prefix):]
 
 def _resource(file, path, culture, logical_name):
     """A `.resx` to compile.
@@ -143,7 +131,7 @@ def split_resources(ctx):
 
         for file in target.files.to_list():
             if file.extension.lower() == "resx":
-                resources.append(_resource(file, _relative_path(file, ctx.label), None, None))
+                resources.append(_resource(file, package_relative_path(file, ctx.label), None, None))
             else:
                 files.append(file)
 
@@ -192,8 +180,25 @@ def _tasks_assembly(toolchain, label):
         "The SDK is expected to carry it in its own directory.",
     )
 
-def _output_name(manifest_name):
-    return "".join([c if c.isalnum() or c in "._-" else "_" for c in manifest_name.elems()])
+def _output_names(resources):
+    """A distinct file name for each compiled resource, after its manifest name.
+
+    Replacing the characters a file name should not hold can give two manifest
+    names one file name (`A+B`, `A_B`), as can a file system that ignores case
+    (`Strings`, `strings`): a later one is numbered.
+    """
+    names = []
+    taken = {}
+    for resource in resources:
+        stem = "".join([c if c.isalnum() or c in "._-" else "_" for c in resource.manifest_name[:-len(".resources")].elems()])
+        name = stem
+        for number in range(1, len(resources) + 1):
+            if name.lower() not in taken:
+                break
+            name = "{}_{}".format(stem, number)
+        taken[name.lower()] = True
+        names.append(name + ".resources")
+    return names
 
 def _satellite_attributes(culture, version):
     lines = [
@@ -208,6 +213,61 @@ def _satellite_attributes(culture, version):
             "[assembly: System.Reflection.AssemblyInformationalVersion(\"%s\")]" % version,
         ]
     return "\n".join(lines) + "\n"
+
+def _generate_resources(actions, label, resx, out_dir, toolchain, references):
+    """Compiles every `.resx` to a `.resources` file in one action.
+
+    Args:
+        actions: The rule's `ctx.actions`.
+        label: The label of the target.
+        resx: The `resx` of `split_resources`.
+        out_dir: The target's output directory.
+        toolchain: The resolved .NET toolchain.
+        references: A depset of what the target compiles against.
+
+    Returns:
+        `(resource, File)` pairs, in the order of `resx.resources`.
+    """
+    tasks = _tasks_assembly(toolchain, label)
+
+    # Non-string resources need this reference, as in MSBuild.
+    extensions = [
+        ref
+        for ref in references.to_list()
+        if ref.basename.lower() == "system.resources.extensions.dll"
+    ]
+
+    compiled = [
+        (resource, actions.declare_file("{}/resx/{}".format(out_dir, name)))
+        for (resource, name) in zip(resx.resources, _output_names(resx.resources))
+    ]
+
+    request = actions.declare_file("{}/resx/request.json".format(out_dir))
+    actions.write(
+        output = request,
+        content = json.encode(struct(
+            tasksAssembly = tasks.path,
+            references = [ref.path for ref in extensions],
+            resources = [
+                struct(source = resource.file.path, output = output.path)
+                for (resource, output) in compiled
+            ],
+        )),
+    )
+
+    actions.run(
+        mnemonic = "ResxCompile",
+        progress_message = "Compiling .resx resources of %{label}",
+        executable = resx.tool.files_to_run,
+        arguments = [request.path],
+        inputs = depset(
+            direct = [request] + [resource.file for resource in resx.resources] + extensions,
+            transitive = [resx.data, toolchain.msbuild_tasks.files],
+        ),
+        outputs = [output for (_, output) in compiled],
+    )
+
+    return compiled
 
 def resx_compile(
         actions,
@@ -242,66 +302,28 @@ def resx_compile(
     if resx == None:
         return [], []
 
-    tasks = _tasks_assembly(toolchain, label)
-
-    # Non-string resources need this reference, as in MSBuild.
-    extensions = [
-        ref
-        for ref in references.to_list()
-        if ref.basename.lower() == "system.resources.extensions.dll"
-    ]
-
     neutral = []
-    cultures = {}
-    requests = []
-    outputs = []
-    for resource in resx.resources:
-        output = actions.declare_file("{}/resx/{}".format(out_dir, _output_name(resource.manifest_name)))
-        outputs.append(output)
-        requests.append(struct(source = resource.file.path, output = output.path))
-
+    by_culture = {}
+    for (resource, output) in _generate_resources(actions, label, resx, out_dir, toolchain, references):
         if resource.culture:
             # One satellite per culture, case-insensitively.
-            cultures.setdefault(resource.culture.lower(), []).append((resource.culture, output, resource.manifest_name))
+            by_culture.setdefault(resource.culture.lower(), []).append((resource, output))
         else:
             neutral.append((output, resource.manifest_name))
 
-    request = actions.declare_file("{}/resx/request.json".format(out_dir))
-    actions.write(
-        output = request,
-        content = json.encode(struct(
-            tasksAssembly = tasks.path,
-            references = [ref.path for ref in extensions],
-            resources = requests,
-        )),
-    )
-
-    actions.run(
-        mnemonic = "ResxCompile",
-        progress_message = "Compiling .resx resources of %{label}",
-        executable = resx.tool.files_to_run,
-        arguments = [request.path],
-        inputs = depset(
-            direct = [request] + [resource.file for resource in resx.resources] + extensions,
-            transitive = [resx.data, toolchain.msbuild_tasks.files],
-        ),
-        outputs = outputs,
-    )
-
     satellites = []
-    if cultures:
+    if by_culture:
         satellite_references = depset([
             file
             for file in framework_files.to_list()
             if file.basename in _SATELLITE_REFERENCES
         ])
-        for key in sorted(cultures.keys()):
-            entries = cultures[key]
-            culture = sorted([entry[0] for entry in entries])[0]
+        for key in sorted(by_culture.keys()):
+            entries = by_culture[key]
             satellites.append(_satellite_assembly(
                 actions,
-                culture = culture,
-                resources = [(entry[1], entry[2]) for entry in entries],
+                culture = sorted([resource.culture for (resource, _) in entries])[0],
+                resources = [(output, resource.manifest_name) for (resource, output) in entries],
                 out_dir = out_dir,
                 assembly_name = assembly_name,
                 toolchain = toolchain,
@@ -345,80 +367,57 @@ def _satellite_assembly(
     if keyfile != None:
         args.add(keyfile, format = "/keyfile:\"%s\"")
     args.add(attributes, format = "\"%s\"")
-    args.set_param_file_format("multiline")
-    args.use_param_file("@%s", use_always = True)
 
-    icu_arguments, icu_tools = [], []
-    if compiler_worker:
-        executable = compiler_worker.executable
-        extra_tools = []
-        execution_requirements = {
-            "requires-worker-protocol": "json",
-            "supports-path-mapping": "1",
-            "supports-workers": "1",
-        }
-    else:
-        executable = compiler_wrapper
-        extra_tools = [compiler_wrapper]
-        execution_requirements = {"supports-path-mapping": "1"}
-        icu_arguments, icu_tools = icu_wrapper_arguments(actions, toolchain)
-
-    actions.run(
+    run_compiler(
+        actions,
         mnemonic = "ResxSatellite",
         progress_message = "Building the %s satellite assembly of %%{label}" % culture,
-        executable = executable,
-        arguments = icu_arguments + [
-            toolchain.compiler_host.files_to_run.executable.path,
-            toolchain.csharp_compiler.files_to_run.executable.path,
-            args,
-        ],
+        toolchain = toolchain,
+        compiler = toolchain.csharp_compiler,
+        compiler_wrapper = compiler_wrapper,
+        compiler_worker = compiler_worker,
+        args = args,
         inputs = depset(
             direct = [attributes] + [file for (file, _) in resources] + ([keyfile] if keyfile else []),
             transitive = [references],
         ),
-        tools = depset(
-            direct = extra_tools + [
-                toolchain.compiler_host.files_to_run.executable,
-                toolchain.csharp_compiler.files_to_run.executable,
-            ],
-            transitive = icu_tools + [
-                toolchain.compiler_host.default_runfiles.files,
-                toolchain.csharp_compiler.default_runfiles.files,
-            ],
-        ),
         outputs = [satellite],
-        env = dicts.add(
-            {"DOTNET_CLI_HOME": toolchain.compiler_host.files_to_run.executable.dirname},
-            globalization_env(toolchain),
-        ),
-        execution_requirements = execution_requirements,
     )
 
     return satellite
 
+def _check_key(label, sources, attribute, path):
+    """Fails unless `path`, a key of `attribute`, is the path of one of `sources`."""
+    if path in sources:
+        return
+
+    # Keys of files in a subdirectory of another repository's package used to
+    # be bare file names.
+    matches = [source for source in sources if source.rpartition("/")[2] == path]
+    hint = " Keys are paths relative to the package: use {}.".format(repr(matches[0])) if len(matches) == 1 else ""
+    fail("{}: `{}` names {}, which is not in `srcs`.{}".format(label, attribute, path, hint))
+
 def _resx_resource_impl(ctx):
-    sources = {_relative_path(src, ctx.label): src for src in ctx.files.srcs}
+    sources = {package_relative_path(src, ctx.label): src for src in ctx.files.srcs}
 
     for path, culture in ctx.attr.cultures.items():
-        if path not in sources:
-            fail("{}: `cultures` names {}, which is not in `srcs`.".format(ctx.label, path))
+        _check_key(ctx.label, sources, "cultures", path)
         if culture:
             _check_culture(culture, "`cultures` of {}".format(ctx.label))
 
-    resources = [
-        _resource(src, path, ctx.attr.cultures.get(path), None)
+    resources = {
+        path: _resource(src, path, ctx.attr.cultures.get(path), None)
         for path, src in sources.items()
-    ]
+    }
 
     # Cultures take their neutral resource's logical name.
     logical_names = {}
     names = {}
     for path, logical_name in ctx.attr.logical_names.items():
-        if path not in sources:
-            fail("{}: `logical_names` names {}, which is not in `srcs`.".format(ctx.label, path))
+        _check_key(ctx.label, sources, "logical_names", path)
         if logical_name.endswith(".resources"):
             fail("{}: the `logical_names` entry {} ends in `.resources`, which is added to it.".format(ctx.label, logical_name))
-        resource = [r for r in resources if r.file == sources[path]][0]
+        resource = resources[path]
         if resource.culture:
             fail("{}: `logical_names` names {}, which is a {} resource. Name the neutral resource it translates, whose name it takes.".format(ctx.label, path, resource.culture))
         if logical_name in names:
@@ -436,7 +435,7 @@ def _resx_resource_impl(ctx):
                     neutral_path = r.neutral_path,
                     logical_name = logical_names.get(r.neutral_path),
                 )
-                for r in resources
+                for r in resources.values()
             ],
             data = depset(ctx.files.data),
         ),

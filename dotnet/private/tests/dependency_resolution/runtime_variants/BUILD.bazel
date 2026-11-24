@@ -1,0 +1,3 @@
+load(":tests.bzl", "runtime_variants_test_suite")
+
+runtime_variants_test_suite(name = "runtime_variants_test")

@@ -64,6 +64,7 @@ bzl_library(
     deps = [
         ":frameworks",
         ":packs",
+        "//dotnet/private:common",
         "//dotnet/private:providers",
     ],
 )
@@ -77,6 +78,12 @@ bzl_library(
 bzl_library(
     name = "frameworks",
     srcs = ["frameworks.bzl"],
+    visibility = ["//dotnet:__subpackages__"],
+)
+
+bzl_library(
+    name = "global_json",
+    srcs = ["global_json.bzl"],
     visibility = ["//dotnet:__subpackages__"],
 )
 

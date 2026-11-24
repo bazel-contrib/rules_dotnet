@@ -478,6 +478,40 @@ TESTS = [
         expected_refs = ["lib/netstandard2.0/A.dll"],
     ),
     nuget_resolution_test(
+        name = "a_native_placeholder_shadows_a_less_specific_rid",
+        files = [
+            "lib/netstandard2.0/A.dll",
+            "runtimes/linux/native/libx.so",
+            "runtimes/linux-x64/native/_._",
+        ],
+        expected_libs = ["lib/netstandard2.0/A.dll"],
+        expected_refs = ["lib/netstandard2.0/A.dll"],
+    ),
+    nuget_resolution_test(
+        name = "a_rid_with_only_assemblies_does_not_shadow_native_libraries",
+        # NuGet picks native and RID bound assemblies independently, each from
+        # the most specific RID that ships that kind of asset.
+        files = [
+            "lib/netstandard2.0/A.dll",
+            "runtimes/linux/native/libx.so",
+            "runtimes/linux-x64/lib/netstandard2.0/A.dll",
+        ],
+        expected_libs = ["runtimes/linux-x64/lib/netstandard2.0/A.dll"],
+        expected_native = ["runtimes/linux/native/libx.so"],
+        expected_refs = ["lib/netstandard2.0/A.dll"],
+    ),
+    nuget_resolution_test(
+        name = "a_rid_with_only_native_libraries_does_not_shadow_assemblies",
+        files = [
+            "lib/netstandard2.0/A.dll",
+            "runtimes/linux/lib/netstandard2.0/A.dll",
+            "runtimes/linux-x64/native/libx.so",
+        ],
+        expected_libs = ["runtimes/linux/lib/netstandard2.0/A.dll"],
+        expected_native = ["runtimes/linux-x64/native/libx.so"],
+        expected_refs = ["lib/netstandard2.0/A.dll"],
+    ),
+    nuget_resolution_test(
         name = "a_targeting_pack_declares_its_metadata",
         # No assemblies of its own: what it contributes is the assembly
         # versions it declares and the packages it supersedes.
@@ -551,6 +585,19 @@ TESTS = [
         ],
         runtime_identifier = "linux-x64",
         expected_libs = ["lib/netstandard2.0/A.dll"],
+        expected_refs = ["lib/netstandard2.0/A.dll"],
+    ),
+    nuget_resolution_test(
+        name = "the_portable_rid_folder_beats_a_version_qualified_one",
+        # NuGet never picks `ubuntu.16.04-x64` for `ubuntu-x64`; the fold is
+        # only a stand in for when the package ships nothing closer.
+        files = [
+            "lib/netstandard2.0/A.dll",
+            "runtimes/ubuntu-x64/lib/netstandard2.0/Portable.dll",
+            "runtimes/ubuntu.16.04-x64/lib/netstandard2.0/Ubuntu.dll",
+        ],
+        runtime_identifier = "ubuntu-x64",
+        expected_libs = ["runtimes/ubuntu-x64/lib/netstandard2.0/Portable.dll"],
         expected_refs = ["lib/netstandard2.0/A.dll"],
     ),
     nuget_resolution_test(

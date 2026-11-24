@@ -12,10 +12,10 @@ bzl_library(
         "//dotnet/private:common",
         "//dotnet/private:nuget_version",
         "//dotnet/private:providers",
-        "//dotnet/private/icu:settings",
+        "//dotnet/private/rules/common:compiler_action",
         "//dotnet/private/rules/common:resx",
         "//dotnet/private/sdk:packs",
-        "@bazel_skylib//lib:dicts",
+        "@bazel_skylib//lib:structs",
     ],
 )
 

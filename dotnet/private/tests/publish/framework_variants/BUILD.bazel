@@ -1,0 +1,52 @@
+load("//dotnet:defs.bzl", "csharp_binary", "csharp_library", "publish_binary")
+load(":tests.bzl", "binary_loads_netstandard_test", "publish_copies_netstandard_test")
+
+# A .NET application reaches `shared` directly, which builds it for
+# netstandard2.0, and through a .NET Framework library, which builds it for
+# net48. Only one Shared.dll can be loaded: the netstandard2.0 one, which a
+# .NET application prefers to anything .NET Framework.
+csharp_library(
+    name = "shared",
+    srcs = ["Shared.cs"],
+    out = "Shared",
+    target_frameworks = [
+        "net48",
+        "netstandard2.0",
+    ],
+)
+
+csharp_library(
+    name = "net48_lib",
+    srcs = ["Net48Lib.cs"],
+    target_frameworks = ["net48"],
+    deps = [":shared"],
+)
+
+csharp_binary(
+    name = "app",
+    srcs = ["Main.cs"],
+    target_frameworks = ["net8.0"],
+    deps = [
+        ":net48_lib",
+        ":shared",
+    ],
+)
+
+binary_loads_netstandard_test(
+    name = "binary_loads_netstandard_test",
+    size = "small",
+    target_under_test = ":app",
+)
+
+publish_binary(
+    name = "publish",
+    binary = ":app",
+    tags = ["manual"],
+    target_framework = "net8.0",
+)
+
+publish_copies_netstandard_test(
+    name = "publish_copies_netstandard_test",
+    size = "small",
+    target_under_test = ":publish",
+)

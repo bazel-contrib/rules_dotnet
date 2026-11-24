@@ -84,9 +84,8 @@ def ready_to_run_references(libs, deps):
     that changing the application recompiles none of its dependencies. crossgen2
     leaves methods needing any other reference to the JIT.
 
-    Sorted by the path path mapping passes, so that neither the order of the
-    dependency graph nor the configurations of the references change the
-    command line.
+    Sorted by their path-mapped paths, so that neither the order of the graph
+    nor the configurations of the references change the command line.
 
     Args:
         libs: The target's own assemblies.
@@ -109,13 +108,9 @@ def crossgen2_args(actions, framework, references):
     """The arguments every crossgen2 invocation starts with.
 
     The framework comes first, so that it takes precedence over a package
-    shipping an assembly of the same name.
-
-    The references alone run past any OS command line limit, so they always go
-    into a parameter file. Each action builds its own rather than sharing one
-    written ahead of time, because Bazel rewrites the paths inside a parameter
-    file it writes for a path-mapped action and cannot rewrite those in a file
-    that already exists.
+    shipping an assembly of the same name. The references can exceed any
+    command line limit, so they go in a parameter file, one per action: Bazel
+    only applies path mapping to a parameter file it writes itself.
 
     Args:
         actions: The `ctx.actions` to create the arguments with.

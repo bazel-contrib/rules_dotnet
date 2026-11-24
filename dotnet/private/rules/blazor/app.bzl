@@ -1,16 +1,22 @@
 """Giving a Blazor WebAssembly binary something to run.
 
-A Bazel rule cannot change its own executable after the fact - MSBuild does it
-by overriding `RunCommand` - so the binary is built under a private name and
-wrapped by a target that carries the public one.
+A rule cannot change its own executable after the fact (MSBuild overrides
+`RunCommand`), so the binary is built under a private name and wrapped by a
+target that carries the public one.
 """
 
 load(":blazor_wasm_binary.bzl", "blazor_wasm_binary")
 
-# The suffix the wrapped binary is built under. It is an implementation detail:
-# everything the binary provides is forwarded by the wrapper, so nothing needs
-# to name it.
+# Everything the binary provides is forwarded by the wrapper, so nothing needs
+# to name the binary itself.
 _BINARY_SUFFIX = ".app"
+
+# Attributes the wrapper takes rather than the binary.
+_WRAPPER_ATTRS = ["application_environment", "invariant_globalization"]
+
+# Attributes that have to agree across the wrapper's edge to the binary, or
+# Bazel rejects the dependency.
+_SHARED_ATTRS = ["testonly", "compatible_with", "restricted_to", "target_compatible_with"]
 
 def blazor_wasm_app(name, binary_rule, kwargs):
     """Declares a Blazor WebAssembly binary and the server that runs it.
@@ -28,30 +34,30 @@ def blazor_wasm_app(name, binary_rule, kwargs):
             "because the browser only ever loads one.",
         )
 
-    # Taken before the binary is declared: these belong to the wrapper, and the
-    # binary rule has no such attributes.
     wrapper_kwargs = {
         attribute: kwargs.pop(attribute)
-        for attribute in ["application_environment", "invariant_globalization"]
+        for attribute in _WRAPPER_ATTRS
         if attribute in kwargs
     }
+    wrapper_kwargs.update({
+        attribute: kwargs[attribute]
+        for attribute in _SHARED_ATTRS
+        if attribute in kwargs
+    })
 
     tags = kwargs.pop("tags", [])
 
     binary_rule(
         name = name + _BINARY_SUFFIX,
-        # The assembly is named for the public target, not the private one it
-        # is built under. Its name reaches the browser - it is what the boot
-        # configuration starts - so the suffix must not show up there.
+        # Defaulted from the public name rather than the private one, as MSBuild
+        # defaults both from the project name. The browser loads `out`.
         out = kwargs.pop("out", None) or name,
-        # Built as a dependency of the wrapper; a wildcard should not pick it
-        # up in its own right.
+        root_namespace = kwargs.pop("root_namespace", None) or name.replace(" ", "_"),
+        # Only built as the wrapper's dependency, never by a wildcard.
         tags = tags + ["manual"],
         **kwargs
     )
 
-    # The user's tags are the public target's: `manual` on the binary has to
-    # keep a wildcard from building it.
     blazor_wasm_binary(
         name = name,
         binary = ":" + name + _BINARY_SUFFIX,

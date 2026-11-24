@@ -1,4 +1,4 @@
-"""Reads the FrameworkList.xml and RuntimeList.xml metadata of packs.
+"""Orders and filters the FrameworkList.xml and RuntimeList.xml entries of packs.
 
 Microsoft.WindowsDesktop.App ships newer copies of some assemblies that
 Microsoft.NETCore.App also ships, such as `System.Drawing.dll`. As in the SDK's

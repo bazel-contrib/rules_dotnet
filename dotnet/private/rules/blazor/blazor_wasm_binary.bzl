@@ -1,18 +1,12 @@
 """Running a Blazor WebAssembly application during development.
 
-A WebAssembly application runs in the browser, so `bazel run` has nothing to
-execute. MSBuild answers this by convention - the Blazor WebAssembly SDK
-overrides `RunCommand` so that `dotnet run` starts a development server - and
-this rule is that convention; `devserver.bzl` runs the server itself.
+As `dotnet run` does for the Blazor WebAssembly SDK, `bazel run` starts a
+development server. The rule wraps the ordinary binary and forwards its
+providers, so `publish_binary` and dependents see no difference, while only
+this rule carries the WebAssembly packs: the runtime pack is selected on the
+target framework with no default, so it cannot sit on every binary.
 
-It wraps the ordinary binary rather than replacing it, forwarding everything
-the binary provides, so a `publish_binary` or a dependent library sees no
-difference. Wrapping also keeps the WebAssembly packs off every other target:
-the runtime pack is selected on the target framework with no default branch, so
-the rule that carries it cannot be the rule every C# and F# binary is built by.
-
-Nothing is trimmed and symbols are shipped, as in `dotnet build`: trimming only
-serves download size and would discard what a debugger needs.
+As in `dotnet build`, nothing is trimmed and symbols are shipped.
 """
 
 load("@bazel_skylib//lib:dicts.bzl", "dicts")

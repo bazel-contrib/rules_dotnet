@@ -4,10 +4,9 @@ Each repository groups its packages behind targets named for what they provide
 (`@dotnet.targeting_packs//user/default:net10.0`), so labels do not move when
 the SDK in use moves the bands to other versions.
 
-The labels come from tables built while loading, from every release rules_dotnet
-declares, so the repositories hold a target for each of them. Those of releases
-newer than the SDK fail when built, saying which SDK they need. See
-`sdk_too_old.bzl`.
+The tables built while loading name a target for every release rules_dotnet
+declares. Those of releases newer than the SDK fail when built, saying which
+SDK they need: see `sdk_too_old.bzl`.
 """
 
 load("@bazel_skylib//lib:collections.bzl", "collections")
@@ -32,6 +31,7 @@ load(
     "ASPNETCORE_FRAMEWORK",
     "BOOTSTRAP_PACKS",
     "CROSSGEN2_PACK_REPO",
+    "HOST_RIDS",
     "ILCOMPILER_PACK_REPO",
     "NATIVEAOT_PACK_REPO",
     "NEWEST_BAND",
@@ -48,7 +48,6 @@ load(
     "crossgen2_pack",
     "frameworks_key",
     "host_platform_setting",
-    "host_rids",
     "host_tool_tfms",
     "ilcompiler_build_pack",
     "ilcompiler_pack",
@@ -71,26 +70,21 @@ load(
     "tfm_channel",
 )
 
-NUGET_ORG = "https://api.nuget.org/v3/index.json"
+_NUGET_ORG = "https://api.nuget.org/v3/index.json"
 
 # Bump when the shape of a fact changes so that stale entries are ignored
 # rather than misread.
 _FACT_VERSION = "v1"
 
-def _reference_packs(tfm):
-    """The packs whose publication decides a band's version.
+# How many packs a failure names before it only counts the rest.
+_LISTED_PACKS = 5
 
-    A patch that never published its reference packs published none of the
-    band's other packs either, and the reference packs are the first to stop
-    being serviced. ilc ships from a build of its own, so it is checked too.
-    """
-    packs = [id for (id, _) in targeting_packs(tfm, {ASPNETCORE_FRAMEWORK: None}, bands = PACK_BANDS)]
-
-    ilcompiler = ilcompiler_pack(tfm, "linux-x64", bands = PACK_BANDS)
-    if ilcompiler != None:
-        packs.append(ilcompiler[0])
-
-    return packs
+# A running server keeps a failed evaluation and repeats it without asking the
+# feed again, so retrying takes a restart.
+_RETRY = (
+    "This is usually a network problem or a nuget.org outage. Once nuget.org answers again, " +
+    "run `bazel shutdown` and retry: the running Bazel server repeats this failure until it restarts."
+)
 
 # Where the rules the generated packages use are loaded from, other than the
 # `<kind>_pack` rules, which live in `<kind>_packs/<kind>_pack.bzl`.
@@ -220,16 +214,11 @@ def _runtime(sdk):
 def _wasm(sdk):
     """What a Blazor WebAssembly publish needs, per target framework.
 
-    There is one target per framework rather than per runtime identifier,
-    because a browser is the only target. The runtime pack reuses the
-    `runtime_pack` rule, since it carries the same mix of managed assemblies and
-    native files as any other; the tools are just their archives' file lists.
-
-    The tools are at the band's version too, as the SDK bundles them at its
-    own: `illink` will not start on a runtime older than the one it was built
-    for, so tools newer than the SDK in use cannot trim. The ones that run on
-    the SDK's runtime, whatever the framework, are its own band's, which the
-    `newest` package names.
+    One target per framework rather than per runtime identifier, as a browser
+    is the only target. The tools are at the band's version, as the SDK bundles
+    them: `illink` will not start on a runtime older than the one it was built
+    for. The `newest` package names the SDK's own band's tools, which run on
+    its runtime whatever the framework.
     """
     packages = []
     build_files = {}
@@ -323,7 +312,7 @@ def _host_tool(kind, pack, sdk):
     build_files = {}
 
     for tfm in host_tool_tfms(pack):
-        found = [(rid, pack(tfm, rid, bands = sdk.bands)) for rid in host_rids()]
+        found = [(rid, pack(tfm, rid, bands = sdk.bands)) for rid in HOST_RIDS]
         found = [(rid, tool) for (rid, tool) in found if tool != None]
 
         if _unknown([tool for (_, tool) in found]):
@@ -408,17 +397,23 @@ def _nativeaot(sdk):
 
     return struct(build_files = build_files, packages = collections.uniq(packages))
 
-def band_fact_key(sdk_version, tfm):
-    """Returns the key the version of a band for an SDK is remembered under.
-
-    Args:
-      sdk_version: The SDK version.
-      tfm: The band's target framework.
-
-    Returns:
-      The fact key.
-    """
+def _band_fact_key(sdk_version, tfm):
     return "pack-band/{}:{}/{}".format(_FACT_VERSION, sdk_version, tfm)
+
+def _reference_packs(tfm):
+    """The packs whose publication decides a band's version.
+
+    A patch that never published its reference packs published none of the
+    band's other packs either, and the reference packs are the first to stop
+    being serviced. ilc ships from a build of its own, so it is checked too.
+    """
+    packs = [id for (id, _) in targeting_packs(tfm, {ASPNETCORE_FRAMEWORK: None}, bands = PACK_BANDS)]
+
+    ilcompiler = ilcompiler_pack(tfm, "linux-x64", bands = PACK_BANDS)
+    if ilcompiler != None:
+        packs.append(ilcompiler[0])
+
+    return packs
 
 def _published_versions(module_ctx, ids, netrc_entries, indexes, cache):
     """The versions nuget.org publishes of each package, None where it gave none.
@@ -435,25 +430,81 @@ def _published_versions(module_ctx, ids, netrc_entries, indexes, cache):
     """
     missing = [id for id in ids if id.lower() not in cache]
     if missing:
-        answered = package_versions(module_ctx, NUGET_ORG, missing, netrc_entries, indexes) or {}
+        answered = package_versions(module_ctx, _NUGET_ORG, missing, netrc_entries, indexes) or {}
         for id in missing:
             cache[id.lower()] = answered.get(id.lower())
 
     return [cache[id.lower()] for id in ids]
 
+def _band_targets(module_ctx, sdk, tfms, releases):
+    """The runtime of each band that had shipped by the day the SDK did.
+
+    Args:
+      module_ctx: The module extension context.
+      sdk: The SDK, from `resolve_sdk`.
+      tfms: The bands' target frameworks.
+      releases: Release metadata cache, shared across calls.
+
+    Returns:
+      A dict of target framework to runtime version: the SDK's own for its own
+      band, and the band's first release where it had none yet.
+    """
+    channels = {tfm: tfm_channel(tfm) for tfm in tfms}
+    shipped = runtimes_shipped_by(
+        module_ctx,
+        releases,
+        [channel for channel in channels.values() if channel != sdk.channel],
+        sdk.release_date,
+    )
+    shipped[sdk.channel] = sdk.runtime_version
+
+    return {tfm: shipped.get(channel) or channel + ".0" for (tfm, channel) in channels.items()}
+
+def _band_version(sdk, tfm, target, references, published):
+    """The newest release of a band, up to `target`, that published every reference pack.
+
+    Args:
+      sdk: The SDK, from `resolve_sdk`.
+      tfm: The band's target framework.
+      target: The runtime version from `_band_targets`.
+      references: The band's reference pack ids, from `_reference_packs`.
+      published: The versions nuget.org publishes of each of `references`.
+
+    Returns:
+      The version.
+    """
+    if None in published:
+        # Guessing would decide the packs a build compiles against from
+        # whether the feed was reachable, so the evaluation fails instead.
+        fail(("nuget.org did not list the versions of {}, which .NET SDK {} needs to pick the " +
+              "packs it compiles against for {}. " + _RETRY).format(
+            ", ".join([id for (id, versions) in zip(references, published) if versions == None]),
+            sdk.version,
+            tfm,
+        ))
+
+    # A preview SDK of a released channel falls back to the release where
+    # the preview's packs do not share a version.
+    channel = tfm_channel(tfm)
+    version = newest_shared_release(channel, target, published) or newest_shared_release(channel, channel + ".0", published)
+    if version == None:
+        fail("NuGet has no version of {} at or before {} that is in all of {}, which .NET SDK {} needs.".format(
+            tfm,
+            target,
+            ", ".join(references),
+            sdk.version,
+        ))
+
+    return version
+
 def _band_versions(module_ctx, sdk, netrc_entries, indexes, releases, published, facts):
     """Returns the version each band from .NET 6 onwards is at for an SDK.
 
-    An SDK compiles against the packs of what had shipped by the day it did:
-    its own band at its own runtime, and every older band at the newest patch
-    out by then, which is what the SDK itself bundles, give or take a release
-    the metadata dates late. A patch whose packs were never published gives way
-    to the newest one before it that was. A newer band than its own the SDK
-    does not know, as it cannot build for it.
-
-    The SDK version alone decides each band, so each is remembered as a fact,
-    except a step back that a later patch has yet to show is for good: the
-    packs of a patch can reach the feed after the release metadata does.
+    An SDK compiles against the packs of what had shipped by the day it did,
+    which is what it bundles, give or take a release the metadata dates late.
+    A patch whose packs were never published gives way to the newest one
+    before it that was. Bands newer than the SDK's own are left out: it cannot
+    build for them.
 
     Args:
       module_ctx: The module extension context.
@@ -465,31 +516,24 @@ def _band_versions(module_ctx, sdk, netrc_entries, indexes, releases, published,
       facts: The facts to hand back to Bazel, which this call adds to.
 
     Returns:
-      The version of each band the SDK knows, by target framework: those up
-      to its own release.
+      The version of each band the SDK knows, by target framework.
     """
     remembered = getattr(module_ctx, "facts", {})
     versions = {}
-    tfms = sdk_band_tfms(sdk.tfm)
+    pending = []
 
-    for tfm in tfms:
-        version = remembered.get(band_fact_key(sdk.version, tfm))
+    for tfm in sdk_band_tfms(sdk.tfm):
+        version = remembered.get(_band_fact_key(sdk.version, tfm))
         if type(version) == "string" and version:
             versions[tfm] = version
-            facts[band_fact_key(sdk.version, tfm)] = version
+            facts[_band_fact_key(sdk.version, tfm)] = version
+        else:
+            pending.append(tfm)
 
-    pending = [tfm for tfm in tfms if tfm not in versions]
     if not pending:
         return versions
 
-    channels = {tfm: tfm_channel(tfm) for tfm in pending}
-    shipped = runtimes_shipped_by(
-        module_ctx,
-        releases,
-        [channel for channel in channels.values() if channel != sdk.channel],
-        sdk.release_date,
-    )
-    shipped[sdk.channel] = sdk.runtime_version
+    targets = _band_targets(module_ctx, sdk, pending, releases)
 
     # Looked up together, so that the feed is asked once.
     references = {tfm: _reference_packs(tfm) for tfm in pending}
@@ -502,47 +546,56 @@ def _band_versions(module_ctx, sdk, netrc_entries, indexes, releases, published,
     )
 
     for tfm in pending:
-        channel = channels[tfm]
-        first = channel + ".0"
-        target = shipped.get(channel) or first
         lists = _published_versions(module_ctx, references[tfm], netrc_entries, indexes, published)
+        versions[tfm] = _band_version(sdk, tfm, targets[tfm], references[tfm], lists)
 
-        if None in lists:
-            # Guessing would decide the packs a build compiles against from
-            # whether the feed was reachable, so the evaluation fails instead.
-            fail(("nuget.org did not list the versions of {}, which .NET SDK {} needs to pick the " +
-                  "packs it compiles against for {}. " + _RETRY).format(
-                ", ".join([id for (id, versions) in zip(references[tfm], lists) if versions == None]),
-                sdk.version,
-                tfm,
-            ))
-
-        # A preview SDK of a released channel falls back to the release where
-        # the preview's packs do not share a version.
-        version = newest_shared_release(channel, target, lists) or newest_shared_release(channel, first, lists)
-        if version == None:
-            fail("NuGet has no version of {} at or before {} that is in all of {}, which .NET SDK {} needs.".format(
-                tfm,
-                target,
-                ", ".join(references[tfm]),
-                sdk.version,
-            ))
-
-        versions[tfm] = version
-        if version == target or is_superseded(channel, target, lists):
-            facts[band_fact_key(sdk.version, tfm)] = version
+        # The SDK version alone decides a band, except for a step back past a
+        # patch that a later one has yet to show is for good: the packs of a
+        # patch can reach the feed after the release metadata does.
+        if versions[tfm] == targets[tfm] or is_superseded(tfm_channel(tfm), targets[tfm], lists):
+            facts[_band_fact_key(sdk.version, tfm)] = versions[tfm]
 
     return versions
 
-# How many packs a failure names before it only counts the rest.
-_LISTED_PACKS = 5
+def _resolve_hashes(module_ctx, packages, netrc_entries, indexes):
+    """Looks up the SHA-512 nuget.org publishes for each pack.
 
-# A running server keeps a failed evaluation and repeats it without asking the
-# feed again, so retrying takes a restart.
-_RETRY = (
-    "This is usually a network problem or a nuget.org outage. Once nuget.org answers again, " +
-    "run `bazel shutdown` and retry: the running Bazel server repeats this failure until it restarts."
-)
+    Args:
+      module_ctx: The module extension context.
+      packages: The packs, as (id, version) pairs.
+      netrc_entries: Credentials for the package feed.
+      indexes: Feed index cache, shared across calls.
+
+    Returns:
+      The integrity of each pack, by `integrity_fact_key`.
+    """
+    resolved = {}
+    resolve_integrity_cached(
+        module_ctx,
+        [_NUGET_ORG],
+        [struct(id = id, version = version) for (id, version) in packages],
+        netrc_entries,
+        resolved,
+        indexes,
+    )
+
+    # nuget.org publishes a hash for every package, so a missing one means a
+    # lookup that failed. Declaring the pack without one would download it
+    # unverified, and every later build would reuse that unverified pin.
+    unverified = sorted([
+        "{} {}".format(id, version)
+        for (id, version) in packages
+        if not resolved.get(integrity_fact_key(id, version))
+    ])
+    if unverified:
+        fail(("Could not look up the SHA-512 of {} of the .NET SDK's packs on nuget.org, so they " +
+              "cannot be downloaded verified: {}{}. " + _RETRY).format(
+            len(unverified),
+            ", ".join(unverified[:_LISTED_PACKS]),
+            " and {} more".format(len(unverified) - _LISTED_PACKS) if len(unverified) > _LISTED_PACKS else "",
+        ))
+
+    return resolved
 
 def declare_pack_repos(module_ctx, sdk, bootstrap, releases):
     """Declares the repositories holding the SDK's packs.
@@ -567,18 +620,12 @@ def declare_pack_repos(module_ctx, sdk, bootstrap, releases):
     published = {}
     facts = {}
 
-    # Each SDK with the bands it knows, which the packages of the others
-    # stand in for.
-    user = struct(
-        version = sdk.version,
-        bands = pack_bands(_band_versions(module_ctx, sdk, netrc_entries, indexes, releases, published, facts)),
-    )
-    tools = user
-    if bootstrap.version != sdk.version:
-        tools = struct(
-            version = bootstrap.version,
-            bands = pack_bands(_band_versions(module_ctx, bootstrap, netrc_entries, indexes, releases, published, facts)),
-        )
+    def with_bands(resolved_sdk):
+        versions = _band_versions(module_ctx, resolved_sdk, netrc_entries, indexes, releases, published, facts)
+        return struct(version = resolved_sdk.version, bands = pack_bands(versions))
+
+    user = with_bands(sdk)
+    tools = user if bootstrap.version == sdk.version else with_bands(bootstrap)
 
     kinds = [
         (TARGETING_PACK_REPO, _targeting({
@@ -595,38 +642,12 @@ def declare_pack_repos(module_ctx, sdk, bootstrap, releases):
         (WASM_PACK_REPO, _wasm(user)),
     ]
 
-    # The kinds cannot share a package: their ids end in `.Ref`,
-    # `.Runtime.<rid>`, `.Host.<rid>`, `.Crossgen2.<rid>` and
-    # `.Runtime.NativeAOT.<rid>`, and ILCompiler packs are `runtime.<rid>.*`,
-    # unlike the `Microsoft.DotNet.ILCompiler` a Windows NativeAOT pack reads.
-    packages = [pack for (_, kind) in kinds for pack in kind.packages]
-
-    resolved = {}
-    resolve_integrity_cached(
+    resolved = _resolve_hashes(
         module_ctx,
-        [NUGET_ORG],
-        [struct(id = id, version = version) for (id, version) in packages],
+        collections.uniq([pack for (_, kind) in kinds for pack in kind.packages]),
         netrc_entries,
-        resolved,
         indexes,
     )
-
-    # nuget.org publishes a hash for every package, so a missing one means a
-    # lookup that failed. Declaring the pack without one would download it
-    # unverified, and the extension's result, unverified pins and all, would be
-    # reused by every later build.
-    unverified = sorted([
-        "{} {}".format(id, version)
-        for (id, version) in packages
-        if not resolved.get(integrity_fact_key(id, version))
-    ])
-    if unverified:
-        fail(("Could not look up the SHA-512 of {} of the .NET SDK's packs on nuget.org, so they " +
-              "cannot be downloaded verified: {}{}. " + _RETRY).format(
-            len(unverified),
-            ", ".join(unverified[:_LISTED_PACKS]),
-            " and {} more".format(len(unverified) - _LISTED_PACKS) if len(unverified) > _LISTED_PACKS else "",
-        ))
 
     declared = {}
     for (repo, kind) in kinds:
@@ -635,7 +656,7 @@ def declare_pack_repos(module_ctx, sdk, bootstrap, releases):
                 "id": id,
                 "name": "{}.v{}".format(id.lower(), version),
                 "sha512": resolved[integrity_fact_key(id, version)],
-                "sources": [NUGET_ORG],
+                "sources": [_NUGET_ORG],
                 "version": version,
             }
             for (id, version) in kind.packages

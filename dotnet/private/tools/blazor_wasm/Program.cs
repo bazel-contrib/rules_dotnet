@@ -43,8 +43,9 @@ internal sealed class Request
     /// A development build does not, as `dotnet build` does not.
     public string TrimmedDirectory { get; set; } = "";
 
-    /// How much the trimmer removes. `full` is what `dotnet publish` uses.
-    public string TrimMode { get; set; } = "full";
+    /// The ILLink `TrimMode`. `partial` is what `dotnet publish` uses for Blazor
+    /// WebAssembly.
+    public string TrimMode { get; set; } = "partial";
 
     /// Whether this is a development build. The boot configuration then says
     /// debugging is available and names the symbols, which is what lets the
@@ -109,8 +110,24 @@ internal static class Program
 
         var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
         var request = JsonSerializer.Deserialize<Request>(File.ReadAllText(args[0]), options)!;
-        var engine = new StubBuildEngine();
 
+        try
+        {
+            Assemble(request);
+        }
+        catch (InvalidOperationException e)
+        {
+            // A task failed, having logged why, or is missing from this SDK.
+            Console.Error.WriteLine($"error: {e.Message}");
+            return 1;
+        }
+
+        return 0;
+    }
+
+    private static void Assemble(Request request)
+    {
+        var engine = new StubBuildEngine();
         var framework = Path.Combine(request.OutputDirectory, Framework);
         Directory.CreateDirectory(framework);
 
@@ -142,7 +159,6 @@ internal static class Program
         }
 
         BootConfig.Write(request, engine, assemblies, native, symbols, framework);
-        return 0;
     }
 
     private static List<FileMapping> Copy(List<string> sources, string directory)

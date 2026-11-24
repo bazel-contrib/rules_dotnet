@@ -1,4 +1,7 @@
 load("@bazel_lib//lib:diff_test.bzl", "diff_test")
+load("//dotnet:defs.bzl", "csharp_binary", "dotnet_tool")
+load("//dotnet/private/rules/nuget:nuget_archive.bzl", "tool_filegroup")
+load(":staged_tool.bzl", "staged_tool")
 
 genrule(
     name = "csharpier_output",
@@ -30,4 +33,44 @@ diff_test(
     name = "diff_test_paket",
     file1 = ":paket_expected",
     file2 = ":paket_actual",
+)
+
+# A tool for an older major release, which does not roll forward itself, still
+# runs on the toolchain's runtime.
+csharp_binary(
+    name = "old_major",
+    srcs = ["OldMajorTool.cs"],
+    roll_forward_behavior = "Minor",
+    target_frameworks = ["net8.0"],
+)
+
+staged_tool(
+    name = "old_major_staged",
+    binary = ":old_major",
+)
+
+tool_filegroup(
+    name = "old_major_tools",
+    tools_by_tfm = {"net8.0": [":old_major_staged"]},
+)
+
+dotnet_tool(
+    name = "old_major_tool",
+    entrypoint = {"net8.0": "old_major.dll"},
+    runner = {"net8.0": "dotnet"},
+    target_frameworks = ["net8.0"],
+    deps = ":old_major_tools",
+)
+
+genrule(
+    name = "old_major_output",
+    outs = ["old_major_actual"],
+    cmd = "$(location :old_major_tool) > $@",
+    tools = [":old_major_tool"],
+)
+
+diff_test(
+    name = "diff_test_old_major",
+    file1 = ":old_major_expected",
+    file2 = ":old_major_actual",
 )

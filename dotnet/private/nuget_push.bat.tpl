@@ -11,7 +11,7 @@ rem Usage of rlocation function:
 rem        call :rlocation <runfile_path> <abs_path>
 rem        The rlocation function maps the given <runfile_path> to its absolute
 rem        path and stores the result in a variable named <abs_path>.
-rem        This function fails if the <runfile_path> doesn't exist in mainifest
+rem        This function fails if the <runfile_path> doesn't exist in manifest
 rem        file.
 :: Start of rlocation
 goto :rlocation_end
@@ -21,33 +21,37 @@ if "%~2" equ "" (
   exit 1
 )
 if "%RUNFILES_MANIFEST_ONLY%" neq "1" (
-  set %~2=%~1
+  set "%~2=%~1"
   exit /b 0
 )
+rem Inside blocks, paths are quoted or expanded late, so that a `)` in one
+rem cannot end the block.
 if exist "%RUNFILES_DIR%" (
-  set RUNFILES_MANIFEST_FILE=%RUNFILES_DIR%_manifest
+  set "RUNFILES_MANIFEST_FILE=!RUNFILES_DIR!_manifest"
 )
 if "%RUNFILES_MANIFEST_FILE%" equ "" (
-  set RUNFILES_MANIFEST_FILE=%~f0.runfiles\MANIFEST
+  set "RUNFILES_MANIFEST_FILE=%~f0.runfiles\MANIFEST"
 )
 if not exist "%RUNFILES_MANIFEST_FILE%" (
-  set RUNFILES_MANIFEST_FILE=%~f0.runfiles_manifest
+  set "RUNFILES_MANIFEST_FILE=%~f0.runfiles_manifest"
 )
-set MF=%RUNFILES_MANIFEST_FILE:/=\%
+set "MF=%RUNFILES_MANIFEST_FILE:/=\%"
 if not exist "%MF%" (
-  echo>&2 ERROR: Manifest file %MF% does not exist.
+  echo>&2 ERROR: Manifest file !MF! does not exist.
   exit 1
 )
-set runfile_path=%~1
-rem The destination is the rest of the line, spaces included.
-for /F "tokens=1* usebackq" %%i in (`%SYSTEMROOT%\system32\findstr.exe /l /c:"!runfile_path! " "%MF%"`) do (
-  set abs_path=%%j
+set "runfile_path=%~1"
+set abs_path=
+rem A manifest line is the runfiles path, a space, then the absolute path, which
+rem can contain spaces itself: split at the first space only.
+for /F "tokens=1* usebackq" %%i in (`%SYSTEMROOT%\system32\findstr.exe /b /l /c:"!runfile_path! " "%MF%"`) do (
+  set "abs_path=%%j"
 )
 if "!abs_path!" equ "" (
   echo>&2 ERROR: !runfile_path! not found in runfiles manifest
   exit 1
 )
-set %~2=!abs_path!
+set "%~2=!abs_path!"
 exit /b 0
 :rlocation_end
 :: End of rlocation
@@ -61,9 +65,10 @@ set DOTNET_CLI_WORKLOAD_UPDATE_NOTIFY_DISABLE=1
 rem USERPROFILE and DOTNET_CLI_HOME stay as they are, so the user's NuGet.Config applies.
 
 call :rlocation "TEMPLATED_dotnet" dotnet_executable
-for %%F in ("!dotnet_executable!") do set DOTNET_ROOT=%%~dpF
+for %%F in ("!dotnet_executable!") do set "DOTNET_ROOT=%%~dpF"
 
-set source_from_target=TEMPLATED_source
+rem Quoted, so that the characters cmd treats specially in a URL stay literal.
+set "source_from_target=TEMPLATED_source"
 set config_file=TEMPLATED_config_file
 
 set has_source=0
@@ -83,11 +88,21 @@ if "!has_source!"=="0" (
   if "!source_from_target!"=="" goto :no_source
   set args=--source "!source_from_target!"
 )
-if "!has_api_key!"=="0" if defined NUGET_API_KEY set args=!args! --api-key "!NUGET_API_KEY!"
-if "!has_symbol_api_key!"=="0" if defined NUGET_SYMBOL_API_KEY set args=!args! --symbol-api-key "!NUGET_SYMBOL_API_KEY!"
 if not "!config_file!"=="" (
   call :rlocation "!config_file!" config_path
   set args=!args! --configfile "!config_path!"
+)
+
+rem Kept out of `args`, so that a dry run prints the variables' names, not the keys.
+set key_args=
+set shown_keys=
+if "!has_api_key!"=="0" if defined NUGET_API_KEY (
+  set key_args=--api-key "!NUGET_API_KEY!"
+  set shown_keys=--api-key "%%NUGET_API_KEY%%"
+)
+if "!has_symbol_api_key!"=="0" if defined NUGET_SYMBOL_API_KEY (
+  set key_args=!key_args! --symbol-api-key "!NUGET_SYMBOL_API_KEY!"
+  set shown_keys=!shown_keys! --symbol-api-key "%%NUGET_SYMBOL_API_KEY%%"
 )
 
 rem Resolved before changing directory; the results are absolute.
@@ -102,9 +117,9 @@ if defined BUILD_WORKING_DIRECTORY cd /d "%BUILD_WORKING_DIRECTORY%"
 set /a last=count-1
 for /L %%i in (0,1,!last!) do (
   if defined RULES_DOTNET_NUGET_PUSH_DRY_RUN (
-    echo "!dotnet_executable!" nuget push "!package_%%i!" TEMPLATED_push_args !args! %*
+    echo "!dotnet_executable!" nuget push "!package_%%i!" TEMPLATED_push_args !args! %* !shown_keys!
   ) else (
-    "!dotnet_executable!" nuget push "!package_%%i!" TEMPLATED_push_args !args! %*
+    "!dotnet_executable!" nuget push "!package_%%i!" TEMPLATED_push_args !args! %* !key_args!
     if errorlevel 1 (
       set failed=!errorlevel!
       goto :push_failed

@@ -1,18 +1,10 @@
-"""Publishing a Blazor WebAssembly application.
+"""Publishing a Blazor WebAssembly application as a static site.
 
-A browser cannot load a .NET assembly, so a publish rewrites the application
-into something it can: the whole program is trimmed to what the entry point
-reaches, every assembly that survives becomes a Webcil module, the Mono
-runtime's own files are copied in beside them, and a boot configuration listing
-all of it is merged into `dotnet.js`. The result is an ordinary static site,
-served through the same static web asset machinery as any other web target.
-
-Nothing here is specific to C#. The application arrives as compiled assemblies,
-so an `fsharp_binary` publishes exactly the same way.
-
-This is reached through `publish_binary(wasm = True)` rather than directly: a
-browser publish produces a site rather than something to run, which is why it
-cannot be the same rule, but it is the same public API.
+The application is trimmed, its assemblies converted to Webcil and placed beside
+the Mono runtime's files, and the boot configuration merged into `dotnet.js`.
+It works on compiled assemblies, so C# and F# publish alike. Reached through
+`publish_binary(wasm = True)`: a site is not something to run, so it needs a
+rule of its own.
 """
 
 load("@bazel_skylib//lib:dicts.bzl", "dicts")

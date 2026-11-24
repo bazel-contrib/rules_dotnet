@@ -45,7 +45,7 @@ def _compile_action(ctx, tfm, toolchain):
         srcs = ctx.files.srcs,
         data = ctx.files.data,
         appsetting_files = [],
-        content_file_mappings = resolve_content_file_mappings(ctx.attr.content_files, ctx.label.package),
+        content_file_mappings = resolve_content_file_mappings(ctx.attr.content_files, ctx.label),
         compile_data = ctx.files.compile_data,
         out = ctx.attr.out,
         target = "library",
@@ -91,7 +91,7 @@ def _library_impl(ctx):
 
 csharp_library = rule(
     _library_impl,
-    doc = "Compile a C# DLL",
+    doc = "Compiles a C# library.",
     attrs = CSHARP_LIBRARY_COMMON_ATTRS,
     executable = False,
     toolchains = ["//dotnet/toolchain:toolchain_type"],

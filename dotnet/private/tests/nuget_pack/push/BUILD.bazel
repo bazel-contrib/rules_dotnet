@@ -2,12 +2,13 @@ load("@rules_shell//shell:sh_test.bzl", "sh_test")
 load("//dotnet:defs.bzl", "nuget_push")
 
 # Never pushed to anything remote: the test runs the launcher dry, and pushes
-# for real only into a folder feed under the test's temporary directory.
+# for real only into a folder feed under the test's temporary directory. The
+# `%20` is one a batch file would expand.
 nuget_push(
     name = "push",
     timeout = 42,
     packages = ["//dotnet/private/tests/nuget_pack/library:pack"],
-    source = "https://example.invalid/never-used/v3/index.json",
+    source = "https://example.invalid/never%20used/v3/index.json",
 )
 
 nuget_push(

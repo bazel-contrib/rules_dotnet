@@ -29,10 +29,11 @@ PROJECT_SDKS = [DEFAULT_SDK, WEB_SDK]
 # What a user may write in `project_sdk`.
 USER_PROJECT_SDKS = PROJECT_SDKS + [RAZOR_SDK, BLAZORWASM_SDK]
 
-# Shared frameworks beyond Microsoft.NETCore.App, in the order their packs are listed.
 NETCORE_FRAMEWORK = "Microsoft.NETCore.App"
 ASPNETCORE_FRAMEWORK = "Microsoft.AspNetCore.App"
 WINDOWSDESKTOP_FRAMEWORK = "Microsoft.WindowsDesktop.App"
+
+# Shared frameworks beyond Microsoft.NETCore.App, in the order their packs are listed.
 SHARED_FRAMEWORKS = [ASPNETCORE_FRAMEWORK, WINDOWSDESKTOP_FRAMEWORK]
 
 # Shared frameworks that need a Windows target framework and runtime identifier.
@@ -660,7 +661,7 @@ TARGETING_PACK_LOOKUP_TABLE = {
 # are fetched for. Each has a platform `config_setting` the tool packs' `host`
 # aliases select over; a musl host is not distinguishable as a Bazel platform
 # here.
-_HOST_RIDS = [
+HOST_RIDS = [
     "linux-arm64",
     "linux-x64",
     "osx-arm64",
@@ -669,19 +670,11 @@ _HOST_RIDS = [
     "win-x64",
 ]
 
-def host_rids():
-    """The runtime identifiers the tool packs are fetched for.
-
-    Returns:
-      A list of runtime identifiers.
-    """
-    return _HOST_RIDS
-
 def host_platform_setting(rid):
     """The `config_setting` that matches the platform of a host runtime identifier.
 
     Args:
-      rid: One of `host_rids()`.
+      rid: One of `HOST_RIDS`.
 
     Returns:
       The label of the `config_setting`.
@@ -701,7 +694,7 @@ def host_tool_tfms(pack):
     return [
         tfm
         for tfm in runtime_pack_tfms()
-        if any([pack(tfm, rid, bands = PACK_BANDS) != None for rid in _HOST_RIDS])
+        if any([pack(tfm, rid, bands = PACK_BANDS) != None for rid in HOST_RIDS])
     ]
 
 def _host_tool_bands(repo, pack):

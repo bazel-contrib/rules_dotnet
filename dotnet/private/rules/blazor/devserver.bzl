@@ -127,7 +127,7 @@ blazor_devserver(
 `--urls` to change the address.""",
     executable = True,
     attrs = dict(DEVSERVER_ATTRS, app = attr.label(
-        doc = "The application to serve.",
+        doc = "The application to serve: a `publish_binary` with `wasm = True`, or a binary with `project_sdk = \"blazorwasm\"`.",
         providers = [BlazorWasmSiteInfo],
         mandatory = True,
     )),

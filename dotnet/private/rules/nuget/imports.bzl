@@ -127,17 +127,21 @@ def _import_library(ctx):
 
 import_library = rule(
     _import_library,
-    doc = "Creates a target for a static DLL for a specific target framework",
+    doc = """Imports prebuilt assemblies, such as the contents of a NuGet package, as a dependency of .NET targets.
+
+`nuget_repo` and the `paket` module extension declare one per package; the
+file groups are expected to already be resolved for the target framework and
+runtime identifier being built.""",
     attrs = dicts.add(READY_TO_RUN_ATTRS, {
         "library_name": attr.string(
-            doc = "The name of the library",
+            doc = "The package id. Names the library in the `deps.json` of a binary that depends on it.",
             mandatory = True,
         ),
         "version": attr.string(
-            doc = "The version of the library",
+            doc = "The package version.",
         ),
         "typeproviders": attr.label_list(
-            doc = """The designer assemblies of any F# type providers the package ships.""",
+            doc = "The design time assemblies of any F# type providers the package ships.",
             allow_files = True,
             allow_empty = True,
             default = [],
@@ -155,61 +159,68 @@ import_library = rule(
 Empty for `_content/<library_name>`, MSBuild's default.""",
         ),
         "libs": attr.label_list(
-            doc = "Static runtime DLLs",
+            doc = "The assemblies a binary that depends on this import loads at run time.",
             allow_files = True,  # [".dll"] currently does not work with empty file groups
             allow_empty = True,
         ),
         "native": attr.label_list(
-            doc = "Native runtime DLLs",
+            doc = "The native libraries a binary that depends on this import loads at run time.",
             allow_files = True,  # [".dll"] currently does not work with empty file groups
             allow_empty = True,
             cfg = native_transition,
         ),
         "analyzers": attr.label_list(
-            doc = "Static analyzer DLLs",
+            doc = "Analyzers and source generators for every language.",
             allow_files = True,  # [".dll"] currently does not work with empty file groups
             allow_empty = True,
         ),
         "analyzers_csharp": attr.label_list(
-            doc = "Static C# analyzer DLLs",
+            doc = "Analyzers and source generators for C# only.",
             allow_files = True,  # [".dll"] currently does not work with empty file groups
             allow_empty = True,
         ),
         "analyzers_fsharp": attr.label_list(
-            doc = "Static F# analyzer DLLs",
+            doc = "Analyzers for F# only.",
             allow_files = True,  # [".dll"] currently does not work with empty file groups
             allow_empty = True,
         ),
         "analyzers_vb": attr.label_list(
-            doc = "Static VB analyzer DLLs",
+            doc = "Analyzers and source generators for Visual Basic only.",
             allow_files = True,  # [".dll"] currently does not work with empty file groups
             allow_empty = True,
         ),
         "refs": attr.label_list(
-            doc = "Compile time DLLs",
+            doc = "The assemblies the compiler references.",
             allow_files = True,  # [".dll"] currently does not work with empty file groups
             allow_empty = True,
         ),
         "resource_assemblies": attr.label_list(
-            doc = "Resource assemblies",
+            doc = "Localized satellite assemblies, each in a folder named after its culture.",
             allow_files = True,  # [".dll"] currently does not work with empty file groups
             allow_empty = True,
         ),
         "deps": attr.label_list(
-            doc = "Other DLLs that this DLL depends on.",
+            doc = "The imports and libraries this import depends on.",
             providers = [DotnetAssemblyRuntimeInfo, DotnetAssemblyCompileInfo],
         ),
         "data": attr.label_list(
-            doc = "Other files that this DLL depends on at runtime",
+            doc = "Other files needed at run time.",
             allow_files = True,
             cfg = native_transition,
         ),
         "targeting_pack_overrides": attr.string_dict(
-            doc = "Targeting packs like e.g. Microsoft.NETCore.App.Ref have a PackageOverride.txt that includes a list of NuGet packages that should be omitted in a compiliation because they are included in the targeting pack",
+            doc = """For a targeting pack: the packages the framework provides itself.
+
+Maps a lower cased package id to the newest version the framework supersedes.
+A dependency on that package at or below that version is not referenced.""",
             default = {},
         ),
         "framework_list": attr.string_dict(
-            doc = "Targeting packs like e.g. Microsoft.NETCore.App.Ref have a PlatformManifest.txt that includes all the DLLs that are included in the targeting pack. This is used to determine which version of a DLL should be used during compilation or runtime.",
+            doc = """For a targeting pack: the assemblies the framework provides.
+
+Maps a lower cased assembly name to the version the framework ships. A
+dependency on an assembly of the same name is only referenced when it is
+newer.""",
             default = {},
         ),
         "framework_list_file_versions": attr.string_dict(
@@ -229,16 +240,17 @@ Empty for `_content/<library_name>`, MSBuild's default.""",
             default = [],
         ),
         "sha512": attr.string(
-            doc = "The SHA512 sum of the NuGet package",
+            doc = "The subresource integrity of the `.nupkg`, written to the `deps.json` of binaries that depend on this import.",
         ),
         "nupkg": attr.label(
-            doc = "The `.nupkg` file providing this import",
+            doc = "The `.nupkg` this import was unpacked from, if any.",
             allow_single_file = True,
         ),
         "portable_assets": attr.label(
-            doc = """The `portable_assets` target of the package's `nuget_archive`:
-            every runtime's assets, which a .NET tool package ships. Without it,
-            a tool package ships `libs` as they are and fails on `native`.""",
+            doc = """Every runtime's assets of the package, for an app that runs on any runtime.
+
+A .NET tool package ships these. Without them, a tool package that depends on
+this import ships `libs` as they are and cannot ship `native`.""",
             providers = [NuGetPortableAssetsInfo],
         ),
     }),
@@ -295,18 +307,18 @@ def _import_dll(ctx):
 
 import_dll = rule(
     _import_dll,
-    doc = "Imports a DLL",
+    doc = "Imports a single prebuilt assembly, which is both referenced at compile time and loaded at run time.",
     attrs = {
         "dll": attr.label(
-            doc = "The name of the library",
+            doc = "The assembly. Its file name, less `.dll`, is the assembly name.",
             mandatory = True,
             allow_single_file = True,
         ),
         "version": attr.string(
-            doc = "The version of the library",
+            doc = "The version of the assembly.",
         ),
         "data": attr.label_list(
-            doc = "Other files that this DLL depends on at runtime",
+            doc = "Other files needed at run time.",
             allow_files = True,
             cfg = native_transition,
         ),

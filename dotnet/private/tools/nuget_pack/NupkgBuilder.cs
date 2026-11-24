@@ -21,16 +21,16 @@ internal static class NupkgBuilder
     public static void Write(Request request, NuGetVersion version)
     {
         var versions = new Dictionary<string, string>(StringComparer.Ordinal);
-        string ResolveVersion(string? file)
+        string ResolveVersion(string file)
         {
-            if (!versions.TryGetValue(file!, out var resolved))
+            if (!versions.TryGetValue(file, out var resolved))
             {
-                var text = File.ReadLines(file!).Select(line => line.Trim()).FirstOrDefault(line => line.Length > 0) ?? "";
+                var text = NuGetVersion.ReadFile(file);
                 if (!NuGetVersion.TryParse(text, out var parsed))
                 {
                     throw new InvalidDataException($"version file '{file}' does not hold a valid version: '{text}'");
                 }
-                resolved = versions[file!] = parsed!.Normalized;
+                resolved = versions[file] = parsed!.Normalized;
             }
             return resolved;
         }

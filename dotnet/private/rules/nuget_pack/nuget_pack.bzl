@@ -107,21 +107,63 @@ def _check_attrs(ctx, is_tool):
     elif ctx.attr.command_name:
         fail("{}: `command_name` names a tool's command; it needs `binary`".format(ctx.label))
 
-def _check_built_framework(ctx, target, compile_info, tfm):
-    built = compile_info.target_framework
+def _assembly_identity(ctx, split, packs_analyzer):
+    """Checks that every split builds its framework, and that all of them build the same assembly.
 
-    if built == None:
-        fail(("{}: {} is an imported assembly. `nuget_pack` packs a csharp_library, " +
-              "fsharp_library, csharp_binary or fsharp_binary.").format(ctx.label, target.label))
+    Args:
+      ctx: The rule context.
+      split: The configured packed targets, keyed by split.
+      packs_analyzer: Whether the package is an analyzer package, which ships no `libs`.
 
-    if built != tfm:
-        _fail_wrong_framework(ctx.label, target.label, tfm, "{} for it".format(built))
+    Returns:
+      A struct of the assembly's `name` and `version`, and `dll`, its file name
+      (None for an analyzer).
+    """
+    identity = None
 
-def _pack_tool(ctx, tfm, target, runtime_info):
+    for key in sorted(split.keys()):
+        (tfm, _) = parse_split_key(key)
+        target = split[key]
+        built = target[DotnetAssemblyCompileInfo].target_framework
+        runtime_info = target[DotnetAssemblyRuntimeInfo]
+
+        if built == None:
+            fail(("{}: {} is an imported assembly. `nuget_pack` packs a csharp_library, " +
+                  "fsharp_library, csharp_binary or fsharp_binary.").format(ctx.label, target.label))
+        if built != tfm:
+            _fail_wrong_framework(ctx.label, target.label, tfm, "{} for it".format(built))
+        if not runtime_info.libs and not packs_analyzer:
+            fail("{}: {} builds no assembly to ship".format(ctx.label, target.label))
+
+        if identity == None:
+            identity = struct(
+                name = runtime_info.name,
+                version = runtime_info.version,
+                dll = runtime_info.libs[0].basename if runtime_info.libs else None,
+            )
+        elif identity.name != runtime_info.name or identity.version != runtime_info.version:
+            fail(("{}: {} is {} {} for {} but {} {} for another framework; a package has " +
+                  "one id and one version").format(ctx.label, target.label, runtime_info.name, runtime_info.version, tfm, identity.name, identity.version))
+
+    return identity
+
+def _package_id(ctx, assembly_name):
+    package_id = ctx.attr.package_id or assembly_name
+    if not is_valid_package_id(package_id):
+        fail(("{}: \"{}\" is not a valid package id: letters, digits and `_`, separated by " +
+              "single `.`, `-` or `_`, at most 100 characters.{}").format(
+            ctx.label,
+            package_id,
+            "" if ctx.attr.package_id else " It is the assembly name; set `package_id`.",
+        ))
+    return package_id
+
+def _pack_tool(ctx, tfm, target):
     """The files of a tool package for one framework, and where they go."""
     if not is_core_framework(tfm):
         fail("{}: a .NET tool runs on .NET; {} is not a .NET framework".format(ctx.label, tfm))
 
+    runtime_info = target[DotnetAssemblyRuntimeInfo]
     binary_info = target[DotnetBinaryInfo]
     transitive = binary_info.transitive_runtime_deps
     name = runtime_info.name
@@ -160,21 +202,140 @@ def _pack_tool(ctx, tfm, target, runtime_info):
         assembly_files,
         depsjson,
         runtimeconfig,
+        ctx.attr.symbols,
     )
 
-def _pack_static_web_assets(ctx, target, assembly_name, package_id, copied_names):
-    """The files a Razor class library serves, and the props file pointing at them.
+def _pack_tool_frameworks(ctx, split):
+    """The contents of a tool package: a framework-dependent publish per framework.
+
+    Returns:
+      What `_pack_library_frameworks` returns, plus `tool_directories`.
+    """
+
+    # A tool package is not RID-specific, so every split is filed under its framework alone.
+    tfms = sorted(split.keys())
+
+    files = []
+    symbol_files = []
+    content_files = []
+    for tfm in tfms:
+        layout = _pack_tool(ctx, tfm, split[tfm])
+        files += layout.files
+        symbol_files += layout.symbol_files
+        content_files += layout.content_files
+
+    return struct(
+        files = files,
+        symbol_files = symbol_files,
+        content_files = content_files,
+        # A tool depends on nothing, but an empty group still says which frameworks it runs on.
+        target_frameworks = tfms,
+        dependency_groups = [dependency_group(tfm, []) for tfm in tfms],
+        framework_references = [],
+        bundled_names = [],
+        tool_directories = [tool_directory(tfm) for tfm in tfms],
+    )
+
+def _pack_library_frameworks(ctx, split, packs_analyzer, dep_packages):
+    """The contents of a library or analyzer package, and its dependencies, per framework.
+
+    Args:
+      ctx: The rule context.
+      split: The configured packed libraries, keyed by split.
+      packs_analyzer: Whether the library is an analyzer or source generator.
+      dep_packages: The `NuGetPackInfo`s of `deps`.
+
+    Returns:
+      A struct of `files` and `symbol_files` (`(path, File)` pairs), the sorted
+      `target_frameworks`, `dependency_groups` and `framework_references` (for
+      the request), and `bundled_names`, the sorted names of the assemblies
+      copied in beside the library.
+    """
+    packages_by_assembly = index_dep_packages(dep_packages, ctx.attr.target_frameworks, ctx.label)
+
+    files = []
+    symbol_files = []
+    groups = {}
+    reference_groups = {}
+    bundled_names = {}
+
+    for key in sorted(split.keys()):
+        (tfm, rid) = parse_split_key(key)
+        compile_info = split[key][DotnetAssemblyCompileInfo]
+        runtime_info = split[key][DotnetAssemblyRuntimeInfo]
+
+        # The parts shared by every runtime identifier of a framework come from
+        # its first split, and every later split must agree with it.
+        first_of_tfm = tfm not in groups
+
+        plan = plan_library_contents(runtime_info, packages_by_assembly, dep_packages, ctx.attr.first_party_deps, ctx.label)
+
+        if packs_analyzer:
+            # Nothing resolves to an analyzer, so `plan` contributes only the
+            # packages listed in `deps`.
+            layout = analyzer_layout(compile_info, runtime_info, ctx.attr.symbols)
+        else:
+            layout = library_layout(
+                tfm,
+                rid,
+                compile_info,
+                runtime_info,
+                plan.bundled,
+                ctx.attr.symbols,
+                ctx.attr.reference_assemblies,
+                emit_portable = first_of_tfm,
+            )
+        files += layout.files
+        symbol_files += layout.symbol_files
+
+        group = dependency_group(tfm, plan.dependencies)
+
+        # Bundled assemblies have no package of their own to declare theirs.
+        references = framework_reference_group(tfm, [
+            reference
+            for info in [runtime_info] + plan.bundled
+            for reference in getattr(info, "framework_references", None) or []
+        ])
+        if first_of_tfm:
+            groups[tfm] = group
+            reference_groups[tfm] = references
+        elif groups[tfm] != group:
+            fail(("{}: the dependencies of {} differ between runtime identifiers for {}; " +
+                  "NuGet declares dependencies per framework, not per runtime identifier").format(ctx.label, split[key].label, tfm))
+        elif reference_groups[tfm] != references:
+            fail(("{}: the framework references of {} differ between runtime identifiers for {}; " +
+                  "NuGet declares framework references per framework, not per runtime identifier").format(ctx.label, split[key].label, tfm))
+
+        for info in plan.bundled:
+            bundled_names[info.name] = True
+
+    return struct(
+        files = files,
+        symbol_files = symbol_files,
+        target_frameworks = sorted(groups.keys()),
+        dependency_groups = [groups[tfm] for tfm in sorted(groups.keys())],
+        # As in `dotnet pack`, every framework gets a group once any has
+        # references, so that NuGet cannot fall back to another framework's.
+        framework_references = [reference_groups[tfm] for tfm in sorted(reference_groups.keys())] if any([
+            reference_group.frameworkReferences
+            for reference_group in reference_groups.values()
+        ]) else [],
+        bundled_names = sorted(bundled_names.keys()),
+    )
+
+def _pack_static_web_assets(ctx, target, assembly_name, package_id, bundled_names):
+    """The files a Razor class library serves, and the props files pointing a consumer at them.
 
     Every framework the package ships serves the same files, so they are taken
-    from one split of the packed library: a second copy of them would only
-    collide with the first.
+    from one split of the packed library: a second copy would only collide
+    with the first.
 
     Args:
       ctx: The rule context.
       target: One configured packed library.
       assembly_name: Its assembly name, which prefixes its own served files.
       package_id: The package id, which prefixes them once they are in a package.
-      copied_names: The names of the assemblies copied into this package.
+      bundled_names: The names of the assemblies copied into this package.
 
     Returns:
       A list of `(path, File)` pairs, empty when the library serves nothing.
@@ -182,7 +343,7 @@ def _pack_static_web_assets(ctx, target, assembly_name, package_id, copied_names
     if StaticWebAssetsInfo not in target:
         return []
 
-    layout = static_web_assets_layout(target[StaticWebAssetsInfo], assembly_name, copied_names, ctx.label)
+    layout = static_web_assets_layout(target[StaticWebAssetsInfo], assembly_name, bundled_names, ctx.label)
     if not layout.files:
         return []
 
@@ -211,6 +372,16 @@ def _pack_static_web_assets(ctx, target, assembly_name, package_id, copied_names
         entries.append((path, file))
 
     return entries
+
+def _placed_files(ctx, content):
+    """The files placed at a path the user chose: `files`, `content_files`, and the readme, icon and license."""
+    placed = extra_files_layout(ctx.attr.files, ctx.label) + content.entries
+
+    for file in [ctx.file.readme, ctx.file.icon, ctx.file.license_file]:
+        if file:
+            placed.append((file.basename, file))
+
+    return placed
 
 def _metadata(ctx, package_id, version):
     license = None
@@ -251,128 +422,39 @@ def _nuget_pack_impl(ctx):
     (is_tool, split) = _split_targets(ctx)
     _check_attrs(ctx, is_tool)
 
-    keys = sorted(split.keys())
-    packs_analyzer = not is_tool and is_analyzer(split[keys[0]][DotnetAssemblyCompileInfo])
+    first_split = split[sorted(split.keys())[0]]
+    packs_analyzer = not is_tool and is_analyzer(first_split[DotnetAssemblyCompileInfo])
     if packs_analyzer and ctx.attr.runtime_identifiers:
         fail("{}: an analyzer runs inside the compiler, not on a runtime; drop `runtime_identifiers`".format(ctx.label))
 
+    identity = _assembly_identity(ctx, split, packs_analyzer)
+    package_id = _package_id(ctx, identity.name)
     dep_packages = [dep[NuGetPackInfo] for dep in ctx.attr.deps]
-    packages_by_assembly = index_dep_packages(dep_packages, ctx.attr.target_frameworks, ctx.label)
 
-    entries = []
-    symbol_entries = []
-    groups = {}
-    reference_groups = {}
-    copied_names = {}
-    tool_directories = []
-    identity = None
+    # The assemblies and their dependencies, per framework.
+    if is_tool:
+        packed = _pack_tool_frameworks(ctx, split)
+    else:
+        packed = _pack_library_frameworks(ctx, split, packs_analyzer, dep_packages)
 
-    for key in keys:
-        (tfm, rid) = parse_split_key(key)
-        target = split[key]
-        compile_info = target[DotnetAssemblyCompileInfo]
-        runtime_info = target[DotnetAssemblyRuntimeInfo]
-
-        _check_built_framework(ctx, target, compile_info, tfm)
-
-        if not runtime_info.libs and not packs_analyzer:
-            fail("{}: {} builds no assembly to ship".format(ctx.label, target.label))
-
-        if identity == None:
-            identity = struct(
-                name = runtime_info.name,
-                version = runtime_info.version,
-                dll = runtime_info.libs[0].basename if runtime_info.libs else None,
-            )
-        elif identity.name != runtime_info.name or identity.version != runtime_info.version:
-            fail(("{}: {} is {} {} for {} but {} {} for another framework; a package has " +
-                  "one id and one version").format(ctx.label, target.label, runtime_info.name, runtime_info.version, tfm, identity.name, identity.version))
-
-        if is_tool:
-            entries += _pack_tool(ctx, tfm, target, runtime_info)
-            tool_directories.append(tool_directory(tfm))
-            groups[tfm] = dependency_group(tfm, [])
-            continue
-
-        # The parts shared by every runtime identifier of a framework come from
-        # its first split, and every later split must agree with it.
-        first_of_tfm = tfm not in groups
-
-        plan = plan_library_contents(runtime_info, packages_by_assembly, dep_packages, ctx.attr.first_party_deps, ctx.label)
-
-        if packs_analyzer:
-            # Nothing resolves to an analyzer, so `plan` contributes only the
-            # packages listed in `deps`.
-            layout = analyzer_layout(compile_info, runtime_info, ctx.attr.symbols)
-        else:
-            layout = library_layout(
-                tfm,
-                rid,
-                compile_info,
-                runtime_info,
-                plan.bundled,
-                ctx.attr.symbols,
-                ctx.attr.reference_assemblies,
-                emit_portable = first_of_tfm,
-            )
-
-        entries += layout.files
-        symbol_entries += layout.symbol_files
-
-        group = dependency_group(tfm, plan.dependencies)
-
-        # Bundled assemblies have no package of their own to declare theirs.
-        references = framework_reference_group(tfm, [
-            reference
-            for info in [runtime_info] + plan.bundled
-            for reference in getattr(info, "framework_references", None) or []
-        ])
-        if first_of_tfm:
-            groups[tfm] = group
-            reference_groups[tfm] = references
-        elif groups[tfm] != group:
-            fail(("{}: the dependencies of {} differ between runtime identifiers for {}; " +
-                  "NuGet declares dependencies per framework, not per runtime identifier").format(ctx.label, target.label, tfm))
-        elif reference_groups[tfm] != references:
-            fail(("{}: the framework references of {} differ between runtime identifiers for {}; " +
-                  "NuGet declares framework references per framework, not per runtime identifier").format(ctx.label, target.label, tfm))
-
-        for info in plan.bundled:
-            copied_names[info.name] = True
-
-    package_id = ctx.attr.package_id or identity.name
-    if not is_valid_package_id(package_id):
-        fail(("{}: \"{}\" is not a valid package id: letters, digits and `_`, separated by " +
-              "single `.`, `-` or `_`, at most 100 characters.{}").format(
-            ctx.label,
-            package_id,
-            "" if ctx.attr.package_id else " It is the assembly name; set `package_id`.",
-        ))
-
+    files = packed.files
     if not is_tool and not packs_analyzer:
-        entries += _pack_static_web_assets(ctx, split[keys[0]], identity.name, package_id, sorted(copied_names.keys()))
+        files += _pack_static_web_assets(ctx, first_split, identity.name, package_id, packed.bundled_names)
+    reject_conflicting_paths(files, ctx.label, what = "packed", content_files = packed.content_files if is_tool else [])
 
-    reject_conflicting_paths(entries, ctx.label, what = "packed")
-
-    placed = extra_files_layout(ctx.attr.files, ctx.label)
     content = content_files_layout(ctx.attr.content_files, ctx.label)
-    placed += content.entries
-
-    for file in [ctx.file.readme, ctx.file.icon, ctx.file.license_file]:
-        if file:
-            placed.append((file.basename, file))
-
-    reject_placed_conflicts(entries, placed, ctx.label)
-    entries += placed
+    placed = _placed_files(ctx, content)
+    reject_placed_conflicts(files, placed, ctx.label)
 
     # The same file under the same path more than once is one entry.
     by_path = {}
-    for (path, file) in entries:
+    for (path, file) in files + placed:
         by_path.setdefault(path, file)
-    entries = sorted(by_path.items(), key = lambda entry: entry[0])
-    symbol_entries = sorted(symbol_entries, key = lambda entry: entry[0])
+    files = sorted(by_path.items(), key = lambda entry: entry[0])
+    symbol_files = sorted(packed.symbol_files, key = lambda entry: entry[0])
 
     if ctx.file.version_file:
+        # Known only once the package is built, so it cannot name the outputs.
         version = None
         normalized = None
         stem = ctx.label.name
@@ -386,14 +468,6 @@ def _nuget_pack_impl(ctx):
     snupkg = ctx.actions.declare_file("{}/{}.snupkg".format(ctx.label.name, stem)) if ctx.attr.symbols == "snupkg" else None
     symbol_packages = [snupkg] if snupkg else []
 
-    tool_settings = None
-    if is_tool:
-        tool_settings = struct(
-            commandName = ctx.attr.command_name or identity.name,
-            entryPoint = identity.dll,
-            directories = tool_directories,
-        )
-
     request = ctx.actions.declare_file("{}/nuget_pack_request.json".format(ctx.label.name))
     ctx.actions.write(request, json.encode(struct(
         output = nupkg.path,
@@ -402,13 +476,8 @@ def _nuget_pack_impl(ctx):
         versionFile = ctx.file.version_file.path if ctx.file.version_file else None,
         metadata = _metadata(ctx, package_id, version),
         packageTypes = [_DOTNET_TOOL_PACKAGE_TYPE] if is_tool else [],
-        dependencyGroups = [groups[tfm] for tfm in sorted(groups.keys())],
-        # As in `dotnet pack`, every framework gets a group once any has
-        # references, so that NuGet cannot fall back to another framework's.
-        frameworkReferenceGroups = [reference_groups[tfm] for tfm in sorted(reference_groups.keys())] if any([
-            reference_group.frameworkReferences
-            for reference_group in reference_groups.values()
-        ]) else [],
+        dependencyGroups = packed.dependency_groups,
+        frameworkReferenceGroups = packed.framework_references,
         contentFiles = [
             struct(
                 include = include,
@@ -418,9 +487,13 @@ def _nuget_pack_impl(ctx):
             )
             for include in content.includes
         ],
-        files = [struct(source = file.path, target = path) for (path, file) in entries],
-        symbolFiles = [struct(source = file.path, target = path) for (path, file) in symbol_entries],
-        toolSettings = tool_settings,
+        files = [struct(source = file.path, target = path) for (path, file) in files],
+        symbolFiles = [struct(source = file.path, target = path) for (path, file) in symbol_files],
+        toolSettings = struct(
+            commandName = ctx.attr.command_name or identity.name,
+            entryPoint = identity.dll,
+            directories = packed.tool_directories,
+        ) if is_tool else None,
     )))
 
     version_files = [pack.version_file for pack in dep_packages if pack.version_file]
@@ -432,7 +505,7 @@ def _nuget_pack_impl(ctx):
         progress_message = "Packing NuGet package %{label}",
         executable = ctx.attr._packer[DefaultInfo].files_to_run,
         arguments = [request.path],
-        inputs = depset([request] + version_files + [file for (_, file) in entries + symbol_entries]),
+        inputs = depset([request] + version_files + [file for (_, file) in files + symbol_files]),
         outputs = [nupkg, nuspec] + symbol_packages,
     )
 
@@ -446,8 +519,8 @@ def _nuget_pack_impl(ctx):
             version_file = ctx.file.version_file,
             nupkg = nupkg,
             snupkg = snupkg,
-            target_frameworks = sorted(groups.keys()),
-            bundled_assemblies = [] if is_tool else sorted([identity.name] + copied_names.keys()),
+            target_frameworks = packed.target_frameworks,
+            bundled_assemblies = [] if is_tool else sorted([identity.name] + packed.bundled_names),
             is_tool = is_tool,
         ),
     ]
@@ -640,7 +713,8 @@ travel with it, so only the packages listed in `deps` are declared.
         "symbols": attr.string(
             doc = """Where the symbols go: nowhere, `embedded` beside the assemblies in the
             package, or into a `.snupkg` symbol package next to the package, which
-            `nuget_push` publishes along with it.""",
+            `nuget_push` publishes along with it. A tool package ships its symbols
+            beside its assemblies, as a publish does, unless they go into a `.snupkg`.""",
             default = "none",
             values = _SYMBOLS,
         ),

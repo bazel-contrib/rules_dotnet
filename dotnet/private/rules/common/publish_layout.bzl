@@ -5,7 +5,7 @@ Shared by `publish_binary`, which copies the layout into a directory, and
 package.
 """
 
-load("//dotnet/private:common.bzl", "collect_transitive_content_files", "get_portable_assets", "runtime_target_path")
+load("//dotnet/private:common.bzl", "collect_transitive_content_files", "get_portable_assets", "runtime_target_path", "select_runtime_variants")
 
 def publish_layout(runtime_identifier, binary_info, assembly_files, runtime_pack_files, is_self_contained):
     """Every published file paired with the path it takes inside the publish directory.
@@ -34,8 +34,7 @@ def publish_layout(runtime_identifier, binary_info, assembly_files, runtime_pack
     if binary_info.app_config:
         layout.append((binary_info.app_config.basename, binary_info.app_config))
 
-    # Content files carry their destination path relative to the assembly
-    # directory, preserving any subdirectory structure under the publish root.
+    # Content files keep their path relative to the assembly.
     for entry in assembly_files.content_files:
         layout.append((entry.dest, entry.file))
 
@@ -46,14 +45,10 @@ def publish_layout(runtime_identifier, binary_info, assembly_files, runtime_pack
 
     for file in assembly_files.native:
         if is_self_contained:
-            # A self-contained publish carries native libraries next to the main DLL.
             layout.append((file.basename, file))
         else:
-            # Everything else goes under runtimes/{rid}/native/. A native
-            # library from a NuGet package carries its RID in its path; one we
-            # built ourselves does not, but is by definition built for our RID.
-            # Files inside a NuGet package are modelled as source files, which
-            # is what tells the two apart.
+            # A package's native library has its RID in its path (package files
+            # are source files); one built here is built for the publish's RID.
             rid = file.dirname.split("/")[-2] if file.is_source else runtime_identifier
             layout.append(("runtimes/{}/native/{}".format(rid, file.basename), file))
 
@@ -61,35 +56,49 @@ def publish_layout(runtime_identifier, binary_info, assembly_files, runtime_pack
     # `runtimeTargets` says they are.
     layout.extend(assembly_files.runtime_targets)
 
-    # A self-contained publish carries the runtime pack at the root of the
-    # publish folder.
     for pack in runtime_pack_files:
         for file in pack.libs + pack.native + pack.data:
             layout.append((file.basename, file))
 
-    # The servable tree, and the manifest describing it, keep the shape the
-    # binary already gave them: `wwwroot/...` with the endpoint manifest beside
-    # the assembly, which is what a published ASP.NET Core application expects.
+    # Static web assets keep the shape the binary gave them: `wwwroot/...`, with
+    # the endpoint manifest beside the assembly.
     for entry in binary_info.static_web_files:
         layout.append((entry.publish_path, entry.file))
 
     return layout
 
-def reject_conflicting_paths(layout, label, what = "published"):
+def reject_conflicting_paths(layout, label, what = "published", content_files = []):
     """Fails when two files the build produces would take the same path.
 
-    Only files the build produces, because only their name can be changed. A
-    file out of a NuGet package keeps the behaviour of the compile actions: a
-    duplicate assembly identity is resolved by order rather than rejected.
+    Only built files can be renamed. Package files that collide are resolved by
+    order, as the compile actions resolve a duplicate assembly identity. A
+    content file's path was chosen, though, so any other file there, from a
+    package or not, is a mistake: one of the two would silently replace the
+    other, even an assembly a ReadyToRun image was compiled from.
 
     Args:
       layout: A list of `(path, File)` pairs.
       label: The label of the target being laid out, for the message.
       what: The verb for the message: the files are both "published" or "packed".
+      content_files: The content files in `layout`, as `struct(file, dest, src)`.
     """
+    content = {entry.dest: entry for entry in content_files}
     built = {}
 
     for (path, file) in layout:
+        entry = content.get(path)
+        if entry and entry.file.path != file.path:
+            fail(("{}: the content file {} of {} would be {} as \"{}\", but so would {}.\n\n" +
+                  "Only one file can take a path. Give the content file another " +
+                  "destination, for example with `dotnet_content_files`.").format(
+                label,
+                entry.src.short_path,
+                entry.file.owner,
+                what,
+                path,
+                file.short_path,
+            ))
+
         if file.is_source:
             continue
 
@@ -141,6 +150,9 @@ def collect_assembly_files(label, assembly_info, transitive_runtime_deps, deps_j
     runtime_target_files = []
     data = list(assembly_info.data)
     targets = deps_json_struct["targets"].values()[0]
+
+    # The configuration of each library that the deps.json lists, and no other.
+    transitive_runtime_deps = select_runtime_variants(transitive_runtime_deps)
 
     for dep in transitive_runtime_deps:
         # A file missing from the deps.json is not published: the runtime pack

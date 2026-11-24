@@ -10,5 +10,6 @@ bzl_library(
     deps = [
         "//dotnet:defs",
         "//dotnet/private/tests:utils",
+        "@bazel_skylib//lib:unittest",
     ],
 )

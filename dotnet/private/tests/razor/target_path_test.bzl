@@ -1,14 +1,14 @@
 """Tests the path a Razor component is named after.
 
 `TargetPath` is the source's path relative to the package that compiles it,
-base64-encoded. The generator decodes it and derives the component's namespace
-and `@page` route from it, so both halves are a contract with MSBuild rather
-than an internal detail.
+base64-encoded. The generator decodes it and derives a component's namespace
+and a Razor Page's route from it, so both halves are a contract with MSBuild
+rather than an internal detail.
 """
 
 load("@bazel_lib//lib:base64.bzl", "base64")
-load("@bazel_skylib//lib:unittest.bzl", "asserts", "unittest")
-load("//dotnet/private/rules/csharp/actions:razor.bzl", "razor_lang_version", "target_path")
+load("@bazel_skylib//lib:unittest.bzl", "analysistest", "asserts", "unittest")
+load("//dotnet/private/rules/csharp/actions:razor.bzl", "escape_section_name", "razor_lang_version", "target_path")
 
 # `target_path` reads only these two fields off the label.
 def _label(package, repo_name = ""):
@@ -67,10 +67,42 @@ def _encoding_test_impl(ctx):
 
 encoding_test = unittest.make(_encoding_test_impl)
 
+# An editorconfig section name is a glob, and Roslyn only parses a section
+# header holding `#` or `;` when they are escaped.
+_SECTION_NAMES = {
+    "Widget.razor": "Widget.razor",
+    "Some Folder/A b.razor": "Some Folder/A b.razor",
+    "C#/Widget.razor": "C\\#/Widget.razor",
+    "a;b/Widget.razor": "a\\;b/Widget.razor",
+    "[x]{y}*?.razor": "\\[x\\]\\{y\\}\\*\\?.razor",
+    "a\\b.razor": "a\\\\b.razor",
+}
+
+def _section_name_test_impl(ctx):
+    env = unittest.begin(ctx)
+    for path, expected in _SECTION_NAMES.items():
+        asserts.equals(env, expected, escape_section_name(path), "section name of %r" % path)
+    return unittest.end(env)
+
+section_name_test = unittest.make(_section_name_test_impl)
+
+def _fails_test_impl(ctx):
+    env = analysistest.begin(ctx)
+    asserts.expect_failure(env, ctx.attr.expected_message)
+    return analysistest.end(env)
+
+# Asserts that the target under test fails analysis with `expected_message`.
+fails_test = analysistest.make(
+    _fails_test_impl,
+    expect_failure = True,
+    attrs = {"expected_message": attr.string(mandatory = True)},
+)
+
 def target_path_test_suite(name):
     unittest.suite(
         name,
         encoding_test,
         lang_version_test,
+        section_name_test,
         target_path_test,
     )

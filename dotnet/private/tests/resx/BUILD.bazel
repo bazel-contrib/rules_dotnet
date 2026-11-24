@@ -107,6 +107,45 @@ resx_resource(
     tags = ["manual"],
 )
 
+# Manifest names that differ only in a character a file name does not keep, or
+# only in case, still compile to distinct files.
+resx_resource(
+    name = "lower_case_a_b",
+    srcs = ["collide/Case.resx"],
+    logical_names = {
+        "collide/Case.resx": "similar_names.collide.a_b",
+    },
+)
+
+csharp_library(
+    name = "similar_names",
+    resources = [
+        "collide/A+B.resx",
+        "collide/A_B.resx",
+        ":lower_case_a_b",
+    ],
+    target_frameworks = ["net8.0"],
+)
+
+# Keys are paths relative to the package, not file names.
+resx_resource(
+    name = "logical_name_by_file_name",
+    srcs = ["resources/Messages.resx"],
+    logical_names = {
+        "Messages.resx": "MyApp.Messages",
+    },
+    tags = ["manual"],
+)
+
+resx_resource(
+    name = "culture_by_file_name",
+    srcs = ["resources/Messages.fr.resx"],
+    cultures = {
+        "Messages.fr.resx": "",
+    },
+    tags = ["manual"],
+)
+
 resx_tests()
 
 # Run each binary and compare what its ResourceManager lookups find.

@@ -1,4 +1,10 @@
-"NuGet Archive"
+"""Repository rule that fetches one NuGet package and generates targets for its contents.
+
+The rule lists the files of the extracted package, sorts them into NuGet's
+asset groups, and writes a `BUILD.bazel` that resolves each group for the
+configured target framework and runtime identifier through the macros in the
+second half of this file.
+"""
 
 load(
     "@bazel_skylib//rules:common_settings.bzl",
@@ -37,146 +43,36 @@ load(
     "RUNTIME_GRAPH",
 )
 
-def _is_windows(repository_ctx):
-    """Returns true if the host operating system is windows."""
-    os_name = repository_ctx.os.name.lower()
-    if os_name.find("windows") != -1:
-        return True
-    return False
+# Bounds the directory walk in `_list_files`, which Starlark cannot write as a
+# while loop. No package comes close.
+_MAX_DIRECTORIES = 1000000
 
-def _read_dir(repository_ctx, src_dir):
-    """Returns a string with all files in a directory.
+def _list_files(ctx):
+    """Lists every file in the repository, by its path from the root.
 
-    Finds all files inside a directory, traversing subfolders and following
-    symlinks. The returned string contains the full path of all files
-    separated by line breaks.
+    Args:
+      ctx: The repository context.
+
+    Returns:
+      The sorted paths, separated by forward slashes on every platform.
     """
-    if _is_windows(repository_ctx):
-        src_dir = src_dir.replace("/", "\\")
-        nuget_directory = repository_ctx.execute(["cmd.exe", "/c", "echo|set", "/p=%cd%"])
-        find_result = repository_ctx.execute(["cmd.exe", "/c", "dir", src_dir, "/b", "/s", "/a-d"])
+    files = []
+    pending = [(ctx.path("."), "")]
 
-        # The output from the find command includes absolute paths so we strip the
-        # current working directory from the paths
-        result = find_result.stdout.replace(nuget_directory.stdout + "\\", "")
+    for _ in range(_MAX_DIRECTORIES):
+        if not pending:
+            break
 
-        # src_files will be used in genrule.outs where the paths must
-        # use forward slashes.
-        result = result.replace("\\", "/")
-    else:
-        find_result = repository_ctx.execute(["find", src_dir, "-follow", "-type", "f"])
-        result = find_result.stdout
-    return result
+        (directory, prefix) = pending.pop()
 
-def _file_dict(group):
-    """Renders a group as the Starlark dict literal the BUILD file passes on.
+        for entry in directory.readdir():
+            path = prefix + entry.basename
+            if entry.is_dir:
+                pending.append((entry, path + "/"))
+            else:
+                files.append(path)
 
-    `_._` placeholders are dropped. They say the package brings nothing under a
-    key, which the key being present at all already records.
-    """
-    entries = [
-        ' "%s": [%s],\n' % (
-            key,
-            ",".join(["\n   \"%s\"" % file for file in files if not file.endswith("_._")]),
-        )
-        for (key, files) in group.items()
-    ]
-
-    return "{\n%s}" % "".join(entries)
-
-def _create_rid_tfm_select(name, tfms, rid_tfms):
-    if not tfms and not rid_tfms:
-        return None
-
-    rids = [
-        ' "%s": %s,\n' % (rid, _file_dict(files_by_tfm))
-        for (rid, files_by_tfm) in rid_tfms.items()
-    ]
-
-    return "rid_tfm_filegroup(\"%s\", %s, {\n%s})" % (name, _file_dict(tfms), "".join(rids))
-
-def _create_ref_select(name, ref_tfms, lib_tfms, msbuild_only_tfms, default_to_empty):
-    # A package with no `lib` or `ref` folders at all -- one that ships only
-    # MSBuild assets -- has nothing to be incompatible with, so it stays a group
-    # that resolves to nothing.
-    if not ref_tfms and not lib_tfms:
-        return None
-
-    return "ref_tfm_filegroup(\"%s\", %s, %s, %s, [%s])" % (
-        name,
-        default_to_empty,
-        _file_dict(ref_tfms),
-        _file_dict(lib_tfms),
-        ", ".join(["\"%s\"" % tfm for tfm in sorted(msbuild_only_tfms)]),
-    )
-
-def _create_group(name, package, build_tfms, unsupported):
-    """Emits the compile or runtime group, unioning in any `build` assemblies."""
-    parts = []
-    srcs = []
-
-    if package:
-        parts.append(package)
-        srcs.append(":%s_package" % name)
-    elif unsupported:
-        # The package ships assemblies, just not for a framework rules_dotnet
-        # can target. That is an incompatible package, not one that brings
-        # nothing.
-        parts.append("unsupported_frameworks(\"%s_package\", [%s])" % (
-            name,
-            ",".join(["\n  \"%s\"" % tfm for tfm in sorted(unsupported)]),
-        ))
-        srcs.append(":%s_package" % name)
-
-    if build_tfms:
-        parts.append("tfm_filegroup(\"%s_build\", True, %s)" % (name, _file_dict(build_tfms)))
-        srcs.append(":%s_build" % name)
-
-    parts.append("filegroup(name = \"%s\", srcs = [%s])" % (
-        name,
-        ",".join(["\n  \"%s\"" % src for src in srcs]),
-    ))
-
-    return "\n".join(parts)
-
-def _create_rid_native_select(name, group):
-    if not group:
-        return None
-
-    return "rid_filegroup(\"%s\", %s)" % (name, _file_dict(group))
-
-def _create_tools_select(tools):
-    if not tools:
-        return None
-
-    return "tool_filegroup(\"tools\", %s)" % _file_dict(tools)
-
-def _create_portable_assets(groups):
-    """Emits the `portable_assets` target.
-
-    Its RID-agnostic assemblies are the `lib` and `build` groups that `libs`
-    falls back to when no RID-bound assembly applies.
-    """
-    libs = []
-
-    if groups.libs or groups.rid_libs:
-        libs.append(":libs_package_lib")
-
-    if groups.build_libs:
-        libs.append(":libs_build")
-
-    return "portable_assets(\"portable_assets\", %s, %s, %s)" % (
-        json.encode(libs),
-        json.encode(groups.portable_runtimes["native"]),
-        json.encode(groups.portable_runtimes["lib"]),
-    )
-
-def _sanitize_path(file_path):
-    # On linux the relative file path starts with ./
-    if file_path.startswith("./"):
-        return file_path[2:]
-
-    return file_path
+    return sorted(files)
 
 # Spellings some packages ship in place of the canonical moniker.
 _NON_STANDARD_TFMS = {
@@ -216,8 +112,7 @@ def _process_group_with_tfm(groups, group_name, file):
         # A framework rules_dotnet cannot configure on: a platform specific TFM
         # other than `-windows`, such as `net8.0-android` or
         # `net8.0-windows10.0.19041.0`, a portable profile, a Xamarin target. A
-        # package whose every folder lands here supports nothing we can build,
-        # which is an incompatible package.
+        # package whose every folder lands here is incompatible.
         groups["unsupported_tfms"][folder] = True
         return
 
@@ -240,10 +135,10 @@ def _process_group_with_tfm(groups, group_name, file):
 # A package supports a framework when it brings anything for it, assemblies or
 # not. MSBuild props and targets named after the package count, and one that
 # resolves through those simply brings no assemblies.
-def _record_build_compatibility(groups, id, file):
+def _record_build_compatibility(groups, msbuild_files, file):
     parts = file.split("/")
 
-    if parts[-1].lower() not in ["%s.props" % id.lower(), "%s.targets" % id.lower()]:
+    if parts[-1].lower() not in msbuild_files:
         return
 
     if len(parts) == 2:
@@ -278,6 +173,7 @@ def _process_build_file(groups, file):
 
     groups["build"].setdefault(tfm, {"lib": [], "ref": []})[file_type].append(file)
 
+# `typeproviders/<fsharp version>/<tfm>/<assembly>.dll`.
 def _process_typeprovider_file(groups, file):
     if not file.endswith(".dll"):
         return
@@ -354,9 +250,6 @@ def _resolve_roslyn_analyzers(groups):
         for file in by_version[lowest]:
             _add_language_analyzer(groups, language, file)
 
-def _process_content_file(groups, file):
-    groups["contentFiles"]["any"].append(file)
-
 def _process_portable_runtimes_file(group, parts, file):
     """Records a `runtimes` file for a RID-less restore, which keeps every RID folder as spelled.
 
@@ -371,15 +264,22 @@ def _process_portable_runtimes_file(group, parts, file):
         if tfm != None and (file.endswith("_._") or (file.endswith(".dll") and not file.endswith(".resources.dll"))):
             group["lib"][file] = tfm
 
+def _folding_rank(source_rid, portable_rid):
+    """Ranks the RID folders that fold onto one portable RID; the highest wins.
+
+    The folder naming the portable RID itself is the one NuGet would pick for
+    it. Among version-qualified folders, the longest fallback chain wins, then
+    the name, so the winner does not depend on the order of the archive.
+    """
+    return (source_rid == portable_rid, len(RUNTIME_GRAPH[source_rid]), source_rid)
+
+# `runtimes/<rid>/native/<file>` and `runtimes/<rid>/lib/<tfm>/<assembly>.dll`.
 def _process_runtimes_file(groups, file):
     parts = file.split("/")
 
     if len(parts) < 3:
         return
 
-    # A package can ship assets under a version-qualified RID such as
-    # `ubuntu.16.04-x64`. rules_dotnet configures only on portable RIDs, so fold
-    # those onto the nearest portable ancestor.
     source_rid = parts[1]
 
     _process_portable_runtimes_file(groups["portable_runtimes"], parts, file)
@@ -387,16 +287,16 @@ def _process_runtimes_file(groups, file):
     if source_rid not in RUNTIME_GRAPH:
         return
 
+    # rules_dotnet configures only on portable RIDs, so assets under a
+    # version-qualified RID such as `ubuntu.16.04-x64` fold onto the nearest
+    # portable ancestor. Only one folder's assets can sit there.
     rid = to_portable_rid(source_rid)
 
     group = groups["runtimes"]
     entry = group.get(rid)
 
     if entry != None and entry["rid"] != source_rid:
-        # Several version-qualified RIDs can fold onto the same portable one, and
-        # only one set of assets can sit there. Order by fallback chain length,
-        # then by name, so the winner does not depend on the order of the archive.
-        if (len(RUNTIME_GRAPH[source_rid]), source_rid) <= (len(RUNTIME_GRAPH[entry["rid"]]), entry["rid"]):
+        if _folding_rank(source_rid, rid) <= _folding_rank(entry["rid"], rid):
             return
         entry = None
 
@@ -428,7 +328,7 @@ def _process_runtimes_file(groups, file):
         if file.endswith(".dll") and not file.endswith(".resources.dll"):
             files.append(file)
 
-# `tools/<TFM>/any/...`
+# `tools/<tfm>/any/...`
 def _process_tools_file(groups, file):
     parts = file.split("/")
 
@@ -448,7 +348,7 @@ def _process_key_and_file(groups, key, file):
     elif key == "analyzers":
         _process_analyzer_file(groups, file)
     elif key == "contentFiles":
-        _process_content_file(groups, file)
+        groups["contentFiles"]["any"].append(file)
     elif key == "staticwebassets":
         groups["staticwebassets"].append(file)
     elif key == "typeproviders":
@@ -460,49 +360,163 @@ def _process_key_and_file(groups, key, file):
     elif key == "tools":
         _process_tools_file(groups, file)
 
-def _get_package_urls(rctx, sources, auth, package_id, package_version):
-    base_addresses = {}
-    package_urls = []
+def _new_groups():
+    """The empty groups a package's files are sorted into, keyed by top level folder."""
+    return {
+        # Format: analyzers/dotnet[/<roslyn version>][/<language>]/<assembly>.dll
+        "analyzers": {
+            "dotnet": [],
+            "dotnet/cs": [],
+            "dotnet/fs": [],
+            "dotnet/vb": [],
+        },
+        # See: https://devblogs.microsoft.com/nuget/nuget-contentfiles-demystified/
+        # NB: Only the any group is supported at the moment
+        "contentFiles": {
+            "any": [],
+        },
+        # Files the package serves, at their paths below its base path:
+        # `_content/<id>` unless its manifest says otherwise. See the
+        # `build/Microsoft.AspNetCore.StaticWebAssets.props` a Razor class
+        # library ships.
+        "staticwebassets": [],
+        # Format: lib/<TFM>/<assembly>.dll
+        "lib": {},
+        # Resource assemblies: https://learn.microsoft.com/en-us/nuget/create-packages/creating-localized-packages
+        # Format: lib/<TFM>/<locale>/<assembly>.resources.dll
+        "resource_assemblies": {},
+        # Format: ref/<TFM>/<assembly>.dll
+        "ref": {},
+        # See https://github.com/fsharp/fslang-design/blob/main/tooling/FST-1003-loading-type-provider-design-time-components.md
+        # Format: typeproviders/<fsharp version>/<TFM>/<assembly>.dll
+        "typeproviders": {},
+        # See https://docs.microsoft.com/en-us/nuget/create-packages/supporting-multiple-target-frameworks#architecture-specific-folders
+        # Format: runtimes/<RID>/native/<file> OR runtimes/<RID>/lib/<TFM>/<assembly>.dll
+        # Keyed by portable RID.
+        "runtimes": {},
+        # The same files for a RID-less restore: every RID folder, unfolded.
+        # `lib` maps a file to its framework.
+        "portable_runtimes": {
+            "native": [],
+            "lib": {},
+        },
+        # See: https://learn.microsoft.com/en-us/nuget/concepts/msbuild-props-and-targets#framework-specific-build-folder
+        # Format: build/<TFM>/ref/<assembly>.dll OR build/<TFM>/lib/<assembly>.dll
+        # NB: Only the assemblies are picked up; the MSBuild props and targets
+        #     that packages ship here are not run.
+        "build": {},
+        # See: https://github.com/dotnet/sdk/blob/master/documentation/general/tool-nuget-package-format.md
+        # Format: tools/<TFM>/any/...
+        # NB: Dotnet requires portable assemblies in the tools folder, so RID is always 'any'
+        "tools": {},
+        # Bookkeeping rather than assets: analyzers still keyed by the Roslyn
+        # they were built against, the `lib`/`ref` folder names that do not name
+        # a framework rules_dotnet can target, and the frameworks the package
+        # supports through MSBuild assets rather than assemblies.
+        "analyzers_by_roslyn": {},
+        "unsupported_tfms": {},
+        "build_compat": {
+            "any": False,
+            "tfms": {},
+        },
+        # The files `package_info.bzl` is read from, by kind, or None.
+        "metadata": {
+            "framework_list": None,
+            "nuspec": None,
+            "package_overrides": None,
+            "static_web_assets_manifest": None,
+        },
+    }
 
-    for source in sources:
-        if base_addresses.get(source):
-            continue
+def _group_package_files(id, all_files):
+    """Sorts a package's files into the groups the BUILD file is generated from.
 
-        # If the url ends with index.json we are dealing with a V3 NuGet feed
-        # and the url schema for the package contents will be:
-        # {base_address}/{lower_id}/{lower_version}/{lower_id}.{lower_version}.nupkg
-        if source.endswith("index.json"):
-            rctx.download(source, auth = auth, output = "index.json")
-            index = json.decode(rctx.read("index.json"))
-            rctx.delete("index.json")
-            for resource in index["resources"]:
-                if resource["@type"] == "PackageBaseAddress/3.0.0":
-                    base_addresses[source] = resource["@id"]
+    Args:
+      id: The package id, which names its MSBuild props and targets.
+      all_files: Every file in the extracted package.
 
-                    package_urls.append(
-                        "{base_address}{package_id}/{package_version}/{package_id}.{package_version}.nupkg".format(
-                            base_address = resource["@id"] if resource["@id"].endswith("/") else resource["@id"] + "/",
-                            package_id = package_id.lower(),
-                            package_version = package_version.lower(),
-                        ),
-                    )
-        else:
-            # Else we expect the url to be a V2 NuGet feed and the url schema for the
-            # package contents will be: {source}/package/{id}/{version}
-            base_addresses[source] = source
-            package_urls.append("{source}/package/{package_id}/{package_version}".format(source = source, package_id = package_id, package_version = package_version))
+    Returns:
+      A struct of the groups, ready to be turned into targets.
+    """
+    groups = _new_groups()
+    msbuild_files = ["%s.props" % id.lower(), "%s.targets" % id.lower()]
 
-    return package_urls
+    # From .NET 11, a package lists its static web assets in a manifest of their
+    # own, which says where they are served from.
+    metadata_kinds = {
+        "build/%s.packageassets.json" % id.lower(): "static_web_assets_manifest",
+        # A runtime pack's RuntimeList.xml lists its assemblies as a targeting
+        # pack's FrameworkList.xml does.
+        "data/frameworklist.xml": "framework_list",
+        "data/runtimelist.xml": "framework_list",
+        "data/packageoverrides.txt": "package_overrides",
+    }
 
-def _get_auth_dict(ctx, urls):
-    # A netrc declared on the package wins over the user's.
-    netrc = read_netrc(ctx, ctx.attr.netrc) if ctx.attr.netrc else read_user_netrc(ctx)
+    for file in all_files:
+        (key, in_folder, _) = file.partition("/")
 
-    return use_netrc(netrc, urls, {
-        "type": "basic",
-        "login": "<login>",
-        "password": "<password>",
-    })
+        if in_folder:
+            _process_key_and_file(groups, key, file)
+
+            if key == "build" or key == "buildTransitive":
+                _record_build_compatibility(groups, msbuild_files, file)
+
+        lower = file.lower()
+        kind = metadata_kinds.get(lower)
+        if kind != None:
+            groups["metadata"][kind] = file
+        elif not in_folder and lower.endswith(".nuspec"):
+            groups["metadata"]["nuspec"] = file
+
+    _resolve_roslyn_analyzers(groups)
+
+    # The runtime group comes from `lib` alone. `ref` never contributes to it,
+    # and never constrains which `lib` entry is picked.
+    libs = dict(groups["lib"])
+
+    for (tfm, files) in groups["typeproviders"].items():
+        libs[tfm] = libs.get(tfm, []) + files
+
+    # RID bound assemblies stand in for the whole lib group when one applies,
+    # so they are kept apart and resolved first. A RID that ships only one kind
+    # of asset must not shadow a less specific RID shipping the other.
+    rid_libs = {rid: entry["lib"] for (rid, entry) in groups["runtimes"].items() if entry["lib"]}
+    native = {rid: entry["native"] for (rid, entry) in groups["runtimes"].items() if entry["native"]}
+
+    return struct(
+        # The F# compiler probes the package layout for a type provider's
+        # design time assembly, so every one is staged whatever framework it
+        # was published for.
+        typeproviders = [
+            file
+            for files in groups["typeproviders"].values()
+            for file in files
+        ],
+        analyzers = groups["analyzers"],
+        build_compat_tfms = groups["build_compat"]["tfms"].keys(),
+        build_libs = _build_assemblies(groups["build"], "lib"),
+        build_refs = _build_assemblies(groups["build"], "ref"),
+        compatible_with_anything = (
+            groups["build_compat"]["any"] or len(groups["contentFiles"]["any"]) > 0
+        ),
+        content_files = groups["contentFiles"]["any"],
+        metadata = groups["metadata"],
+        static_web_assets = groups["staticwebassets"],
+        libs = libs,
+        native = native,
+        portable_runtimes = groups["portable_runtimes"],
+        refs = groups["ref"],
+        resource_assemblies = groups["resource_assemblies"],
+        rid_libs = rid_libs,
+        tools = groups["tools"],
+        unsupported_tfms = groups["unsupported_tfms"].keys(),
+    )
+
+# Assemblies under `build` resolve through their own select and are unioned
+# into the compile or runtime group: the SDK adds them alongside a package's own
+# assemblies, not in place of them.
+def _build_assemblies(build, kind):
+    return {tfm: entry[kind] for (tfm, entry) in build.items() if entry[kind]}
 
 _PACKAGE_INFO_TEMPLATE = """\
 "GENERATED"
@@ -539,69 +553,74 @@ def _static_web_assets_base_path(manifest):
 
     return ""
 
-def _write_package_info(ctx, id, all_files, tool_files, prefix):
-    """Extracts the package metadata that the hub repository needs.
+def _dotnet_tools(ctx, tool_files, prefix):
+    """Reads the commands a dotnet tool package declares.
+
+    Args:
+      ctx: The repository context.
+      tool_files: The package's `tools` group.
+      prefix: The directory the package is extracted into.
+
+    Returns:
+      Tool name to target framework to its `entrypoint` and `runner`.
+    """
+    tools = {}
+
+    for (tfm, files) in tool_files.items():
+        for file in files:
+            if not file.endswith("DotnetToolSettings.xml"):
+                continue
+
+            for command in parse_dotnet_tool_settings(ctx.read(prefix + file), file):
+                tools.setdefault(command["name"], {})[tfm] = {
+                    "entrypoint": command["entrypoint"],
+                    "runner": command["runner"],
+                }
+
+    return tools
+
+def _write_package_info(ctx, groups, prefix):
+    """Writes the package metadata that the hub repository loads.
 
     Reading it here keeps the work lazy: a package nothing depends on is never
     fetched, let alone parsed.
     """
-    nuspec = None
-    framework_list = {}
-    framework_list_metadata = {"analyzer_profiles": {}, "file_versions": {}, "profiles": {}}
-    targeting_pack_overrides = {}
-
-    # From .NET 11, a package lists its static web assets in a manifest of
-    # their own, which says where they are served from. One built by an older
-    # SDK serves them from MSBuild's default.
-    static_web_assets_manifest = "build/{}.packageassets.json".format(id.lower())
-    static_web_assets_base_path = ""
-
-    for file in all_files:
-        file = _sanitize_path(file)
-        lower = file.lower()
-
-        if lower.endswith(".nuspec") and file.find("/") == -1:
-            nuspec = file
-        elif lower in ["data/frameworklist.xml", "data/runtimelist.xml"]:
-            # A targeting pack's FrameworkList.xml and a runtime pack's
-            # RuntimeList.xml list their assemblies the same way.
-            metadata = parse_framework_list_metadata(ctx.read(prefix + file))
-            framework_list = metadata.assemblies
-            framework_list_metadata = {
-                "analyzer_profiles": metadata.analyzer_profiles,
-                "file_versions": metadata.file_versions,
-                "profiles": metadata.profiles,
-            }
-        elif lower == "data/packageoverrides.txt":
-            targeting_pack_overrides = parse_package_overrides(ctx.read(prefix + file))
-        elif lower == static_web_assets_manifest:
-            static_web_assets_base_path = _static_web_assets_base_path(ctx.read(prefix + file))
+    files = groups.metadata
 
     dependency_groups = {}
     framework_reference_groups = {}
-    is_dotnet_tool = False
-
-    if nuspec != None:
-        manifest = parse_nuspec(ctx.read(prefix + nuspec))
-        dependency_groups = manifest.dependency_groups
-        framework_reference_groups = manifest.framework_reference_groups
-        is_dotnet_tool = manifest.is_dotnet_tool
-
-    # Tool name -> target framework -> entrypoint. Packages that are not
-    # dotnet tools sometimes ship helper executables under `tools/`, which are
-    # not meant to be run through `dotnet tool`.
     tools = {}
-    if is_dotnet_tool:
-        for (tfm, files) in tool_files.items():
-            for file in files:
-                if not file.endswith("DotnetToolSettings.xml"):
-                    continue
 
-                for command in parse_dotnet_tool_settings(ctx.read(prefix + file), file):
-                    tools.setdefault(command["name"], {})[tfm] = {
-                        "entrypoint": command["entrypoint"],
-                        "runner": command["runner"],
-                    }
+    if files["nuspec"]:
+        nuspec = parse_nuspec(ctx.read(prefix + files["nuspec"]))
+        dependency_groups = nuspec.dependency_groups
+        framework_reference_groups = nuspec.framework_reference_groups
+
+        # Packages that are not dotnet tools sometimes ship helper executables
+        # under `tools/`, which are not meant to be run through `dotnet tool`.
+        if nuspec.is_dotnet_tool:
+            tools = _dotnet_tools(ctx, groups.tools, prefix)
+
+    framework_list = {}
+    framework_list_metadata = {"analyzer_profiles": {}, "file_versions": {}, "profiles": {}}
+    if files["framework_list"]:
+        metadata = parse_framework_list_metadata(ctx.read(prefix + files["framework_list"]))
+        framework_list = metadata.assemblies
+        framework_list_metadata = {
+            "analyzer_profiles": metadata.analyzer_profiles,
+            "file_versions": metadata.file_versions,
+            "profiles": metadata.profiles,
+        }
+
+    targeting_pack_overrides = {}
+    if files["package_overrides"]:
+        targeting_pack_overrides = parse_package_overrides(ctx.read(prefix + files["package_overrides"]))
+
+    # A package built by an SDK older than .NET 11 has no manifest and serves
+    # its static web assets from MSBuild's default.
+    static_web_assets_base_path = ""
+    if files["static_web_assets_manifest"]:
+        static_web_assets_base_path = _static_web_assets_base_path(ctx.read(prefix + files["static_web_assets_manifest"]))
 
     ctx.file(prefix + "package_info.bzl", _PACKAGE_INFO_TEMPLATE.format(
         dependency_groups = json.encode(dependency_groups),
@@ -613,190 +632,126 @@ def _write_package_info(ctx, id, all_files, tool_files, prefix):
         static_web_assets_base_path = json.encode(static_web_assets_base_path),
     ))
 
-# Assemblies under `build` resolve through their own select and are unioned
-# into the compile or runtime group: the SDK adds them alongside a package's own
-# assemblies, not in place of them.
-def _build_assemblies(build, kind):
-    return {tfm: entry[kind] for (tfm, entry) in build.items() if entry[kind]}
+def _file_dict(group):
+    """Renders a group as the Starlark dict literal the BUILD file passes on.
 
-def _group_package_files(id, all_files):
-    """Sorts a package's files into the groups the BUILD file is generated from.
-
-    Args:
-      id: The package id, used to recognise its MSBuild props and targets.
-      all_files: Every file in the extracted package.
-
-    Returns:
-      A struct of the groups, ready to be turned into targets.
+    `_._` placeholders are dropped. They say the package brings nothing under a
+    key, which the key being present at all already records.
     """
-
-    # The NuGet package format
-    groups = {
-        # Format: analyzers/dotnet[/<roslyn version>][/<language>]/<assembly>.dll
-        "analyzers": {
-            "dotnet": [],
-            "dotnet/cs": [],
-            "dotnet/fs": [],
-            "dotnet/vb": [],
-        },
-        # See: https://devblogs.microsoft.com/nuget/nuget-contentfiles-demystified/
-        # NB: Only the any group is supported at the moment
-        "contentFiles": {
-            "any": [],
-        },
-        # Files the package serves, at their paths below its base path:
-        # `_content/<id>` unless its manifest says otherwise. See the
-        # `build/Microsoft.AspNetCore.StaticWebAssets.props` a Razor class
-        # library ships.
-        "staticwebassets": [],
-        # Format: lib/<TFM>/<assembly>.dll
-        "lib": {},
-        # Resource assemblies: https://learn.microsoft.com/en-us/nuget/create-packages/creating-localized-packages
-        # Format: lib/<TFM>/<locale>/<assembly>.resources.<dll|xml>
-        "resource_assemblies": {},
-        # Format: ref/<TFM>/<assembly>.dll
-        "ref": {},
-        # See https://github.com/fsharp/fslang-design/blob/main/tooling/FST-1003-loading-type-provider-design-time-components.md
-        # Format: typeproviders/<TFM>/<assembly>.dll
-        "typeproviders": {},
-        # See https://docs.microsoft.com/en-us/nuget/create-packages/supporting-multiple-target-frameworks#architecture-specific-folders
-        # Format: runtimes/<RID>/native/<assembly>.dll OR runtimes/<RID>/lib/<TFM>/<assembly>.dll
-        "runtimes": {},
-        # The same files for a RID-less restore: every RID folder, unfolded.
-        # `lib` maps a file to its framework.
-        "portable_runtimes": {
-            "native": [],
-            "lib": {},
-        },
-        # See: https://learn.microsoft.com/en-us/nuget/concepts/msbuild-props-and-targets#framework-specific-build-folder
-        # Format: build/<TFM>/ref/<assembly>.dll OR build/<TFM>/lib/<assembly>.dll
-        # NB: Only the assemblies are picked up; the MSBuild props and targets
-        #     that packages ship here are not run.
-        "build": {},
-        # See: https://github.com/dotnet/sdk/blob/master/documentation/general/tool-nuget-package-format.md
-        # Format: tools/<TFM>/any/...
-        # NB: Dotnet requires portable assemblies in the tools folder, so RID is always 'any'
-        "tools": {},
-        # Bookkeeping rather than assets: analyzers still keyed by the Roslyn
-        # they were built against, the `lib`/`ref` folder names that do not name
-        # a framework rules_dotnet can target, and the frameworks the package
-        # supports through MSBuild assets rather than assemblies.
-        "analyzers_by_roslyn": {},
-        "unsupported_tfms": {},
-        "build_compat": {
-            "any": False,
-            "tfms": {},
-        },
-    }
-
-    for file in all_files:
-        file = _sanitize_path(file)
-        i = file.find("/")
-        key = file[:i]
-
-        _process_key_and_file(groups, key, file)
-
-        if key == "build" or key == "buildTransitive":
-            _record_build_compatibility(groups, id, file)
-
-    _resolve_roslyn_analyzers(groups)
-
-    # The runtime group comes from `lib` alone. `ref` never contributes to it,
-    # and never constrains which `lib` entry is picked.
-    libs = dict(groups["lib"])
-    native = {}
-
-    for (tfm, files) in groups["typeproviders"].items():
-        if libs.get(tfm):
-            libs[tfm] = libs[tfm] + files
-        else:
-            libs[tfm] = files
-
-    # RID bound assemblies stand in for the whole lib group when one applies,
-    # so they are kept apart and resolved first.
-    rid_libs = {}
-
-    for (rid, files_for_rid) in groups["runtimes"].items():
-        native[rid] = files_for_rid["native"]
-        if files_for_rid["lib"]:
-            rid_libs[rid] = files_for_rid["lib"]
-
-    # An F# type provider's designer assembly is never referenced, but the
-    # compiler probes the package layout for it, so it has to be staged whatever
-    # framework it was published for.
-    typeproviders = [
-        file
-        for files in groups["typeproviders"].values()
-        for file in files
+    entries = [
+        ' "%s": [%s],\n' % (
+            key,
+            ",".join(["\n   \"%s\"" % file for file in files if not file.endswith("_._")]),
+        )
+        for (key, files) in group.items()
     ]
 
-    return struct(
-        typeproviders = typeproviders,
-        analyzers = groups["analyzers"],
-        build_compat_tfms = groups["build_compat"]["tfms"].keys(),
-        build_libs = _build_assemblies(groups["build"], "lib"),
-        build_refs = _build_assemblies(groups["build"], "ref"),
-        compatible_with_anything = (
-            groups["build_compat"]["any"] or len(groups["contentFiles"]["any"]) > 0
-        ),
-        content_files = groups["contentFiles"]["any"],
-        static_web_assets = groups["staticwebassets"],
-        libs = libs,
-        native = native,
-        portable_runtimes = groups["portable_runtimes"],
-        refs = groups["ref"],
-        resource_assemblies = groups["resource_assemblies"],
-        rid_libs = rid_libs,
-        tools = groups["tools"],
-        unsupported_tfms = groups["unsupported_tfms"].keys(),
+    return "{\n%s}" % "".join(entries)
+
+def _filegroup(name, files):
+    return "filegroup(name = \"%s\", srcs = [%s])" % (
+        name,
+        ",".join(["\n  \"%s\"" % file for file in files]),
     )
 
-def _nuget_archive_impl(ctx):
-    # First get the auth dict for the package sources since the sources can be different than the
-    # package base url when using NuGet V3 feeds.
-    auth = _get_auth_dict(ctx, ctx.attr.sources)
-    urls = _get_package_urls(ctx, ctx.attr.sources, auth, ctx.attr.id, ctx.attr.version)
+def _create_rid_tfm_select(name, tfms, rid_tfms):
+    if not tfms and not rid_tfms:
+        return None
 
-    # Then get the auth dict for the package base urls
-    auth = _get_auth_dict(ctx, urls)
+    rids = [
+        ' "%s": %s,\n' % (rid, _file_dict(files_by_tfm))
+        for (rid, files_by_tfm) in rid_tfms.items()
+    ]
 
-    nupkg_name = "%s.%s.nupkg" % (ctx.attr.id, ctx.attr.version)
+    return "rid_tfm_filegroup(\"%s\", %s, {\n%s})" % (name, _file_dict(tfms), "".join(rids))
 
-    ctx.download(urls, output = nupkg_name, integrity = ctx.attr.sha512, auth = auth)
-    ctx.extract(archive = nupkg_name, type = "zip")
+def _create_ref_select(name, ref_tfms, lib_tfms, msbuild_only_tfms, default_to_empty):
+    # A package with no `lib` or `ref` folders at all -- one that ships only
+    # MSBuild assets -- has nothing to be incompatible with, so it stays a group
+    # that resolves to nothing.
+    if not ref_tfms and not lib_tfms:
+        return None
 
-    all_files = sorted(_read_dir(ctx, ".").replace(str(ctx.path(".")) + "/", "").splitlines())
+    return "ref_tfm_filegroup(\"%s\", %s, %s, %s, [%s])" % (
+        name,
+        default_to_empty,
+        _file_dict(ref_tfms),
+        _file_dict(lib_tfms),
+        ", ".join(["\"%s\"" % tfm for tfm in sorted(msbuild_only_tfms)]),
+    )
 
-    _write_repository(ctx, ctx.attr.id, nupkg_name, all_files)
+def _create_group(name, package, build_tfms, unsupported):
+    """Emits the compile or runtime group, unioning in any `build` assemblies."""
+    parts = []
+    srcs = []
 
-    # Without a checksum the package is whatever the feed serves today.
-    return ctx.repo_metadata(reproducible = bool(ctx.attr.sha512))
+    if package:
+        parts.append(package)
+        srcs.append(":%s_package" % name)
+    elif unsupported:
+        # The package ships assemblies, just not for a framework rules_dotnet
+        # can target. That is an incompatible package, not one that brings
+        # nothing.
+        parts.append("unsupported_frameworks(\"%s_package\", [%s])" % (
+            name,
+            ",".join(["\n  \"%s\"" % tfm for tfm in sorted(unsupported)]),
+        ))
+        srcs.append(":%s_package" % name)
 
-def _write_repository(ctx, id, nupkg_name, all_files, prefix = ""):
-    """Turns an extracted package into the metadata and targets it is consumed through.
+    if build_tfms:
+        parts.append("tfm_filegroup(\"%s_build\", True, %s)" % (name, _file_dict(build_tfms)))
+        srcs.append(":%s_build" % name)
+
+    parts.append(_filegroup(name, srcs))
+
+    return "\n".join(parts)
+
+def _create_portable_assets(groups):
+    """Emits the `portable_assets` target.
+
+    Its RID-agnostic assemblies are the `lib` and `build` groups that `libs`
+    falls back to when no RID-bound assembly applies.
+    """
+    libs = []
+
+    if groups.libs or groups.rid_libs:
+        libs.append(":libs_package_lib")
+
+    if groups.build_libs:
+        libs.append(":libs_build")
+
+    return "portable_assets(\"portable_assets\", %s, %s, %s)" % (
+        json.encode(libs),
+        json.encode(groups.portable_runtimes["native"]),
+        json.encode(groups.portable_runtimes["lib"]),
+    )
+
+_BUILD_HEADER = """\
+load("{}", "portable_assets", "ref_tfm_filegroup", "rid_filegroup", "rid_tfm_filegroup", "tfm_filegroup", "tool_filegroup", "unsupported_frameworks")
+
+package(default_visibility = ["//visibility:public"])
+
+exports_files(glob(["**"]))
+
+""".format(Label("//dotnet/private/rules/nuget:nuget_archive.bzl"))
+
+def _render_build_file(groups, all_files, nupkg_name):
+    """Renders the BUILD file that exposes each group of a package's files.
 
     Args:
-      ctx: The repository context.
-      id: The package id.
-      nupkg_name: The name of the `.nupkg` in the repository.
-      all_files: Every file in the package, relative to the package it is
-        written into.
-      prefix: The directory the targets are written into, empty for the
-        repository root. Several packages can then share one repository.
+      groups: The package's files, from `_group_package_files`.
+      all_files: Every file in the package.
+      nupkg_name: The name of the `.nupkg` in the package.
+
+    Returns:
+      The content of the BUILD file.
     """
-    groups = _group_package_files(id, all_files)
-
-    _write_package_info(ctx, id, all_files, groups.tools, prefix)
-
-    ctx.file(prefix + "BUILD.bazel", r"""package(default_visibility = ["//visibility:public"])
-exports_files(glob(["**"]))
-load("%s", "tfm_filegroup", "rid_tfm_filegroup", "ref_tfm_filegroup", "rid_filegroup", "portable_assets", "tool_filegroup", "unsupported_frameworks")
-""" % str(Label("//dotnet/private/rules/nuget:nuget_archive.bzl")) + "\n".join([
+    targets = [
         _create_group(
             "libs",
             _create_rid_tfm_select("libs_package", groups.libs, groups.rid_libs),
             groups.build_libs,
-            {},
+            [],
         ),
         _create_group(
             "refs",
@@ -812,32 +767,142 @@ load("%s", "tfm_filegroup", "rid_tfm_filegroup", "ref_tfm_filegroup", "rid_fileg
         ),
         # A package can ship satellite assemblies for some of its frameworks and
         # not others, so this group falls back to empty rather than to an error.
-        "tfm_filegroup(\"resource_assemblies\", True, %s)" % _file_dict(groups.resource_assemblies) if groups.resource_assemblies else "filegroup(name = \"resource_assemblies\", srcs = [])",
-        "filegroup(name = \"analyzers\", srcs = [%s])" % ",".join(["\n  \"%s\"" % a for a in groups.analyzers["dotnet"]]),
-        "filegroup(name = \"analyzers_csharp\", srcs = [%s])" % ",".join(["\n  \"%s\"" % a for a in groups.analyzers["dotnet/cs"]]),
-        "filegroup(name = \"analyzers_fsharp\", srcs = [%s])" % ",".join(["\n  \"%s\"" % a for a in groups.analyzers["dotnet/fs"]]),
-        "filegroup(name = \"analyzers_vb\", srcs = [%s])" % ",".join(["\n  \"%s\"" % a for a in groups.analyzers["dotnet/vb"]]),
-        "filegroup(name = \"data\", srcs = [])",
-        _create_rid_native_select("native", groups.native) or "filegroup(name = \"native\", srcs = [])",
+        "tfm_filegroup(\"resource_assemblies\", True, %s)" % _file_dict(groups.resource_assemblies) if groups.resource_assemblies else _filegroup("resource_assemblies", []),
+        _filegroup("analyzers", groups.analyzers["dotnet"]),
+        _filegroup("analyzers_csharp", groups.analyzers["dotnet/cs"]),
+        _filegroup("analyzers_fsharp", groups.analyzers["dotnet/fs"]),
+        _filegroup("analyzers_vb", groups.analyzers["dotnet/vb"]),
+        _filegroup("data", []),
+        "rid_filegroup(\"native\", %s)" % _file_dict(groups.native) if groups.native else _filegroup("native", []),
         _create_portable_assets(groups),
-        "filegroup(name = \"content_files\", srcs = [%s])" % ",".join(["\n  \"%s\"" % a for a in groups.content_files]),
-        "filegroup(name = \"typeproviders\", srcs = [%s])" % ",".join(["\n  \"%s\"" % _sanitize_path(a) for a in groups.typeproviders]),
-        "filegroup(name = \"static_web_assets\", srcs = [%s])" % ",".join(["\n  \"%s\"" % _sanitize_path(a) for a in groups.static_web_assets]),
-        "filegroup(name = \"files\", srcs = [%s])" % ",".join(["\n  \"%s\"" % _sanitize_path(a) for a in all_files]),
-        _create_tools_select(groups.tools) or "filegroup(name = \"tools\", srcs = [])",
+        _filegroup("content_files", groups.content_files),
+        _filegroup("typeproviders", groups.typeproviders),
+        _filegroup("static_web_assets", groups.static_web_assets),
+        _filegroup("files", all_files),
+        "tool_filegroup(\"tools\", %s)" % _file_dict(groups.tools) if groups.tools else _filegroup("tools", []),
         "exports_files([\"%s\"])" % nupkg_name,
-    ]))
+    ]
+
+    return _BUILD_HEADER + "\n".join(targets)
+
+def _write_repository(ctx, id, nupkg_name, all_files, prefix = ""):
+    """Turns an extracted package into the metadata and targets it is consumed through.
+
+    Args:
+      ctx: The repository context.
+      id: The package id.
+      nupkg_name: The name of the `.nupkg` in the repository.
+      all_files: Every file in the package, relative to the package it is
+        written into.
+      prefix: The directory the targets are written into, empty for the
+        repository root. Several packages can then share one repository.
+    """
+    groups = _group_package_files(id, all_files)
+
+    _write_package_info(ctx, groups, prefix)
+    ctx.file(prefix + "BUILD.bazel", _render_build_file(groups, all_files, nupkg_name))
+
+def _auth(netrc, urls):
+    return use_netrc(netrc, urls, {
+        "type": "basic",
+        "login": "<login>",
+        "password": "<password>",
+    })
+
+def _get_package_urls(ctx, sources, auth, package_id, package_version):
+    """Returns the URLs a package version can be downloaded from, in feed order.
+
+    Args:
+      ctx: The repository context.
+      sources: The feeds to download from.
+      auth: The credentials for the feeds' own URLs.
+      package_id: The package id.
+      package_version: The normalized package version.
+
+    Returns:
+      The candidate URLs.
+    """
+    urls = []
+
+    for source in {source: None for source in sources}:
+        if not source.endswith("index.json"):
+            # A V2 feed: {source}/package/{id}/{version}
+            urls.append("{}/package/{}/{}".format(source, package_id, package_version))
+            continue
+
+        # A V3 feed serves packages from the base address its service index
+        # names: {base}/{lower id}/{lower version}/{lower id}.{lower version}.nupkg
+        ctx.download(source, auth = auth, output = "index.json")
+        index = json.decode(ctx.read("index.json"))
+        ctx.delete("index.json")
+
+        for resource in index.get("resources", []):
+            if resource.get("@type") == "PackageBaseAddress/3.0.0":
+                base = resource["@id"]
+                urls.append("{base}{id}/{version}/{id}.{version}.nupkg".format(
+                    base = base if base.endswith("/") else base + "/",
+                    id = package_id.lower(),
+                    version = package_version.lower(),
+                ))
+
+    if not urls:
+        fail("None of the sources of {} {} serves packages: {}".format(package_id, package_version, sources))
+
+    return urls
+
+def _nuget_archive_impl(ctx):
+    netrc = read_netrc(ctx, ctx.attr.netrc) if ctx.attr.netrc else read_user_netrc(ctx)
+
+    # A V3 feed's packages can be served from another host than its service
+    # index, so each is matched against the netrc on its own.
+    urls = _get_package_urls(ctx, ctx.attr.sources, _auth(netrc, ctx.attr.sources), ctx.attr.id, ctx.attr.version)
+
+    nupkg_name = "%s.%s.nupkg" % (ctx.attr.id, ctx.attr.version)
+
+    ctx.download(urls, output = nupkg_name, integrity = ctx.attr.sha512, auth = _auth(netrc, urls))
+    ctx.extract(archive = nupkg_name, type = "zip")
+
+    _write_repository(ctx, ctx.attr.id, nupkg_name, _list_files(ctx))
+
+    # Without a checksum the package is whatever the feed serves today.
+    return ctx.repo_metadata(reproducible = bool(ctx.attr.sha512))
 
 nuget_archive = repository_rule(
     _nuget_archive_impl,
+    doc = """Downloads one NuGet package and exposes its contents as targets.
+
+Prefer the `paket` module extension or `nuget_repo`, which declare an archive
+per package and wire up the dependencies between packages.
+
+Every file of the package is exported by its path in the package, and
+`:files` groups all of them. The other targets resolve the package's assets
+for the target framework and runtime identifier being built.""",
     attrs = {
-        "sources": attr.string_list(),
-        "netrc": attr.label(),
-        "id": attr.string(),
-        "version": attr.string(),
-        "sha512": attr.string(),
+        "sources": attr.string_list(
+            doc = """The feeds to download the package from, tried in order.
+
+A URL ending in `index.json` is a NuGet V3 service index; any other URL is a
+NuGet V2 feed.""",
+        ),
+        "netrc": attr.label(
+            doc = "A netrc file with the credentials for the feeds. Defaults to the user's netrc file.",
+        ),
+        "id": attr.string(
+            doc = "The package id.",
+        ),
+        "version": attr.string(
+            doc = "The package version, normalized the way NuGet names its files: `6.0.0` rather than `6.0`.",
+        ),
+        "sha512": attr.string(
+            doc = """The subresource integrity of the `.nupkg`, e.g. `sha512-<base64>`.
+
+Empty to download the package without verifying it.""",
+        ),
     },
 )
+
+# What follows runs when the generated BUILD file is loaded: the macros it
+# calls to resolve each group for the configured framework and RID.
 
 def _tfm_alias(name, targets_by_tfm, default_target):
     """Resolves a TFM keyed mapping through the `tfm_*` config settings.
@@ -1018,9 +1083,7 @@ def rid_tfm_filegroup(name, tfms, rid_tfms):
                 srcs = files,
                 visibility = ["//visibility:public"],
             )
-            if tfm not in rids_by_tfm:
-                rids_by_tfm[tfm] = {}
-            rids_by_tfm[tfm][rid] = ":%s_%s_%s_files" % (name, rid, tfm)
+            rids_by_tfm.setdefault(tfm, {})[rid] = ":%s_%s_%s_files" % (name, rid, tfm)
 
     targets_by_tfm = {}
 

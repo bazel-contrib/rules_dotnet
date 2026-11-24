@@ -1,28 +1,17 @@
 """Razor support for the C# compile action.
 
-The Razor SDK runs no compiler of its own. It feeds `csc` through three ordinary
-flags:
+Razor is a source generator: `csc` gets the SDK's generator assemblies as
+analyzers, the `.razor`/`.cshtml` files as additional files, and two analyzer
+configs. Roslyn forces the split:
 
-    /analyzer:        the generator assemblies, from the SDK
-    /additionalfile:  the .razor and .cshtml files
-    /analyzerconfig:  the settings the generator reads
-
-The settings are split across two config files because Roslyn forces it:
-
-  * a *global* config (`is_global = true`) carrying the `build_property.*`
-    settings. Global configs may only have absolute section names, which Bazel
-    cannot know at analysis time, so this one has no sections at all.
-
-  * a plain `.editorconfig` carrying the per-file `build_metadata.*` settings.
-    Its sections are globs relative to the config's own directory, and Roslyn
-    applies it only to files *underneath* that directory, which is why the Razor
-    sources are staged next to it.
-
-That staging directory is what makes `TargetPath` well defined: it is the Bazel
-equivalent of the directory a `.csproj` sits in, and `TargetPath` is a file's
-path within it. The generator derives a component's namespace and its `@page`
-route from that path, so it has to be package-relative rather than dependent on
-where the execroot happens to be.
+  * a global config with the `build_property.*` settings. Global configs only
+    take absolute section names, which are unknown at analysis time.
+  * an `.editorconfig` with the per-file `build_metadata.*` settings. It only
+    applies to files below its own directory, so the sources are staged there,
+    which also stands in for the `.csproj` directory: a file's `TargetPath` is
+    its path relative to the package. Razor derives a component's namespace
+    from it, and a Razor Page's (`.cshtml`) route; a component's route is the
+    one its `@page` directive states.
 """
 
 load("@bazel_lib//lib:base64.bzl", "base64")
@@ -59,9 +48,10 @@ _ASCII_PRINTABLE = (
     "abcdefghijklmnopqrstuvwxyz{|}~"
 )
 
-# editorconfig treats these as glob syntax, so a literal one in a file name has
-# to be escaped or the section would match the wrong files, or nothing at all.
-_GLOB_METACHARACTERS = ["\\", "*", "?", "[", "]", "{", "}"]
+# Characters a section name has to backslash-escape to match literally: the glob
+# syntax, plus `#` and `;`, which Roslyn's section-header parser only accepts
+# escaped. An unparsed header leaves its properties to the previous section.
+_SECTION_NAME_SPECIAL_CHARACTERS = ["\\", "*", "?", "[", "]", "{", "}", "#", ";"]
 
 def partition_srcs(srcs, label):
     """Splits `srcs` by what the compile action does with each file.
@@ -112,7 +102,8 @@ def target_path(short_path, label):
     """The path of a Razor file relative to the package that declares the target.
 
     This is the Bazel stand-in for a file's path relative to its `.csproj`, and
-    the generator turns it into the component's namespace suffix and route.
+    the generator turns it into a component's namespace suffix and a Razor
+    Page's route.
 
     Args:
       short_path: The `short_path` of the Razor source.
@@ -132,7 +123,7 @@ def target_path(short_path, label):
     if not short_path.startswith(prefix) or path.startswith("../"):
         fail(
             "the Razor source %s is outside the package of %s.\n" % (short_path, label) +
-            "Razor derives a component's namespace and route from its path relative to the " +
+            "Razor derives a component's namespace and a page's route from its path relative to the " +
             "package that compiles it, so the file has to live in that package or below it. " +
             "Move the file, or compile it with a target in its own package and depend on that.",
         )
@@ -152,10 +143,7 @@ def target_path(short_path, label):
     return path
 
 def _sanitize_namespace(value):
-    """Turns a target name into something usable as a C# namespace.
-
-    Bazel target names routinely contain characters a namespace cannot, and
-    MSBuild sanitizes `RootNamespace` the same way.
+    """Turns a target name, which may hold `-` and the like, into a C# namespace.
 
     Args:
       value: The namespace to sanitize.
@@ -182,8 +170,8 @@ def escape_section_name(path):
     Returns:
       The escaped path.
     """
-    for metacharacter in _GLOB_METACHARACTERS:
-        path = path.replace(metacharacter, "\\" + metacharacter)
+    for character in _SECTION_NAME_SPECIAL_CHARACTERS:
+        path = path.replace(character, "\\" + character)
     return path
 
 # Razor's versioning has tracked .NET's since net5.0, so
@@ -245,41 +233,37 @@ def razor_compile_inputs(
             "Sdks/Microsoft.NET.Sdk.Razor/source-generators.",
         )
 
-    # Symlinked rather than copied: staging costs nothing and the action still
-    # depends on the real file.
     staged = []
     sections = []
-    seen = {}
-    has_cshtml = False
+    by_target_path = {}
     for src in razor_srcs:
         relative_path = target_path(src.short_path, label)
-        if relative_path in seen:
+
+        # `srcs` holds each file once, so two sources share a `TargetPath` only
+        # when one file is built in two configurations.
+        other = by_target_path.get(relative_path)
+        if other != None:
             fail(
-                "two Razor sources in %s both map to %r: %s and %s.\n" % (
+                "two Razor sources in %s have the TargetPath %r: %s and %s.\n" % (
                     label,
                     relative_path,
-                    seen[relative_path],
-                    src.short_path,
+                    other.path,
+                    src.path,
                 ) +
-                "Razor names a component after this path, so it has to be unique.",
+                "They are one file built in two configurations, and Razor names a component " +
+                "after that path. List the file in one configuration only.",
             )
-        seen[relative_path] = src.short_path
-        has_cshtml = has_cshtml or src.extension == "cshtml"
+        by_target_path[relative_path] = src
 
+        # Symlinked rather than copied: staging costs nothing.
         staged_file = actions.declare_file("%s/%s/%s" % (out_dir, RAZOR_STAGING_DIR, relative_path))
         actions.symlink(output = staged_file, target_file = src)
         staged.append(staged_file)
 
-        # The leading slash anchors the glob to this config's own directory,
-        # which is the one above the staging directory. Without it,
-        # `[Widget.razor]` would also match `sub/Widget.razor`.
-        sections.append("[/{}/{}]".format(
-            RAZOR_STAGING_DIR,
-            escape_section_name(relative_path),
-        ))
-
-        # The generator decodes this with Convert.FromBase64String
-        # unconditionally, so it is never written unencoded.
+        # The leading slash anchors the glob to this config's own directory;
+        # without it `[Widget.razor]` would also match `sub/Widget.razor`. The
+        # generator always base64-decodes `TargetPath`.
+        sections.append("[/{}/{}]".format(RAZOR_STAGING_DIR, escape_section_name(relative_path)))
         sections.append("build_metadata.AdditionalFiles.TargetPath = " + base64.encode(relative_path))
         sections.append("")
 
@@ -295,7 +279,7 @@ def razor_compile_inputs(
     ]))
 
     extra_srcs = []
-    if has_cshtml:
+    if any([src.extension == "cshtml" for src in razor_srcs]):
         assembly_info = actions.declare_file("%s/RazorAssemblyInfo.cs" % out_dir)
         actions.write(assembly_info, _APPLICATION_PART_FACTORY_SRC)
         extra_srcs.append(assembly_info)

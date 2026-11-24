@@ -1,13 +1,9 @@
-"""Scoped CSS: per-component stylesheets.
+"""Scoped CSS: a `Foo.razor.css` applies only to the `Foo.razor` beside it.
 
-A `Foo.razor.css` applies only to the `Foo.razor` beside it.
-`//dotnet/private/tools/scoped_css` runs the SDK's own tasks to derive the scope
-identifier, rewrite the selectors and bundle the result.
-
-The scope is a hash, which Starlark cannot compute, so the tool also writes the
-analyzer config the Razor source generator reads it from. That lands inside the
-Razor staging directory, since the `TargetPath` config already occupies the one
-above it.
+The SDK's own tasks derive each component's scope, rewrite the selectors and
+bundle the result. The scope is a hash Starlark cannot compute, so the tool also
+writes the analyzer config the Razor generator reads it from, inside the Razor
+staging directory (the one above holds the `TargetPath` config).
 """
 
 load("//dotnet/private/rules/common:static_web_assets.bzl", "base_path")

@@ -446,4 +446,32 @@ def windowsdesktop_tests():
         expected_message_fragments = ["would both compile to theme.baml", "rename one of them"],
     )
 
+    # WPF resources are embedded by their path in the package, which WPF
+    # compares case-insensitively.
+    for (case, name) in [("upper", "Icon.txt"), ("lower", "icon.txt")]:
+        native.genrule(
+            name = "colliding_{}_resource".format(case),
+            outs = ["colliding_resources/" + name],
+            cmd = "echo > $@",
+            tags = ["manual"],
+        )
+
+    csharp_library(
+        name = "colliding_wpf_resources",
+        srcs = ["wpf/Wpf.cs"],
+        framework_references = ["Microsoft.WindowsDesktop.App.WPF"],
+        tags = ["manual"],
+        target_frameworks = ["net10.0-windows"],
+        wpf_resources = [
+            ":colliding_lower_resource",
+            ":colliding_upper_resource",
+        ],
+    )
+
+    _failure_test(
+        name = "colliding_wpf_resources_test",
+        target_under_test = ":colliding_wpf_resources",
+        expected_message_fragments = ["would both be embedded as colliding_resources/icon.txt", "rename one of them"],
+    )
+
     _unit_test(name = "windowsdesktop_unit_test")

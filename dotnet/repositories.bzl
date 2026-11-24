@@ -1,13 +1,11 @@
-"""
-Rules to load all the .NET SDK & framework dependencies of rules_dotnet.
+"""Repository rules that download a .NET SDK and declare the toolchains backed by it.
+
+The `dotnet` module extension declares these: register an SDK with
+`dotnet.toolchain` rather than calling them directly.
 """
 
 load("//dotnet/private:toolchains_repo.bzl", "DOTNET_TOOLCHAIN_TYPE", "PLATFORMS", "toolchains_repo")
 
-########
-# Remaining content of the file is only used to support toolchains.
-########
-_DOC = "Fetch external tools needed for dotnet toolchain"
 _ATTRS = {
     "dotnet_version": attr.string(mandatory = True),
     "platform": attr.string(mandatory = True, values = PLATFORMS.keys()),
@@ -225,15 +223,7 @@ filegroup(
 
 filegroup(
     name = "fsc_binary",
-    # We glob both fsc.dll and fsc.exe for backwards compatibility
-    # Pre .Net 5.0 the file was called fsc.exe but has been changed to fsc.dll
-    srcs = glob(
-        [
-            "sdk/**/FSharp/fsc.dll*",
-            "sdk/**/FSharp/fsc.exe*",
-        ],
-        allow_empty = True,
-    ) or fail("glob is empty"),
+    srcs = ["sdk/{sdk_version}/FSharp/fsc.dll"],
     data = glob([
         "host/**/*",
         "sdk/{sdk_version}/FSharp/**/*.dll",
@@ -244,7 +234,7 @@ filegroup(
 )
 
 dotnet_toolchain(
-    name = "dotnet_toolchain", 
+    name = "dotnet_toolchain",
     runtime = ":runtime",
     runtime_host = ":runtime_host",
     compiler_host = ":compiler_host",
@@ -284,7 +274,7 @@ dotnet_toolchain(
 
 dotnet_repositories = repository_rule(
     _dotnet_repo_impl,
-    doc = _DOC,
+    doc = "Downloads the .NET SDK for one platform and declares its `dotnet_toolchain`.",
     attrs = _ATTRS,
 )
 

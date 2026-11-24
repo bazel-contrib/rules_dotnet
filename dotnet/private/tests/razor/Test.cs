@@ -10,6 +10,7 @@ public static class Test
 
         failures += Check("Razor.Tests.Widget");
         failures += Check("Razor.Tests.Pages.Widget");
+        failures += Check("Razor.Tests.C_.Widget");
 
         if (Type.GetType("Razor.Tests.Pages.Widget, razor_components")?.GetProperty("Label") is null)
         {

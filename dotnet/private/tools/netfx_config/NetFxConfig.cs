@@ -23,8 +23,8 @@ internal static class NetFxConfig
     private static readonly XNamespace Asm = "urn:schemas-microsoft-com:asm.v1";
 
     private const string Usage =
-        "usage: netfx_config --output <exe.config> --main <exe> [--label <label>] [--app-config <app.config>]\n" +
-        "         [--supported-runtime <version> <sku|->] [--no-binding-redirects]\n" +
+        "usage: netfx_config --output <exe.config> (--main <exe> | --no-binding-redirects) [--label <label>]\n" +
+        "         [--app-config <app.config>] [--supported-runtime <version> <sku|->]\n" +
         "         [--framework <reference assembly>]... [--assembly <shipped assembly>]...\n" +
         "         [--select <lib|resource> <output> <pdb output|-> <satellite count> <satellite directory>...\n" +
         "                   <candidate count> (<candidate> <pdb|-> <satellite|->...)...]...";
@@ -43,24 +43,34 @@ internal static class NetFxConfig
             return 2;
         }
 
-        var shipped = new List<string>(options.Assemblies);
+        var selected = new List<AssemblyMetadata>();
         foreach (Selection selection in options.Selections)
         {
-            if (Select(selection) is { } message)
+            if (Select(selection, out AssemblyMetadata? chosen) is { } message)
             {
                 error.WriteLine($"error: {options.Label}: {message}");
                 return 1;
             }
 
-            if (selection.IsLibrary)
+            if (selection.IsLibrary && chosen is not null)
             {
-                shipped.Add(selection.Output);
+                selected.Add(chosen);
             }
         }
 
-        XDocument config = options.AppConfig is null
-            ? new XDocument(new XElement("configuration"))
-            : XDocument.Load(options.AppConfig);
+        XDocument config;
+        try
+        {
+            config = options.AppConfig is null
+                ? new XDocument(new XElement("configuration"))
+                : XDocument.Load(options.AppConfig);
+        }
+        catch (XmlException e)
+        {
+            error.WriteLine($"error: {options.Label}: {options.AppConfig} is not well-formed XML: {e.Message}");
+            return 1;
+        }
+
         XElement? configuration = config.Root;
         if (configuration is null || configuration.Name != "configuration")
         {
@@ -77,9 +87,9 @@ internal static class NetFxConfig
         {
             List<XElement> dependentAssemblies = DependentAssemblies(configuration, options.SupportedRuntime?.Version);
             Analysis analysis = Analyze(
-                options.Main,
-                shipped,
-                options.Framework,
+                TryReadAssembly(options.Main!),
+                ReadAssemblies(options.Assemblies).Concat(selected),
+                ReadAssemblies(options.Framework).Select(assembly => assembly.Identity),
                 (identity, version) => RedirectsVersion(dependentAssemblies, identity, version));
 
             if (analysis.Errors.Count > 0)
@@ -119,36 +129,36 @@ internal static class NetFxConfig
     }
 
     // Picks the highest version, as ResolveAssemblyReference does; a tie keeps
-    // the first. Returns why it cannot pick, or null.
-    private static string? Select(Selection selection)
+    // the first. Returns why it cannot pick, or null, and the metadata of the
+    // copy it ships, at its new path.
+    private static string? Select(Selection selection, out AssemblyMetadata? shipped)
     {
+        shipped = null;
+        var candidates = selection.Candidates
+            .Select(candidate => (Candidate: candidate, Metadata: TryReadAssembly(candidate.Assembly)))
+            .ToList();
+
         // Same-named files that are different assemblies, e.g. signed with
         // different keys, cannot stand in for each other.
-        var assemblies = selection.Candidates
-            .Select(candidate => (candidate.Assembly, Metadata: TryReadAssembly(candidate.Assembly)))
-            .Where(candidate => candidate.Metadata is not null)
-            .ToList();
+        var assemblies = candidates.Where(candidate => candidate.Metadata is not null).ToList();
         foreach (var other in assemblies.Skip(1))
         {
             var first = assemblies[0];
             if (!IsSameAssembly(other.Metadata!.Identity, first.Metadata!.Identity))
             {
-                return $"{first.Assembly} ({Describe(first.Metadata.Identity)}) and {other.Assembly} " +
+                return $"{first.Candidate.Assembly} ({Describe(first.Metadata.Identity)}) and {other.Candidate.Assembly} " +
                        $"({Describe(other.Metadata.Identity)}) would both be {Path.GetFileName(selection.Output)} " +
                        "beside the executable, but they are different assemblies rather than versions of one, so " +
                        "neither can stand in for the other.";
             }
         }
 
-        Candidate chosen = selection.Candidates[0];
-        Version chosenVersion = VersionOf(chosen.Assembly);
-        foreach (Candidate candidate in selection.Candidates.Skip(1))
+        var (chosen, metadata) = candidates[0];
+        foreach (var (candidate, candidateMetadata) in candidates.Skip(1))
         {
-            Version version = VersionOf(candidate.Assembly);
-            if (version > chosenVersion)
+            if (VersionOf(candidateMetadata) > VersionOf(metadata))
             {
-                chosen = candidate;
-                chosenVersion = version;
+                (chosen, metadata) = (candidate, candidateMetadata);
             }
         }
 
@@ -169,13 +179,19 @@ internal static class NetFxConfig
             }
         }
 
+        shipped = metadata is null ? null : metadata with { Path = selection.Output };
         return null;
     }
 
     private static string Describe(Identity identity) =>
         $"{identity.Name}, Version={identity.Version}, Culture={identity.Culture}, PublicKeyToken={identity.PublicKeyToken ?? "null"}";
 
-    private static Version VersionOf(string path) => TryReadAssembly(path)?.Identity.Version ?? new Version(0, 0, 0, 0);
+    private static Version VersionOf(AssemblyMetadata? assembly) => assembly?.Identity.Version ?? new Version(0, 0, 0, 0);
+
+    // Skips what is not a .NET assembly, such as a native library a package
+    // lists among its assemblies.
+    private static IEnumerable<AssemblyMetadata> ReadAssemblies(IEnumerable<string> paths) =>
+        paths.Select(TryReadAssembly).OfType<AssemblyMetadata>();
 
     private static void Copy(string source, string destination)
     {
@@ -187,37 +203,24 @@ internal static class NetFxConfig
     }
 
     private static Analysis Analyze(
-        string main,
-        IReadOnlyList<string> shippedPaths,
-        IReadOnlyList<string> frameworkPaths,
+        AssemblyMetadata? application,
+        IEnumerable<AssemblyMetadata> shippedAssemblies,
+        IEnumerable<Identity> frameworkAssemblies,
         Func<Identity, Version, bool> redirectedByAppConfig)
     {
         var shipped = new Dictionary<string, AssemblyMetadata>(StringComparer.OrdinalIgnoreCase);
-        foreach (string path in shippedPaths)
+        foreach (AssemblyMetadata assembly in shippedAssemblies)
         {
-            // Native libraries have no metadata.
-            if (TryReadAssembly(path) is { } assembly)
-            {
-                shipped.TryAdd(assembly.Identity.Name, assembly);
-            }
+            shipped.TryAdd(assembly.Identity.Name, assembly);
         }
 
-        var inBox = new List<Identity>();
-        foreach (string path in frameworkPaths)
-        {
-            if (TryReadAssembly(path) is { } assembly)
-            {
-                inBox.Add(assembly.Identity);
-            }
-        }
-
-        var referrers = new List<AssemblyMetadata>();
-        if (TryReadAssembly(main) is { } application)
-        {
-            referrers.Add(application);
-        }
-
-        referrers.AddRange(shipped.Values);
+        // Indexed by name, so that the analysis is linear in the number of
+        // references however many assemblies ship.
+        ILookup<string, Identity> inBox = frameworkAssemblies.ToLookup(identity => identity.Name, StringComparer.OrdinalIgnoreCase);
+        IEnumerable<AssemblyMetadata> referrers = application is null ? shipped.Values : shipped.Values.Prepend(application);
+        ILookup<string, (AssemblyMetadata Referrer, Identity Reference)> referencesByName = referrers
+            .SelectMany(referrer => referrer.References.Select(reference => (Referrer: referrer, Reference: reference)))
+            .ToLookup(reference => reference.Reference.Name, StringComparer.OrdinalIgnoreCase);
 
         var redirects = new List<Identity>();
         var errors = new List<string>();
@@ -232,14 +235,13 @@ internal static class NetFxConfig
                 continue;
             }
 
-            var requests = referrers
-                .SelectMany(referrer => referrer.References
-                    .Where(reference => IsSameAssembly(reference, identity))
-                    .Select(reference => (Referrer: referrer, reference.Version)))
+            var requests = referencesByName[identity.Name]
+                .Where(reference => IsSameAssembly(reference.Reference, identity))
+                .Select(reference => (reference.Referrer, reference.Reference.Version))
                 .ToList();
 
             // The framework's copy, from the GAC, serves references it is new enough for.
-            Version? frameworkVersion = inBox
+            Version? frameworkVersion = inBox[identity.Name]
                 .Where(framework => IsSameAssembly(framework, identity))
                 .Select(framework => framework.Version)
                 .DefaultIfEmpty()
@@ -348,7 +350,9 @@ internal static class NetFxConfig
     private static bool Describes(XElement dependentAssembly, Identity identity)
     {
         XElement? assemblyIdentity = dependentAssembly.Element(Asm + "assemblyIdentity");
-        string culture = (string?)assemblyIdentity?.Attribute("culture") ?? "neutral";
+
+        // The CLR, like MSBuild, reads an empty culture as neutral.
+        string culture = (string?)assemblyIdentity?.Attribute("culture") is { Length: > 0 } named ? named : "neutral";
         return assemblyIdentity is not null &&
             string.Equals((string?)assemblyIdentity.Attribute("name"), identity.Name, StringComparison.OrdinalIgnoreCase) &&
             string.Equals((string?)assemblyIdentity.Attribute("publicKeyToken"), identity.PublicKeyToken, StringComparison.OrdinalIgnoreCase) &&
@@ -369,7 +373,8 @@ internal static class NetFxConfig
         var generated = new List<Identity>();
         foreach (Identity redirect in redirects)
         {
-            // App.config's own redirect wins, as with MSBuild (MSB3836 when they differ).
+            // App.config's own redirect wins. MSBuild instead replaces one that
+            // differs, with warning MSB3836.
             if (FindDependentAssembly(dependentAssemblies, redirect, withRedirect: true) is { } redirected)
             {
                 string? explicitVersion = (string?)redirected.Element(Asm + "bindingRedirect")!.Attribute("newVersion");
@@ -539,7 +544,7 @@ internal static class NetFxConfig
     {
         public string Label { get; private set; } = "netfx_config";
         public string Output { get; private set; } = "";
-        public string Main { get; private set; } = "";
+        public string? Main { get; private set; }
         public string? AppConfig { get; private set; }
         public SupportedRuntime? SupportedRuntime { get; private set; }
         public bool GenerateBindingRedirects { get; private set; } = true;
@@ -594,9 +599,15 @@ internal static class NetFxConfig
                 }
             }
 
-            if (options.Output.Length == 0 || options.Main.Length == 0)
+            if (options.Output.Length == 0)
             {
-                throw new ArgumentException("--output and --main are required");
+                throw new ArgumentException("--output is required");
+            }
+
+            // Only binding redirects depend on the executable's references.
+            if (options.GenerateBindingRedirects && options.Main is null)
+            {
+                throw new ArgumentException("--main is required unless --no-binding-redirects is given");
             }
 
             return options;

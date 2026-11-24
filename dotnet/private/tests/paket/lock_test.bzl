@@ -1,7 +1,7 @@
 """Tests for the paket.lock parser."""
 
 load("@bazel_skylib//lib:unittest.bzl", "asserts", "unittest")
-load("//dotnet/private/paket:dependencies.bzl", "parse_dependencies")
+load("//dotnet/private/paket:dependencies.bzl", "parse_dependencies", "stale_requirements")
 load("//dotnet/private/paket:lock.bzl", "normalize_version", "parse_lock")
 
 _LOCK = """\
@@ -156,10 +156,76 @@ def _parse_dependencies_test_impl(ctx):
 
 _parse_dependencies_test = unittest.make(_parse_dependencies_test_impl)
 
+_LOCK_WITH_SOURCES = """\
+NUGET
+  remote: https://api.nuget.org/v3/index.json
+    Argu (6.2.3)
+
+GROUP Docs
+GITHUB
+  remote: fsprojects/FAKE
+    src/app/FakeLib/Globbing/Globbing.fs (0341a2e614eb2a7f34607cec914eb0ed83ce9add)
+"""
+
+def _unsupported_sections_test_impl(ctx):
+    env = unittest.begin(ctx)
+    groups = {group.name: group for group in parse_lock(_LOCK_WITH_SOURCES, "paket.lock")}
+
+    asserts.equals(env, ["Main", "Docs"], groups.keys(), "a group of only unsupported sections is still a group")
+    asserts.equals(env, "", groups["Main"].unsupported)
+    asserts.equals(
+        env,
+        "paket.lock:7: the GITHUB section is not supported by rules_dotnet.",
+        groups["Docs"].unsupported,
+        "an unsupported section only fails the build when its group is used",
+    )
+
+    return unittest.end(env)
+
+_unsupported_sections_test = unittest.make(_unsupported_sections_test_impl)
+
+def _stale_requirements_test_impl(ctx):
+    env = unittest.begin(ctx)
+    locked = {group.name.lower(): group for group in parse_lock(_LOCK)}
+
+    asserts.equals(
+        env,
+        [],
+        stale_requirements(
+            {
+                "BUILD": {"libgit2sharp": "0.27.0-PREVIEW-0182", "RocksDB": ""},
+                "Main": {"Argu": "6.2.3"},
+            },
+            locked,
+        ),
+        "group names, package ids and versions compare case insensitively",
+    )
+    asserts.equals(
+        env,
+        [
+            "the 'Docs' group is missing",
+            "Argu is pinned at 6.2.4 but the 'Main' group resolves 6.2.3",
+            "Newtonsoft.Json is missing from the 'Main' group",
+        ],
+        stale_requirements(
+            {
+                "Docs": {"FSharp.Formatting": ""},
+                "Main": {"Argu": "6.2.4", "Newtonsoft.Json": ""},
+            },
+            locked,
+        ),
+    )
+
+    return unittest.end(env)
+
+_stale_requirements_test = unittest.make(_stale_requirements_test_impl)
+
 def lock_test_suite(name):
     unittest.suite(
         name,
         _normalize_version_test,
         _parse_dependencies_test,
         _parse_lock_test,
+        _stale_requirements_test,
+        _unsupported_sections_test,
     )

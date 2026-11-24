@@ -232,6 +232,22 @@ public sealed class NetFxConfigTests
     }
 
     [Test]
+    public void AnExplicitRedirectWithAnEmptyCultureIsForTheNeutralAssembly()
+    {
+        string appConfig = AppConfig($"""
+            <dependentAssembly>
+              <assemblyIdentity name="SharedDep" publicKeyToken="{SharedDepToken}" culture="" />
+              <bindingRedirect oldVersion="0.0.0.0-9.0.0.0" newVersion="1.0.0.0" />
+            </dependentAssembly>
+            """);
+
+        int exitCode = Run("--main", UsesV2, "--app-config", appConfig, "--assembly", SharedDepV1);
+
+        Assert.That(exitCode, Is.EqualTo(0), _error.ToString());
+        Assert.That(RedirectTo(Config(), "SharedDep"), Is.EqualTo("1.0.0.0"));
+    }
+
+    [Test]
     public void AnExplicitRedirectForAnotherKeyDoesNotCount()
     {
         string appConfig = AppConfig("""
@@ -416,6 +432,28 @@ public sealed class NetFxConfigTests
 
         Assert.That(exitCode, Is.EqualTo(0), _error.ToString());
         Assert.That(Config().Root!.Element("runtime"), Is.Null);
+    }
+
+    [Test]
+    public void OnlyBindingRedirectsNeedTheExecutable()
+    {
+        Assert.That(Run("--no-binding-redirects", "--supported-runtime", "v4.0", ".NETFramework,Version=v4.8"), Is.EqualTo(0), _error.ToString());
+        Assert.That(Config().Root!.Element("startup")?.Element("supportedRuntime"), Is.Not.Null);
+
+        Assert.That(Run("--assembly", SharedDepV1), Is.EqualTo(2));
+        Assert.That(_error.ToString(), Does.Contain("--main is required"));
+    }
+
+    [Test]
+    public void AnAppConfigThatIsNotXmlIsReported()
+    {
+        string appConfig = Path.Combine(_dir, "App.config");
+        File.WriteAllText(appConfig, "<configuration><runtime></configuration>");
+
+        int exitCode = Run("--main", Consumer, "--app-config", appConfig);
+
+        Assert.That(exitCode, Is.EqualTo(1));
+        Assert.That(_error.ToString(), Does.StartWith($"error: //test:app: {appConfig} is not well-formed XML:"));
     }
 
     [Test]

@@ -58,13 +58,23 @@ internal static class Program
         var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
         var request = JsonSerializer.Deserialize<Request>(File.ReadAllText(args[0]), options)!;
 
-        var tasks = Tasks.Load(request.TasksAssembly);
-        var engine = new StubBuildEngine();
+        try
+        {
+            var tasks = Tasks.Load(request.TasksAssembly);
+            var engine = new StubBuildEngine();
 
-        var scopes = ComputeScopes(tasks, engine, request);
-        Rewrite(tasks, engine, request, scopes);
-        Bundle(tasks, engine, request);
-        WriteScopeConfig(request, scopes);
+            var scopes = ComputeScopes(tasks, engine, request);
+            Rewrite(tasks, engine, request, scopes);
+            Bundle(tasks, engine, request);
+            WriteScopeConfig(request, scopes);
+        }
+        catch (InvalidOperationException e)
+        {
+            // A task failed, having logged why, or is missing from this SDK.
+            Console.Error.WriteLine($"error: {e.Message}");
+            return 1;
+        }
+
         return 0;
     }
 

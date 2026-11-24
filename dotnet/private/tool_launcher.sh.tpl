@@ -30,6 +30,9 @@ set -o pipefail -o errexit -o nounset
 export DOTNET_MULTILEVEL_LOOKUP="false"
 export DOTNET_NOLOGO="1"
 export DOTNET_CLI_TELEMETRY_OPTOUT="1"
+# The toolchain carries one runtime, so a tool built for an older major release
+# runs on it, as `dotnet tool install --allow-roll-forward` lets it.
+export DOTNET_ROLL_FORWARD="${DOTNET_ROLL_FORWARD:-Major}"
 TEMPLATED_environment
 
 dotnet="$(rlocation TEMPLATED_dotnet)"

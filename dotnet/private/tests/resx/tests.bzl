@@ -1,6 +1,7 @@
 """Analysis tests for `.resx` resources: how they are named, where satellites go, and what fails."""
 
-load("@bazel_skylib//lib:unittest.bzl", "analysistest", "asserts")
+load("@bazel_skylib//lib:unittest.bzl", "analysistest", "asserts", "unittest")
+load("//dotnet/private:common.bzl", "package_relative_path")
 load("//dotnet/private/tests:utils.bzl", "action_args_test")
 
 def _satellites_test_impl(ctx):
@@ -68,9 +69,67 @@ _fails_test = analysistest.make(
     },
 )
 
+def _distinct_files_test_impl(ctx):
+    env = analysistest.begin(ctx)
+
+    # `/resource:"<file>","<manifest name>"`
+    files = {}
+    for action in analysistest.target_actions(env):
+        if action.mnemonic != "CSharpCompile":
+            continue
+        for arg in action.argv:
+            for name in ctx.attr.manifest_names:
+                suffix = "\",\"{}\"".format(name)
+                if arg.startswith("/resource:\"") and arg.endswith(suffix):
+                    files[name] = arg[len("/resource:\""):-len(suffix)]
+
+    asserts.equals(env, sorted(ctx.attr.manifest_names), sorted(files.keys()))
+    asserts.equals(env, len(files), len({file.lower(): None for file in files.values()}), "each resource is compiled to its own file: {}".format(files))
+
+    return analysistest.end(env)
+
+_distinct_files_test = analysistest.make(
+    _distinct_files_test_impl,
+    doc = "Asserts that the C# compile embeds each manifest name from a file of its own, whatever the case.",
+    attrs = {
+        "manifest_names": attr.string_list(),
+    },
+)
+
+def _file(short_path):
+    return struct(short_path = short_path, basename = short_path.rpartition("/")[2])
+
+def _label(package, repo_name = ""):
+    return struct(package = package, repo_name = repo_name)
+
+# (short_path, label of the compiling target, path relative to its package)
+_RELATIVE_PATHS = [
+    ("Strings.resx", _label(""), "Strings.resx"),
+    ("app/Strings.resx", _label("app"), "Strings.resx"),
+    ("app/My Res/Strings.resx", _label("app"), "My Res/Strings.resx"),
+    ("../other+/Strings.resx", _label("", "other+"), "Strings.resx"),
+    ("../other+/app/sub/Strings.resx", _label("app", "other+"), "sub/Strings.resx"),
+    # Outside the package, only the file name is kept.
+    ("lib/Strings.resx", _label("app"), "Strings.resx"),
+    ("appendix/Strings.resx", _label("app"), "Strings.resx"),
+    ("../other+/app/Strings.resx", _label("app"), "Strings.resx"),
+    ("../other+/app/Strings.resx", _label(""), "Strings.resx"),
+    ("app/Strings.resx", _label("app", "other+"), "Strings.resx"),
+]
+
+def _package_relative_path_test_impl(ctx):
+    env = unittest.begin(ctx)
+    for short_path, label, expected in _RELATIVE_PATHS:
+        asserts.equals(env, expected, package_relative_path(_file(short_path), label), "relative path of {} to {}".format(short_path, label))
+    return unittest.end(env)
+
+_package_relative_path_test = unittest.make(_package_relative_path_test_impl)
+
 # buildifier: disable=unnamed-macro
 def resx_tests():
     """The analysis tests of this package."""
+
+    _package_relative_path_test(name = "project_relative_path_test")
 
     # Neutral resources go into the assembly, named after `root_namespace`,
     # and a culture's do not.
@@ -126,6 +185,23 @@ def resx_tests():
         target_under_test = ":duplicate_names",
         expected_message = "would both be embedded as duplicate_names.Strings.resources",
     )
+
+    _distinct_files_test(
+        name = "similar_names_test",
+        target_under_test = ":similar_names",
+        manifest_names = [
+            "similar_names.collide.A+B.resources",
+            "similar_names.collide.A_B.resources",
+            "similar_names.collide.a_b.resources",
+        ],
+    )
+
+    for (attribute, path) in [("logical_name", "resources/Messages.resx"), ("culture", "resources/Messages.fr.resx")]:
+        _fails_test(
+            name = "{}_by_file_name_test".format(attribute),
+            target_under_test = ":{}_by_file_name".format(attribute),
+            expected_message = "use \"{}\"".format(path),
+        )
 
     _fails_test(
         name = "logical_name_of_a_culture_test",

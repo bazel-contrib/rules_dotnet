@@ -1,17 +1,14 @@
-".Net Runtime Pack"
+".Net apphost pack"
 
 load("//dotnet/private:providers.bzl", "DotnetApphostPackInfo", "DotnetAssemblyRuntimeInfo")
 load("//dotnet/private/transitions:tfm_transition.bzl", "tfm_transition")
 
 def _apphost_pack_impl(ctx):
-    # This is a workaround because label settings require a default target
-    # so we create a default target with `pack` set as None.
-    if ctx.label.name == "empty_pack":
-        apphost_file = None
-        singlefilehost_file = None
-    else:
-        apphost_file = None
-        singlefilehost_file = None
+    apphost_file = None
+    singlefilehost_file = None
+
+    # The label setting's default, which has no pack.
+    if ctx.label.name != "empty_pack":
         for f in ctx.attr.pack[0][DotnetAssemblyRuntimeInfo].native:
             if f.basename == "apphost" or f.basename == "apphost.exe":
                 apphost_file = f

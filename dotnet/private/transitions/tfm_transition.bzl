@@ -1,10 +1,11 @@
-"A transition that transitions between compatible target frameworks"
+"""Moves each target onto the framework it builds for: the one its consumer can use, or its newest."""
 
 load("@bazel_skylib//lib:dicts.bzl", "dicts")
 load(
     "//dotnet/private:common.bzl",
     "FRAMEWORK_COMPATIBILITY",
-    "get_highest_compatible_target_framework",
+    "get_dependency_target_framework",
+    "get_newest_target_framework",
     "is_core_framework",
     "is_netframework",
     "netframework_runtime_identifier",
@@ -13,6 +14,7 @@ load("//dotnet/private/sdk:packs.bzl", "frameworks_key", "resolve_framework_refe
 load(
     "//dotnet/private/transitions:common.bzl",
     "FRAMEWORK_COMPATABILITY_TRANSITION_OUTPUTS",
+    "FRAMEWORK_FROM_CONSUMER",
     "NATIVE_COMPILER",
     "NO_READY_TO_RUN",
     "PUBLISHED",
@@ -67,10 +69,14 @@ def _impl(settings, attr):
     if hasattr(attr, "target_frameworks"):
         target_frameworks += attr.target_frameworks
 
-    transitioned_tfm = get_highest_compatible_target_framework(incoming_tfm, target_frameworks)
-
-    if transitioned_tfm == None:
-        fail("Label {0} does not support the target framework: {1}".format(attr.name, incoming_tfm))
+    if settings[FRAMEWORK_FROM_CONSUMER]:
+        transitioned_tfm = get_dependency_target_framework(incoming_tfm, target_frameworks)
+        if transitioned_tfm == None:
+            fail("{} cannot be used by a {} target: none of its target frameworks {} is compatible".format(attr.name, incoming_tfm, target_frameworks))
+    else:
+        transitioned_tfm = get_newest_target_framework(incoming_tfm, target_frameworks)
+        if transitioned_tfm == None:
+            fail("{} cannot be built for {}: its target frameworks {} are all newer".format(attr.name, incoming_tfm, target_frameworks))
 
     runtime_identifier = settings["//dotnet:rid"]
     if hasattr(attr, "runtime_identifier") and attr.runtime_identifier != "":
@@ -80,18 +86,23 @@ def _impl(settings, attr):
         if getattr(attr, "runtime_identifier_from_platform", False) and is_netframework(transitioned_tfm):
             runtime_identifier = netframework_runtime_identifier(runtime_identifier)
     elif runtime_identifier == "base":
-        # If the runtime_identifier attribute is not set and the incoming value is "base", we will use the platform to determine the rid since no upstream target has set the runtime identifier
+        # Nothing above this target picked one.
         runtime_identifier = platform_to_rid()
 
         # .NET Framework only runs on Windows, whatever platform builds it.
         if is_netframework(transitioned_tfm):
             runtime_identifier = netframework_runtime_identifier(runtime_identifier)
 
-    return dicts.add({"//dotnet:target_framework": transitioned_tfm}, {"//dotnet:rid": runtime_identifier}, FRAMEWORK_COMPATABILITY_TRANSITION_OUTPUTS[transitioned_tfm], rid_compatability_transition_outputs(runtime_identifier), _ready_to_run(settings, attr, transitioned_tfm))
+    return dicts.add(
+        {"//dotnet:target_framework": transitioned_tfm, "//dotnet:rid": runtime_identifier, FRAMEWORK_FROM_CONSUMER: True},
+        FRAMEWORK_COMPATABILITY_TRANSITION_OUTPUTS[transitioned_tfm],
+        rid_compatability_transition_outputs(runtime_identifier),
+        _ready_to_run(settings, attr, transitioned_tfm),
+    )
 
 tfm_transition = transition(
     implementation = _impl,
-    inputs = ["//dotnet:target_framework", "//dotnet:rid"] + NO_READY_TO_RUN.keys(),
+    inputs = ["//dotnet:target_framework", "//dotnet:rid", FRAMEWORK_FROM_CONSUMER] + NO_READY_TO_RUN.keys(),
     outputs = TFM_RID_TRANSITION_OUTPUTS,
 )
 
@@ -129,6 +140,6 @@ def _publish_binary_impl(settings, attr):
 # `native_tools`, the native compiler for the binary's framework.
 publish_binary_transition = transition(
     implementation = _publish_binary_impl,
-    inputs = ["//dotnet:target_framework", "//dotnet:rid"] + NO_READY_TO_RUN.keys(),
+    inputs = ["//dotnet:target_framework", "//dotnet:rid", FRAMEWORK_FROM_CONSUMER] + NO_READY_TO_RUN.keys(),
     outputs = TFM_RID_TRANSITION_OUTPUTS,
 )

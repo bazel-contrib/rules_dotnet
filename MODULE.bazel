@@ -60,7 +60,7 @@ bazel_dep(name = "bazel_ci_rules", version = "1.0.0", dev_dependency = True)
 # Builds container layers from a publish in the tests.
 bazel_dep(name = "rules_img", version = "0.3.22", dev_dependency = True)
 
-# The LLVM toolchains are registered selctively in .bazelrc
+# The LLVM toolchains are registered selectively in .bazelrc
 bazel_dep(name = "llvm", version = "0.8.19", dev_dependency = True)
 
 osx_sysroot = use_extension("@llvm//extensions:osx.bzl", "osx", dev_dependency = True)

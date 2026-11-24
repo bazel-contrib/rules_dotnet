@@ -38,17 +38,15 @@ with fewer fields than the targets read, so restore silently produces a
 
 ## Using this as a development dependency of other rules
 
-You'll commonly find that you develop in another WORKSPACE, such as
-some other ruleset that depends on rules_dotnet, or in a nested
-WORKSPACE in the integration_tests folder.
+You'll commonly find that you develop in another module, such as
+some other ruleset that depends on rules_dotnet, or in one of the
+`e2e` or `examples` workspaces.
 
-To always tell Bazel to use this directory rather than some release
-artifact or a version fetched from the internet, run this from this
-directory:
+To always tell Bazel to use this directory rather than a version fetched
+from the registry, run this from this directory:
 
 ```sh
-OVERRIDE="--override_repository=rules_dotnet=$(pwd)/rules_dotnet"
-echo "common $OVERRIDE" >> ~/.bazelrc
+echo "common --override_module=rules_dotnet=$(pwd)" >> ~/.bazelrc
 ```
 
 This means that any usage of `@rules_dotnet` on your system will point to this folder.
@@ -56,7 +54,7 @@ This means that any usage of `@rules_dotnet` on your system will point to this f
 ## Running tests
 
 To run and build all tests simply run `bazel test //...`
-To build and test all lexamples run `cd examples && bazel test //...`
+To build and test all examples run `cd examples && bazel test //...`
 
 ## Releasing
 
