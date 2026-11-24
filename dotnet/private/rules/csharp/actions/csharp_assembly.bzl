@@ -70,7 +70,7 @@ def _write_internals_visible_to_csharp(actions, label_name, dll_name, others):
 
     return output
 
-def _write_assembly_version_csharp(actions, label_name, dll_name, version, user_secrets_id = ""):
+def _write_assembly_info_csharp(actions, label_name, dll_name, version, user_secrets_id = ""):
     """Write a .cs file carrying the assembly version and user-secrets attributes.
 
     Args:
@@ -477,9 +477,9 @@ def AssemblyAction(
         if not srcs:
             nowarn = nowarn + ["CS2008"]
 
-    assembly_version_cs = _write_assembly_version_csharp(actions, target_name, assembly_name, version, user_secrets_id)
-    if assembly_version_cs:
-        srcs = srcs + [assembly_version_cs]
+    assembly_info_cs = _write_assembly_info_csharp(actions, target_name, assembly_name, version, user_secrets_id)
+    if assembly_info_cs:
+        srcs = srcs + [assembly_info_cs]
 
     out_dll = actions.declare_file("%s/%s.%s" % (out_dir, assembly_name, out_ext))
     out_iref = None
