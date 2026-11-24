@@ -8,6 +8,7 @@ load(
     "import_library",
     "publish_binary",
 )
+load(":netfx_config_inputs_test.bzl", "netfx_config_inputs_test")
 load(":publish_runfiles_test.bzl", "publish_runfiles_test")
 
 csharp_binary(
@@ -216,6 +217,44 @@ publish_binary(
 filegroup(
     name = "conflict_publish_files",
     srcs = [":conflict_publish"],
+)
+
+# Binding redirects follow the references of the executable and of the
+# assemblies beside it, so netfx_config reads them...
+netfx_config_inputs_test(
+    name = "netfx_config_inputs_test",
+    expected = [
+        "Consumer.dll",
+        "SharedDep.dll",
+        "app.exe",
+        "unsigned_dep.dll",
+    ],
+    target_under_test = ":app",
+)
+
+csharp_binary(
+    name = "app_without_redirects",
+    srcs = ["Program.cs"],
+    auto_generate_binding_redirects = False,
+    resources = ["resource.txt"],
+    tags = ["manual"],
+    target_frameworks = ["net48"],
+    deps = [
+        ":consumer",
+        ":unsigned_dep",
+    ],
+)
+
+# ...and without them, it does not.
+netfx_config_inputs_test(
+    name = "netfx_config_inputs_without_redirects_test",
+    target_under_test = ":app_without_redirects",
+    unexpected = [
+        "Consumer.dll",
+        "SharedDep.dll",
+        "app_without_redirects.exe",
+        "unsigned_dep.dll",
+    ],
 )
 
 publish_runfiles_test(
