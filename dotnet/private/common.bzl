@@ -13,6 +13,7 @@ load(
     "DotnetTargetingPackInfo",
     "NuGetInfo",
 )
+load("//dotnet/private:nuget_version.bzl", "nuget_version")
 load("//dotnet/private:semver.bzl", "semver")
 load(
     "//dotnet/private/sdk:frameworks.bzl",
@@ -952,6 +953,29 @@ def _get_resource_assembly_locale(file):
     """
     return file.dirname.split("/")[-1]
 
+def _depsjson_runtime_asset(version):
+    """The properties of a `runtime` asset in a deps.json, from its library's version.
+
+    The host reads `assemblyVersion` as a `System.Version`, two to four numbers,
+    to choose between an app's assembly and a framework's of the same name: the
+    higher wins. A missing value and one it cannot parse are the same to it, no
+    version at all, which any framework assembly beats. So the value is written
+    padded to four numbers, as the framework's own deps.json spells it, and left
+    out when the library has no version that maps to one.
+
+    Args:
+        version: The library's version, a NuGet version string or "".
+
+    Returns:
+        A dict for the asset's entry in `runtime`.
+    """
+
+    # `error` also rejects a component above 65535, which `assembly_version`
+    # would fail on.
+    if not version or nuget_version.error(version):
+        return {}
+    return {"assemblyVersion": nuget_version.assembly_version(version)}
+
 # For deps.json spec see: https://github.com/dotnet/sdk/blob/main/documentation/specs/runtime-configuration-file.md
 def generate_depsjson(
         ctx,
@@ -1064,9 +1088,10 @@ def generate_depsjson(
 
         # Do not add the `runtime` and `native` sections if the runtime pack overrides the dependency.
         if runtime_dep.name.lower() not in runtime_pack_overrides:
-            target_fragment["runtime"] = {(dll.basename if not use_relative_paths else to_rlocation_path(ctx, dll)): {
-                "assemblyVersion": runtime_dep.version + ".0",
-            } for dll in (portable_assets.libs if portable_assets else runtime_dep.libs)}
+            target_fragment["runtime"] = {
+                (dll.basename if not use_relative_paths else to_rlocation_path(ctx, dll)): _depsjson_runtime_asset(runtime_dep.version)
+                for dll in (portable_assets.libs if portable_assets else runtime_dep.libs)
+            }
 
             # A satellite assembly is keyed by its locale folder as well, as MSBuild
             # writes it: every locale's satellite has the same file name.

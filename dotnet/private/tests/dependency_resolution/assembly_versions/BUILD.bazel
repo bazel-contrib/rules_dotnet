@@ -1,0 +1,3 @@
+load(":tests.bzl", "assembly_versions_test_suite")
+
+assembly_versions_test_suite(name = "assembly_versions_test_suite")
