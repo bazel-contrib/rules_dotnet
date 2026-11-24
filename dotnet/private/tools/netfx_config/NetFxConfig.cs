@@ -150,6 +150,11 @@ internal static class NetFxConfig
     {
         Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(destination))!);
         File.Copy(source, destination, overwrite: true);
+
+        // On Windows a copy keeps the source's read-only attribute, which every
+        // Bazel output has. The copy is an output of its own, which Bazel
+        // makes read-only itself once the action is done.
+        File.SetAttributes(destination, File.GetAttributes(destination) & ~FileAttributes.ReadOnly);
     }
 
     private static Analysis Analyze(
