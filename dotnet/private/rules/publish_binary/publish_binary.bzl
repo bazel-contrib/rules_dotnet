@@ -7,7 +7,7 @@ load("@bazel_skylib//lib:paths.bzl", "paths")
 load("@bazel_skylib//lib:shell.bzl", "shell")
 load("@rules_cc//cc:action_names.bzl", "CPP_LINK_EXECUTABLE_ACTION_NAME")
 load("@rules_cc//cc/common:cc_common.bzl", "cc_common")
-load("//dotnet/private:common.bzl", "generate_depsjson", "generate_runtimeconfig", "get_toolchain", "is_from_nuget_package", "tfm_to_semver", "tfm_version", "to_rlocation_path")
+load("//dotnet/private:common.bzl", "generate_depsjson", "generate_runtimeconfig", "get_toolchain", "is_from_nuget_package", "netframework_runtime_identifier", "tfm_to_semver", "tfm_version", "to_rlocation_path")
 load(
     "//dotnet/private:providers.bzl",
     "DotnetAssemblyCompileInfo",
@@ -57,6 +57,8 @@ def _render_copy_script(copies, is_windows, directories = []):
     Each directory is created once instead, and the files that keep their name
     are copied in batches.
 
+    A directory source is copied as its flat contents.
+
     Args:
         copies: The (source, destination path) pairs to copy, one pair per destination.
         is_windows: Whether the script is a batch file rather than a shell script.
@@ -72,8 +74,13 @@ def _render_copy_script(copies, is_windows, directories = []):
     # created along with the rest.
     same_name = {directory: [] for directory in directories}
     renamed = []
+    trees = []
 
     for (src, dst) in copies:
+        if src.is_directory:
+            trees.append((src, dst))
+            continue
+
         same_name.setdefault(paths.dirname(dst), [])
         if src.basename == paths.basename(dst):
             same_name[paths.dirname(dst)].append(src)
@@ -109,6 +116,17 @@ def _render_copy_script(copies, is_windows, directories = []):
             ))
         else:
             script_body.append("cp -f {src} {dst}".format(src = shell.quote(src.path), dst = shell.quote(dst)))
+
+    for (src, dst) in trees:
+        if is_windows:
+            script_body.append("if not exist \"{dst}\" @mkdir \"{dst}\" >NUL".format(dst = dst.replace("/", "\\")))
+            script_body.append("@for %%F in (\"{src}\\*\") do @copy /Y \"%%F\" \"{dst}\" >NUL".format(
+                src = src.path.replace("/", "\\"),
+                dst = dst.replace("/", "\\"),
+            ))
+        else:
+            script_body.append("mkdir -p {dst}".format(dst = shell.quote(dst)))
+            script_body.append("cp -Rf {src}/. {dst}".format(src = shell.quote(src.path), dst = shell.quote(dst)))
 
     return script_body
 
@@ -916,6 +934,12 @@ def _run_copy_script(ctx, copies, suffix, mnemonic, progress_message, directory 
 
     return outputs
 
+def _declare_like(ctx, source, path, sibling = None):
+    """Declares the copy of `source` at `path`: a directory for a tree artifact."""
+    if source.is_directory:
+        return ctx.actions.declare_directory(path, sibling = sibling)
+    return ctx.actions.declare_file(path, sibling = sibling)
+
 def _copy_beside(ctx, executable, layout):
     """Copies files into the directory holding `executable`.
 
@@ -929,7 +953,7 @@ def _copy_beside(ctx, executable, layout):
         The copied files.
     """
     copies = [
-        (file, ctx.actions.declare_file(path, sibling = executable))
+        (file, _declare_like(ctx, file, path, sibling = executable))
         for (path, file) in layout
     ]
     if not copies:
@@ -947,7 +971,7 @@ def _copy_to_publish(ctx, runtime_identifier, entries, binary_info):
     root = "{}/publish/{}".format(ctx.label.name, runtime_identifier)
 
     copies = [
-        (file, ctx.actions.declare_file("{}/{}".format(root, path)))
+        (file, _declare_like(ctx, file, "{}/{}".format(root, path)))
         for (path, file) in entries.items()
     ]
 
@@ -1154,6 +1178,68 @@ def _generate_depsjson(
 
     return depsjson_struct
 
+# Publish settings that only apply to .NET.
+_NOT_FOR_NETFX = [
+    "self_contained",
+    "ready_to_run",
+    "ready_to_run_composite",
+    "native_aot",
+    "single_file",
+    "include_native_libraries_for_self_extract",
+    "enable_compression_in_single_file",
+]
+
+def _netfx_publish(ctx, binary_info, assembly_runtime_info, transitive_runtime_deps):
+    """Publishes a .NET Framework binary: its output directory, without PDBs.
+
+    Args:
+        ctx: The rule context.
+        binary_info: The binary's DotnetBinaryInfo.
+        assembly_runtime_info: The binary's DotnetAssemblyRuntimeInfo.
+        transitive_runtime_deps: The DotnetAssemblyRuntimeInfo of everything it depends on.
+
+    Returns:
+        The DefaultInfo and OutputGroupInfo of the publish.
+    """
+    for attribute in _NOT_FOR_NETFX:
+        if getattr(ctx.attr, attribute):
+            fail(("{}: `{}` does not apply to {}, which targets .NET Framework: the framework " +
+                  "installed in Windows runs it.").format(ctx.label, attribute, _binary(ctx).label))
+
+    # The runtime identifier the binary was built for.
+    runtime_identifier = ctx.attr.runtime_identifier
+    if ctx.attr.runtime_identifier_from_platform:
+        runtime_identifier = netframework_runtime_identifier(runtime_identifier)
+    if not runtime_identifier.startswith("win"):
+        fail(("{}: {} targets .NET Framework, which only runs on Windows, so it cannot be " +
+              "published for runtime identifier {}. Set `runtime_identifier` to a Windows " +
+              "one, such as win-x64, or leave it unset.").format(ctx.label, _binary(ctx).label, repr(runtime_identifier)))
+
+    layout = binary_info.netfx_layout
+    reject_conflicting_paths(layout, ctx.label)
+
+    entries = _publish_entries(layout)
+    (executable, outputs) = _copy_to_publish(ctx, runtime_identifier, entries, binary_info)
+    data = assembly_runtime_info.data + [file for dep in transitive_runtime_deps for file in dep.data]
+
+    # Run from runfiles, the executable needs the files beside it there too.
+    beside = [(path, file) for (path, file) in entries.items() if path != executable.basename]
+
+    output_groups = _publish_layers(
+        ctx,
+        dicts.add(entries, _runfiles_entries(ctx, executable, data, beside = beside)),
+        _dependency_layers(transitive_runtime_deps, None),
+    )
+
+    return [
+        DefaultInfo(
+            executable = executable,
+            files = depset(outputs),
+            runfiles = ctx.runfiles(files = outputs + data),
+        ),
+        OutputGroupInfo(**output_groups),
+    ]
+
 def _publish_binary_impl(ctx):
     assembly_compile_info = _binary(ctx)[DotnetAssemblyCompileInfo]
     assembly_runtime_info = _binary(ctx)[DotnetAssemblyRuntimeInfo]
@@ -1161,6 +1247,9 @@ def _publish_binary_impl(ctx):
     transitive_runtime_deps = binary_info.transitive_runtime_deps
     target_framework = ctx.attr.target_framework
     is_self_contained = ctx.attr.self_contained
+
+    if binary_info.netfx_layout != None:
+        return _netfx_publish(ctx, binary_info, assembly_runtime_info, transitive_runtime_deps)
 
     if ctx.attr.ready_to_run_composite and not (ctx.attr.ready_to_run and is_self_contained):
         fail("ready_to_run_composite requires ready_to_run and self_contained")
@@ -1412,7 +1501,9 @@ the publish directory:
   `runtimeconfig.json`, app settings and static web assets.
 
 Together they also hold the runfiles tree Bazel lays out beside the
-executable, each data file in the layer of the target it belongs to.""",
+executable, each data file in the layer of the target it belongs to.
+
+A .NET Framework binary is published as its output directory, without PDBs.""",
     # Read by the C/C++ toolchain a NativeAOT publish links with.
     fragments = ["cpp"],
     attrs = {
@@ -1444,6 +1535,10 @@ executable, each data file in the layer of the target it belongs to.""",
             doc = "The runtime identifier that is being targeted. " +
                   "See https://docs.microsoft.com/en-us/dotnet/core/rid-catalog",
             mandatory = False,
+        ),
+        "runtime_identifier_from_platform": attr.bool(
+            doc = "Set by the `publish_binary` macro when it fills in `runtime_identifier` from the target platform.",
+            default = False,
         ),
         "roll_forward_behavior": attr.string(
             doc = "The roll forward behavior that should be used: https://learn.microsoft.com/en-us/dotnet/core/versions/selection#control-roll-forward-behavior",
@@ -1583,6 +1678,7 @@ def _publish_binary_macro_impl(name, **kwargs):
 
     if rid == None:
         kwargs["runtime_identifier"] = _TARGET_RID
+        kwargs["runtime_identifier_from_platform"] = True
 
     _publish_binary(name = name, **kwargs)
 
@@ -1611,6 +1707,8 @@ def _publish_wasm(name, kwargs):
 publish_binary = macro(
     inherit_attrs = _publish_binary,
     attrs = dicts.add(_WASM_ONLY_ATTRS, {
+        # Set by the macro itself.
+        "runtime_identifier_from_platform": None,
         "wasm": attr.bool(
             doc = """Publish a Blazor WebAssembly application as a static site.
 

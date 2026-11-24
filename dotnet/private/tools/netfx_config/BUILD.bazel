@@ -1,0 +1,23 @@
+load(
+    "//dotnet/private/rules/csharp:binary.bzl",
+    "bootstrap_tool_binary",
+)
+
+# The tool without its entry point, for the tests.
+filegroup(
+    name = "srcs",
+    srcs = ["NetFxConfig.cs"],
+    visibility = ["//dotnet/private/tests/netframework_binary:__pkg__"],
+)
+
+# Writes a .NET Framework application's `<exe>.config`. See NetFxConfig.cs.
+bootstrap_tool_binary(
+    name = "netfx_config",
+    srcs = [
+        "NetFxConfig.cs",
+        "Program.cs",
+    ],
+    nullable = "enable",
+    target_frameworks = ["net11.0"],
+    visibility = ["//visibility:public"],
+)

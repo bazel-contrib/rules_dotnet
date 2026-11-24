@@ -11,14 +11,15 @@ load(
     "collect_transitive_runfiles",
     "generate_depsjson",
     "generate_runtimeconfig",
-    "is_core_framework",
+    "is_netframework",
     "is_standard_framework",
     "runtime_frameworks",
     "shared_framework_version",
     "to_rlocation_path",
 )
-load("//dotnet/private:providers.bzl", "DotnetApphostPackInfo", "DotnetAssemblyRuntimeInfo", "DotnetBinaryInfo", "DotnetNativeToolsInfo", "DotnetRuntimePackInfo")
+load("//dotnet/private:providers.bzl", "DotnetApphostPackInfo", "DotnetAssemblyRuntimeInfo", "DotnetBinaryInfo", "DotnetNativeToolsInfo", "DotnetRuntimePackInfo", "DotnetTargetingPackInfo")
 load("//dotnet/private/icu:settings.bzl", "icu_files", "icu_launcher_environment")
+load("//dotnet/private/rules/common:netfx.bzl", "satellite_path", "stage_netfx_application")
 load(
     "//dotnet/private/rules/common:static_web_assets.bzl",
     "WEB_ROOT",
@@ -57,9 +58,40 @@ def _collect_native_dlls(assembly_runtime_info, deps):
 
     return result
 
-def _create_launcher(ctx, executable, toolchain):
+def _reserved_paths(dll, runtime_provider, appsetting_files, inherited_content_files):
+    """The paths a binary writes in its output directory itself.
+
+    Returns:
+        A dict of each path, lower-cased as Windows compares them, to what it is.
+    """
+    reserved = {dll.basename: "the application's own assembly"}
+    for file in runtime_provider.pdbs + runtime_provider.xml_docs:
+        reserved[file.basename] = "an output of the application itself"
+    for file in appsetting_files:
+        reserved[file.basename] = "one of its `appsetting_files`"
+    for entry in list(runtime_provider.content_files) + inherited_content_files:
+        reserved[entry.dest] = "the content file {}".format(entry.src.short_path)
+    for file in runtime_provider.resource_assemblies:
+        reserved[satellite_path(file)] = "a satellite assembly of the application"
+    return {path.lower(): owner for (path, owner) in reserved.items()}
+
+def _create_launcher(ctx, executable, toolchain, tfm):
     is_windows = ctx.target_platform_has_constraint(ctx.attr._windows_constraint[platform_common.ConstraintValueInfo])
     launcher = ctx.actions.declare_file("{}.{}".format(executable.basename, "bat" if is_windows else "sh"), sibling = executable)
+
+    if is_netframework(tfm):
+        # No .NET host. Outside Windows the launcher reports it cannot run.
+        ctx.actions.expand_template(
+            template = ctx.file._launcher_netfx_bat if is_windows else ctx.file._launcher_netfx_sh,
+            output = launcher,
+            substitutions = {
+                "TEMPLATED_executable": to_rlocation_path(ctx, executable),
+                "TEMPLATED_label": str(ctx.label),
+                "TEMPLATED_target_framework": tfm,
+            },
+            is_executable = True,
+        )
+        return launcher
 
     ctx.actions.expand_template(
         template = ctx.file._launcher_bat if is_windows else ctx.file._launcher_sh,
@@ -141,6 +173,8 @@ def build_binary(ctx, compile_action, toolchain, runtime_toolchain = None, winex
     if is_standard_framework(tfm):
         fail("It doesn't make sense to build an executable for " + tfm)
 
+    is_netfx = is_netframework(tfm)
+
     (compile_provider, runtime_provider, generated_assets) = compile_action(ctx, tfm, toolchain)
     runtime_provider = with_ready_to_run_images(ctx, runtime_provider)
     dll = runtime_provider.libs[0]
@@ -148,7 +182,7 @@ def build_binary(ctx, compile_action, toolchain, runtime_toolchain = None, winex
     out_content_files = [entry.file for entry in runtime_provider.content_files]
     default_info_files = [dll] + runtime_provider.xml_docs + appsetting_files + out_content_files
 
-    launcher = _create_launcher(ctx, dll, runtime_toolchain)
+    launcher = _create_launcher(ctx, dll, runtime_toolchain, tfm)
 
     # Staged appsettings and content files must be in runfiles (not just DefaultInfo) so they're present when the target runs from an isolated runfiles tree (RBE/sandbox).
     additional_runfiles = list(appsetting_files) + out_content_files
@@ -156,12 +190,16 @@ def build_binary(ctx, compile_action, toolchain, runtime_toolchain = None, winex
     runtimeconfig = None
     depsjson = None
     framework_version = None
+    app_config_staged = None
+    netfx_layout = None
     transitive_runtime_deps = runtime_provider.deps.to_list()
 
     # A library's content files are staged next to the library, but the app looks
     # for them under its own `AppContext.BaseDirectory`, so they are staged again here.
     out_dir = "{}/{}".format(ctx.label.name, tfm)
     assembly_name = ctx.attr.out or ctx.attr.name
+    app_config = ctx.file.app_config
+    app_config_name = dll.basename + ".config"
     inherited_content_files = collect_transitive_content_files(
         ctx.label,
         runtime_provider,
@@ -181,7 +219,9 @@ def build_binary(ctx, compile_action, toolchain, runtime_toolchain = None, winex
     binary_frameworks = runtime_frameworks(runtime_provider, transitive_runtime_deps)
     check_windows_frameworks(ctx.label, tfm, binary_frameworks, transitively = True)
 
-    if is_core_framework(tfm):
+    reserved = _reserved_paths(dll, runtime_provider, appsetting_files, inherited_content_files)
+
+    if not is_netfx:
         framework_version = shared_framework_version(tfm, toolchain.dotnetinfo.runtime_version)
         runtimeconfig = ctx.actions.declare_file("%s/%s/%s.runtimeconfig.json" % (ctx.label.name, tfm, ctx.attr.out or ctx.attr.name))
         runtimeconfig_struct = generate_runtimeconfig(
@@ -230,19 +270,57 @@ def build_binary(ctx, compile_action, toolchain, runtime_toolchain = None, winex
             content = json.encode(depsjson_struct),
         )
 
+        # Where MSBuild puts App.config, for System.Configuration.ConfigurationManager.
+        if app_config:
+            owner = reserved.get(app_config_name.lower())
+            if owner:
+                fail("{}: `app_config` would be staged as {}, but that is already {}.".format(ctx.label, app_config_name, owner))
+            app_config_staged = ctx.actions.declare_file("{}/{}".format(out_dir, app_config_name))
+            ctx.actions.symlink(output = app_config_staged, target_file = app_config)
+            default_info_files.append(app_config_staged)
+            additional_runfiles.append(app_config_staged)
+    else:
+        netfx_staged = stage_netfx_application(
+            ctx,
+            executable = dll,
+            out_dir = out_dir,
+            target_framework = tfm,
+            transitive_runtime_deps = transitive_runtime_deps,
+            reserved = reserved,
+            framework_files = ctx.attr._targeting_pack[0][DotnetTargetingPackInfo].framework_files_depset,
+            app_config = app_config,
+            auto_generate_binding_redirects = ctx.attr.auto_generate_binding_redirects,
+        )
+        default_info_files.extend(netfx_staged.files)
+        additional_runfiles.extend(netfx_staged.files)
+
+        # Published without PDBs.
+        netfx_layout = [(dll.basename, dll)] + [
+            (f.basename, f)
+            for f in appsetting_files
+        ] + [
+            (entry.dest, entry.file)
+            for entry in list(runtime_provider.content_files) + inherited_content_files
+        ] + [
+            (satellite_path(f), f)
+            for f in runtime_provider.resource_assemblies
+        ] + netfx_staged.publish_layout
+
     if runtimeconfig != None:
         additional_runfiles.append(runtimeconfig)
 
     if depsjson != None:
         additional_runfiles.append(depsjson)
 
+    # .NET Framework executables run on the framework installed in Windows.
+    runtime_files = []
+    if not is_netfx:
+        runtime_files = [runtime_toolchain.dotnetinfo.runtime_files, icu_files(runtime_toolchain)]
+
     runfiles = collect_transitive_runfiles(ctx, runtime_provider, ctx.attr.deps).merge(
         ctx.runfiles(
             files = additional_runfiles,
-            transitive_files = depset(transitive = [
-                runtime_toolchain.dotnetinfo.runtime_files,
-                icu_files(runtime_toolchain),
-            ]),
+            transitive_files = depset(transitive = runtime_files),
         ),
     )
 
@@ -265,7 +343,8 @@ def build_binary(ctx, compile_action, toolchain, runtime_toolchain = None, winex
     # Due to how the .Net runtime loads native DLLs we need make the native
     # DLLs available in the application root directory with the folder structure:
     # runtimes/{rid}/native/{dlls}
-    native_dlls = _collect_native_dlls(runtime_provider, ctx.attr.deps)
+    # .NET Framework loads them from beside the executable instead.
+    native_dlls = _collect_native_dlls(runtime_provider, ctx.attr.deps) if not is_netfx else {}
     native_symlinks = []
     for (rid, native_files) in native_dlls.items():
         for file in native_files:
@@ -323,7 +402,8 @@ def build_binary(ctx, compile_action, toolchain, runtime_toolchain = None, winex
         default_info_files.extend(served)
         runfiles = runfiles.merge(ctx.runfiles(files = served))
 
-    if not ctx.target_platform_has_constraint(ctx.attr._windows_constraint[platform_common.ConstraintValueInfo]):
+    # Only the .NET launcher uses the Bash runfiles library.
+    if not is_netfx and not ctx.target_platform_has_constraint(ctx.attr._windows_constraint[platform_common.ConstraintValueInfo]):
         runfiles = runfiles.merge(ctx.attr._bash_runfiles[DefaultInfo].default_runfiles)
     default_info = DefaultInfo(
         executable = launcher,
@@ -344,6 +424,8 @@ def build_binary(ctx, compile_action, toolchain, runtime_toolchain = None, winex
         runtime_frameworks = binary_frameworks,
         packed_frameworks = resolve_framework_references(ctx.attr.project_sdk, getattr(ctx.attr, "framework_references", [])).keys(),
         winexe = winexe,
+        app_config = app_config_staged,
+        netfx_layout = netfx_layout,
     )
 
     # The same two files, for a `filegroup` to select: they are runfiles, not

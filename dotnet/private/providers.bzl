@@ -179,6 +179,8 @@ binary, so a publish copies these rather than laying the tree out a second time.
         "runtime_frameworks": "list[string]: The shared frameworks beyond Microsoft.NETCore.App that the binary and its dependencies reference.",
         "packed_frameworks": "list[string]: The shared frameworks beyond Microsoft.NETCore.App that the binary itself references, which `runtime_pack_info` carries.",
         "winexe": "bool: True if the binary is a Windows GUI executable (Subsystem.WindowsGui)",
+        "app_config": "File: The `app_config` of a .NET binary, as `<assembly>.dll.config`, or None.",
+        "netfx_layout": "list[(string, File)]: The files a .NET Framework binary publishes, with their paths in the publish directory. None for other binaries.",
     },
 )
 

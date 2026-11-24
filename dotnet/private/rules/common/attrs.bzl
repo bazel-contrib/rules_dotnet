@@ -266,6 +266,20 @@ BINARY_COMMON_ATTRS = dicts.add(STATIC_WEB_ASSETS_ATTRS, {
         default = "Major",
         values = ["Minor", "Major", "LatestPatch", "LatestMinor", "LatestMajor", "Disable"],
     ),
+    "app_config": attr.label(
+        doc = """The application configuration file, MSBuild's `App.config`.
+
+It is copied next to the assembly as `<assembly>.exe.config` for .NET Framework,
+with `<supportedRuntime>` and generated binding redirects added, or as
+`<assembly>.dll.config` for .NET.""",
+        allow_single_file = [".config"],
+    ),
+    "auto_generate_binding_redirects": attr.bool(
+        doc = """Add binding redirects to a .NET Framework executable's configuration file, as
+MSBuild's `AutoGenerateBindingRedirects` does. When false, write them in `app_config`.
+Has no effect on .NET.""",
+        default = True,
+    ),
     "appsetting_files": attr.label_list(
         doc = "A list of appsettings files to include in the output directory.",
         allow_files = True,
@@ -300,6 +314,16 @@ BINARY_COMMON_ATTRS = dicts.add(STATIC_WEB_ASSETS_ATTRS, {
         default = "//dotnet/private:launcher.bat.tpl",
         allow_single_file = True,
     ),
+    "_launcher_netfx_sh": attr.label(
+        doc = "A template file for the launcher of a .NET Framework executable on Linux/MacOS",
+        default = "//dotnet/private:launcher_netfx.sh.tpl",
+        allow_single_file = True,
+    ),
+    "_launcher_netfx_bat": attr.label(
+        doc = "A template file for the launcher of a .NET Framework executable on Windows",
+        default = "//dotnet/private:launcher_netfx.bat.tpl",
+        allow_single_file = True,
+    ),
     "_apphost_pack": attr.label(
         default = "//dotnet/private/sdk/apphost_packs:apphost_pack",
         cfg = apphost_pack_transition,
@@ -313,6 +337,11 @@ BINARY_COMMON_ATTRS = dicts.add(STATIC_WEB_ASSETS_ATTRS, {
 
 Resolves to nothing unless a publish asked, so that no other build analyses the packs.""",
         default = "//dotnet/private/rules/publish_binary:native_tools",
+    ),
+    "_netfx_config_tool": attr.label(
+        doc = "Lays out a .NET Framework executable's dependencies and writes its `<exe>.config`.",
+        default = "//dotnet/private/tools/netfx_config",
+        cfg = "exec",
     ),
 })
 

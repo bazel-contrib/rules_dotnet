@@ -1,0 +1,37 @@
+load("//dotnet:defs.bzl", "csharp_binary", "csharp_nunit_test", "publish_binary")
+
+# On .NET, `app_config` is copied next to the assembly as `<assembly>.dll.config`.
+csharp_binary(
+    name = "app",
+    srcs = ["Main.cs"],
+    app_config = "App.config",
+    target_frameworks = ["net10.0"],
+)
+
+publish_binary(
+    name = "app_publish",
+    binary = ":app",
+    target_framework = "net10.0",
+)
+
+# All publish files: `$(rootpaths)` of the publish names only its executable.
+filegroup(
+    name = "app_publish_files",
+    srcs = [":app_publish"],
+)
+
+csharp_nunit_test(
+    name = "app_config_test",
+    size = "small",
+    srcs = ["AppConfigTest.cs"],
+    data = [
+        ":app",
+        ":app_publish_files",
+    ],
+    envs = {
+        "APP_FILES": "$(rootpaths :app)",
+        "PUBLISH_FILES": "$(rootpaths :app_publish_files)",
+    },
+    nullable = "enable",
+    target_frameworks = ["net10.0"],
+)

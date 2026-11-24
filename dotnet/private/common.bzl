@@ -99,6 +99,24 @@ def is_standard_framework(tfm):
 def is_core_framework(tfm):
     return _tfm_family(tfm) == _NETCOREAPP
 
+def is_netframework(tfm):
+    return _tfm_family(tfm) == _NETFRAMEWORK
+
+def netframework_runtime_identifier(runtime_identifier):
+    """The Windows runtime identifier with the architecture of `runtime_identifier`.
+
+    .NET Framework only runs on Windows: `linux-x64` gives `win-x64`.
+
+    Args:
+        runtime_identifier: A runtime identifier.
+
+    Returns:
+        The Windows runtime identifier of the same architecture.
+    """
+    if runtime_identifier.startswith("win") or "-" not in runtime_identifier:
+        return runtime_identifier
+    return "win-" + runtime_identifier.rsplit("-", 1)[-1]
+
 def is_greater_or_equal_framework(tfm1, tfm2):
     """Returns true if tfm1 is greater or equal to tfm2
 
@@ -1557,6 +1575,45 @@ def _quote_resource_name(name, language):
     name = name.replace("%", "%%")
     return "\"" + name + "\"" if language == "csharp" else name
 
+def embedded_resource_name(file, target_label, out_dll):
+    """The manifest name a resource file is embedded under, as MSBuild names it.
+
+    Args:
+        file: (File) The file to embed.
+        target_label: (Label) The label of the target that is embedding the resource.
+        out_dll: (str) Basename of the output assembly, if one exists.
+
+    Returns:
+        The name, or None when there is no `.dll` or `.exe` to name it after.
+    """
+
+    # We can only determine the embedded resource's name if we have a DLL or EXE to embed it in.
+    if out_dll == None or not (out_dll.endswith(".dll") or out_dll.endswith(".exe")):
+        return None
+
+    # When the file is not within a project directory, MSBuild falls back to
+    # the basename of the file.
+    simple_resource_name = "{}.{}".format(out_dll[:-4], file.basename)
+
+    if file.owner != None and file.owner.repo_name != target_label.repo_name:
+        # Fallback to the basename if the file comes from a different repository.
+        return simple_resource_name
+
+    if not target_label.package:
+        # The path is relative to the root package already, after an external
+        # repository's `../<repo>/`.
+        relative_path = file.short_path.split("/", 2)[2] if file.short_path.startswith("../") else file.short_path
+    elif not file.short_path.startswith(target_label.package):
+        # Fallback to the basename if the file is not in the target's package, because
+        # the path will not be normalized.
+        return simple_resource_name
+    else:
+        # Packages/Foo.Bar/BUILD.bazel importing Packages/Foo.Bar/a/b/c.txt -> a/b/c.txt
+        relative_path = file.short_path[len(target_label.package) + 1:]
+
+    # Foo.Bar.dll and a/b/c.txt -> Foo.Bar.a.b.c.txt
+    return "{}.{}".format(out_dll[:-4], ".".join(relative_path.split("/")))
+
 def _resource_arg_format(file, target_label, out_dll, language):
     """The Args format string that turns a resource file into a compiler argument.
 
@@ -1579,28 +1636,9 @@ def _resource_arg_format(file, target_label, out_dll, language):
     else:
         fail("Unsupported language: {}".format(language))
 
-    # We can only determine the embedded resource's name if we have a DLL to embed it in.
-    if out_dll == None or not out_dll.endswith(".dll"):
+    resource_name = embedded_resource_name(file, target_label, out_dll)
+    if resource_name == None:
         return base_resource_fmt
-
-    # When the file is not within a project directory, MSBuild falls back to
-    # the basename of the file.
-    simple_resource_name = "{}.{}".format(out_dll[:-4], file.basename)
-
-    if file.owner != None and file.owner.repo_name != target_label.repo_name:
-        # Fallback to the basename if the file comes from a different repository.
-        resource_name = simple_resource_name
-    elif not file.short_path.startswith(target_label.package):
-        # Fallback to the basename if the file is not in the target's package, because
-        # the path will not be normalized.
-        resource_name = simple_resource_name
-    else:
-        # Packages/Foo.Bar/BUILD.bazel importing Packages/Foo.Bar/a/b/c.txt -> a/b/c.txt
-        relative_path = file.short_path[len(target_label.package) + 1:]
-
-        # Foo.Bar.dll and a/b/c.txt -> Foo.Bar.a.b.c.txt
-        parts = relative_path.split("/")
-        resource_name = "{}.{}".format(out_dll[:-4], ".".join(parts))
 
     # `%` is the escape character in an Args format string, so a resource whose
     # name contains one has to double it to come out literal.

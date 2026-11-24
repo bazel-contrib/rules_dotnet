@@ -7,11 +7,14 @@ load(
     "test_path_from_parent_package_should_stay_as_basename",
     "test_path_from_unrelated_package_should_stay_as_basename",
 )
+load(":resource_name_test.bzl", "resource_name_test_suite")
 
 exports_files(
     ["file.txt"],
     visibility = ["//visibility:public"],
 )
+
+resource_name_test_suite(name = "resource_name_tests")
 
 test_embedded_resource_path_csharp()
 

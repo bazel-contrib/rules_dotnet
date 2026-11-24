@@ -384,6 +384,61 @@ Two attributes mirror the MSBuild properties of the same name:
 `single_file` needs `self_contained`, and cannot be combined with `native_aot`,
 which produces a single executable already.
 
+## .NET Framework
+
+Binaries and tests can target .NET Framework (`net48`, `net472`, ...). They
+compile to an `.exe` that runs on the .NET Framework installed in Windows, with
+no apphost, `deps.json` or `runtimeconfig.json`. With `winexe = True` it starts
+without a console window.
+
+As with MSBuild, the application's dependencies are copied next to the `.exe`:
+assemblies with their PDBs, satellite assemblies and native libraries. When
+several dependencies ship the same assembly, the highest version is used.
+NuGet packages contribute their Windows native libraries and runtime-specific
+assemblies for the target architecture.
+
+### Configuration file
+
+`app_config` is MSBuild's `App.config`. It is copied next to the executable as
+`<assembly>.exe.config`, and the build adds:
+
+- a `<supportedRuntime>` for the target framework, unless one is present;
+- a binding redirect for each strong-named assembly that is referenced at a
+  different version than the one shipped, as MSBuild's
+  `AutoGenerateBindingRedirects` does. Redirects already in `app_config` are
+  kept.
+
+A reference to a newer version of an assembly than the application ships fails
+the build, as the application could not load it. Depend on a newer version, or
+add a `<bindingRedirect>` that covers it to `app_config`. Set
+`auto_generate_binding_redirects = False` to write all redirects yourself.
+
+### Publishing
+
+`publish_binary` publishes the output directory, without PDBs, to
+`publish/<runtime_identifier>`. The runtime identifier defaults to Windows on
+the target platform's architecture, such as `win-x64` on x64 Linux.
+`self_contained`, `single_file`, `ready_to_run` and `native_aot` don't apply to
+.NET Framework.
+
+### Running
+
+Only Windows runs .NET Framework executables, but any platform can build them.
+Mark .NET Framework tests with
+`target_compatible_with = ["@platforms//os:windows"]` to skip them elsewhere.
+
+### Differences from MSBuild
+
+- .NET Framework 4.6.1 to 4.7.1 applications that depend on .NET Standard
+  libraries need facade assemblies, which are not added. Target `net472` or
+  later instead.
+- The executable is always AnyCPU, so it runs as a 64-bit process on 64-bit
+  Windows. The .NET SDK defaults to x86 when NuGet packages have native
+  libraries.
+- NuGet packages' copies of assemblies that .NET Framework provides, such as
+  `System.Net.Http`, are copied next to the executable but not redirected to,
+  so the framework's copy is used. The .NET SDK leaves them out.
+
 ## Container images
 
 The output from `publish_binary` can easily be used to build container images.

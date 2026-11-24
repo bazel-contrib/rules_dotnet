@@ -34,8 +34,9 @@ if not exist "%MF%" (
   exit 1
 )
 set runfile_path=%~1
-for /F "tokens=2* usebackq" %%i in (`%SYSTEMROOT%\system32\findstr.exe /l /c:"!runfile_path! " "%MF%"`) do (
-  set abs_path=%%i
+rem The destination is the rest of the line, spaces included.
+for /F "tokens=1* usebackq" %%i in (`%SYSTEMROOT%\system32\findstr.exe /l /c:"!runfile_path! " "%MF%"`) do (
+  set abs_path=%%j
 )
 if "!abs_path!" equ "" (
   echo>&2 ERROR: !runfile_path! not found in runfiles manifest
