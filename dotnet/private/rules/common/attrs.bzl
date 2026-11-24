@@ -106,6 +106,32 @@ COMMON_ATTRS = {
         Unset, no attributes are generated and the assembly is reported as `1.0.0`.""",
         default = "",
     ),
+    "user_secrets_id": attr.string(
+        doc = """The user secrets ID for the assembly (`<UserSecretsId>` in MSBuild).
+
+        When set, emits `Microsoft.Extensions.Configuration.UserSecrets.UserSecretsIdAttribute`
+        into the generated assembly info source file, which is what
+        `AddUserSecrets` and the default host builder read.
+
+        The target has to reference `Microsoft.Extensions.Configuration.UserSecrets`,
+        or the compile fails on the unresolved attribute: either through
+        `project_sdk = "web"`, whose shared framework carries it, or through
+        the NuGet package in `deps`.
+
+        The secrets file is looked up at run time under the user's home
+        directory (`$HOME/.microsoft/usersecrets/<id>/secrets.json`, or
+        `%APPDATA%\\Microsoft\\UserSecrets\\<id>\\secrets.json` on Windows):
+
+        * `bazel run` inherits the caller's environment, so the user's secrets are found.
+        * `bazel test` sets `HOME` to `$TEST_TMPDIR`, so they are not: the
+          lookup lands in an empty directory, and since the host builder adds
+          user secrets as optional the values are silently missing rather
+          than an error. Passing `--test_env=HOME` (`--test_env=APPDATA` on
+          Windows) restores the lookup for local runs at the cost of
+          hermeticity. It cannot work with remote execution, where the
+          user's home directory does not exist.""",
+        default = "",
+    ),
     "target_frameworks": attr.string_list(
         doc = "A list of target framework monikers to build" +
               "See https://docs.microsoft.com/en-us/dotnet/standard/frameworks",
