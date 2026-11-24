@@ -246,9 +246,9 @@ csharp_library(
 
 A target only compiles against the frameworks it lists itself, so list a
 framework on every target whose code uses it. A binary runs on the frameworks
-of all its dependencies, NuGet packages included. A self-contained
-`publish_binary` only bundles the frameworks the binary lists, and fails if a
-dependency needs another one.
+of all its dependencies, NuGet packages included. A self-contained or
+ReadyToRun `publish_binary` only takes the runtime packs of the frameworks the
+binary lists itself, and fails if a dependency needs another one.
 
 `nuget_pack` records a library's framework references in the package, so that
 its consumers get them too.
@@ -275,9 +275,9 @@ cannot be a dependency of a plain framework target. Target frameworks for a
 specific Windows version, such as `net8.0-windows10.0.19041.0`, are not
 supported.
 
-Windows Forms and WPF code builds on any host, but running and publishing it
-needs Windows: `publish_binary` needs a `win-*` `runtime_identifier`. They do
-not support trimming, so `native_aot` cannot publish them.
+Windows Forms and WPF code builds and publishes on any host, but only runs on
+Windows, so `publish_binary` needs a `win-*` `runtime_identifier`. They do not
+support trimming, so `native_aot` cannot publish them.
 
 `winexe = True` builds a GUI application, MSBuild's
 `<OutputType>WinExe</OutputType>`, which starts without a console window. As in
@@ -288,11 +288,14 @@ MSBuild, referencing Windows Forms or WPF does not imply it.
 `.xaml` files in `srcs` are compiled as in MSBuild. `App.xaml` at the root of
 the package is the application definition, and every other `.xaml` file is a
 page. `wpf_resources` are MSBuild's `<Resource>` items. Pages and resources are
-addressed by their path relative to the package, including generated ones, and
-by their file name when they come from another package.
+addressed by their path relative to the package's directory, generated ones
+included, and by their file name when they are outside it, as the files of a
+parent or sibling package are. Two that would get the same address, compared
+case-insensitively, fail the build.
 
-Only C# targets compile XAML, and the generated `.xaml` files of a target need
-distinct file names.
+Only C# targets compile XAML. A `.xaml` file that is generated, or outside the
+package's directory, is compiled by its file name alone, which must not be that
+of another such file or of a `.xaml` file at the root of the package.
 
 ## Unsupported workloads
 

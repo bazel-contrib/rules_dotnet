@@ -7,6 +7,12 @@
    is only known after pass1, so it is always compiled.
 3. ResourcesGenerator embeds the BAML and WPF resources in
    `<assembly name>.g.resources`.
+
+The tasks run in the package's directory, as MSBuild runs them in the
+project's: they write a XAML file's output under its path below that
+directory, or under its file name alone if it is outside it, as a generated
+file is. Its BAML is still embedded under its `package_path`, the URI WPF
+loads it by.
 """
 
 load("//dotnet/private/sdk:packs.bzl", "WINDOWSDESKTOP_FRAMEWORK")
@@ -24,13 +30,14 @@ _OUTPUT_TYPES = {
 }
 
 def _build_tasks(toolchain, label):
+    """PresentationBuildTasks, and the assemblies it loads from the SDK."""
+    files = toolchain.wpf_build_tasks.files if getattr(toolchain, "wpf_build_tasks", None) else depset()
     tasks = None
     dependencies = []
-    for file in toolchain.wpf_build_tasks.files.to_list() if getattr(toolchain, "wpf_build_tasks", None) else []:
+    for file in files.to_list():
         if file.basename == _TASKS_ASSEMBLY:
             tasks = file
         else:
-            # Assemblies the tasks load from the SDK.
             dependencies.append(file)
 
     if tasks == None:
@@ -39,17 +46,10 @@ def _build_tasks(toolchain, label):
             "The SDK is expected to carry it under Sdks/Microsoft.NET.Sdk.WindowsDesktop/tools.",
         )
 
-    return struct(tasks = tasks, dependencies = dependencies)
+    return struct(tasks = tasks, dependencies = dependencies, files = files)
 
-def uses_wpf(frameworks):
-    """Whether a target references WPF, which XAML compiles against.
-
-    Args:
-      frameworks: The shared frameworks, as `resolve_framework_references` returns them.
-
-    Returns:
-      True if Microsoft.WindowsDesktop.App is referenced whole or with the WPF profile.
-    """
+def _uses_wpf(frameworks):
+    """Whether Microsoft.WindowsDesktop.App is referenced whole or with the WPF profile."""
     if WINDOWSDESKTOP_FRAMEWORK not in frameworks:
         return False
 
@@ -61,14 +61,14 @@ def check_wpf(label, frameworks, target_framework_is_core, what):
 
     Args:
       label: The label of the target.
-      frameworks: Its shared frameworks.
+      frameworks: Its shared frameworks, as `resolve_framework_references` returns them.
       target_framework_is_core: Whether it is built for .NET Core or .NET.
       what: What it has, for the message.
     """
     if not target_framework_is_core:
         fail("%s: %s are only compiled for .NET Core 3.0 and later." % (label, what))
 
-    if not uses_wpf(frameworks):
+    if not _uses_wpf(frameworks):
         fail(
             "%s has %s but does not reference WPF: add \"Microsoft.WindowsDesktop.App.WPF\" " % (label, what) +
             "or \"Microsoft.WindowsDesktop.App\" to its `framework_references`.",
@@ -86,7 +86,6 @@ def package_path(file, label):
     Returns:
       The path, with forward slashes.
     """
-
     return _path_in_package(file, label) or file.basename
 
 def _path_in_package(file, label):
@@ -105,27 +104,24 @@ def _path_in_package(file, label):
     return path
 
 def xaml_plan(label, xaml_srcs, frameworks, target_framework_is_core):
-    """Splits XAML sources into the application definition and the pages.
+    """Checks a target's XAML sources and splits them into the application definition and the pages.
 
     Args:
       label: The label of the target.
       xaml_srcs: The `.xaml` files among its `srcs`.
-      frameworks: Its shared frameworks.
+      frameworks: Its shared frameworks, as `resolve_framework_references` returns them.
       target_framework_is_core: Whether it is built for .NET Core or .NET.
 
     Returns:
       A struct of the `application` definition, or None, and the `pages`.
     """
     check_wpf(label, frameworks, target_framework_is_core, "XAML sources")
-
-    compiled = {}
-    for src in xaml_srcs:
-        path = _compiled_path(src, label)
-        if path in compiled:
-            fail(("{}: {} and {} would both compile to {}.baml. The markup compiler places a XAML " +
-                  "file from outside the package's source directory, such as a generated one, by " +
-                  "its file name alone; rename one of them.").format(label, compiled[path].short_path, src.short_path, path))
-        compiled[path] = src
+    _check_unique_names(
+        label,
+        [(src, _compiled_path(src, label) + ".baml") for src in xaml_srcs],
+        "compile to",
+        "The markup compiler places a XAML file from outside the package's directory, such as a generated one, by its file name alone",
+    )
 
     application = None
     pages = []
@@ -137,21 +133,44 @@ def xaml_plan(label, xaml_srcs, frameworks, target_framework_is_core):
 
     return struct(application = application, pages = pages)
 
-def _compiled_path(file, label):
-    """Where the markup compiler writes a XAML file's output, lowercased and without extension.
+def _xaml_files(plan):
+    return plan.pages + ([plan.application] if plan.application else [])
 
-    A file outside the directory the tasks run in, such as a generated one, is
-    written by its file name alone.
-    """
+def _compiled_path(file, label):
+    """Where the markup compiler writes a XAML file's output, lowercased and without extension."""
     project_dir = _project_dir(label)
-    if project_dir == ".":
-        path = file.path
-    elif file.path.startswith(project_dir + "/"):
-        path = file.path[len(project_dir) + 1:]
-    else:
+    prefix = "" if project_dir == "." else project_dir + "/"
+    path = file.path[len(prefix):]
+    if not file.path.startswith(prefix) or path.startswith("../"):
         path = file.basename
 
-    return path.rpartition(".")[0].lower()
+    return _without_extension(path).lower()
+
+def _without_extension(path):
+    return path.rpartition(".")[0] if "." in path.rpartition("/")[2] else path
+
+def _check_unique_names(label, named_files, collision, why):
+    """Fails if two files take the same name, which the build tasks compare case-insensitively.
+
+    Args:
+      label: The label of the target.
+      named_files: A list of (file, name) tuples.
+      collision: What sharing the name does to them, for the message.
+      why: Why names can collide, for the message.
+    """
+    files = {}
+    for (file, name) in named_files:
+        key = name.lower()
+        if key in files:
+            fail("{}: {} and {} would both {} {}. {}; rename one of them.".format(
+                label,
+                files[key].short_path,
+                file.short_path,
+                collision,
+                key,
+                why,
+            ))
+        files[key] = file
 
 def _named(files, label):
     """Each file with the name it takes in the assembly, as the tool reads them."""
@@ -212,10 +231,7 @@ def xaml_pass1(actions, label, plan, srcs, out_dir, assembly_name, root_namespac
         progress_message = "Compiling XAML for %{label}",
         executable = tool.files_to_run,
         arguments = ["pass1", args],
-        inputs = depset(
-            direct = plan.pages + ([plan.application] if plan.application else []) + srcs,
-            transitive = [references, toolchain.wpf_build_tasks.files],
-        ),
+        inputs = depset(_xaml_files(plan) + srcs, transitive = [references, tasks.files]),
         outputs = [output],
     )
 
@@ -246,20 +262,26 @@ def xaml_pass2(actions, label, plan, pass1, temporary_assembly, wpf_resources, o
       compilation takes as sources, or None without XAML, and the `resources`
       file it embeds.
     """
+    xaml = _xaml_files(plan) if plan else []
+
+    # ResourcesGenerator fails on a duplicate name without saying which files have it.
+    _check_unique_names(
+        label,
+        [(src, _without_extension(package_path(src, label)) + ".baml") for src in xaml] +
+        [(resource, package_path(resource, label)) for resource in wpf_resources],
+        "be embedded as",
+        "Names are compared case-insensitively, and a file from outside the package's directory is named by its file name alone",
+    )
+
     tasks = _build_tasks(toolchain, label)
     output = actions.declare_directory("{}/xaml/obj".format(out_dir))
     resources = actions.declare_file("{}/xaml/{}.g.resources".format(out_dir, assembly_name))
-    xaml = (plan.pages + ([plan.application] if plan.application else [])) if plan else []
 
-    args = _common_args(
-        actions,
-        label,
-        tasks,
-        assembly_name,
-        root_namespace,
-        target,
-        depset([temporary_assembly] if temporary_assembly else [], transitive = [references] if xaml else []),
-    )
+    # Pass2 compiles the XAML that pass1 left for it from source, against the
+    # temporary assembly and everything that references.
+    references = depset([temporary_assembly], transitive = [references]) if xaml else depset()
+
+    args = _common_args(actions, label, tasks, assembly_name, root_namespace, target, references)
     if pass1:
         args.add("--pass1-dir", pass1.path)
     args.add("--output-dir", output.path)
@@ -274,10 +296,9 @@ def xaml_pass2(actions, label, plan, pass1, temporary_assembly, wpf_resources, o
         progress_message = ("Compiling XAML that names local types for %{label}" if xaml else "Embedding WPF resources for %{label}"),
         executable = tool.files_to_run,
         arguments = ["pass2", args],
-        # Pass2 compiles the XAML that pass1 left for it from source.
         inputs = depset(
-            direct = ([pass1, temporary_assembly] if pass1 else []) + xaml + wpf_resources,
-            transitive = ([references] if xaml else []) + [toolchain.wpf_build_tasks.files],
+            ([pass1] if pass1 else []) + xaml + wpf_resources,
+            transitive = [references, tasks.files],
         ),
         outputs = [output, resources],
     )

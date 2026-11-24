@@ -29,10 +29,11 @@ PROJECT_SDKS = [DEFAULT_SDK, WEB_SDK]
 # What a user may write in `project_sdk`.
 USER_PROJECT_SDKS = PROJECT_SDKS + [RAZOR_SDK, BLAZORWASM_SDK]
 
-# Shared frameworks beyond Microsoft.NETCore.App, in the order their packs are listed.
 NETCORE_FRAMEWORK = "Microsoft.NETCore.App"
 ASPNETCORE_FRAMEWORK = "Microsoft.AspNetCore.App"
 WINDOWSDESKTOP_FRAMEWORK = "Microsoft.WindowsDesktop.App"
+
+# Shared frameworks beyond Microsoft.NETCore.App, in the order their packs are listed.
 SHARED_FRAMEWORKS = [ASPNETCORE_FRAMEWORK, WINDOWSDESKTOP_FRAMEWORK]
 
 # Shared frameworks that need a Windows target framework and runtime identifier.
