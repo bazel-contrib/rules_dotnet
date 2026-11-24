@@ -273,6 +273,11 @@ WINEXE_ATTRS = {
 
 # These are attributes that are common across all binary/test rules
 BINARY_COMMON_ATTRS = dicts.add(STATIC_WEB_ASSETS_ATTRS, {
+    # The binary rules replace this with `WINEXE_ATTRS`.
+    "winexe": attr.bool(
+        doc = "Has no effect: a test always builds as a console executable.",
+        default = False,
+    ),
     "roll_forward_behavior": attr.string(
         doc = "The roll forward behavior that should be used: https://learn.microsoft.com/en-us/dotnet/core/versions/selection#control-roll-forward-behavior",
         default = "Major",
@@ -413,10 +418,11 @@ CSHARP_COMMON_ATTRS = dicts.add(
         "wpf_resources": attr.label_list(
             doc = """Files WPF loads as resources: MSBuild's `<Resource>` items, such as images.
 
-            They are embedded with the compiled XAML in `<assembly name>.g.resources`,
-            each named by its path relative to the target's package, which is
-            how a `pack://application:,,,/<path>` URI or a relative path in
-            XAML finds it.""",
+            They are embedded in `<assembly name>.g.resources`, with the
+            compiled XAML if the target has any, each named by its path
+            relative to the target's package, which is how a
+            `pack://application:,,,/<path>` URI or a relative path in XAML
+            finds it. Needs WPF referenced through `framework_references`.""",
             allow_files = True,
             default = [],
             # We transition to the default configuration because the end user might have resources

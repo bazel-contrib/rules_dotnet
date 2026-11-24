@@ -116,7 +116,7 @@ def _native_tools(ctx, native_tools):
 
     return [DefaultInfo(executable = executable), native_tools]
 
-def build_binary(ctx, compile_action, toolchain, runtime_toolchain = None):
+def build_binary(ctx, compile_action, toolchain, runtime_toolchain = None, winexe = False):
     """Builds a .Net binary from a compilation action
 
     Args:
@@ -127,6 +127,8 @@ def build_binary(ctx, compile_action, toolchain, runtime_toolchain = None):
         toolchain: The .Net toolchain to build with.
         runtime_toolchain: The .Net toolchain whose runtime the binary runs on,
             if not `toolchain`'s.
+        winexe: Whether the binary is a Windows GUI executable. Only the
+            binary rules set it: a test is always a console one.
     Returns:
         A collection of the references, runfiles and native dlls.
     """
@@ -342,8 +344,7 @@ def build_binary(ctx, compile_action, toolchain, runtime_toolchain = None):
         framework_version = framework_version,
         runtime_frameworks = binary_frameworks,
         packed_frameworks = resolve_framework_references(ctx.attr.project_sdk, getattr(ctx.attr, "framework_references", [])).keys(),
-        # Only the binary rules have it: a test is always a console executable.
-        winexe = getattr(ctx.attr, "winexe", False),
+        winexe = winexe,
     )
 
     # The same two files, for a `filegroup` to select: they are runfiles, not

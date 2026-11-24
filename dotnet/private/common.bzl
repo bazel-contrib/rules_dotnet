@@ -1259,6 +1259,8 @@ def check_windows_frameworks(label, tfm, frameworks, transitively = False):
             tfm,
         ))
 
+_FRAMEWORK_REFERENCES_BY_LOWER_NAME = {name.lower(): value for (name, value) in FRAMEWORK_REFERENCES.items()}
+
 def runtime_frameworks(assembly_runtime_info, transitive_runtime_deps):
     """The shared frameworks an application runs on, beyond Microsoft.NETCore.App.
 
@@ -1277,8 +1279,10 @@ def runtime_frameworks(assembly_runtime_info, transitive_runtime_deps):
     frameworks = {}
     for info in [assembly_runtime_info] + transitive_runtime_deps:
         for reference in getattr(info, "framework_references", None) or []:
-            if reference in FRAMEWORK_REFERENCES:
-                frameworks[FRAMEWORK_REFERENCES[reference][0]] = None
+            # NuGet compares framework reference names case-insensitively.
+            known = _FRAMEWORK_REFERENCES_BY_LOWER_NAME.get(reference.lower())
+            if known:
+                frameworks[known[0]] = None
 
     return [framework for framework in SHARED_FRAMEWORKS if framework in frameworks]
 

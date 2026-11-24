@@ -40,6 +40,7 @@ load("//dotnet/private/rules/csharp/actions:scoped_css.bzl", "scoped_css_action"
 load("//dotnet/private/rules/csharp/actions:sdk_analyzers.bzl", "sdk_analyzer_compile_inputs")
 load(
     "//dotnet/private/rules/csharp/actions:xaml.bzl",
+    "check_wpf",
     "generated_code",
     "xaml_pass1",
     "xaml_pass2",
@@ -552,9 +553,12 @@ def AssemblyAction(
             irefs = irefs,
             framework_files = framework_files,
             resources = resources,
+            # Like the ref-only compile, the temporary assembly reports no
+            # diagnostics, so it skips the SDK's analyzers and keeps the rest,
+            # source generators included.
             analyzers = compile_analyzers,
-            analyzers_csharp = compile_analyzers_csharp,
-            analyzer_configs = compile_analyzer_configs,
+            analyzers_csharp = ref_only_analyzers_csharp,
+            analyzer_configs = analyzer_configs,
             additionalfiles = additionalfiles,
             compile_data = depset(compile_data, transitive = [transitive_compile_data]),
             debug = debug,
@@ -572,7 +576,23 @@ def AssemblyAction(
             toolchain = toolchain,
         )
     elif wpf_resources:
-        fail("%s has `wpf_resources` but no XAML sources: WPF resources are embedded with the compiled XAML." % label)
+        # MSBuild embeds `<Resource>` items whether or not there is XAML.
+        check_wpf(label, frameworks, is_core_framework(target_framework), "`wpf_resources`")
+        xaml = xaml_pass2(
+            actions,
+            label,
+            None,
+            None,
+            None,
+            wpf_resources,
+            out_dir = out_dir,
+            assembly_name = assembly_name,
+            root_namespace = root_namespace or target_name,
+            target = target,
+            references = depset(),
+            tool = xaml_tool,
+            toolchain = toolchain,
+        )
 
     if len(internals_visible_to) == 0 or is_analyzer:
         _compile(
@@ -1031,7 +1051,8 @@ def _compile(
     # The code behind XAML, and its BAML and WPF resources under the name WPF
     # loads them by.
     if xaml:
-        args.add_all([xaml.code], map_each = generated_code, format_each = "\"%s\"", expand_directories = True)
+        if xaml.code:
+            args.add_all([xaml.code], map_each = generated_code, format_each = "\"%s\"", expand_directories = True)
         if xaml.resources:
             args.add(xaml.resources, format = "/resource:\"%s\",\"" + xaml.resources.basename + "\"")
 
@@ -1064,7 +1085,7 @@ def _compile(
     direct_inputs = srcs + resources + [resource_file for (resource_file, _) in resx_neutral_resources] + additionalfiles + analyzer_configs
     direct_inputs += [keyfile] if keyfile else []
     if xaml:
-        direct_inputs += [xaml.code] + ([xaml.resources] if xaml.resources else [])
+        direct_inputs += ([xaml.code] if xaml.code else []) + ([xaml.resources] if xaml.resources else [])
     if razor:
         direct_inputs += razor.analyzers + razor.additionalfiles + razor.configs
 

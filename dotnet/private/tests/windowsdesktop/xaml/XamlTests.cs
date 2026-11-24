@@ -44,7 +44,22 @@ public sealed class XamlResourceTests
     {
         Assert.That(
             GeneratedResources("xaml_app/net10.0-windows/xaml_app.dll", "xaml_app.g.resources"),
-            Is.EqualTo(new[] { "app.baml", "assets/greeting.txt", "views/mainwindow.baml" }));
+            Is.EqualTo(new[]
+            {
+                "app.baml",
+                "assets/generated.txt",
+                "assets/greeting.txt",
+                "themes/generated.baml",
+                "views/mainwindow.baml",
+            }));
+    }
+
+    [Test]
+    public void ALibraryWithoutXamlEmbedsItsResources()
+    {
+        Assert.That(
+            GeneratedResources("icons/net10.0-windows/XamlIcons.dll", "XamlIcons.g.resources"),
+            Is.EqualTo(new[] { "icons/icons/app.txt" }));
     }
 
     [Test]

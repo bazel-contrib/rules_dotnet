@@ -308,8 +308,11 @@ SDK since .NET 6, referencing Windows Forms or WPF does not imply it.
 as `Microsoft.WinFX.targets` compiles them. An `App.xaml` at the root of the
 target's package is the application definition, which generates the
 application's `Main`; every other `.xaml` file is a page. `wpf_resources` are
-MSBuild's `<Resource>` items: embedded with the compiled XAML and addressed by
-their path relative to the package.
+MSBuild's `<Resource>` items: embedded in `<assembly name>.g.resources` with the
+compiled XAML, or on their own in a target with none, and addressed by their
+path relative to the package. A generated page or resource is named by its path
+in the package too, and one from outside the package by its file name, as
+MSBuild names a file from outside the project.
 
 XAML that names a type of the assembly being built, such as a value converter
 it declares, is compiled against a temporary assembly of the sources, as MSBuild

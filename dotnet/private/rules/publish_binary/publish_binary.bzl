@@ -1196,7 +1196,7 @@ def _publish_binary_impl(ctx):
     runtime_pack_info = binary_info.runtime_pack_info if is_self_contained else None
     runtime_identifier = ctx.attr.runtime_identifier if ctx.attr.runtime_identifier else binary_info.runtime_pack_info.runtime_identifier
 
-    if windows_only and not (runtime_identifier or "").startswith("win-"):
+    if windows_only and not (runtime_identifier or "").startswith("win"):
         fail("{}: {} runs on {}, which only exists on Windows. Set `runtime_identifier` to a Windows one, such as win-x64.".format(
             ctx.label,
             _binary(ctx).label,
@@ -1211,13 +1211,15 @@ def _publish_binary_impl(ctx):
 
     # The binary's runtime pack carries the shared frameworks it references
     # itself. One a dependency needs, which its runtimeconfig.json asks for,
-    # would be missing from a self-contained publish.
+    # would be missing from a self-contained publish, and from what ReadyToRun
+    # compiles every assembly against.
     missing = [framework for framework in binary_info.runtime_frameworks if framework not in binary_info.packed_frameworks]
-    if is_self_contained and missing:
-        fail("{}: {} runs on {}, which one of its dependencies references, but a self-contained publish only carries the runtime packs of the shared frameworks the binary references itself. Add {} to the `framework_references` of {}.".format(
+    if (is_self_contained or ctx.attr.ready_to_run) and missing:
+        fail("{}: {} runs on {}, which one of its dependencies references, but a {} publish only takes the runtime packs of the shared frameworks the binary references itself. Add {} to the `framework_references` of {}.".format(
             ctx.label,
             _binary(ctx).label,
             ", ".join(missing),
+            "self-contained" if is_self_contained else "ReadyToRun",
             " and ".join(["\"{}\"".format(framework) for framework in missing]),
             _binary(ctx).label,
         ))

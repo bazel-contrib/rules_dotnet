@@ -15,6 +15,34 @@ csharp_library(
     target_frameworks = ["net10.0-windows"],
 )
 
+# A generated page and resource are named by their path in the package, as
+# their sources would be.
+genrule(
+    name = "generated_theme",
+    outs = ["Themes/Generated.xaml"],
+    cmd = """cat > $@ <<'EOF'
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation">
+  <SolidColorBrush x:Key="Generated" Color="Green" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" />
+</ResourceDictionary>
+EOF""",
+)
+
+genrule(
+    name = "generated_asset",
+    outs = ["Assets/generated.txt"],
+    cmd = "echo generated > $@",
+)
+
+# WPF resources without any XAML, which MSBuild embeds all the same.
+csharp_library(
+    name = "icons",
+    srcs = ["icons/Icons.cs"],
+    out = "XamlIcons",
+    framework_references = ["Microsoft.WindowsDesktop.App.WPF"],
+    target_frameworks = ["net10.0-windows"],
+    wpf_resources = ["icons/Icons/app.txt"],
+)
+
 csharp_binary(
     name = "xaml_app",
     srcs = [
@@ -23,11 +51,15 @@ csharp_binary(
         "Converters.cs",
         "Views/MainWindow.xaml",
         "Views/MainWindow.xaml.cs",
+        ":generated_theme",
     ],
     framework_references = ["Microsoft.WindowsDesktop.App.WPF"],
     target_frameworks = ["net10.0-windows"],
     winexe = True,
-    wpf_resources = ["Assets/greeting.txt"],
+    wpf_resources = [
+        "Assets/greeting.txt",
+        ":generated_asset",
+    ],
     deps = [":controls"],
 )
 
@@ -36,6 +68,7 @@ csharp_nunit_test(
     srcs = ["XamlTests.cs"],
     data = [
         ":controls",
+        ":icons",
         ":xaml_app",
     ],
     target_frameworks = ["net10.0"],

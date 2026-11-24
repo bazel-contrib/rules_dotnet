@@ -91,7 +91,7 @@ def _compile_action(ctx, tfm, toolchain):
     )
 
 def _binary_impl(ctx):
-    return build_binary(ctx, _compile_action, get_toolchain(ctx))
+    return build_binary(ctx, _compile_action, get_toolchain(ctx), winexe = ctx.attr.winexe)
 
 def _tool_runtime(ctx):
     """The toolchain whose runtime a tool of ours runs on.
@@ -113,7 +113,7 @@ def _tool_runtime(ctx):
     return user
 
 def _bootstrap_binary_impl(ctx):
-    return build_binary(ctx, _compile_action, ctx.toolchains[BOOTSTRAP_TOOLCHAIN_TYPE], _tool_runtime(ctx))
+    return build_binary(ctx, _compile_action, ctx.toolchains[BOOTSTRAP_TOOLCHAIN_TYPE], _tool_runtime(ctx), winexe = ctx.attr.winexe)
 
 # The user's toolchain is only looked at for the runtime a tool runs on.
 _BOOTSTRAP_TOOLCHAINS = [

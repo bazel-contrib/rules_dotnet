@@ -1,7 +1,9 @@
 "Tests for Windows Forms, WPF and Windows GUI executables."
 
-load("@bazel_skylib//lib:unittest.bzl", "analysistest", "asserts")
+load("@bazel_skylib//lib:unittest.bzl", "analysistest", "asserts", "unittest")
 load("//dotnet:defs.bzl", "csharp_binary", "csharp_library", "csharp_nunit_test", "fsharp_binary", "publish_binary")
+load("//dotnet/private:common.bzl", "runtime_frameworks")
+load("//dotnet/private/rules/csharp/actions:xaml.bzl", "package_path", "xaml_plan")
 load("//dotnet/private/tests:utils.bzl", "action_args_test")
 
 _WINDOWS_ONLY = ["@platforms//os:windows"]
@@ -62,6 +64,45 @@ _failure_test = analysistest.make(
         "expected_message_fragments": attr.string_list(mandatory = True),
     },
 )
+
+def _unit_test_impl(ctx):
+    env = unittest.begin(ctx)
+
+    # A file's name in the assembly is its path relative to the package, from
+    # another repository too, and its file name from outside the package.
+    def file(short_path):
+        return struct(short_path = short_path, basename = short_path.split("/")[-1])
+
+    # What `package_path` reads of a label, for this repository and another.
+    here = struct(repo_name = "", package = "app")
+    there = struct(repo_name = "other", package = "app")
+    asserts.equals(env, "App.xaml", package_path(file("app/App.xaml"), here))
+    asserts.equals(env, "Views/Main.xaml", package_path(file("app/Views/Main.xaml"), here))
+    asserts.equals(env, "App.xaml", package_path(file("../other/app/App.xaml"), there))
+    asserts.equals(env, "Shared.xaml", package_path(file("lib/Themes/Shared.xaml"), here))
+    asserts.equals(env, "Shared.xaml", package_path(file("../other/lib/Shared.xaml"), there))
+
+    # An App.xaml at the root of the package is the application definition,
+    # whichever repository the package is in.
+    plan = xaml_plan(there, [file("../other/app/App.xaml"), file("../other/app/Page.xaml")], {"Microsoft.WindowsDesktop.App": ["WPF"]}, True)
+    asserts.equals(env, "../other/app/App.xaml", plan.application.short_path)
+    asserts.equals(env, ["../other/app/Page.xaml"], [page.short_path for page in plan.pages])
+    outside = xaml_plan(here, [file("lib/App.xaml")], {"Microsoft.WindowsDesktop.App": None}, True)
+    asserts.equals(env, None, outside.application, "only the package's own App.xaml")
+
+    # NuGet compares framework reference names case-insensitively.
+    asserts.equals(
+        env,
+        ["Microsoft.AspNetCore.App", "Microsoft.WindowsDesktop.App"],
+        runtime_frameworks(
+            struct(framework_references = []),
+            [struct(framework_references = ["microsoft.aspnetcore.APP"]), struct(framework_references = ["Microsoft.WindowsDesktop.App.wpf"])],
+        ),
+    )
+
+    return unittest.end(env)
+
+_unit_test = unittest.make(_unit_test_impl)
 
 # buildifier: disable=function-docstring
 # buildifier: disable=unnamed-macro
@@ -251,6 +292,8 @@ def windowsdesktop_tests():
     csharp_nunit_test(
         name = "publish_test",
         srcs = ["PublishTests.cs"],
+        # Has no effect on a test, but is still accepted.
+        winexe = True,
         data = [
             ":app_publish",
             ":app_self_contained",
@@ -352,3 +395,21 @@ def windowsdesktop_tests():
         target_under_test = ":uses_wpf_self_contained",
         expected_message_fragments = ["Microsoft.WindowsDesktop.App", "framework_references"],
     )
+
+    # ReadyToRun compiles every assembly against the binary's runtime pack too.
+    publish_binary(
+        name = "uses_wpf_ready_to_run",
+        binary = ":uses_wpf",
+        ready_to_run = True,
+        runtime_identifier = "win-x64",
+        tags = ["manual"],
+        target_framework = "net10.0-windows",
+    )
+
+    _failure_test(
+        name = "uses_wpf_ready_to_run_test",
+        target_under_test = ":uses_wpf_ready_to_run",
+        expected_message_fragments = ["a ReadyToRun publish", "Microsoft.WindowsDesktop.App", "framework_references"],
+    )
+
+    _unit_test(name = "windowsdesktop_unit_test")

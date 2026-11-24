@@ -118,15 +118,47 @@ internal static class Program
     private static string WithSeparator(string directory) =>
         directory.EndsWith(Path.DirectorySeparatorChar) ? directory : directory + Path.DirectorySeparatorChar;
 
-    // A XAML file of the project is named relative to it, as MSBuild names an
-    // item: that path is what names its BAML resource and the URI its code
-    // behind loads it from. One from elsewhere keeps its full path.
-    private static ITaskItem ProjectItem(string path, string projectDir, Func<string, string> absolute)
+    // A XAML file or resource, as `<path>|<name>`: the name is its path relative
+    // to the package, which names its BAML or resource and the URI its code
+    // behind loads it from. MSBuild derives it from the item's path relative to
+    // the project, which a generated file under bazel-out has none of, so it is
+    // given as LogicalName, which the tasks take as it is.
+    private static (string Path, string Name) Named(string value)
     {
+        var separator = value.LastIndexOf('|');
+        return (value[..separator], value[(separator + 1)..]);
+    }
+
+    // The item the tasks get: named relative to the project where it is in it,
+    // as MSBuild names an item, and by its full path otherwise.
+    private static ITaskItem ProjectItem(string value, string projectDir, Func<string, string> absolute)
+    {
+        var (path, name) = Named(value);
         var full = absolute(path);
         var relative = Path.GetRelativePath(projectDir, full);
 
-        return new TaskItem(relative.StartsWith("..") || Path.IsPathRooted(relative) ? full : relative);
+        var item = new TaskItem(relative.StartsWith("..") || Path.IsPathRooted(relative) ? full : relative);
+        item.SetMetadata("LogicalName", name);
+        return item;
+    }
+
+    // Where pass1 or pass2 writes a XAML file's BAML: under the output directory,
+    // at its path relative to the project, or at its file name if it is
+    // outside it. Keyed to the name its source gives it, so that the BAML file
+    // is named as its source.
+    private static Dictionary<string, string> BamlNames(IEnumerable<string> pages, string projectDir, string outputDir, Func<string, string> absolute)
+    {
+        var names = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var (path, name) in pages.Select(Named))
+        {
+            var full = absolute(path);
+            var relative = Path.GetRelativePath(projectDir, full);
+            var located = relative.StartsWith("..") || Path.IsPathRooted(relative) ? Path.GetFileName(full) : relative;
+
+            names[Path.GetFullPath(Path.Combine(outputDir, Path.ChangeExtension(located, ".baml")))] = Path.ChangeExtension(name, ".baml");
+        }
+
+        return names;
     }
 
     private static ITask Task(string tasksAssembly, string name)
@@ -169,6 +201,11 @@ internal static class Program
 
         Tasks.Run(task, "MarkupCompilePass1");
 
+        // Pass1's state for an incremental build holds absolute paths, which
+        // would make what reads this directory miss the cache each time.
+        // Pass2 does not need it.
+        DeleteState(outputDir, "*_MarkupCompile.cache");
+
         // Pass2 runs in a sandbox of its own, with its own output directory.
         // The output directory is inside the execution root, so it goes first.
         Relocate(outputDir, (outputDir, OutputDirPlaceholder), (WithSeparator(execRoot), ExecRootPlaceholder + Path.DirectorySeparatorChar));
@@ -180,11 +217,17 @@ internal static class Program
     {
         var projectDir = absolute(options.ProjectDir);
         var outputDir = WithSeparator(absolute(options.OutputDir));
-        var pass1Dir = absolute(options.Pass1Dir);
+        Directory.CreateDirectory(outputDir);
 
         // Pass2 adds to what pass1 left, and an action's outputs are its own.
-        CopyDirectory(pass1Dir, outputDir);
-        Relocate(outputDir, (OutputDirPlaceholder, outputDir), (ExecRootPlaceholder + Path.DirectorySeparatorChar, WithSeparator(execRoot)));
+        // Without XAML there is no pass1, and only the resources are embedded.
+        if (options.Pass1Dir != "")
+        {
+            CopyDirectory(absolute(options.Pass1Dir), outputDir);
+            Relocate(outputDir, (OutputDirPlaceholder, outputDir), (ExecRootPlaceholder + Path.DirectorySeparatorChar, WithSeparator(execRoot)));
+        }
+
+        var bamlNames = BamlNames(options.Pages, projectDir, outputDir, absolute);
 
         var references = options.References.Select(reference => (ITaskItem)new TaskItem(absolute(reference))).ToArray();
         var resources = options.Resources.Select(resource => ProjectItem(resource, projectDir, absolute)).ToArray();
@@ -213,15 +256,21 @@ internal static class Program
 
         // What pass1 and pass2 leave for an incremental build means nothing to
         // the compilation, and holds absolute paths.
-        foreach (var state in Directory.EnumerateFiles(outputDir, "*_MarkupCompile.*", SearchOption.TopDirectoryOnly))
-        {
-            File.Delete(state);
-        }
+        DeleteState(outputDir, "*_MarkupCompile.*");
 
         // MainResourcesGeneration: in a stable order, so that the resources file
-        // is too.
+        // is too. Each BAML file is named as the XAML it was compiled from.
         var baml = Directory.EnumerateFiles(outputDir, "*.baml", SearchOption.AllDirectories)
-            .Select(file => (ITaskItem)new TaskItem(file));
+            .Select(file =>
+            {
+                var item = new TaskItem(file);
+                if (bamlNames.TryGetValue(Path.GetFullPath(file), out var name))
+                {
+                    item.SetMetadata("LogicalName", name);
+                }
+
+                return (ITaskItem)item;
+            });
         var embedded = baml.Concat(resources).OrderBy(item => item.ItemSpec, StringComparer.Ordinal).ToArray();
 
         Directory.CreateDirectory(Path.GetDirectoryName(resourcesFile)!);
@@ -242,6 +291,14 @@ internal static class Program
         Tasks.Run(generator, "ResourcesGenerator");
 
         return 0;
+    }
+
+    private static void DeleteState(string directory, string pattern)
+    {
+        foreach (var state in Directory.EnumerateFiles(directory, pattern, SearchOption.TopDirectoryOnly))
+        {
+            File.Delete(state);
+        }
     }
 
     private static void Relocate(string directory, params (string From, string To)[] replacements)

@@ -66,7 +66,7 @@ def _compile_action(ctx, tfm, toolchain):
     )
 
 def _binary_private_impl(ctx):
-    return build_binary(ctx, _compile_action, get_toolchain(ctx))
+    return build_binary(ctx, _compile_action, get_toolchain(ctx), winexe = ctx.attr.winexe)
 
 fsharp_binary = rule(
     _binary_private_impl,

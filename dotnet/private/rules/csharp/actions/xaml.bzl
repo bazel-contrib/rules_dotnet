@@ -64,6 +64,57 @@ def uses_wpf(frameworks):
     profiles = frameworks[WINDOWSDESKTOP_FRAMEWORK]
     return profiles == None or "WPF" in profiles
 
+def check_wpf(label, frameworks, target_framework_is_core, what):
+    """Fails unless a target that compiles WPF XAML or resources references WPF.
+
+    Args:
+      label: The label of the target.
+      frameworks: Its shared frameworks.
+      target_framework_is_core: Whether it is built for .NET Core or .NET.
+      what: What it has, for the message.
+    """
+    if not target_framework_is_core:
+        fail("%s: %s are only compiled for .NET Core 3.0 and later." % (label, what))
+
+    if not uses_wpf(frameworks):
+        fail(
+            "%s has %s but does not reference WPF: add \"Microsoft.WindowsDesktop.App.WPF\" " % (label, what) +
+            "or \"Microsoft.WindowsDesktop.App\" to its `framework_references`.",
+        )
+
+def package_path(file, label):
+    """A file's path relative to the target's package: MSBuild's path relative to the project.
+
+    It names the file's BAML or resource, and the URI WPF loads it by. A file
+    generated into the package is named as its source would be. One from
+    outside the package is named by its file name, as MSBuild names a file
+    from outside the project.
+
+    Args:
+      file: A XAML source or WPF resource.
+      label: The label of the target.
+
+    Returns:
+      The path, with forward slashes.
+    """
+
+    return _path_in_package(file, label) or file.basename
+
+def _path_in_package(file, label):
+    """A file's path relative to the target's package, or None if it is outside it."""
+
+    # A file reaches `short_path` as `<package>/<rel>`, or as
+    # `../<repo>/<package>/<rel>` when it comes from another repository.
+    prefix = "../%s/" % label.repo_name if label.repo_name else ""
+    if label.package:
+        prefix += label.package + "/"
+
+    path = file.short_path[len(prefix):]
+    if not file.short_path.startswith(prefix) or path.startswith("../"):
+        return None
+
+    return path
+
 def xaml_plan(label, xaml_srcs, frameworks, target_framework_is_core):
     """Splits XAML sources into the application definition and the pages.
 
@@ -76,26 +127,21 @@ def xaml_plan(label, xaml_srcs, frameworks, target_framework_is_core):
     Returns:
       A struct of the `application` definition, or None, and the `pages`.
     """
-    if not target_framework_is_core:
-        fail("%s: XAML is only compiled for .NET Core 3.0 and later." % label)
-
-    if not uses_wpf(frameworks):
-        fail(
-            "%s has XAML sources but does not reference WPF: add \"Microsoft.WindowsDesktop.App.WPF\" " % label +
-            "or \"Microsoft.WindowsDesktop.App\" to its `framework_references`. XAML sources: %s" % (
-                ", ".join([src.short_path for src in xaml_srcs]),
-            ),
-        )
+    check_wpf(label, frameworks, target_framework_is_core, "XAML sources")
 
     application = None
     pages = []
     for src in xaml_srcs:
-        if src.basename == _APPLICATION_DEFINITION and src.short_path == "{}/{}".format(label.package, _APPLICATION_DEFINITION).lstrip("/"):
+        if _path_in_package(src, label) == _APPLICATION_DEFINITION:
             application = src
         else:
             pages.append(src)
 
     return struct(application = application, pages = pages)
+
+def _named(files, label):
+    """Each file with the name it takes in the assembly, as the tool reads them."""
+    return ["{}|{}".format(file.path, package_path(file, label)) for file in files]
 
 def _project_dir(label):
     """The directory the tasks run in, as MSBuild runs them in the project's."""
@@ -141,9 +187,9 @@ def xaml_pass1(actions, label, plan, srcs, out_dir, assembly_name, root_namespac
 
     args = _common_args(actions, label, tasks, assembly_name, root_namespace, target, references)
     args.add("--output-dir", output.path)
-    args.add_all(plan.pages, before_each = "--page")
+    args.add_all(_named(plan.pages, label), before_each = "--page")
     if plan.application:
-        args.add("--application", plan.application)
+        args.add("--application", _named([plan.application], label)[0])
     args.add_all(srcs, before_each = "--source")
     args.add_all(defines, before_each = "--define")
 
@@ -164,12 +210,15 @@ def xaml_pass1(actions, label, plan, srcs, out_dir, assembly_name, root_namespac
 def xaml_pass2(actions, label, plan, pass1, temporary_assembly, wpf_resources, out_dir, assembly_name, root_namespace, target, references, tool, toolchain):
     """Runs MarkupCompilePass2 where pass1 asks for it, then ResourcesGenerator.
 
+    Without XAML, only ResourcesGenerator runs, as MSBuild embeds `<Resource>`
+    items whether or not there is any.
+
     Args:
       actions: The rule's `ctx.actions`.
       label: The label of the target.
-      plan: From `xaml_plan`.
-      pass1: What `xaml_pass1` returned.
-      temporary_assembly: The sources and pass1's code compiled together.
+      plan: From `xaml_plan`, or None without XAML.
+      pass1: What `xaml_pass1` returned, or None without XAML.
+      temporary_assembly: The sources and pass1's code compiled together, or None without XAML.
       wpf_resources: The `wpf_resources` to embed.
       out_dir: The target's output directory prefix.
       assembly_name: The assembly name.
@@ -181,32 +230,46 @@ def xaml_pass2(actions, label, plan, pass1, temporary_assembly, wpf_resources, o
 
     Returns:
       A struct of the generated `code` directory, whose `.g.cs` files the
-      compilation takes as sources, and the `resources` file it embeds.
+      compilation takes as sources, or None without XAML, and the `resources`
+      file it embeds.
     """
     tasks = _build_tasks(toolchain, label)
     output = actions.declare_directory("{}/xaml/obj".format(out_dir))
     resources = actions.declare_file("{}/xaml/{}.g.resources".format(out_dir, assembly_name))
+    xaml = (plan.pages + ([plan.application] if plan.application else [])) if plan else []
 
-    args = _common_args(actions, label, tasks, assembly_name, root_namespace, target, depset([temporary_assembly], transitive = [references]))
-    args.add("--pass1-dir", pass1.path)
+    args = _common_args(
+        actions,
+        label,
+        tasks,
+        assembly_name,
+        root_namespace,
+        target,
+        depset([temporary_assembly] if temporary_assembly else [], transitive = [references] if xaml else []),
+    )
+    if pass1:
+        args.add("--pass1-dir", pass1.path)
     args.add("--output-dir", output.path)
     args.add("--resources-file", resources.path)
-    args.add_all(wpf_resources, before_each = "--resource")
+
+    # The XAML again, so that each BAML file is named as its source.
+    args.add_all(_named(xaml, label), before_each = "--page")
+    args.add_all(_named(wpf_resources, label), before_each = "--resource")
 
     actions.run(
-        mnemonic = "XamlCompilePass2",
-        progress_message = "Compiling XAML that names local types for %{label}",
+        mnemonic = "XamlCompilePass2" if xaml else "WpfResources",
+        progress_message = ("Compiling XAML that names local types for %{label}" if xaml else "Embedding WPF resources for %{label}"),
         executable = tool.files_to_run,
         arguments = ["pass2", args],
         # Pass2 compiles the XAML that pass1 left for it from source.
         inputs = depset(
-            direct = [pass1, temporary_assembly] + plan.pages + ([plan.application] if plan.application else []) + wpf_resources,
-            transitive = [references, toolchain.wpf_build_tasks.files],
+            direct = ([pass1, temporary_assembly] if pass1 else []) + xaml + wpf_resources,
+            transitive = ([references] if xaml else []) + [toolchain.wpf_build_tasks.files],
         ),
         outputs = [output, resources],
     )
 
-    return struct(code = output, resources = resources)
+    return struct(code = output if xaml else None, resources = resources)
 
 def generated_code(file):
     """`map_each` for a XAML output directory: only the code the compiler takes."""
