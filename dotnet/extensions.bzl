@@ -40,10 +40,13 @@ Bazel uses exactly `sdk.version`: `rollForward` does not apply. Set this or
     ),
 }
 
+def _check_toolchain(mod, toolchain):
+    """Fails unless a toolchain tag names its SDK version in exactly one way."""
+    if bool(toolchain.dotnet_version) == bool(toolchain.global_json):
+        fail("dotnet.toolchain in module '{}' needs exactly one of dotnet_version and global_json".format(mod.name))
+
 def _toolchain_version(module_ctx, toolchain):
     """The SDK version a toolchain tag names, directly or through its global.json."""
-    if bool(toolchain.dotnet_version) == bool(toolchain.global_json):
-        fail("dotnet.toolchain needs exactly one of dotnet_version and global_json")
     if toolchain.dotnet_version:
         return toolchain.dotnet_version
     version = json.decode(module_ctx.read(toolchain.global_json)).get("sdk", {}).get("version")
@@ -69,7 +72,10 @@ def _toolchain_extension(module_ctx):
         # One SDK is registered per toolchain type, so a single SDK decides both
         # what everything compiles with and what it compiles against. Modules are
         # processed breadth-first, so the root-most registration wins.
+        # Every tag is checked, so that a module's mistake shows wherever the
+        # module is used, but only the winning tag's global.json is read.
         for toolchain in mod.tags.toolchain:
+            _check_toolchain(mod, toolchain)
             if sdk_version == None:
                 sdk_version = _toolchain_version(module_ctx, toolchain)
 
