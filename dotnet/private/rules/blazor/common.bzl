@@ -46,14 +46,10 @@ def _is_published_native(basename):
 def _managed_assemblies(runtime_info, pack):
     """Every assembly the browser loads, keyed by file name.
 
-    The runtime pack carries a whole framework. A dependency replaces an
-    assembly of it only when the dependency is newer, as MSBuild resolves the
-    conflict and as a self-contained publish's `deps.json` does: a package
-    from an older release, such as one a library still asks for after the
-    framework took it in, would otherwise replace the assembly the framework's
-    own assemblies were built against, and they would fail to load it. Of
-    several dependencies that are newer, the newest wins. One that sets no
-    version, as an import need not, is never taken to be the newer.
+    As in MSBuild's conflict resolution, a dependency replaces a runtime pack
+    assembly only when it is newer, and the newest such dependency wins: the
+    framework's own assemblies may fail to load an older copy. A dependency
+    without a version never counts as newer.
 
     Args:
       runtime_info: The application's `DotnetAssemblyRuntimeInfo`.
@@ -69,16 +65,11 @@ def _managed_assemblies(runtime_info, pack):
     versions = {}
 
     for info in pack.assembly_runtime_infos:
-        for lib in info.libs:
-            assemblies[lib.basename] = lib
-            versions[lib.basename] = info.version
-
         # The Mono pack keeps `System.Private.CoreLib.dll` among its native
         # files, but it is managed like any other.
-        for native in info.native:
-            if native.basename.endswith(".dll"):
-                assemblies[native.basename] = native
-                versions[native.basename] = info.version
+        for lib in info.libs + [file for file in info.native if file.basename.endswith(".dll")]:
+            assemblies[lib.basename] = lib
+            versions[lib.basename] = info.version
 
     for dep in runtime_info.deps.to_list():
         for lib in dep.libs:
@@ -138,7 +129,7 @@ def only(files, basename, what, under = None):
         if file.basename != basename:
             continue
 
-        if under == None or [True for fragment in under if fragment in file.path]:
+        if under == None or any([fragment in file.path for fragment in under]):
             return file
 
     fail("the packs carry no %s%s, which %s needs" % (
@@ -153,13 +144,11 @@ def _tool_file(files, basename, tfm):
     return only(files, basename, "a %s application" % tfm, ["/tools/%s/" % tfm, "/tools/net/"])
 
 def _application_assets(ctx, binary, tfm):
-    """The application's servable files, with the route each takes.
+    """The application's and its dependencies' static web assets, plus the starter script.
 
-    Those are the application's own and its dependencies', plus the starter
-    script. From .NET 11 the application's `Microsoft.AspNetCore.Components.WebAssembly`
-    package serves that like any other asset. Before, the package kept it out of
-    the assets, so it is taken from the internal assets pack, which ships the
-    same script.
+    From .NET 11 the `Microsoft.AspNetCore.Components.WebAssembly` package
+    serves the starter script as an ordinary asset; before that it comes from
+    the internal assets pack.
 
     Args:
       ctx: The rule context.
@@ -192,12 +181,10 @@ def _application_assets(ctx, binary, tfm):
     )
 
 def _application_symbols(runtime_info, assemblies):
-    """The symbols of the application's own assemblies.
+    """The symbols of the application and of the dependencies whose assemblies are shipped.
 
-    A NuGet package hardly ever ships symbols, so this naturally yields
-    first-party code only. A dependency's symbols go only where its assembly
-    does: one that lost to the runtime pack's copy would leave a debugger
-    symbols that match nothing the site ships.
+    A dependency that lost to the runtime pack's copy keeps its symbols out,
+    since they would match nothing the site serves.
 
     Args:
       runtime_info: The application's `DotnetAssemblyRuntimeInfo`.
@@ -299,24 +286,27 @@ def _assemble_action(ctx, binary, tfm, output, trimmed = None, trim_mode = "part
         outputs = [output] + ([trimmed] if trimmed else []),
     )
 
-# Both rules take these; the shared doc is also what `publish_binary` shows for
-# the same two settings.
-APPLICATION_ENVIRONMENT_DOC = "The environment name the application starts in."
+# Shared with `publish_binary`, which offers the same settings for `wasm = True`.
+APPLICATION_ENVIRONMENT_DOC = """The hosting environment a Blazor WebAssembly application starts in, as
+`IWebAssemblyHostEnvironment.Environment` reports it.
 
-INVARIANT_GLOBALIZATION_DOC = """Drop the globalization data.
+Defaults to `Development` for `bazel run` and to `Production` for a publish."""
 
-Culture-sensitive behaviour then falls back to the invariant culture, which
-saves the ICU payload at the cost of correct formatting and comparison."""
+INVARIANT_GLOBALIZATION_DOC = """Run a Blazor WebAssembly application without globalization data.
 
-TRIM_MODE_DOC = """How much of the application the trimmer removes.
+Culture-sensitive formatting, parsing and comparison then behave as in the
+invariant culture. The site no longer downloads the ICU data, at the cost of
+culture-correct behaviour."""
 
-`partial` is what `dotnet publish` uses for a Blazor WebAssembly application:
-it trims the framework and the assemblies that declare themselves trimmable,
-and keeps every other assembly whole. `full` trims every assembly, which is
-smaller but removes code reached only through reflection, and like the SDK the
-trimmer reports no warnings about it. `copyused` keeps every member of every
-assembly that is used at all, which is worth trying if a trimmed application
-misbehaves."""
+TRIM_MODE_DOC = """How much of a published Blazor WebAssembly application is trimmed away.
+
+* `partial` (the default, as in `dotnet publish`): trims the framework and the
+  assemblies that declare themselves trimmable, and keeps every other assembly
+  whole.
+* `full`: trims every assembly. Smaller, but it can remove code that is only
+  reached through reflection, and no trim warnings are reported.
+* `copyused`: keeps every member of every assembly that is used at all. Worth
+  trying if a trimmed application misbehaves."""
 
 TRIM_MODES = ["full", "partial", "copyused", "copy"]
 

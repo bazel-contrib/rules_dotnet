@@ -63,7 +63,8 @@ rem USERPROFILE and DOTNET_CLI_HOME stay as they are, so the user's NuGet.Config
 call :rlocation "TEMPLATED_dotnet" dotnet_executable
 for %%F in ("!dotnet_executable!") do set DOTNET_ROOT=%%~dpF
 
-set source_from_target=TEMPLATED_source
+rem Quoted, so that the characters cmd treats specially in a URL stay literal.
+set "source_from_target=TEMPLATED_source"
 set config_file=TEMPLATED_config_file
 
 set has_source=0
@@ -83,11 +84,21 @@ if "!has_source!"=="0" (
   if "!source_from_target!"=="" goto :no_source
   set args=--source "!source_from_target!"
 )
-if "!has_api_key!"=="0" if defined NUGET_API_KEY set args=!args! --api-key "!NUGET_API_KEY!"
-if "!has_symbol_api_key!"=="0" if defined NUGET_SYMBOL_API_KEY set args=!args! --symbol-api-key "!NUGET_SYMBOL_API_KEY!"
 if not "!config_file!"=="" (
   call :rlocation "!config_file!" config_path
   set args=!args! --configfile "!config_path!"
+)
+
+rem Kept out of `args`, so that a dry run prints the variables' names, not the keys.
+set key_args=
+set shown_keys=
+if "!has_api_key!"=="0" if defined NUGET_API_KEY (
+  set key_args=--api-key "!NUGET_API_KEY!"
+  set shown_keys=--api-key "%%NUGET_API_KEY%%"
+)
+if "!has_symbol_api_key!"=="0" if defined NUGET_SYMBOL_API_KEY (
+  set key_args=!key_args! --symbol-api-key "!NUGET_SYMBOL_API_KEY!"
+  set shown_keys=!shown_keys! --symbol-api-key "%%NUGET_SYMBOL_API_KEY%%"
 )
 
 rem Resolved before changing directory; the results are absolute.
@@ -102,9 +113,9 @@ if defined BUILD_WORKING_DIRECTORY cd /d "%BUILD_WORKING_DIRECTORY%"
 set /a last=count-1
 for /L %%i in (0,1,!last!) do (
   if defined RULES_DOTNET_NUGET_PUSH_DRY_RUN (
-    echo "!dotnet_executable!" nuget push "!package_%%i!" TEMPLATED_push_args !args! %*
+    echo "!dotnet_executable!" nuget push "!package_%%i!" TEMPLATED_push_args !args! %* !shown_keys!
   ) else (
-    "!dotnet_executable!" nuget push "!package_%%i!" TEMPLATED_push_args !args! %*
+    "!dotnet_executable!" nuget push "!package_%%i!" TEMPLATED_push_args !args! %* !key_args!
     if errorlevel 1 (
       set failed=!errorlevel!
       goto :push_failed

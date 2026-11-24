@@ -1,6 +1,7 @@
 """Analysis tests for `.resx` resources: how they are named, where satellites go, and what fails."""
 
-load("@bazel_skylib//lib:unittest.bzl", "analysistest", "asserts")
+load("@bazel_skylib//lib:unittest.bzl", "analysistest", "asserts", "unittest")
+load("//dotnet/private:common.bzl", "package_relative_path")
 load("//dotnet/private/tests:utils.bzl", "action_args_test")
 
 def _satellites_test_impl(ctx):
@@ -68,9 +69,40 @@ _fails_test = analysistest.make(
     },
 )
 
+def _file(short_path):
+    return struct(short_path = short_path, basename = short_path.rpartition("/")[2])
+
+def _label(package, repo_name = ""):
+    return struct(package = package, repo_name = repo_name)
+
+# (short_path, label of the compiling target, path relative to its package)
+_RELATIVE_PATHS = [
+    ("Strings.resx", _label(""), "Strings.resx"),
+    ("app/Strings.resx", _label("app"), "Strings.resx"),
+    ("app/My Res/Strings.resx", _label("app"), "My Res/Strings.resx"),
+    ("../other+/Strings.resx", _label("", "other+"), "Strings.resx"),
+    ("../other+/app/sub/Strings.resx", _label("app", "other+"), "sub/Strings.resx"),
+    # Outside the package, only the file name is kept.
+    ("lib/Strings.resx", _label("app"), "Strings.resx"),
+    ("appendix/Strings.resx", _label("app"), "Strings.resx"),
+    ("../other+/app/Strings.resx", _label("app"), "Strings.resx"),
+    ("../other+/app/Strings.resx", _label(""), "Strings.resx"),
+    ("app/Strings.resx", _label("app", "other+"), "Strings.resx"),
+]
+
+def _package_relative_path_test_impl(ctx):
+    env = unittest.begin(ctx)
+    for short_path, label, expected in _RELATIVE_PATHS:
+        asserts.equals(env, expected, package_relative_path(_file(short_path), label), "relative path of {} to {}".format(short_path, label))
+    return unittest.end(env)
+
+_package_relative_path_test = unittest.make(_package_relative_path_test_impl)
+
 # buildifier: disable=unnamed-macro
 def resx_tests():
     """The analysis tests of this package."""
+
+    _package_relative_path_test(name = "project_relative_path_test")
 
     # Neutral resources go into the assembly, named after `root_namespace`,
     # and a culture's do not.

@@ -8,7 +8,7 @@ than an internal detail.
 
 load("@bazel_lib//lib:base64.bzl", "base64")
 load("@bazel_skylib//lib:unittest.bzl", "asserts", "unittest")
-load("//dotnet/private/rules/csharp/actions:razor.bzl", "razor_lang_version", "target_path")
+load("//dotnet/private/rules/csharp/actions:razor.bzl", "escape_section_name", "razor_lang_version", "target_path")
 
 # `target_path` reads only these two fields off the label.
 def _label(package, repo_name = ""):
@@ -67,10 +67,30 @@ def _encoding_test_impl(ctx):
 
 encoding_test = unittest.make(_encoding_test_impl)
 
+# An editorconfig section name is a glob, and Roslyn only parses a section
+# header holding `#` or `;` when they are escaped.
+_SECTION_NAMES = {
+    "Widget.razor": "Widget.razor",
+    "Some Folder/A b.razor": "Some Folder/A b.razor",
+    "C#/Widget.razor": "C\\#/Widget.razor",
+    "a;b/Widget.razor": "a\\;b/Widget.razor",
+    "[x]{y}*?.razor": "\\[x\\]\\{y\\}\\*\\?.razor",
+    "a\\b.razor": "a\\\\b.razor",
+}
+
+def _section_name_test_impl(ctx):
+    env = unittest.begin(ctx)
+    for path, expected in _SECTION_NAMES.items():
+        asserts.equals(env, expected, escape_section_name(path), "section name of %r" % path)
+    return unittest.end(env)
+
+section_name_test = unittest.make(_section_name_test_impl)
+
 def target_path_test_suite(name):
     unittest.suite(
         name,
         encoding_test,
         lang_version_test,
+        section_name_test,
         target_path_test,
     )

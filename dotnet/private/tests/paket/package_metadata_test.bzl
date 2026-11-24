@@ -277,7 +277,7 @@ def _selected(env, deps, tfm):
     ]
     asserts.equals(env, 1, len(winners), "one branch wins for {} among {}".format(tfm, holding))
 
-    return deps["@rules_dotnet//dotnet:tfm_{}".format(winners[0])]
+    return deps[str(Label("//dotnet:tfm_{}".format(winners[0])))]
 
 def _deps_by_tfm_test_impl(ctx):
     env = unittest.begin(ctx)

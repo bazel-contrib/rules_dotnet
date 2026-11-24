@@ -26,16 +26,9 @@ def _narrow_analyzers(analyzers, nuget_info, profiles):
     ]
 
 def _targeting_pack_impl(ctx):
-    compile_infos = []
-    runtime_infos = []
-    nuget_infos = []
-    for pack in ctx.attr.packs:
-        if pack[DotnetAssemblyCompileInfo]:
-            compile_infos.append(pack[DotnetAssemblyCompileInfo])
-        if pack[DotnetAssemblyRuntimeInfo]:
-            runtime_infos.append(pack[DotnetAssemblyRuntimeInfo])
-        if pack[NuGetInfo]:
-            nuget_infos.append(pack[NuGetInfo])
+    compile_infos = [pack[DotnetAssemblyCompileInfo] for pack in ctx.attr.packs]
+    runtime_infos = [pack[DotnetAssemblyRuntimeInfo] for pack in ctx.attr.packs]
+    nuget_infos = [pack[NuGetInfo] for pack in ctx.attr.packs]
 
     profiles_by_pack = _parse_profiles(ctx.attr.profiles)
 
@@ -53,8 +46,7 @@ def _targeting_pack_impl(ctx):
     analyzers_vb = []
     compile_data = []
 
-    for i, nuget_info in enumerate(nuget_infos):
-        compile_info = compile_infos[i]
+    for (compile_info, nuget_info) in zip(compile_infos, nuget_infos):
         profiles = profiles_by_pack.get(compile_info.name)
 
         # `parse_framework_list` lower cases the assembly names it returns, so
@@ -63,8 +55,7 @@ def _targeting_pack_impl(ctx):
         for ref in compile_info.refs:
             refs_by_name.setdefault(ref.basename.lower().replace(".dll", ""), ref)
 
-        for override_name, override_version in nuget_info.targeting_pack_overrides.items():
-            targeting_pack_overrides[override_name] = override_version
+        targeting_pack_overrides.update(nuget_info.targeting_pack_overrides)
 
         for dll_name, dll_version in nuget_info.framework_list.items():
             if not in_profiles(nuget_info.framework_list_profiles.get(dll_name, ""), profiles):

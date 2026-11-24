@@ -40,7 +40,7 @@ internal static partial class Validation
             }
             else
             {
-                versionText = File.ReadLines(request.VersionFile).Select(line => line.Trim()).FirstOrDefault(line => line.Length > 0) ?? "";
+                versionText = NuGetVersion.ReadFile(request.VersionFile);
                 if (versionText.Length == 0)
                 {
                     errors.Add($"version file '{request.VersionFile}' is empty");

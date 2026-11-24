@@ -42,7 +42,7 @@ def _compile_action(ctx, tfm, toolchain):
         srcs = ctx.files.srcs,
         data = ctx.files.data,
         appsetting_files = ctx.files.appsetting_files,
-        content_file_mappings = resolve_content_file_mappings(ctx.attr.content_files, ctx.label.package),
+        content_file_mappings = resolve_content_file_mappings(ctx.attr.content_files, ctx.label),
         compile_data = ctx.files.compile_data,
         out = ctx.attr.out,
         target = "winexe" if ctx.attr.winexe else "exe",
@@ -70,7 +70,7 @@ def _binary_private_impl(ctx):
 
 fsharp_binary = rule(
     _binary_private_impl,
-    doc = """Compile a F# exe""" + BINARY_OUTPUT_GROUPS_DOC,
+    doc = """Compiles an F# executable.""" + BINARY_OUTPUT_GROUPS_DOC,
     attrs = dicts.add(FSHARP_BINARY_COMMON_ATTRS, WINEXE_ATTRS),
     executable = True,
     toolchains = [

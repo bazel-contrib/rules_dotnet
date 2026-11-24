@@ -6,7 +6,7 @@ rem Usage of rlocation function:
 rem        call :rlocation <runfile_path> <abs_path>
 rem        The rlocation function maps the given <runfile_path> to its absolute
 rem        path and stores the result in a variable named <abs_path>.
-rem        This function fails if the <runfile_path> doesn't exist in mainifest
+rem        This function fails if the <runfile_path> doesn't exist in manifest
 rem        file.
 :: Start of rlocation
 goto :rlocation_end
@@ -48,14 +48,14 @@ exit /b 0
 :: End of rlocation
 
 set RUNFILES_MANIFEST_ONLY=1
-set DOTNET_MULTILEVEL_LOOKUP="false"
-set DOTNET_NOLOGO="1"
-set DOTNET_CLI_TELEMETRY_OPTOUT="1"
+rem Unquoted: cmd keeps quotes as part of the value.
+set DOTNET_MULTILEVEL_LOOKUP=false
+set DOTNET_NOLOGO=1
+set DOTNET_CLI_TELEMETRY_OPTOUT=1
 TEMPLATED_environment
 
-set dotnet_executable="TEMPLATED_dotnet"
 call :rlocation "TEMPLATED_dotnet" dotnet_executable
-for %%F in (%dotnet_executable%) do set DOTNET_ROOT=%%~dpF
+for %%F in ("!dotnet_executable!") do set DOTNET_ROOT=%%~dpF
 
 call :rlocation "TEMPLATED_executable" run_script
 set args=%*

@@ -1,25 +1,14 @@
 """Static web assets: the files a web target serves.
 
-An asset is a file plus the path it is served from, and propagation across
-dependency edges is a transitive depset. Two of MSBuild's conventions are
-reproduced rather than invented:
+As in MSBuild, an asset under `wwwroot` is served at its path relative to it,
+and a library's assets are served under `_content/<assembly name>` while an
+application's sit at the root.
 
-  * files live under a `wwwroot` directory, and are served at their path
-    relative to it. This is MSBuild's default content root.
-  * a library's assets are served under `_content/<assembly name>`, so two
-    libraries shipping `site.css` do not collide. An application's assets sit at
-    the root.
-
-Assets are always materialized into a `wwwroot` tree rather than recorded in a
-manifest that points at their original locations, because only that layout works
-under remote execution and `bazel run`. It is also the layout `dotnet publish`
-produces, which is why no `{Assembly}.staticwebassets.runtime.json` is written:
-a published application does not carry one either.
-
-The tree holds copies rather than symlinks. `MapStaticAssets` sends each asset
-straight from the file with the `Content-Length` the manifest declares, and on
-Windows that send comes up short against a symlink, so every asset reached
-through one answers its request with a 500.
+A binary materializes its transitive assets into a `wwwroot` tree, the layout
+`dotnet publish` produces, rather than a `staticwebassets.runtime.json` pointing
+at their sources: only that works under remote execution and `bazel run`. The
+tree holds copies, because on Windows `MapStaticAssets` fails to send a
+symlinked file in full and answers with a 500.
 """
 
 load("//dotnet/private:providers.bzl", "StaticWebAssetsInfo")

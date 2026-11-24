@@ -278,6 +278,11 @@ def _resolve_sdk_test_impl(ctx):
     asserts.equals(env, 6, len(sdk.archives))
     asserts.true(env, sdk.fact != None, "complete metadata is remembered")
 
+    # A release of the SDK alone carries the newest runtime out by then.
+    sdk_only = resolve_sdk(_fake_module_ctx({_METADATA + "10.0/releases.json": _RELEASES}), "10.0.302", {})
+    asserts.equals(env, "10.0.10", sdk_only.runtime_version)
+    asserts.equals(env, None, sdk_only.fact, "no archives, so not remembered")
+
     # What is remembered is used without asking again.
     remembered = _fake_module_ctx({}, facts = {sdk_fact_key("10.0.401"): sdk.fact})
     asserts.equals(env, sdk.archives, resolve_sdk(remembered, "10.0.401", {}).archives)

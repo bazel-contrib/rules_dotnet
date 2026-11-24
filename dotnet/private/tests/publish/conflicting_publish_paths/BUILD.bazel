@@ -1,5 +1,5 @@
 load("//dotnet:defs.bzl", "csharp_binary", "csharp_library", "import_library", "publish_binary")
-load(":tests.bzl", "publish_conflict_test", "publish_succeeds_test")
+load(":tests.bzl", "one_file_per_path_test", "publish_conflict_test", "publish_succeeds_test")
 
 # `lib_one` and `lib_two` both build `lib.dll`, and `a` and `b` each see only
 # one of them. Nothing conflicts until a publish flattens the whole closure
@@ -125,6 +125,42 @@ publish_succeeds_test(
     target_under_test = ":duplicate_native_names",
 )
 
+# The same goes for the natives a single-file or NativeAOT executable keeps
+# beside it: one of them is copied there, not both into the same path.
+publish_binary(
+    name = "duplicate_native_names_single_file",
+    binary = ":native_app",
+    self_contained = True,
+    single_file = True,
+    tags = ["manual"],
+    target_framework = "net10.0",
+)
+
+one_file_per_path_test(
+    name = "duplicate_native_names_single_file_test",
+    size = "small",
+    basename = "libnative.so",
+    mnemonic = "DotnetCopySidecars",
+    target_under_test = ":duplicate_native_names_single_file",
+)
+
+publish_binary(
+    name = "duplicate_native_names_native_aot",
+    binary = ":native_app",
+    native_aot = True,
+    self_contained = True,
+    tags = ["manual"],
+    target_framework = "net10.0",
+)
+
+one_file_per_path_test(
+    name = "duplicate_native_names_native_aot_test",
+    size = "small",
+    basename = "libnative.so",
+    mnemonic = "DotnetCopySidecars",
+    target_under_test = ":duplicate_native_names_native_aot",
+)
+
 # The same two natives keep their RID folders in a framework-dependent publish,
 # so nothing collides and the publish is expected to succeed.
 publish_binary(
@@ -179,4 +215,23 @@ publish_succeeds_test(
     name = "duplicate_packaged_assemblies_test",
     size = "small",
     target_under_test = ":duplicate_packaged_assemblies",
+)
+
+# A composite image compiles the assembly that is published, not both.
+publish_binary(
+    name = "duplicate_packaged_assemblies_composite",
+    binary = ":packaged_app",
+    ready_to_run = True,
+    ready_to_run_composite = True,
+    self_contained = True,
+    tags = ["manual"],
+    target_framework = "net10.0",
+)
+
+one_file_per_path_test(
+    name = "duplicate_packaged_assemblies_composite_test",
+    size = "small",
+    basename = "Shared.dll",
+    mnemonic = "Crossgen2Composite",
+    target_under_test = ":duplicate_packaged_assemblies_composite",
 )

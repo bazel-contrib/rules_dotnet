@@ -10,6 +10,10 @@ load("//dotnet/private/rules/nuget:nuget_archive.bzl", "nuget_archive")
 
 _GLOBAL_NUGET_PREFIX = "nuget"
 
+# By canonical label, so that the hub repository resolves it whatever name it
+# sees rules_dotnet under.
+_PACKAGE_BZL = str(Label("//dotnet/private/rules/nuget:package.bzl"))
+
 _PACKAGES_TEMPLATE = """\
 "GENERATED"
 
@@ -21,7 +25,7 @@ PACKAGES = {packages}
 _PACKAGE_TEMPLATE = """\
 "GENERATED"
 
-load("@rules_dotnet//dotnet/private/rules/nuget:package.bzl", "nuget_package")
+load("{package_bzl}", "nuget_package")
 load(
     "@{archive}//:package_info.bzl",
     "DEPENDENCY_GROUPS",
@@ -67,7 +71,7 @@ alias(name = "files", actual = "@{archive}//:files")
 _TOOLS_TEMPLATE = """\
 "GENERATED"
 
-load("@rules_dotnet//dotnet/private/rules/nuget:package.bzl", "nuget_package_tools")
+load("{package_bzl}", "nuget_package_tools")
 load("@{archive}//:package_info.bzl", "TOOLS")
 
 package(default_visibility = ["//visibility:public"])
@@ -139,6 +143,7 @@ package(default_visibility = ["//visibility:public"])
         ctx.file("{}/{}/BUILD.bazel".format(id, version), _PACKAGE_TEMPLATE.format(
             archive = archive,
             library_name = package["id"],
+            package_bzl = _PACKAGE_BZL,
             sha512 = package.get("sha512", ""),
             version = version,
         ))
@@ -152,6 +157,7 @@ package(default_visibility = ["//visibility:public"])
         ctx.file("{}/tools/BUILD.bazel".format(name), _TOOLS_TEMPLATE.format(
             archive = archive,
             package = nuget_package_label(id, version),
+            package_bzl = _PACKAGE_BZL,
         ))
 
 _nuget_repo = repository_rule(
@@ -226,13 +232,26 @@ def nuget_repo(name, packages):
     """Declares a repository for a set of resolved NuGet packages.
 
     Prefer pointing the `paket` module extension at a `paket.lock` file. This
-    is the lower level entry point, for resolvers that produce the package
-    list some other way.
+    is the lower level entry point, for a module extension that resolves the
+    package list some other way.
+
+    A package is addressed as `@<name>//<lower cased id>`, and a dotnet tool
+    it ships as `@<name>//<lower cased id>/tools:<command>`. The dependencies
+    a package declares resolve among the packages of the same repository; one
+    that is not listed is left out. A package is only downloaded when a build
+    needs it.
 
     Args:
-      name: The repository name, which is how users address the packages.
-      packages: Dicts describing each resolved package, with `id`, `version`
-        and `sources` keys, and optionally `sha512` and `netrc`.
+      name: The repository name.
+      packages: Dicts describing each resolved package, with keys `id`,
+        `version` (normalized, e.g. `6.0.0` rather than `6.0`), `sources` (the
+        feeds to download it from, in order) and optionally `sha512` (the
+        subresource integrity of the `.nupkg`) and `netrc` (a label of a netrc
+        file with credentials for the feeds).
     """
     nuget_archives(packages, {})
     nuget_hub_repo(name, packages)
+
+# Exposed so the generated BUILD files can be checked without a module
+# extension. See `//dotnet/private/tests/nuget_labels`.
+write_hub_for_testing = _nuget_repo_impl

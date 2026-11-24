@@ -5,7 +5,6 @@
 
 using System;
 using System.IO;
-using System.Runtime.InteropServices;
 using Microsoft.NET.HostModel.AppHost;
 
 namespace ApphostShimmer
@@ -23,8 +22,8 @@ namespace ApphostShimmer
         // host. Both the apphost and singlefilehost are stamped this way.
         public void CreateApphostShellShim(string appBinaryFilePath, string shimPath, string targetRid, bool windowsGraphicalUserInterface = false)
         {
-            // by passing null to assemblyToCopyResorcesFrom, it will skip copying resources,
-            // which is only supported on Windows
+            // Without `assemblyToCopyResourcesFrom` no Win32 resources are copied,
+            // which only works on a Windows host.
             HostWriter.CreateAppHost(appHostSourceFilePath: Path.GetFullPath(_apphost),
               appHostDestinationFilePath: Path.GetFullPath(shimPath),
               appBinaryFilePath: appBinaryFilePath,

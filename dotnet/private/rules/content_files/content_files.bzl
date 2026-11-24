@@ -1,15 +1,4 @@
-"""The `dotnet_content_files` rule and helpers for resolving `content_files` targets.
-
-`dotnet_content_files` groups a set of data files and gives explicit control over where each
-one is copied relative to a consuming assembly's output directory. It mirrors MSBuild's
-[`CopyToOutputDirectory`](https://learn.microsoft.com/en-us/visualstudio/msbuild/common-msbuild-project-items)
-combined with [`Link`/`TargetPath`](https://learn.microsoft.com/en-us/visualstudio/msbuild/common-msbuild-project-items#content):
-`strip_prefix` removes a leading directory from each file's package-relative path and `prefix`
-prepends a destination directory, so you can flatten, relocate, or re-root arbitrary trees.
-
-Pass the resulting target to the `content_files` attribute of a `csharp_library`,
-`csharp_binary`, `csharp_test`, `fsharp_library`, `fsharp_binary`, or `fsharp_test`.
-"""
+"""The `dotnet_content_files` rule, and resolving the `content_files` attribute to destination paths."""
 
 load("//dotnet/private:common.bzl", "package_relative_path")
 load("//dotnet/private:providers.bzl", "DotnetContentFilesInfo")
@@ -37,7 +26,7 @@ def _dotnet_content_files_impl(ctx):
     mappings = []
     seen = {}
     for f in ctx.files.srcs:
-        dest = _remap(package_relative_path(f, ctx.label.package), strip_prefix, prefix)
+        dest = _remap(package_relative_path(f, ctx.label), strip_prefix, prefix)
         if dest in seen:
             fail("dotnet_content_files %s: sources %s and %s both map to destination %r; adjust `srcs`, `strip_prefix`, or `prefix` to disambiguate." % (ctx.label, seen[dest], f.short_path, dest))
         seen[dest] = f.short_path
@@ -45,10 +34,7 @@ def _dotnet_content_files_impl(ctx):
 
     return [
         DefaultInfo(files = depset(ctx.files.srcs)),
-        DotnetContentFilesInfo(
-            files = depset(ctx.files.srcs),
-            mappings = mappings,
-        ),
+        DotnetContentFilesInfo(mappings = mappings),
     ]
 
 dotnet_content_files = rule(
@@ -56,19 +42,15 @@ dotnet_content_files = rule(
     doc = """Groups data files and controls where they are copied next to a consuming assembly.
 
 Reference the target from the `content_files` attribute of a `csharp_library`, `csharp_binary`,
-`csharp_test`, `fsharp_library`, `fsharp_binary`, or `fsharp_test`. Each source file's
-destination (relative to the assembly output directory, resolvable at runtime via
-`AppContext.BaseDirectory`) is computed from its path relative to this target's Bazel package,
-after applying `strip_prefix` and `prefix`.
+`csharp_test`, `fsharp_library`, `fsharp_binary`, or `fsharp_test`. Each file's destination,
+relative to the assembly's directory (`AppContext.BaseDirectory` at run time), is its path
+relative to this target's package with `strip_prefix` removed and `prefix` prepended. A file
+from another package starts from its file name.
 
-This mirrors an MSBuild
+Like the `Link` metadata of an MSBuild
 [`Content`](https://learn.microsoft.com/en-us/visualstudio/msbuild/common-msbuild-project-items#content)
-or [`None`](https://learn.microsoft.com/en-us/visualstudio/msbuild/common-msbuild-project-items#none)
-item marked
-[`CopyToOutputDirectory`](https://learn.microsoft.com/en-us/visualstudio/msbuild/common-msbuild-project-items):
-its `Link`/`TargetPath` metadata controls where each file lands, so you can flatten a directory,
-relocate files, or re-root a whole tree — the cases plain `content_files` (which preserves the
-package-relative structure verbatim) cannot express.
+item copied to the output directory, this can flatten a directory, relocate files or re-root a
+tree, which plain `content_files` cannot.
 
 Example:
 
@@ -92,47 +74,56 @@ csharp_binary(
 """,
     attrs = {
         "srcs": attr.label_list(
-            doc = "The data files to stage. Directory structure is taken relative to this " +
-                  "target's Bazel package before `strip_prefix`/`prefix` are applied. " +
-                  "Typically populated with `glob`.",
+            doc = "The data files to copy.",
             allow_files = True,
             allow_empty = True,
         ),
         "strip_prefix": attr.string(
-            doc = "A leading directory (relative to this target's package) to remove from each " +
-                  "source's path before computing its destination. Sources whose package-relative " +
-                  "path does not start with this prefix are left unchanged. Defaults to stripping " +
-                  "nothing, preserving the package-relative structure.",
+            doc = "A leading directory, relative to this target's package, to remove from each " +
+                  "file's path. Files outside it keep their whole path.",
             default = "",
         ),
         "prefix": attr.string(
-            doc = "A destination directory to prepend to every file's path (after `strip_prefix`), " +
-                  "relative to the consuming assembly's output directory. Defaults to no prefix.",
+            doc = "A directory, relative to the assembly's directory, to place every file under. " +
+                  "Must not contain `..`.",
             default = "",
         ),
     },
 )
 
-def resolve_content_file_mappings(content_targets, package):
-    """Resolves the `content_files` attribute targets into `(src, dest)` mappings.
+def resolve_content_file_mappings(content_targets, label):
+    """Resolves the targets of a `content_files` attribute into destination paths.
 
-    Targets providing `DotnetContentFilesInfo` (i.e. `dotnet_content_files`) contribute their
-    explicit destination paths. Plain file targets fall back to their path relative to `package`
-    (the consuming target's Bazel package) via `package_relative_path`, preserving the
-    package-relative directory structure.
+    A `dotnet_content_files` target gives its own; any other file keeps its
+    path relative to the consuming target's package. Two different files may
+    not share a destination.
 
     Args:
         content_targets: The list of `Target`s from the `content_files` attribute.
-        package: The Bazel package of the consuming target (`ctx.label.package`).
+        label: The label of the consuming target.
 
     Returns:
-        A list of `struct(src = File, dest = string)` mappings.
+        A list of `struct(src = File, dest = string)` mappings, one per destination.
     """
+    sources = {}
     mappings = []
     for t in content_targets:
         if DotnetContentFilesInfo in t:
-            mappings.extend(t[DotnetContentFilesInfo].mappings)
+            target_mappings = t[DotnetContentFilesInfo].mappings
         else:
-            for f in t[DefaultInfo].files.to_list():
-                mappings.append(struct(src = f, dest = package_relative_path(f, package)))
+            target_mappings = [struct(src = f, dest = package_relative_path(f, label)) for f in t[DefaultInfo].files.to_list()]
+
+        for mapping in target_mappings:
+            previous = sources.get(mapping.dest)
+            if previous == None:
+                sources[mapping.dest] = mapping.src
+                mappings.append(mapping)
+            elif previous != mapping.src:
+                fail(("%s: `content_files` would stage both %s and %s at %r. Give one of them " +
+                      "another destination, for example with `dotnet_content_files`.") % (
+                    label,
+                    previous.short_path,
+                    mapping.src.short_path,
+                    mapping.dest,
+                ))
     return mappings

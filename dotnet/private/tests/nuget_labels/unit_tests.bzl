@@ -1,9 +1,15 @@
-"""Checks that the BUILD file written for a NuGet package names rules_dotnet by canonical label."""
+"""Checks that the BUILD files written for NuGet packages name rules_dotnet by canonical label."""
 
 load("@bazel_skylib//lib:unittest.bzl", "asserts", "unittest")
 
 # buildifier: disable=bzl-visibility
 load("//dotnet/private/rules/nuget:nuget_archive.bzl", "write_repository_for_testing")
+
+# buildifier: disable=bzl-visibility
+load("//dotnet/private/rules/nuget:nuget_repo.bzl", "write_hub_for_testing")
+
+# buildifier: disable=bzl-visibility
+load("//dotnet/private/rules/nuget:package.bzl", "deps_by_tfm")
 
 _NUSPEC = """<?xml version="1.0" encoding="utf-8"?>
 <package xmlns="http://schemas.microsoft.com/packaging/2013/05/nuspec.xsd">
@@ -46,5 +52,35 @@ def _canonical_labels_test_impl(ctx):
 
 canonical_labels_test = unittest.make(_canonical_labels_test_impl)
 
+def _hub_build_files():
+    written = {}
+    ctx = struct(
+        attr = struct(
+            extra_build_files = {},
+            packages = [json.encode({"id": "A", "name": "A", "sha512": "", "version": "1.0.0"})],
+        ),
+        file = lambda path, content: written.update({path: content}),
+    )
+    write_hub_for_testing(ctx)
+    return written
+
+def _hub_canonical_labels_test_impl(ctx):
+    env = unittest.begin(ctx)
+    written = _hub_build_files()
+    package_bzl = 'load("%s"' % Label("//dotnet/private/rules/nuget:package.bzl")
+
+    for (path, content) in written.items():
+        asserts.false(env, "@rules_dotnet//" in content, "{} names @rules_dotnet by apparent name".format(path))
+
+    asserts.true(env, package_bzl in written["a/1.0.0/BUILD.bazel"], "missing the canonical load of the package")
+    asserts.true(env, package_bzl in written["a/tools/BUILD.bazel"], "missing the canonical load of the tools")
+
+    for condition in deps_by_tfm({"netstandard2.0": ["B"]}, {"b": "b"}):
+        asserts.false(env, condition.startswith("@rules_dotnet//"), "{} is an apparent label".format(condition))
+
+    return unittest.end(env)
+
+hub_canonical_labels_test = unittest.make(_hub_canonical_labels_test_impl)
+
 def unit_test_suite(name):
-    unittest.suite(name, canonical_labels_test)
+    unittest.suite(name, canonical_labels_test, hub_canonical_labels_test)

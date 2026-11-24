@@ -128,7 +128,11 @@ def _download_json(module_ctx, requests):
                 " the SDK lets a build go without it.",
             )
 
-        documents[name] = json.decode(module_ctx.read(output))
+        document = json.decode(module_ctx.read(output), default = None)
+        if type(document) != "dict":
+            fail("The .NET release metadata at {} is not a JSON object. A proxy may have answered in its place.".format(url))
+
+        documents[name] = document
 
     return documents
 
@@ -238,13 +242,27 @@ def _read_sdk(module_ctx, cache, channel, version):
         )
 
     (release, sdk) = found
+    release_date = release.get("release-date") or ""
+
+    # A release of the SDK alone names no runtime: the SDK carries the newest
+    # one out by then.
+    runtime_version = (
+        sdk.get("runtime-version") or
+        (release.get("runtime") or {}).get("version") or
+        runtime_shipped_by(releases, release_date)
+    )
+
+    # Both decide which packs the SDK compiles against, so guessing either
+    # would pick, and remember, the wrong ones.
+    if not release_date or not runtime_version:
+        fail("The .NET release metadata for .NET {} gives no release date or runtime version for SDK {}.".format(channel, version))
 
     return {
         "archives": select_archives(sdk.get("files") or []),
         "csharp_version": sdk.get("csharp-version") or "",
         "fsharp_version": sdk.get("fsharp-version") or "",
-        "release_date": release.get("release-date") or "",
-        "runtime_version": sdk.get("runtime-version") or (release.get("runtime") or {}).get("version", ""),
+        "release_date": release_date,
+        "runtime_version": runtime_version,
     }
 
 def _is_complete(fact):

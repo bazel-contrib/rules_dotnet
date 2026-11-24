@@ -2,7 +2,6 @@
 Actions for compiling targets with F#.
 """
 
-load("@bazel_skylib//lib:dicts.bzl", "dicts")
 load(
     "//dotnet/private:common.bzl",
     "add_resource_args",
@@ -29,7 +28,7 @@ load(
     "DotnetAssemblyCompileInfo",
     "DotnetAssemblyRuntimeInfo",
 )
-load("//dotnet/private/icu:settings.bzl", "globalization_env", "icu_wrapper_arguments")
+load("//dotnet/private/rules/common:compiler_action.bzl", "run_compiler")
 load("//dotnet/private/rules/common:resx.bzl", "resx_compile")
 load("//dotnet/private/sdk:packs.bzl", "framework_references_of")
 
@@ -43,24 +42,17 @@ def _format_targetprofile(tfm):
     return "--targetprofile:mscorlib"
 
 def _write_internals_visible_to_fsharp(actions, label_name, dll_name, others):
-    """Write a .fs file containing InternalsVisibleTo attributes.
-
-    Letting Bazel see which assemblies we are going to have InternalsVisibleTo
-    allows for more robust caching of compiles.
+    """Writes a .fs file declaring each of `others` a friend assembly.
 
     Args:
       actions: An actions module, usually from ctx.actions.
       label_name: The label name
       dll_name: The assembly name.
-      others: The names of other assemblies.
+      others: The names of the friend assemblies.
 
     Returns:
-      A File object for a generated .fs file
+      The generated .fs file.
     """
-
-    if len(others) == 0:
-        return None
-
     content = """
 module AssemblyInfo
 
@@ -77,8 +69,8 @@ do()
 
     return output
 
-def _write_assembly_info_fsharp(actions, label_name, dll_name, version, user_secrets_id = "", platform = None):
-    """Write a .fs file carrying the assembly version, user-secrets and platform attributes.
+def _write_assembly_info_fsharp(actions, label_name, dll_name, version, user_secrets_id, platform):
+    """Writes a .fs file carrying the assembly version, user-secrets and platform attributes.
 
     Args:
       actions: An actions module, usually from ctx.actions.
@@ -86,10 +78,10 @@ def _write_assembly_info_fsharp(actions, label_name, dll_name, version, user_sec
       dll_name: The assembly name.
       version: The target's `version` attribute; "" when unset.
       user_secrets_id: The target's `user_secrets_id` attribute; "" when unset.
-      platform: The platform the target framework targets, from `target_platform`, or None.
+      platform: The platform of a platform specific framework, from `target_platform`, or None.
 
     Returns:
-      A File object for a generated .fs file, or None when no attributes are set.
+      The generated .fs file, or None when neither attribute is set.
     """
     if not version and not user_secrets_id and not platform:
         return None
@@ -124,12 +116,6 @@ def _write_assembly_info_fsharp(actions, label_name, dll_name, version, user_sec
     actions.write(output, "\n".join(lines))
 
     return output
-
-def _should_output_ref_assembly(toolchain):
-    return fsharp_ref_assemblies_are_deterministic(toolchain.dotnetinfo.sdk_version)
-
-def _checks_nullness(toolchain):
-    return fsharp_checks_nullness(toolchain.dotnetinfo.sdk_version)
 
 # buildifier: disable=unnamed-macro
 def AssemblyAction(
@@ -172,9 +158,9 @@ def AssemblyAction(
         is_windows,
         user_secrets_id = "",
         frameworks = {}):
-    """Creates an action that runs the F# compiler with the specified inputs.
+    """Creates the actions that compile an F# assembly.
 
-    This macro aims to match the [F# compiler](https://docs.microsoft.com/en-us/dotnet/fsharp/language-reference/compiler-options), with the inputs mapping to compiler options.
+    The arguments map onto the [F# compiler options](https://learn.microsoft.com/en-us/dotnet/fsharp/language-reference/compiler-options).
 
     Args:
         actions: Bazel module providing functions to create actions.
@@ -189,10 +175,10 @@ def AssemblyAction(
         targeting_pack: The targeting pack being used.
         internals_visible_to: An optional list of assemblies that can see this assemblies internal symbols.
         keyfile: Specifies a strong name key file of the assembly.
-        langversion: Specify language version: Default, ISO-1, ISO-2, 3, 4, 5, 6, 7, 7.1, 7.2, 7.3, or Latest
-        resources: The list of resouces to be embedded in the assembly.
+        langversion: The F# language version, or "" for the compiler's default.
+        resources: The list of resources to be embedded in the assembly.
         resx: The `.resx` resources to compile, from `split_resources`, or None.
-        srcs: The list of source (.cs) files that are processed to create the assembly.
+        srcs: The .fs files to compile, in compilation order.
         data: List of files that are a direct runtime dependency
         appsetting_files: List of appsettings files to include in the output.
         content_file_mappings: List of `struct(src = File, dest = string)` describing content files to copy next to the assembly, where `dest` is the path relative to the output directory.
@@ -221,11 +207,19 @@ def AssemblyAction(
         The compile and runtime providers, and the static web assets the compile
         generated - always none, because F# compiles no Razor.
     """
+    sdk_version = toolchain.dotnetinfo.sdk_version
+    if nullable == "enable" and not fsharp_checks_nullness(sdk_version):
+        fail("%s: nullable = \"enable\" needs F# 9 or newer but the toolchain is .NET SDK %s." % (label, sdk_version))
 
-    assembly_name = target_name if out == "" else out
     frameworks = applicable_frameworks(target_framework, frameworks)
     check_windows_frameworks(label, target_framework, frameworks)
-    subsystem_version = get_framework_version_info(target_framework)
+
+    assembly_name = target_name if out == "" else out
+    out_dir = target_name + "/" + target_framework
+
+    # A .NET Framework executable is an `.exe`; .NET runs every assembly from a `.dll`.
+    out_ext = "dll" if (target == "library" or is_core_framework(target_framework)) else "exe"
+
     (
         irefs,
         prefs,
@@ -244,28 +238,24 @@ def AssemblyAction(
         exports,
         strict_deps,
     )
+
     defines = framework_preprocessor_symbols(target_framework) + defines
-
     if nullable == "enable":
-        if not _checks_nullness(toolchain):
-            fail("%s: nullable = \"enable\" needs F# 9 or newer but the toolchain is .NET SDK %s." % (label, toolchain.dotnetinfo.sdk_version))
-
         defines = defines + ["NULLABLE"]
 
+    # Generated files go first: a binary's entry point has to be in the last file.
     assembly_info_fs = _write_assembly_info_fsharp(actions, target_name, assembly_name, version, user_secrets_id, target_platform(target_framework))
     if assembly_info_fs:
-        # First rather than last: a binary's entry point has to be in the last file.
         srcs = [assembly_info_fs] + srcs
 
-    out_dir = target_name + "/" + target_framework
-    out_ext = "dll" if (target == "library" or is_core_framework(target_framework)) else "exe"
+    # A reference assembly only pays off where fsc writes it deterministically.
+    emits_ref = fsharp_ref_assemblies_are_deterministic(sdk_version)
     out_dll = actions.declare_file("%s/%s.%s" % (out_dir, assembly_name, out_ext))
     out_iref = None
-    out_ref = actions.declare_file("%s/ref/%s.%s" % (out_dir, assembly_name, out_ext)) if _should_output_ref_assembly(toolchain) else None
+    out_ref = actions.declare_file("%s/ref/%s.%s" % (out_dir, assembly_name, out_ext)) if emits_ref else None
     out_pdb = actions.declare_file("%s/%s.pdb" % (out_dir, assembly_name))
     out_xml = actions.declare_file("%s/%s.xml" % (out_dir, assembly_name)) if generate_documentation_file else None
 
-    # Stage appsettings and content files next to the assembly.
     out_appsetting_files = copy_appsettings_to_dir(target_name, actions, is_windows, appsetting_files, out_dir)
     out_content_files = copy_content_to_dir(target_name, actions, is_windows, content_file_mappings, out_dir)
 
@@ -285,129 +275,63 @@ def AssemblyAction(
         version = version,
     )
 
-    if len(internals_visible_to) == 0:
-        _compile(
-            actions,
-            compiler_wrapper,
-            compiler_worker,
-            label,
-            debug,
-            embed_sources,
-            defines,
-            keyfile,
-            langversion,
-            nullable,
-            irefs,
-            framework_files,
-            resources,
-            srcs,
-            depset(compile_data, transitive = [transitive_compile_data]),
-            subsystem_version,
-            target,
-            target_name,
-            target_framework,
-            toolchain,
-            treat_warnings_as_errors,
-            warnings_as_errors,
-            warnings_not_as_errors,
-            warning_level,
-            nowarn,
-            compiler_options,
-            out_dll = out_dll,
-            out_ref = out_ref,
-            out_pdb = out_pdb,
-            out_xml = out_xml,
-            resx_neutral_resources = resx_neutral_resources,
-        )
-    else:
-        # If the user is using internals_visible_to generate an additional
-        # reference-only DLL that contains the internals. We want the
-        # InternalsVisibleTo in the main DLL too to be less suprising to users.
-        out_iref = actions.declare_file("%s/iref/%s.%s" % (out_dir, assembly_name, out_ext)) if _should_output_ref_assembly(toolchain) else None
+    compilation = struct(
+        actions = actions,
+        compiler_wrapper = compiler_wrapper,
+        compiler_worker = compiler_worker,
+        toolchain = toolchain,
+        label = label,
+        target_name = target_name,
+        target = target,
+        target_framework = target_framework,
+        # Every compile names the resources after the assembly, even the
+        # `--refonly` one, or two resources sharing a file name collide there.
+        dll_basename = out_dll.basename,
+        treat_warnings_as_errors = treat_warnings_as_errors,
+        warnings_as_errors = warnings_as_errors,
+        warnings_not_as_errors = warnings_not_as_errors,
+        warning_level = warning_level,
+        nowarn = nowarn,
+        langversion = langversion,
+        nullable = nullable,
+        debug = debug,
+        embed_sources = embed_sources,
+        refs = irefs,
+        framework_files = framework_files,
+        resources = resources,
+        resx_neutral_resources = resx_neutral_resources,
+        defines = defines,
+        keyfile = keyfile,
+        compiler_options = compiler_options,
+        compile_data = depset(compile_data, transitive = [transitive_compile_data]),
+    )
 
+    if internals_visible_to:
+        # The friends compile against a reference assembly that keeps the
+        # internals, and everyone else against one from a second, `--refonly`
+        # compile without the `InternalsVisibleTo` attributes.
+        out_iref = actions.declare_file("%s/iref/%s.%s" % (out_dir, assembly_name, out_ext)) if emits_ref else None
         internals_visible_to_fs = _write_internals_visible_to_fsharp(
             actions,
             label_name = target_name,
             dll_name = assembly_name,
             others = internals_visible_to,
         )
-        _compile(
-            actions,
-            compiler_wrapper,
-            compiler_worker,
-            label,
-            debug,
-            embed_sources,
-            defines,
-            keyfile,
-            langversion,
-            nullable,
-            irefs,
-            framework_files,
-            resources,
-            srcs + [internals_visible_to_fs],
-            depset(compile_data, transitive = [transitive_compile_data]),
-            subsystem_version,
-            target,
-            target_name,
-            target_framework,
-            toolchain,
-            treat_warnings_as_errors,
-            warnings_as_errors,
-            warnings_not_as_errors,
-            warning_level,
-            nowarn,
-            compiler_options,
-            out_ref = out_iref,
-            out_dll = out_dll,
-            out_pdb = out_pdb,
-            out_xml = out_xml,
-            resx_neutral_resources = resx_neutral_resources,
-        )
 
-        if out_iref != None:
-            # Generate a ref-only DLL without internals
-            _compile(
-                actions,
-                compiler_wrapper,
-                compiler_worker,
-                label,
-                debug,
-                embed_sources,
-                defines,
-                keyfile,
-                langversion,
-                nullable,
-                irefs,
-                framework_files,
-                resources,
-                srcs,
-                depset(compile_data, transitive = [transitive_compile_data]),
-                subsystem_version,
-                target,
-                target_name,
-                target_framework,
-                toolchain,
-                treat_warnings_as_errors,
-                warnings_as_errors,
-                warnings_not_as_errors,
-                warning_level,
-                nowarn,
-                compiler_options,
-                out_dll = None,
-                out_ref = out_ref,
-                out_pdb = None,
-                out_xml = None,
-                resx_neutral_resources = resx_neutral_resources,
-            )
+        # First, like the assembly info, so a binary's entry point stays last.
+        _compile(compilation, [internals_visible_to_fs] + srcs, out_dll, out_iref, out_pdb, out_xml)
+        if out_ref:
+            _compile(compilation, srcs, None, out_ref)
+    else:
+        _compile(compilation, srcs, out_dll, out_ref, out_pdb, out_xml)
 
     return (DotnetAssemblyCompileInfo(
         name = assembly_name,
         version = version or DEFAULT_ASSEMBLY_VERSION,
         project_sdk = project_sdk,
         target_framework = target_framework,
-        refs = [out_ref] if out_ref else [out_dll],
-        irefs = [out_iref] if out_iref else [out_ref] if out_ref else [out_dll],
+        refs = [out_ref or out_dll],
+        irefs = [out_iref or out_ref or out_dll],
         analyzers = [],
         analyzers_csharp = [],
         analyzers_fsharp = [],
@@ -427,7 +351,7 @@ def AssemblyAction(
         version = version or DEFAULT_ASSEMBLY_VERSION,
         libs = [out_dll],
         resource_assemblies = satellite_assemblies,
-        pdbs = [out_pdb] if out_pdb else [],
+        pdbs = [out_pdb],
         xml_docs = [out_xml] if out_xml else [],
         data = data,
         appsetting_files = depset(out_appsetting_files),
@@ -439,99 +363,67 @@ def AssemblyAction(
         direct_deps_depsjson_fragment = {dep[DotnetAssemblyRuntimeInfo].name: dep[DotnetAssemblyRuntimeInfo].version for dep in deps},
     ), [])
 
-def _compile(
-        actions,
-        compiler_wrapper,
-        compiler_worker,
-        label,
-        debug,
-        embed_sources,
-        defines,
-        keyfile,
-        langversion,
-        nullable,
-        refs,
-        framework_files,
-        resources,
-        srcs,
-        compile_data,
-        subsystem_version,
-        target,
-        target_name,
-        target_framework,
-        toolchain,
-        treat_warnings_as_errors,
-        warnings_as_errors,
-        warnings_not_as_errors,
-        warning_level,
-        nowarn,
-        compiler_options,
-        out_dll = None,
-        out_ref = None,
-        out_pdb = None,
-        out_xml = None,
-        resx_neutral_resources = []):
-    # Our goal is to match msbuild as much as reasonable
-    # https://docs.microsoft.com/en-us/dotnet/fsharp/language-reference/compiler-options
-    args = actions.args()
+def _compile(compilation, srcs, out_dll, out_ref, out_pdb = None, out_xml = None):
+    """Runs fsc once, to `out_dll` and its reference assembly, or with no `out_dll` to a `--refonly` `out_ref`.
+
+    Args:
+        compilation: The settings every compile of the target shares, from `AssemblyAction`.
+        srcs: The .fs files to compile, in compilation order.
+        out_dll: The assembly, or None for a `--refonly` compile.
+        out_ref: The reference assembly, or None for none.
+        out_pdb: The symbols, beside `out_dll`.
+        out_xml: The XML documentation, or None.
+    """
+    c = compilation
+
+    # Our goal is to match MSBuild as closely as is reasonable.
+    args = c.actions.args()
     args.add("--noframework")
     args.add("--utf8output")
     args.add("--deterministic+")
     args.add("--nowin32manifest")
     args.add("--nocopyfsharpcore")
     args.add("--simpleresolution")
-    args.add(_format_targetprofile(target_framework))
+    args.add(_format_targetprofile(c.target_framework))
     args.add("--nologo")
+    args.add("--highentropyva+" if use_highentropyva(c.target_framework) else "--highentropyva-")
 
-    if use_highentropyva(target_framework):
-        args.add("--highentropyva+")
-    else:
-        args.add("--highentropyva-")
-
+    subsystem_version = get_framework_version_info(c.target_framework)
     if subsystem_version != None:
         args.add("--subsystemversion:" + subsystem_version)
 
     generate_warning_args(
         args,
-        treat_warnings_as_errors,
-        warnings_as_errors,
-        warnings_not_as_errors,
-        warning_level,
-        nowarn,
+        c.treat_warnings_as_errors,
+        c.warnings_as_errors,
+        c.warnings_not_as_errors,
+        c.warning_level,
+        c.nowarn,
     )
 
-    args.add("--target:" + target)
+    args.add("--target:" + c.target)
 
     # MSBuild passes no --langversion for F#, letting fsc default to latest.
-    if langversion:
-        args.add("--langversion:" + langversion)
+    if c.langversion:
+        args.add("--langversion:" + c.langversion)
 
     # Off is fsc's default, and fsc before F# 9 rejects --checknulls-, so
     # "disable" passes nothing, as MSBuild does when `Nullable` is unset.
-    if nullable == "enable":
+    if c.nullable == "enable":
         args.add("--checknulls+")
 
-    if debug:
-        args.add("--debug+")
-        args.add("--optimize-")
-        args.add("--define:TRACE")
-        args.add("--define:DEBUG")
-        args.add("--tailcalls-")
+    if c.debug:
+        args.add_all(["--debug+", "--optimize-", "--define:TRACE", "--define:DEBUG", "--tailcalls-"])
     else:
-        args.add("--debug-")
-        args.add("--optimize+")
-        args.add("--define:TRACE")
-        args.add("--define:RELEASE")
-
+        args.add_all(["--debug-", "--optimize+", "--define:TRACE", "--define:RELEASE"])
     args.add("--debug:portable")
 
     # A PDB records execroot-relative document paths, which resolve to nothing
     # once the build is over. `--embed+` puts the sources in the symbols instead.
     # See docs/README.md#embedded-sources.
-    if embed_sources:
+    if c.embed_sources:
         args.add("--embed+")
 
-    # outputs
     if out_dll != None:
         args.add(out_dll, format = "--out:%s")
         args.add(out_pdb, format = "--pdb:%s")
@@ -540,7 +432,6 @@ def _compile(
         if out_ref != None:
             args.add(out_ref, format = "--refout:%s")
             outputs.append(out_ref)
-
     else:
         args.add("--refonly")
         args.add(out_ref, format = "--out:%s")
@@ -550,83 +441,31 @@ def _compile(
         args.add(out_xml, format = "--doc:%s")
         outputs.append(out_xml)
 
-    # assembly references
     # fsc resolves a duplicate assembly identity by order, so refs must come
     # before the framework files.
-    format_ref_arg(args, depset(transitive = [refs, framework_files]))
+    format_ref_arg(args, depset(transitive = [c.refs, c.framework_files]))
 
-    # .fs files
     args.add_all(srcs)
+    add_resource_args(args, c.resources, c.label, c.dll_basename, "fsharp")
+    add_resx_resource_args(args, c.resx_neutral_resources, language = "fsharp")
+    args.add_all(c.defines, format_each = "-d:%s")
 
-    # resources
-    add_resource_args(args, resources, label, out_dll.basename if out_dll != None else None, "fsharp")
+    direct_inputs = srcs + c.resources + [resource_file for (resource_file, _) in c.resx_neutral_resources]
+    if c.keyfile != None:
+        args.add(c.keyfile, format = "--keyfile:%s")
+        direct_inputs.append(c.keyfile)
 
-    # compiled `.resx` resources, embedded under their manifest name
-    add_resx_resource_args(args, resx_neutral_resources, language = "fsharp")
+    args.add_all(c.compiler_options)
 
-    # defines
-    args.add_all(defines, format_each = "-d:%s")
-
-    # keyfile
-    if keyfile != None:
-        args.add(keyfile, format = "--keyfile:%s")
-
-    # Additional compiler options
-    for option in compiler_options:
-        args.add(option)
-
-    # spill to a "response file" when the argument list gets too big (Bazel
-    # makes that call based on limitations of the OS).
-    args.set_param_file_format("multiline")
-
-    args.use_param_file("@%s", use_always = True)
-
-    direct_inputs = srcs + resources + [resource_file for (resource_file, _) in resx_neutral_resources]
-    direct_inputs += [keyfile] if keyfile else []
-
-    icu_arguments, icu_tools = [], []
-    if compiler_worker:
-        executable = compiler_worker
-        extra_tools = []
-        execution_requirements = {
-            "requires-worker-protocol": "json",
-            "supports-path-mapping": "1",
-            "supports-workers": "1",
-        }
-    else:
-        executable = compiler_wrapper
-        extra_tools = [compiler_wrapper]
-        execution_requirements = {"supports-path-mapping": "1"}
-
-        icu_arguments, icu_tools = icu_wrapper_arguments(actions, toolchain)
-
-    actions.run(
+    run_compiler(
+        c.actions,
         mnemonic = "FSharpCompile",
-        progress_message = "Compiling " + target_name + (" (internals ref-only dll)" if out_dll == None else ""),
-        inputs = depset(
-            direct = direct_inputs,
-            transitive = [framework_files, refs, compile_data],
-        ),
-        tools = depset(
-            direct = extra_tools + [
-                toolchain.compiler_host.files_to_run.executable,
-                toolchain.fsharp_compiler.files_to_run.executable,
-            ],
-            transitive = icu_tools + [
-                toolchain.compiler_host.default_runfiles.files,
-                toolchain.fsharp_compiler.default_runfiles.files,
-            ],
-        ),
+        progress_message = "Compiling " + c.target_name + (" (internals ref-only dll)" if out_dll == None else ""),
+        toolchain = c.toolchain,
+        compiler = c.toolchain.fsharp_compiler,
+        compiler_wrapper = c.compiler_wrapper,
+        compiler_worker = c.compiler_worker,
+        args = args,
+        inputs = depset(direct = direct_inputs, transitive = [c.framework_files, c.refs, c.compile_data]),
         outputs = outputs,
-        executable = executable,
-        arguments = icu_arguments + [
-            toolchain.compiler_host.files_to_run.executable.path,
-            toolchain.fsharp_compiler.files_to_run.executable.path,
-            args,
-        ],
-        env = dicts.add(
-            {"DOTNET_CLI_HOME": toolchain.compiler_host.files_to_run.executable.dirname},
-            globalization_env(toolchain),
-        ),
-        execution_requirements = execution_requirements,
     )

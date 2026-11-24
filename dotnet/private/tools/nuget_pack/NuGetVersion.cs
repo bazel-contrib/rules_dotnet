@@ -3,6 +3,8 @@
 // pre-release label and build metadata. Mirrors dotnet/private/nuget_version.bzl,
 // which validates the same strings at analysis time.
 using System;
+using System.IO;
+using System.Linq;
 using System.Text.RegularExpressions;
 
 namespace RulesDotnet.NuGetPack;
@@ -49,6 +51,10 @@ internal sealed partial class NuGetVersion
 
     /// <summary>The normalized version with its metadata, which is what a nuspec records.</summary>
     public string Full => Metadata.Length > 0 ? Normalized + "+" + Metadata : Normalized;
+
+    /// <summary>The text of a version file: its first non-empty line, trimmed, or "" when it has none.</summary>
+    public static string ReadFile(string path) =>
+        File.ReadLines(path).Select(line => line.Trim()).FirstOrDefault(line => line.Length > 0) ?? "";
 
     public static bool TryParse(string text, out NuGetVersion? version)
     {

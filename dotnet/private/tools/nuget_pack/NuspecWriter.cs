@@ -24,7 +24,7 @@ internal static class NuspecWriter
     };
 
     /// <summary>The manifest of the package, or of its symbol package.</summary>
-    public static byte[] Write(Request request, NuGetVersion version, Func<string?, string> resolveDependencyVersion, bool symbols)
+    public static byte[] Write(Request request, NuGetVersion version, Func<string, string> resolveDependencyVersion, bool symbols)
     {
         var metadata = request.Metadata;
         using var stream = new MemoryStream();

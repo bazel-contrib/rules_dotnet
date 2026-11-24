@@ -43,13 +43,16 @@ exit /b 0
 :rlocation_end
 :: End of rlocation
 
-set DOTNET_MULTILEVEL_LOOKUP="false"
-set DOTNET_NOLOGO="1"
-set DOTNET_CLI_TELEMETRY_OPTOUT="1"
+rem Resolve every path through the runfiles manifest: `bazel run` on Windows
+rem does not build a runfiles tree by default.
+set RUNFILES_MANIFEST_ONLY=1
+set DOTNET_MULTILEVEL_LOOKUP=false
+set DOTNET_NOLOGO=1
+set DOTNET_CLI_TELEMETRY_OPTOUT=1
 TEMPLATED_environment
 
 call :rlocation "TEMPLATED_dotnet" dotnet_executable
-for %%F in (%dotnet_executable%) do set DOTNET_ROOT=%%~dpF
+for %%F in ("!dotnet_executable!") do set DOTNET_ROOT=%%~dpF
 
 call :rlocation "TEMPLATED_devserver" devserver
 call :rlocation "TEMPLATED_application" application

@@ -1,4 +1,4 @@
-"A transition that transitions between compatible target frameworks"
+"""Moves each target onto the highest of its frameworks that the incoming one is compatible with."""
 
 load("@bazel_skylib//lib:dicts.bzl", "dicts")
 load(
@@ -80,14 +80,19 @@ def _impl(settings, attr):
         if getattr(attr, "runtime_identifier_from_platform", False) and is_netframework(transitioned_tfm):
             runtime_identifier = netframework_runtime_identifier(runtime_identifier)
     elif runtime_identifier == "base":
-        # If the runtime_identifier attribute is not set and the incoming value is "base", we will use the platform to determine the rid since no upstream target has set the runtime identifier
+        # Nothing above this target picked one.
         runtime_identifier = platform_to_rid()
 
         # .NET Framework only runs on Windows, whatever platform builds it.
         if is_netframework(transitioned_tfm):
             runtime_identifier = netframework_runtime_identifier(runtime_identifier)
 
-    return dicts.add({"//dotnet:target_framework": transitioned_tfm}, {"//dotnet:rid": runtime_identifier}, FRAMEWORK_COMPATABILITY_TRANSITION_OUTPUTS[transitioned_tfm], rid_compatability_transition_outputs(runtime_identifier), _ready_to_run(settings, attr, transitioned_tfm))
+    return dicts.add(
+        {"//dotnet:target_framework": transitioned_tfm, "//dotnet:rid": runtime_identifier},
+        FRAMEWORK_COMPATABILITY_TRANSITION_OUTPUTS[transitioned_tfm],
+        rid_compatability_transition_outputs(runtime_identifier),
+        _ready_to_run(settings, attr, transitioned_tfm),
+    )
 
 tfm_transition = transition(
     implementation = _impl,

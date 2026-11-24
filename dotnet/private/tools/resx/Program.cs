@@ -46,6 +46,22 @@ internal static class Program
         var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
         var request = JsonSerializer.Deserialize<Request>(File.ReadAllText(args[0]), options)!;
 
+        try
+        {
+            Compile(request);
+        }
+        catch (InvalidOperationException e)
+        {
+            // A task failed, having logged why, or is missing from this SDK.
+            Console.Error.WriteLine($"error: {e.Message}");
+            return 1;
+        }
+
+        return 0;
+    }
+
+    private static void Compile(Request request)
+    {
         var tasks = Tasks.Load(request.TasksAssembly);
         var task = Tasks.Create(tasks, new StubBuildEngine(), "Microsoft.Build.Tasks.GenerateResource");
 
@@ -70,17 +86,7 @@ internal static class Program
             Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(resource.Output))!);
         }
 
-        try
-        {
-            Tasks.Run(task, "GenerateResource");
-        }
-        catch (InvalidOperationException)
-        {
-            // The task has already reported why.
-            return 1;
-        }
-
-        return 0;
+        Tasks.Run(task, "GenerateResource");
     }
 
     private static ITaskItem Item(string path) => new TaskItem(Path.GetFullPath(path));

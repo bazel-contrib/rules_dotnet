@@ -1,6 +1,6 @@
 """Implementation of the `paket` module extension. See //dotnet:paket.bzl."""
 
-load("//dotnet/private/paket:dependencies.bzl", "parse_dependencies")
+load("//dotnet/private/paket:dependencies.bzl", "parse_dependencies", "stale_requirements")
 load(
     "//dotnet/private/paket:feed.bzl",
     "integrity_fact_key",
@@ -26,10 +26,9 @@ _parse = tag_class(
         "dependencies": attr.label(
             doc = """The `paket.dependencies` the lock file was resolved from.
 
-Optional. When given, the extension checks the lock file still covers what
-this file asks for, so that editing it without re-running Paket fails the
-build with the command that fixes it rather than a confusing missing package
-much later.""",
+Optional. When given, a lock file that no longer covers the packages and exact
+versions this file asks for is reported with a warning naming the command
+that regenerates it.""",
         ),
         "groups": attr.string_list(
             doc = """The dependency groups to make available.
@@ -50,12 +49,11 @@ have a group in common.""",
             doc = "A netrc file with the credentials for the feeds. Defaults to the user's.",
         ),
         "verify_integrity": attr.bool(
-            doc = """Whether to pin packages to the hash their feed publishes.
+            doc = """Whether to verify each package against the hash its feed publishes.
 
-Paket does not record hashes, so they are looked up from the feed's
-registration metadata and remembered in `MODULE.bazel.lock`. Feeds that do not
-serve that metadata yield no hash and their packages are pinned by version
-alone.""",
+Paket does not record hashes, so they are looked up on the feeds and recorded
+in `MODULE.bazel.lock`. A package whose feed publishes no hash, such as one on
+a NuGet V2 feed, is pinned by version alone.""",
             default = True,
         ),
     },
@@ -63,33 +61,9 @@ alone.""",
 
 _INSTALL_COMMAND = "bazel run @rules_dotnet//tools/paket -- install"
 
-def _check_lock_is_current(tag, declared, groups):
-    """Fails if the lock file does not cover what the dependencies file asks for.
-
-    Only exact versions are compared; a constraint such as `~> 6.2` can
-    legitimately resolve to anything, so for those only the package's presence
-    is checked.
-    """
-    stale = []
-
-    for (group_name, packages) in declared.items():
-        group = groups.get(group_name.lower())
-        if group == None:
-            stale.append("the '{}' group is missing".format(group_name))
-            continue
-
-        locked = {package.id.lower(): package.version for package in group.packages}
-
-        for (id, version) in packages.items():
-            if id.lower() not in locked:
-                stale.append("{} is missing from the '{}' group".format(id, group_name))
-            elif version and version != locked[id.lower()]:
-                stale.append("{} is pinned at {} but the '{}' group resolves {}".format(
-                    id,
-                    version,
-                    group_name,
-                    locked[id.lower()],
-                ))
+def _warn_if_stale(module_ctx, tag, groups):
+    """Warns when the lock file does not cover what the dependencies file asks for."""
+    stale = stale_requirements(parse_dependencies(module_ctx.read(tag.dependencies)), groups)
 
     if stale:
         # buildifier: disable=print
@@ -119,6 +93,14 @@ def _select_groups(tag, groups):
 
     return selected
 
+def _check_supported(group):
+    if group.unsupported:
+        fail(
+            group.unsupported +
+            " Fetch those sources with http_file/git_repository instead and remove the section from paket.dependencies," +
+            " or leave the '{}' group out of `groups`.".format(group.name),
+        )
+
 def _collect(module_ctx):
     """Reads every lock file the build refers to.
 
@@ -139,13 +121,10 @@ def _collect(module_ctx):
             }
 
             if tag.dependencies:
-                _check_lock_is_current(
-                    tag,
-                    parse_dependencies(module_ctx.read(tag.dependencies)),
-                    groups,
-                )
+                _warn_if_stale(module_ctx, tag, groups)
 
             for group in _select_groups(tag, groups):
+                _check_supported(group)
                 repo = tag.repo_prefix + group.name.lower()
 
                 if repo in claimed:

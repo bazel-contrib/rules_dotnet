@@ -47,7 +47,7 @@ def _compile_action(ctx, tfm, toolchain):
         srcs = ctx.files.srcs,
         data = ctx.files.data,
         appsetting_files = ctx.files.appsetting_files,
-        content_file_mappings = resolve_content_file_mappings(ctx.attr.content_files, ctx.label.package),
+        content_file_mappings = resolve_content_file_mappings(ctx.attr.content_files, ctx.label),
         compile_data = ctx.files.compile_data,
         out = ctx.attr.out,
         target = "exe",
@@ -93,7 +93,7 @@ def _csharp_test_impl(ctx):
 
 csharp_test = rule(
     _csharp_test_impl,
-    doc = """Compiles a C# executable and runs it as a test""" + BINARY_OUTPUT_GROUPS_DOC,
+    doc = """Compiles a C# executable and runs it as a test.""" + BINARY_OUTPUT_GROUPS_DOC,
     attrs = CSHARP_BINARY_COMMON_ATTRS,
     test = True,
     toolchains = [

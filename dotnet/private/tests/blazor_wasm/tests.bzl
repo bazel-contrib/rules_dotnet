@@ -158,6 +158,50 @@ def _symbols_of_shipped_assemblies_test_impl(env, target):
     inputs.contains_predicate(_file("the newer library's symbols", "_newer/", "System.Collections.Immutable.pdb"))
     inputs.not_contains_predicate(_file("the older library's symbols", "_older/", "System.Text.Json.pdb"))
 
+def _default_root_namespace_test(name):
+    # Neither `root_namespace` nor `out` is set, so both default to the target
+    # name, as MSBuild defaults them to the project name.
+    csharp_binary(
+        name = name + "_app",
+        srcs = ["App.razor"],
+        project_sdk = "blazorwasm",
+        tags = ["manual"],
+        target_frameworks = ["net10.0"],
+        deps = [_PACKAGES + "microsoft.aspnetcore.components.webassembly"],
+    )
+    analysis_test(
+        name = name,
+        impl = _default_root_namespace_test_impl,
+        target = name + "_app.app",
+    )
+
+def _default_root_namespace_test_impl(env, target):
+    name = target.label.name.removesuffix(".app")
+    env.expect.that_target(target).action_generating(
+        "{package}/{name}/net10.0/razor.globalconfig",
+    ).content().contains("build_property.RootNamespace = " + name + "\n")
+
+def _testonly_test(name):
+    csharp_binary(
+        name = name + "_app",
+        srcs = ["App.razor"],
+        project_sdk = "blazorwasm",
+        tags = ["manual"],
+        target_frameworks = ["net10.0"],
+        testonly = True,
+        deps = [_PACKAGES + "microsoft.aspnetcore.components.webassembly"],
+    )
+
+    # The wrapper has to be testonly too, or depending on the binary fails.
+    analysis_test(
+        name = name,
+        impl = _testonly_test_impl,
+        target = name + "_app",
+    )
+
+def _testonly_test_impl(env, target):
+    env.expect.that_target(target).action_named("BlazorWasmAssemble")
+
 def blazor_wasm_test_suite(name):
     test_suite(
         name = name,
@@ -168,5 +212,7 @@ def blazor_wasm_test_suite(name):
             _newest_of_two_import_first_test,
             _newest_of_two_import_last_test,
             _symbols_of_shipped_assemblies_test,
+            _default_root_namespace_test,
+            _testonly_test,
         ],
     )

@@ -7,10 +7,12 @@ load(":target_path_test.bzl", "target_path_test_suite")
 
 # `Widget.razor` and `Pages/Widget.razor` share a file name and differ only by
 # directory: an editorconfig section that is not anchored to the config's own
-# directory matches both and gives them the same namespace.
+# directory matches both and gives them the same namespace. `C#` has to be
+# escaped in a section name, or Roslyn skips the section.
 csharp_library(
     name = "razor_components",
     srcs = [
+        "C#/Widget.razor",
         "Pages/Widget.razor",
         "Widget.razor",
         "_Imports.razor",

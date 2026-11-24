@@ -93,32 +93,31 @@ def _dotnet_tool_impl(ctx):
 dotnet_tool = rule(
     implementation = _dotnet_tool_impl,
     executable = True,
-    doc = """Run a .NET command-line tool hermetically via Bazel.
+    doc = """Runs a .NET command-line tool from a NuGet package with the hermetic .NET runtime.
 
-This rule allows you to run a pre-built .NET command-line tool that has been packaged
-with NuGet. The tool is executed using the hermetic .NET runtime provided by `rules_dotnet`.
+`bazel run` runs the tool in the directory it was invoked from.
 
-This is a lower-level API that requires a manual specification of tool details.
-Prefer adding the tool to your `paket.dependencies`: every dotnet tool in a
-dependency group is exposed automatically as `@<group>//<package>/tools:<tool>`.
+Prefer adding the tool to `paket.dependencies`: every dotnet tool in a
+dependency group is then available as `@paket.<group>//<package>/tools:<command>`
+without declaring this rule.
 """,
     attrs = {
         "target_frameworks": attr.string_list(
-            doc = "The target frameworks this tool was built for.",
+            doc = "The frameworks the package ships the tool for. The newest one the toolchain's runtime can run is used.",
             mandatory = True,
         ),
         "entrypoint": attr.string_dict(
             mandatory = True,
-            doc = "The entrypoint of the dotnet tool (the dll to execute), keyed by the target framework.",
+            doc = "The file name of the assembly to run, keyed by target framework, as the package's `DotnetToolSettings.xml` names it.",
         ),
         "runner": attr.string_dict(
             mandatory = True,
-            doc = "The runner to use to execute the tool, keyed by the target framework. Currently, only 'dotnet' is supported.",
+            doc = "How to run the entrypoint, keyed by target framework. Only `dotnet` is supported.",
         ),
         "deps": attr.label(
             mandatory = True,
             providers = [DotnetToolInfo],
-            doc = "The dependencies of the dotnet tool. Must include a DotnetToolInfo provider.",
+            doc = "The `tools` target of the package's `nuget_archive`.",
         ),
         "_launcher_sh": attr.label(
             doc = "A template file for the launcher on Linux/MacOS",

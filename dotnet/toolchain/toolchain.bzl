@@ -22,10 +22,6 @@ May be empty if the csharp_compiler_path points to a locally installed tool bina
         "fsharp_compiler_files": """depset[File]: Files required in runfiles to make the F# compiler executable available.
 
 May be empty if the fsharp_compiler_path points to a locally installed tool binary.""",
-        "apphost_path": "Path to the apphost executable",
-        "apphost_files": """Files required in runfiles to make the apphost executable available.
-
-May be empty if the apphost_path points to a locally installed tool binary.""",
         "os": """string: The operating system the toolchain's tools run on, one of
 `linux`, `osx` or `windows`.""",
         "sdk_version": "Version of the dotnet SDK",
@@ -209,17 +205,13 @@ Defaults to `runtime`, which also carries the SDK a binary does not need.""",
             mandatory = False,
         ),
         "msbuild_dlls": attr.label_list(
-            doc = """The MSBuild interfaces a task is written against.
-
-A few pieces of the SDK's build logic ship only as MSBuild tasks. These let a
-tool of ours instantiate such a task and run it directly.""",
+            doc = """The SDK's `Microsoft.Build.Framework`, `Microsoft.Build.Utilities.Core` and
+`Microsoft.NET.StringTools`, which the rules need to run the SDK's MSBuild tasks.""",
             mandatory = False,
         ),
         "static_web_assets_tasks": attr.label(
-            doc = """The `Microsoft.NET.Sdk.StaticWebAssets` task assembly and its dependencies.
-
-Carries the scoped CSS implementation: `ComputeCssScope`, `RewriteCss` and
-`ConcatenateCssFiles`.""",
+            doc = """The `Microsoft.NET.Sdk.StaticWebAssets` task assembly and its dependencies,
+which compile the scoped CSS of Razor components.""",
             mandatory = False,
             allow_files = True,
             cfg = "exec",
@@ -237,11 +229,10 @@ Carries the scoped CSS implementation: `ComputeCssScope`, `RewriteCss` and
             cfg = "exec",
         ),
         "razor_source_generators": attr.label(
-            doc = """The Razor source generator assemblies.
+            doc = """The Razor source generator assemblies, which compile `.razor` and `.cshtml` sources.
 
-Passed to `csc` with `/analyzer:` whenever a target has `.razor` or `.cshtml`
-sources. They ship inside the SDK, so their version follows the toolchain
-rather than the target framework, as it does under MSBuild.""",
+As under MSBuild, their version follows the SDK rather than the target
+framework.""",
             mandatory = False,
             allow_files = True,
             cfg = "exec",

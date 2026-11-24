@@ -55,14 +55,12 @@ namespace RulesDotnet
         /// a reference or an analyzer -- pointed at the file behind the link.
         /// </summary>
         /// <remarks>
-        /// A sandboxed worker is handed its inputs as links in a directory Bazel
-        /// restages for every request, and the compilers cache across requests.
-        /// fsc and Roslyn's build server key a reference by path and last-write
-        /// time, which on Unix is the link's own, so a rebuilt reference would keep
-        /// its old contents. The build server, which outlives the worker, also loads
-        /// an analyzer's dependencies through paths from earlier requests, which may
-        /// no longer exist. The files behind the links have neither problem, and
-        /// the compilers record none of these paths in their outputs.
+        /// A sandboxed worker gets its inputs as links that Bazel restages for
+        /// every request. fsc and Roslyn's build server cache a reference by path
+        /// and last-write time, which on Unix is the link's own, so they would miss
+        /// a rebuilt reference; the build server, which outlives the worker, would
+        /// also load an analyzer's dependencies through links that are gone. The
+        /// compilers record none of these paths in their outputs.
         /// </remarks>
         public static List<string> ResolveInputLinks(List<string> arguments, params string[] prefixes)
         {
@@ -79,7 +77,7 @@ namespace RulesDotnet
         /// <paramref name="path"/> without the quotes csc's response file needs,
         /// since csc splits each of its lines on whitespace.
         /// </summary>
-        public static string Unquote(string path) =>
+        private static string Unquote(string path) =>
             path.Length >= 2 && path[0] == '"' && path[^1] == '"' ? path[1..^1] : path;
 
         /// <summary>The full path of the file behind <paramref name="path"/>, or null when it is no link or cannot be read.</summary>
@@ -224,23 +222,15 @@ namespace RulesDotnet
         /// through, when the one its environment points at will not do.
         /// </summary>
         /// <remarks>
-        /// From .NET 11 that state is the user's own. On Linux it lives under
-        /// XDG_RUNTIME_DIR, or else under HOME, and on macOS under TMPDIR, which
-        /// the runtime will not follow a link to reach. A sandbox or a remote
-        /// executor can leave HOME, or XDG_RUNTIME_DIR, unwritable, and a test's
-        /// TMPDIR is /tmp, which on macOS is a link. Either fails every named
-        /// mutex in the process: csc then compiles on its own instead of on the
-        /// build server, every time.
-        ///
-        /// Whether the runtime can use what the environment points at is tried
-        /// in this process, whose environment csc inherits. Only when it cannot
-        /// does Linux get a directory of the user's own under the temporary
-        /// directory, named for the user's id so that every worker of theirs
-        /// finds the server one of them started, and used only when it is theirs
-        /// alone. Without one, the runtime's own choice stands, and with it the
-        /// fallback to compiling on its own.
+        /// From .NET 11 that state lives under XDG_RUNTIME_DIR or HOME on Linux,
+        /// and under TMPDIR on macOS, where the runtime will not follow a link. A
+        /// sandbox can leave the former unwritable, and a test's TMPDIR is /tmp,
+        /// a link on macOS; either fails every named mutex, and csc then compiles
+        /// without the build server every time. The Linux fallback is named for
+        /// the user's id, so every worker of theirs finds the same server, and is
+        /// only used if no one else can reach it.
         /// </remarks>
-        internal static void GiveNamedMutexesADirectory(IDictionary<string, string?> environment)
+        private static void GiveNamedMutexesADirectory(IDictionary<string, string?> environment)
         {
             if (NamedMutexesWork.Value)
             {
@@ -360,13 +350,12 @@ namespace RulesDotnet
             };
 
             // Roslyn's build server needs the runtime of the SDK it ships in, which
-            // may be newer than the one this worker runs on, and it outlives this
-            // worker, whose directory Bazel restages. csc gives the server the
-            // directory of DOTNET_HOST_PATH as its DOTNET_ROOT; without one, the
-            // directory behind a `dotnet` link in the working directory, such as an
-            // execution root's link to a source folder of that name; and only then
-            // its own DOTNET_ROOT. A server that cannot load its runtime never
-            // starts, and every compile waits 20 s for it before compiling alone.
+            // may be newer than this worker's, at a path that outlives the worker's
+            // restaged directory. csc takes the server's DOTNET_ROOT from
+            // DOTNET_HOST_PATH, and without it from a `dotnet` in the working
+            // directory, which in an execution root can be a source folder. A
+            // server that cannot load its runtime never starts, and every compile
+            // waits 20 s for it.
             var host = LinkTarget(dotnet) ?? Path.GetFullPath(dotnet);
             startInfo.Environment["DOTNET_HOST_PATH"] = host;
             startInfo.Environment["DOTNET_ROOT"] = Path.GetDirectoryName(host);

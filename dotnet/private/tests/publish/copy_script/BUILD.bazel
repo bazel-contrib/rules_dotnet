@@ -1,0 +1,3 @@
+load(":copy_script_test.bzl", "copy_script_test_suite")
+
+copy_script_test_suite(name = "copy_script_test")

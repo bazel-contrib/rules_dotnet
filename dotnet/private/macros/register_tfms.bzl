@@ -32,12 +32,10 @@ def register_tfms():
             visibility = ["//visibility:public"],
         )
 
-        # when activating a certain target framework there should be a transation
-        # that enables pricesly all compatible framework versions. This allows us to
-        # create config_settings for each tfm that a nuget package provides Where the
-        # best match is correctly picked because it has the largest set of compatible frameworks.
-
-        # e.g. a setting with {"net6.0": "True", "net5.0": "True", ...} takes precedence over {"net5.0": "True", ...}
+        # A framework's condition requires every framework it is compatible
+        # with, so that among the frameworks a NuGet package has assets for,
+        # `select` picks the closest: {net6.0, net5.0, ...} is a superset of,
+        # and so takes precedence over, {net5.0, ...}.
         tfm_flags = {":framework_compatible_%s" % f: repr(True) for f in sets.to_list(TRANSITIVE_FRAMEWORK_COMPATIBILITY[framework])}
 
         native.config_setting(

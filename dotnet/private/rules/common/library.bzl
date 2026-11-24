@@ -15,7 +15,7 @@ def build_library(ctx, compile_action, toolchain):
             generated static web assets) tuple.
         toolchain: The .Net toolchain to compile with.
     Returns:
-        A collection of the references, runfiles and native dlls.
+        The library's providers.
     """
     tfm = ctx.attr._target_framework[BuildSettingInfo].value
 

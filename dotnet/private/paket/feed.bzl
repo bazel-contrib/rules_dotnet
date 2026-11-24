@@ -27,9 +27,6 @@ load(
 # rather than misread.
 _FACT_VERSION = "v1"
 
-# Registration resources in order of preference. Only the SemVer 2.0.0
-# flavours list packages whose versions carry build metadata or dotted
-# pre-release identifiers, which rules out the older resources for some feeds.
 # The algorithms Bazel can verify a download against. NuGet publishes the hash
 # in standard base 64, which is the encoding subresource integrity wants, so
 # the algorithm name is all that has to be translated. nuget.org has always
@@ -40,6 +37,9 @@ _HASH_ALGORITHMS = {
     "SHA512": "sha512",
 }
 
+# Registration resources in order of preference. Only the SemVer 2.0.0
+# flavours list packages whose versions carry build metadata or dotted
+# pre-release identifiers, which rules out the older resources for some feeds.
 _REGISTRATION_RESOURCES = [
     "RegistrationsBaseUrl/3.6.0",
     "RegistrationsBaseUrl/Versioned",
@@ -223,7 +223,7 @@ def _served_versions(module_ctx, resources, ids, netrc_entries):
         if type(index.get("versions")) == "list"
     }
 
-def resolve_integrity(module_ctx, source, packages, netrc_entries, indexes):
+def _resolve_on_feed(module_ctx, source, packages, netrc_entries, indexes):
     """Looks up the subresource integrity of each package on a feed.
 
     Args:
@@ -340,7 +340,7 @@ def resolve_integrity_cached(module_ctx, sources, packages, netrc_entries, resol
         if not pending:
             break
 
-        answers = resolve_integrity(module_ctx, source, pending.values(), netrc_entries, indexes)
+        answers = _resolve_on_feed(module_ctx, source, pending.values(), netrc_entries, indexes)
 
         for key in pending:
             if key not in answers:

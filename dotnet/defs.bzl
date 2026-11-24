@@ -1,6 +1,6 @@
-"""Public API surface is re-exported here.
+"""The public API of rules_dotnet.
 
-Users should not load files under "/dotnet"
+Load the rules from here rather than from `//dotnet/private`.
 """
 
 load(
@@ -105,11 +105,11 @@ def _binary(name, rule, kwargs):
         rule(name = name, **kwargs)
 
 def csharp_binary(name, **kwargs):
-    """Builds a C# binary.
+    """Builds a C# executable.
 
-    `project_sdk = "blazorwasm"` builds an application that is served to a
-    browser rather than executed, so it is built by a rule of its own.
-    Dispatching here keeps one public name.
+    With `project_sdk = "blazorwasm"` it builds a Blazor WebAssembly
+    application instead, which runs in a browser: `bazel run` serves it with a
+    development server.
 
     Args:
       name: The target name.
@@ -118,7 +118,7 @@ def csharp_binary(name, **kwargs):
     _binary(name, _csharp_binary, kwargs)
 
 def fsharp_binary(name, **kwargs):
-    """Builds an F# binary.
+    """Builds an F# executable.
 
     See `csharp_binary` for what `project_sdk = "blazorwasm"` changes.
 
@@ -141,7 +141,7 @@ def csharp_library(name, **kwargs):
     _csharp_library(name = name, embed_sources = _embed_sources_or_flag(kwargs.pop("embed_sources", None)), **kwargs)
 
 def csharp_test(name, **kwargs):
-    """Builds a C# test.
+    """Builds a C# executable and runs it as a test.
 
     Args:
       name: The target name.
@@ -159,7 +159,7 @@ def fsharp_library(name, **kwargs):
     _fsharp_library(name = name, embed_sources = _embed_sources_or_flag(kwargs.pop("embed_sources", None)), **kwargs)
 
 def fsharp_test(name, **kwargs):
-    """Builds an F# test.
+    """Builds an F# executable and runs it as a test.
 
     Args:
       name: The target name.

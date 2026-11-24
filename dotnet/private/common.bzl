@@ -1,5 +1,6 @@
 """
-Rules for compatability resolution of dependencies for .NET frameworks.
+Helpers shared by the .NET rules: target frameworks, compile inputs, deps.json
+and runtimeconfig.json generation, and staging files next to an assembly.
 """
 
 load("@bazel_skylib//lib:sets.bzl", "sets")
@@ -9,10 +10,7 @@ load("//dotnet/private:nuget_version.bzl", "nuget_version")
 load(
     "//dotnet/private:providers.bzl",
     "DotnetAssemblyCompileInfo",
-    "DotnetAssemblyRuntimeInfo",
-    "DotnetDepVariantInfo",
     "DotnetTargetingPackInfo",
-    "NuGetInfo",
 )
 load("//dotnet/private:semver.bzl", "semver")
 load(
@@ -85,10 +83,10 @@ def tfm_to_semver(tfm):
     elif tfm.startswith("net"):
         return "{}.0".format(tfm.replace("net", ""))
     else:
-        fail("Could not get tfm semver version: {}", tfm)
+        fail("Could not get tfm semver version: {}".format(tfm))
 
 def is_debug(ctx):
-    return ctx.var["COMPILATION_MODE"] == "dbg" or ctx.var["COMPILATION_MODE"] == "fastbuild"
+    return ctx.var["COMPILATION_MODE"] in ["dbg", "fastbuild"]
 
 def use_highentropyva(tfm):
     return tfm not in ["net20", "net40"]
@@ -126,10 +124,8 @@ def is_greater_or_equal_framework(tfm1, tfm2):
     Returns:
         True if tfm1 is greater or equal to tfm2
     """
-    keys = list(FRAMEWORK_COMPATIBILITY.keys())
-    if keys.index(tfm1) >= keys.index(tfm2):
-        return True
-    return False
+    keys = FRAMEWORK_COMPATIBILITY.keys()
+    return keys.index(tfm1) >= keys.index(tfm2)
 
 # The first SDK that gives an F# reference assembly a deterministic MVID.
 # https://github.com/dotnet/fsharp/pull/19801
@@ -210,8 +206,8 @@ def get_csharp_compiler_worker(ctx):
         ctx: The rule context.
 
     Returns:
-        A struct with an `executable`, or None when the compile should use the
-        wrapper script instead.
+        The worker's `FilesToRunProvider`, or None when the compile should use
+        the wrapper script instead.
     """
 
     # compiler_worker_binary drops the attribute: the workers are the targets
@@ -219,12 +215,7 @@ def get_csharp_compiler_worker(ctx):
     if not hasattr(ctx.attr, "_csharp_compiler_worker"):
         return None
 
-    executable = _worker_executable(ctx.attr._csharp_compiler_worker)
-
-    if executable == None:
-        return None
-
-    return struct(executable = executable)
+    return _worker_executable(ctx.attr._csharp_compiler_worker)
 
 def get_fsharp_compiler_worker(ctx):
     """The persistent worker to compile F# with, if it is enabled.
@@ -249,29 +240,28 @@ def resolve_enable_net_analyzers(ctx):
 def resolve_enforce_code_style_in_build(ctx):
     return resolve_tristate(ctx.attr.enforce_code_style_in_build, ctx.attr._enforce_code_style_in_build[BuildSettingInfo].value)
 
-def _format_ref_with_overrides(assembly):
-    # See https://github.com/bazel-contrib/rules_dotnet/issues/405
-    # The following files should not be passed as references to the compiler
-    if assembly.path.endswith("System.EnterpriseServices.Thunk.dll") or assembly.path.endswith("System.EnterpriseServices.Wrapper.dll"):
-        return None
-    return "-r:" + assembly.path
+# Assemblies that must not be handed to the compiler as references.
+# See https://github.com/bazel-contrib/rules_dotnet/issues/405
+_UNREFERENCEABLE_ASSEMBLIES = ("System.EnterpriseServices.Thunk.dll", "System.EnterpriseServices.Wrapper.dll")
 
-def _format_quoted_ref_with_overrides(assembly):
-    ref = _format_ref_with_overrides(assembly)
-    return None if ref == None else "-r:\"" + assembly.path + "\""
+def _format_ref(assembly):
+    return None if assembly.path.endswith(_UNREFERENCEABLE_ASSEMBLIES) else "-r:" + assembly.path
+
+def _format_quoted_ref(assembly):
+    return None if assembly.path.endswith(_UNREFERENCEABLE_ASSEMBLIES) else "-r:\"" + assembly.path + "\""
 
 def format_ref_arg(args, refs, quote = False):
-    """Takes
+    """Adds a `-r:` argument for each reference assembly to `args`.
 
     Args:
-        args: The args object that will be sent into the compilation action
-        refs: List of all references that are being sent into the compilation action
-        quote: Quote each path, for compilers whose response file splits on whitespace
+        args: The Args object of the compilation action.
+        refs: A depset of the reference assemblies.
+        quote: Quote each path, for compilers whose response file splits on whitespace.
     Returns:
-        The updated args object
+        `args`.
     """
 
-    args.add_all(refs, map_each = _format_quoted_ref_with_overrides if quote else _format_ref_with_overrides)
+    args.add_all(refs, map_each = _format_quoted_ref if quote else _format_ref)
 
     return args
 
@@ -306,150 +296,156 @@ def _internals(assembly):
     friends = tuple(assembly.internals_visible_to)
     return [(ref, iref, friends) for ref, iref in zip(assembly.refs, assembly.irefs)]
 
+def _friend_irefs(name, internals):
+    """Maps each ref that grants `name` its internals to the iref that carries them.
+
+    Args:
+        name: The name of the assembly being compiled.
+        internals: Depsets of `(ref, iref, friends)`, as in `transitive_internals`.
+
+    Returns:
+        A dict of ref File to iref File.
+    """
+    return {
+        ref: iref
+        for ref, iref, friends in depset(transitive = internals).to_list()
+        if name in friends
+    }
+
+def _ref_assembly_name(file):
+    return file.basename.replace(".dll", "").lower()
+
+def _references_dependency(assembly, pack, superseded):
+    """Whether to compile against a dependency rather than the targeting pack's copy of it.
+
+    A dependency that the pack also provides wins only when it is newer than the
+    pack's minimum version, and then supersedes the pack's reference assembly. One
+    that sets no version is never newer.
+
+    Args:
+        assembly: The dependency's `DotnetAssemblyCompileInfo`.
+        pack: The `DotnetTargetingPackInfo`, or None.
+        superseded: The pack assemblies superseded so far, by lower-cased name.
+            Updated in place.
+
+    Returns:
+        True if the dependency is referenced.
+    """
+    if not pack:
+        return True
+
+    name = assembly.name.lower()
+    if name in pack.targeting_pack_overrides:
+        minimum_version = pack.targeting_pack_overrides[name]
+    elif name in pack.framework_list and name not in superseded:
+        minimum_version = pack.framework_list[name]["version"]
+    else:
+        return True
+
+    if not nuget_version.is_newer(assembly.version, minimum_version):
+        return False
+
+    superseded[name] = True
+    return True
+
+def _pack_reference_assemblies(pack, superseded):
+    """The targeting pack's reference assemblies, less those a dependency supersedes."""
+    if not pack:
+        return depset()
+
+    # A superseded assembly need not be in `framework_list`: System.Security.Cryptography.Xml
+    # has a minimum version for net8.0, but only the `web` framework provides it.
+    if not [name for name in superseded if name in pack.framework_list]:
+        # Share the depset the pack resolved once.
+        return pack.framework_files_depset
+
+    files = list(pack.framework_files)
+    for (name, entry) in pack.framework_list.items():
+        if entry["file"] != None and name not in superseded:
+            files.append(entry["file"])
+    return depset(files)
+
+_ANALYZER_FIELDS = ["analyzers", "analyzers_csharp", "analyzers_fsharp", "analyzers_vb"]
+
 def collect_compile_info(name, deps, targeting_pack, exports, strict_deps):
-    """Determine the transitive dependencies by the target framework.
+    """Collects what a compilation references from its dependencies and targeting pack.
 
     Args:
         name: The name of the assembly that is being compiled.
         deps: Dependencies that the compilation target depends on.
-        targeting_pack: Targeting pack that the compilation target depends on.
-        exports: Exported targets
-        strict_deps: Whether or not to use strict dependencies.
+        targeting_pack: Targeting pack that the compilation target depends on, or None.
+        exports: Exported targets.
+        strict_deps: Whether only direct dependencies and their exports are referenced.
 
     Returns:
-        A collection of the references, analyzers and runfiles.
+        A tuple of: the reference assemblies to compile against; the public
+        reference closure for `transitive_refs`; the common, C#, F# and VB
+        analyzers; the compile data; the targeting pack's reference assemblies;
+        the reference assemblies of `exports`; and `transitive_internals`.
     """
+    pack = targeting_pack[DotnetTargetingPackInfo] if targeting_pack else None
+    superseded = {}
+
     direct_iref = []
     direct_ref = []
-    transitive_ref = []
-    transitive_ref_depsets = []
-    direct_compile_data = []
-    transitive_compile_data = []
-    direct_analyzers = []
-    direct_analyzers_csharp = []
-    direct_analyzers_fsharp = []
-    direct_analyzers_vb = []
-    transitive_analyzers = []
-    transitive_analyzers_csharp = []
-    transitive_analyzers_fsharp = []
-    transitive_analyzers_vb = []
+    direct_analyzers = {field: [] for field in _ANALYZER_FIELDS}
+    direct_compile_data = list(pack.compile_data) if pack else []
     direct_internals = []
-
-    exports_files = []
-
-    targeting_pack_info = None
-    targeting_pack_overrides = {}
-    framework_list = {}
-
-    # The pack has already resolved its FrameworkList to ref files. A dependency
-    # that supersedes one of them narrows that set, which needs a copy of the
-    # pack's dict; hold the pack's own until that actually happens.
-    narrowed = False
-
-    if targeting_pack:
-        targeting_pack_info = targeting_pack[DotnetTargetingPackInfo]
-        targeting_pack_overrides = targeting_pack_info.targeting_pack_overrides
-        framework_list = targeting_pack_info.framework_list
-
-        direct_compile_data.extend(targeting_pack_info.compile_data)
 
     for dep in deps:
         assembly = dep[DotnetAssemblyCompileInfo]
-        dep_name = assembly.name.lower()
 
-        # `targeting_pack_overrides` gives minimum versions for assemblies;
-        # `framework_list` gives reference assemblies the pack contributes even
-        # when the target does not depend on them explicitly.
-        minimum_version = None
-        if dep_name in targeting_pack_overrides:
-            minimum_version = targeting_pack_overrides[dep_name]
-        elif dep_name in framework_list:
-            minimum_version = framework_list[dep_name]["version"]
-
-        add_to_output = True
-        if minimum_version != None:
-            # An explicit dependency newer than the minimum supersedes the pack's
-            # own reference assembly, which has to go to avoid a conflict. One
-            # that sets no version is never newer. The pop() is a no-op when
-            # `framework_list` never contributed one: not every assembly with a
-            # minimum version is in it for every `project_sdk`.
-            # System.Security.Cryptography.Xml, for example, has a minimum
-            # version for net8.0 but is only contributed by the
-            # `project_sdk = "web"` (ASP.NET) framework.
-            add_to_output = nuget_version.is_newer(assembly.version, minimum_version)
-            if add_to_output:
-                if not narrowed:
-                    framework_list = dict(framework_list)
-                    narrowed = True
-                framework_list.pop(dep_name, None)
-
-        if add_to_output:
+        if _references_dependency(assembly, pack, superseded):
             direct_iref.extend(assembly.irefs if name in assembly.internals_visible_to else assembly.refs)
             direct_ref.extend(assembly.refs)
-            direct_analyzers.extend(assembly.analyzers)
-            direct_analyzers_csharp.extend(assembly.analyzers_csharp)
-            direct_analyzers_fsharp.extend(assembly.analyzers_fsharp)
-            direct_analyzers_vb.extend(assembly.analyzers_vb)
+            for field in _ANALYZER_FIELDS:
+                direct_analyzers[field].extend(getattr(assembly, field))
             direct_compile_data.extend(assembly.compile_data)
             direct_internals.extend(_internals(assembly))
 
-        # We take all the exports of each dependency and add them
-        # to the direct refs.
         direct_iref.extend(assembly.exports)
 
-        # This is not a complete solution since we are not comparing assembly versions
-        # Transitive dependency resolution is very complicated.
-        if not strict_deps:
-            # The compiler must not be handed an assembly that this target's
-            # targeting pack already provides, so filter the closure down to the
-            # reference arguments of this compilation.
-            for transitive_assembly in assembly.transitive_refs.to_list():
-                transitive_name = transitive_assembly.basename.replace(".dll", "").lower()
-                if transitive_name not in targeting_pack_overrides and transitive_name not in framework_list:
-                    transitive_ref.append(transitive_assembly)
+    transitive_ref = []
+    transitive_ref_depsets = []
+    transitive_analyzers = {field: [] for field in _ANALYZER_FIELDS}
+    transitive_compile_data = []
+    if not strict_deps:
+        dep_infos = [dep[DotnetAssemblyCompileInfo] for dep in deps]
+        transitive_ref_depsets = [assembly.transitive_refs for assembly in dep_infos]
+        for field in _ANALYZER_FIELDS:
+            transitive_analyzers[field] = [getattr(assembly, "transitive_" + field) for assembly in dep_infos]
+        transitive_compile_data = [assembly.transitive_compile_data for assembly in dep_infos]
 
-            # The provider keeps the deps' depsets, so every consumer shares one
-            # copy of the closure and filters it against its own targeting pack.
-            transitive_ref_depsets.append(assembly.transitive_refs)
-
-            transitive_analyzers.append(assembly.transitive_analyzers)
-            transitive_analyzers_csharp.append(assembly.transitive_analyzers_csharp)
-            transitive_analyzers_fsharp.append(assembly.transitive_analyzers_fsharp)
-            transitive_analyzers_vb.append(assembly.transitive_analyzers_vb)
-            transitive_compile_data.append(assembly.transitive_compile_data)
+        # Of the assemblies the targeting pack provides, the compiler only gets
+        # the pack's copy or a direct dependency that supersedes it, never one
+        # from the closure. Transitive assembly versions are not compared.
+        if pack:
+            transitive_ref = [
+                ref
+                for ref in depset(transitive = transitive_ref_depsets).to_list()
+                if _ref_assembly_name(ref) not in pack.targeting_pack_overrides and
+                   _ref_assembly_name(ref) not in pack.framework_list
+            ]
+        else:
+            transitive_ref = depset(transitive = transitive_ref_depsets).to_list()
 
     # A friend reaching an assembly through an export or the closure gets its
     # iref in place of its ref, never both: of two reference assemblies with
     # the same identity, fsc keeps the first and csc the last.
     deps_internals = [dep[DotnetAssemblyCompileInfo].transitive_internals for dep in deps]
-    friend_irefs = {
-        ref: iref
-        for ref, iref, friends in depset(transitive = deps_internals).to_list()
-        if name in friends
-    }
+    friend_irefs = _friend_irefs(name, deps_internals)
     if friend_irefs:
         direct_iref = [friend_irefs.get(ref, ref) for ref in direct_iref]
         transitive_ref = [friend_irefs.get(ref, ref) for ref in transitive_ref]
 
-    if targeting_pack_info:
+    if pack:
         # Last, so a dependency wins a file name clash: it contributes analyzers
         # only once it has superseded the pack's reference assembly, so its
         # analyzer is the one that matches the refs. See `_resolve_analyzers`.
-        direct_analyzers.extend(targeting_pack_info.analyzers)
-        direct_analyzers_csharp.extend(targeting_pack_info.analyzers_csharp)
-        direct_analyzers_fsharp.extend(targeting_pack_info.analyzers_fsharp)
-        direct_analyzers_vb.extend(targeting_pack_info.analyzers_vb)
+        for field in _ANALYZER_FIELDS:
+            direct_analyzers[field].extend(getattr(pack, field))
 
-    if not narrowed:
-        # Nothing was superseded, so share the depset the pack resolved once.
-        framework_files = targeting_pack_info.framework_files_depset if targeting_pack_info else depset()
-    else:
-        narrowed_files = list(targeting_pack_info.framework_files)
-        for file in framework_list.values():
-            if file["file"] != None:
-                narrowed_files.append(file["file"])
-        framework_files = depset(narrowed_files)
-
+    exports_files = []
     for export in exports:
         assembly = export[DotnetAssemblyCompileInfo]
         exports_files.extend(assembly.refs)
@@ -460,12 +456,12 @@ def collect_compile_info(name, deps, targeting_pack, exports, strict_deps):
         depset(direct = direct_iref, transitive = [depset(transitive_ref)]),
         # Unfiltered and structurally shared: only ever read back out of a provider.
         depset(direct = direct_ref, transitive = transitive_ref_depsets),
-        _resolve_analyzers(direct_analyzers, transitive_analyzers),
-        _resolve_analyzers(direct_analyzers_csharp, transitive_analyzers_csharp),
-        _resolve_analyzers(direct_analyzers_fsharp, transitive_analyzers_fsharp),
-        _resolve_analyzers(direct_analyzers_vb, transitive_analyzers_vb),
+        _resolve_analyzers(direct_analyzers["analyzers"], transitive_analyzers["analyzers"]),
+        _resolve_analyzers(direct_analyzers["analyzers_csharp"], transitive_analyzers["analyzers_csharp"]),
+        _resolve_analyzers(direct_analyzers["analyzers_fsharp"], transitive_analyzers["analyzers_fsharp"]),
+        _resolve_analyzers(direct_analyzers["analyzers_vb"], transitive_analyzers["analyzers_vb"]),
         depset(direct = direct_compile_data, transitive = transitive_compile_data),
-        framework_files,
+        _pack_reference_assemblies(pack, superseded),
         exports_files,
         depset(direct_internals, transitive = [] if strict_deps else deps_internals),
     )
@@ -496,6 +492,7 @@ def collect_transitive_runfiles(ctx, assembly_runtime_info, deps):
     return runfiles.merge_all(transitive_runfiles)
 
 def get_framework_version_info(tfm):
+    """The PE subsystem version to compile `tfm` with, or None to leave it to the compiler."""
     return _subsystem_version.get(tfm)
 
 def get_highest_compatible_target_framework(incoming_tfm, tfms):
@@ -717,22 +714,6 @@ def get_nuget_relative_path(file):
     # So we remove the first two parts of the path to get the path within the nuget package.
     return "/".join(file.path.split("/")[2:])
 
-def transform_deps(deps):
-    """Transforms a [Target] into [DotnetDepVariantInfo].
-
-    This helper function is used to transform ctx.attr.deps into
-    [DotnetDepVariantInfo].
-    Args:
-        deps (list of Targets): Dependencies coming from ctx.attr.deps
-    Returns:
-        list of DotnetDepVariantInfos.
-    """
-    return [DotnetDepVariantInfo(
-        label = dep.label,
-        assembly_runtime_info = dep[DotnetAssemblyRuntimeInfo] if DotnetAssemblyRuntimeInfo in dep else None,
-        nuget_info = dep[NuGetInfo] if NuGetInfo in dep else None,
-    ) for dep in deps]
-
 def generate_warning_args(
         args,
         treat_warnings_as_errors,
@@ -937,9 +918,7 @@ def default_csharp_lang_version(tfm, sdk_default):
 
     return selected
 
-# Both of these are called once per target per framework during analysis, and
-# the input domain is the known framework set, so they are computed once here
-# rather than on every call.
+# Computed once rather than per target: the input domain is the known framework set.
 _FRAMEWORK_PREPROCESSOR_SYMBOLS = {
     tfm: _compute_framework_preprocessor_symbols(tfm)
     for tfm in FRAMEWORK_COMPATIBILITY
@@ -954,7 +933,8 @@ def framework_preprocessor_symbols(tfm):
     Returns:
         A list of preprocessor symbols.
     """
-    return _FRAMEWORK_PREPROCESSOR_SYMBOLS.get(tfm, _compute_framework_preprocessor_symbols(tfm))
+    symbols = _FRAMEWORK_PREPROCESSOR_SYMBOLS.get(tfm)
+    return symbols if symbols != None else _compute_framework_preprocessor_symbols(tfm)
 
 def is_from_nuget_package(dep):
     """Whether a dependency was unpacked from a `.nupkg`.
@@ -1035,6 +1015,120 @@ def _depsjson_runtime_asset(version):
         return {}
     return {"assemblyVersion": nuget_version.assembly_version(version)}
 
+def _lib_assembly_name(file):
+    return file.basename.lower().replace(".dll", "")
+
+def _runtime_pack_conflicts(runtime_pack_info, transitive_runtime_deps):
+    """Decides, for each dependency the runtime pack also ships, which copy the app gets.
+
+    As in MSBuild, the dependency wins only when it is newer than the runtime
+    pack. One that sets no version is never newer.
+
+    Args:
+        runtime_pack_info: The `DotnetRuntimePackInfo` of a self-contained app.
+        transitive_runtime_deps: The app's `DotnetAssemblyRuntimeInfo`s.
+
+    Returns:
+        A pair of dicts keyed by lower-cased assembly name: the dependencies
+        that replace the pack's copy, and those the pack's copy replaces.
+    """
+
+    # Every pack of a runtime release shares the release's version.
+    pack_version = runtime_pack_info.assembly_runtime_infos[0].version
+    pack_assemblies = {
+        _lib_assembly_name(lib): None
+        for info in runtime_pack_info.assembly_runtime_infos
+        for lib in info.libs
+    }
+
+    dependency_wins = {}
+    pack_wins = {}
+    for dep in transitive_runtime_deps:
+        name = dep.name.lower()
+        if name not in pack_assemblies:
+            continue
+        if nuget_version.is_newer(dep.version, pack_version):
+            dependency_wins[name] = None
+        else:
+            pack_wins[name] = None
+
+    return (dependency_wins, pack_wins)
+
+def _depsjson_library(runtime_dep, library_name, use_relative_paths):
+    """The `libraries` entry of a dependency."""
+    if runtime_dep.nuget_info and not use_relative_paths:
+        return {
+            "type": "package",
+            "serviceable": True,
+            "sha512": runtime_dep.nuget_info.sha512,
+            "path": library_name.lower(),
+            # NuGet lower-cases the whole file name, prerelease label included.
+            "hashPath": "{}.{}.nupkg.sha512".format(runtime_dep.name.lower(), runtime_dep.version.lower()),
+        }
+
+    library = {
+        "type": "project",
+        "serviceable": False,
+        "sha512": "",
+    }
+    if use_relative_paths:
+        library["path"] = "./"
+    return library
+
+def _depsjson_target(ctx, runtime_dep, is_self_contained, use_relative_paths, portable):
+    """The `targets` entry of a dependency whose own files the app loads.
+
+    With `use_relative_paths`, files are keyed by their runfiles path rather
+    than by their path inside the application directory.
+    """
+    portable_assets = get_portable_assets(runtime_dep, portable)
+    runtime_asset = _depsjson_runtime_asset(runtime_dep.version)
+
+    target = {"dependencies": runtime_dep.direct_deps_depsjson_fragment}
+
+    target["runtime"] = {
+        to_rlocation_path(ctx, dll) if use_relative_paths else dll.basename: dict(runtime_asset)
+        for dll in (portable_assets.libs if portable_assets else runtime_dep.libs)
+    }
+
+    # A satellite assembly is keyed by its locale folder as well, as MSBuild
+    # writes it: every locale's satellite has the same file name.
+    target["resources"] = {}
+    for resource in runtime_dep.resource_assemblies:
+        locale = _get_resource_assembly_locale(resource)
+        key = to_rlocation_path(ctx, resource) if use_relative_paths else "{}/{}".format(locale, resource.basename)
+        target["resources"][key] = {"locale": locale}
+
+    # A self-contained app lists its native files directly; otherwise they are
+    # per-RID `runtimeTargets`, as in
+    # https://github.com/dotnet/sdk/blob/main/documentation/specs/runtime-configuration-file.md#framework-dependent-deployment-model
+    if is_self_contained:
+        target["native"] = {native_file.basename: {"fileVersion": "0.0.0.0"} for native_file in runtime_dep.native}
+    elif portable_assets:
+        target["runtimeTargets"] = {
+            asset.path: {
+                "rid": asset.rid,
+                "assetType": asset.asset_type,
+            }
+            for asset in portable_assets.runtime_targets
+        }
+    elif not is_from_nuget_package(runtime_dep):
+        # Built in this workspace, so not laid out by RID.
+        target["native"] = {
+            to_rlocation_path(ctx, native_file) if use_relative_paths else native_file.basename: {"fileVersion": "0.0.0.0"}
+            for native_file in runtime_dep.native
+        }
+    else:
+        target["runtimeTargets"] = {
+            runtime_target_path(native_file): {
+                "rid": native_file.dirname.split("/")[-2],
+                "assetType": "runtime" if native_file.dirname.split("/")[-1] == "lib" else "native",
+            }
+            for native_file in runtime_dep.native
+        }
+
+    return target
+
 # For deps.json spec see: https://github.com/dotnet/sdk/blob/main/documentation/specs/runtime-configuration-file.md
 def generate_depsjson(
         ctx,
@@ -1061,132 +1155,61 @@ def generate_depsjson(
     Returns:
         The deps.json file as a struct.
     """
-    version = "{}/{}".format(tfm_to_semver(target_framework), runtime_pack_info.runtime_identifier) if is_self_contained else "{}".format(tfm_to_semver(target_framework))
+    version = tfm_to_semver(target_framework)
+    if is_self_contained:
+        version += "/" + runtime_pack_info.runtime_identifier
     runtime_target = ".NETCoreApp,Version=v{}".format(version)
 
-    # DLLs that are overidden by the runtime pack due to the runtime pack having a higher version than the user provided dependency.
-    runtime_pack_overrides = []
-
-    # User provided dependencies that provide same DLLs as the runtime pack, but with a higher version.
-    dep_overrides = []
-
+    targets = {}
+    libraries = {}
     base = {
         "runtimeTarget": {
             "name": runtime_target,
             "signature": "",
         },
         "compilationOptions": {},
-        "targets": {
-        },
+        "targets": {runtime_target: targets},
+        "libraries": libraries,
     }
-    base["targets"][runtime_target] = {}
-    base["libraries"] = {}
 
+    pack_wins = {}
     if is_self_contained:
-        # We need to filter out the runtime DLLs that are provided by the end user as a normal dependency
-        # We only filter the DLL out if the user provided dependency has a higher version than the runtime pack.
-        # This is the same behavior as in MSBuild. We only need to do this for self-contained binaries.
-        runtime_dlls = [
-            lib.basename.lower().replace(".dll", "")
-            for assembly_runtime_info in runtime_pack_info.assembly_runtime_infos
-            for lib in assembly_runtime_info.libs
-        ]
-        deps = [dep for dep in transitive_runtime_deps if dep.name.lower() in runtime_dlls]
-        for dep in deps:
-            # We can use the first assembly_runtime_info since all assembly_runtime_infos will
-            # have the same version for the same runtime pack. A dependency that sets no
-            # version is never newer.
-            if nuget_version.is_newer(dep.version, runtime_pack_info.assembly_runtime_infos[0].version):
-                dep_overrides.append(dep.name.lower())
-            else:
-                runtime_pack_overrides.append(dep.name.lower())
+        (dependency_wins, pack_wins) = _runtime_pack_conflicts(runtime_pack_info, transitive_runtime_deps)
 
         for assembly_runtime_info in runtime_pack_info.assembly_runtime_infos:
             runtime_pack_name = "runtimepack.{}/{}".format(assembly_runtime_info.name, assembly_runtime_info.version)
-            base["libraries"][runtime_pack_name] = {
+            libraries[runtime_pack_name] = {
                 "type": "runtimepack",
                 "serviceable": False,
                 "sha512": "",
             }
-            base["targets"][runtime_target][runtime_pack_name] = {
-                "runtime": {dll.basename: {} for dll in assembly_runtime_info.libs if dll.basename.lower().replace(".dll", "") not in dep_overrides},
+            targets[runtime_pack_name] = {
+                "runtime": {dll.basename: {} for dll in assembly_runtime_info.libs if _lib_assembly_name(dll) not in dependency_wins},
                 "native": {native_file.basename: {} for native_file in assembly_runtime_info.native},
             }
 
-        base["runtimes"] = {rid: RUNTIME_GRAPH[rid] for rid, supported_rids in RUNTIME_GRAPH.items() if runtime_pack_info.runtime_identifier in supported_rids or runtime_pack_info.runtime_identifier == rid}
+        rid = runtime_pack_info.runtime_identifier
+        base["runtimes"] = {
+            graph_rid: compatible_rids
+            for graph_rid, compatible_rids in RUNTIME_GRAPH.items()
+            if rid == graph_rid or rid in compatible_rids
+        }
 
     for runtime_dep in [target_assembly_runtime_info] + transitive_runtime_deps:
         library_name = "{}/{}".format(runtime_dep.name, runtime_dep.version)
 
-        # We need to make sure that we do not include multiple versions of the same first party dll
-        # in the deps.json. Using the default ordering of depsets we can be sure that the first instance
-        # of a package is the one that is most compatible with the rest of the tree since our transitions
-        # make it so that you can't depend on incompatible packages
-        if library_name in base["libraries"]:
+        # The same library can be reached more than once, e.g. built for two
+        # frameworks. The first in depset order is the most compatible with the
+        # rest of the graph, since the transitions only allow compatible ones.
+        if library_name in libraries:
             continue
 
-        library_fragment = {
-            "type": "project",
-            "serviceable": False,
-            "sha512": "",
-        }
-        if use_relative_paths:
-            library_fragment["path"] = "./"
-
-        if runtime_dep.nuget_info and not use_relative_paths:
-            library_fragment["type"] = "package"
-            library_fragment["serviceable"] = True
-            library_fragment["sha512"] = runtime_dep.nuget_info.sha512
-            library_fragment["path"] = library_name.lower()
-            library_fragment["hashPath"] = "{}.{}.nupkg.sha512".format(runtime_dep.name.lower(), runtime_dep.version)
-
-        target_fragment = {
-            "dependencies": runtime_dep.direct_deps_depsjson_fragment,
-        }
-
-        portable_assets = get_portable_assets(runtime_dep, portable)
-
-        # Do not add the `runtime` and `native` sections if the runtime pack overrides the dependency.
-        if runtime_dep.name.lower() not in runtime_pack_overrides:
-            target_fragment["runtime"] = {
-                (dll.basename if not use_relative_paths else to_rlocation_path(ctx, dll)): _depsjson_runtime_asset(runtime_dep.version)
-                for dll in (portable_assets.libs if portable_assets else runtime_dep.libs)
-            }
-
-            # A satellite assembly is keyed by its locale folder as well, as MSBuild
-            # writes it: every locale's satellite has the same file name.
-            target_fragment["resources"] = {("{}/{}".format(_get_resource_assembly_locale(resource_assembly), resource_assembly.basename) if not use_relative_paths else to_rlocation_path(ctx, resource_assembly)): {
-                "locale": _get_resource_assembly_locale(resource_assembly),
-            } for resource_assembly in runtime_dep.resource_assemblies}
-
-            # Handling of runtime files
-            # If the publish is self-contained we put the native files in the `native` section of the target fragment
-            # Otherwise we followe the conventions mentioned here: https://github.com/dotnet/sdk/blob/main/documentation/specs/runtime-configuration-file.md#framework-dependent-deployment-model
-            if is_self_contained:
-                target_fragment["native"] = {native_file.basename: {"fileVersion": "0.0.0.0"} for native_file in runtime_dep.native}
-            elif portable_assets:
-                target_fragment["runtimeTargets"] = {
-                    asset.path: {
-                        "rid": asset.rid,
-                        "assetType": asset.asset_type,
-                    }
-                    for asset in portable_assets.runtime_targets
-                }
-            elif not is_from_nuget_package(runtime_dep):
-                # For non self-contained binaries that are not from a NuGet package, assume we built
-                # them and point to their relative location within the execroot.
-                target_fragment["native"] = {(native_file.basename if not use_relative_paths else to_rlocation_path(ctx, native_file)): {"fileVersion": "0.0.0.0"} for native_file in runtime_dep.native}
-            else:
-                target_fragment["runtimeTargets"] = {
-                    runtime_target_path(native_file): {
-                        "rid": native_file.dirname.split("/")[-2],
-                        "assetType": "runtime" if native_file.dirname.split("/")[-1] == "lib" else "native",
-                    }
-                    for native_file in runtime_dep.native
-                }
-
-        base["libraries"][library_name] = library_fragment
-        base["targets"][runtime_target][library_name] = target_fragment
+        libraries[library_name] = _depsjson_library(runtime_dep, library_name, use_relative_paths)
+        if runtime_dep.name.lower() in pack_wins:
+            # The runtime pack's copy is the one the app loads.
+            targets[library_name] = {"dependencies": runtime_dep.direct_deps_depsjson_fragment}
+        else:
+            targets[library_name] = _depsjson_target(ctx, runtime_dep, is_self_contained, use_relative_paths, portable)
 
     return base
 
@@ -1333,55 +1356,48 @@ def generate_runtimeconfig(target_framework, frameworks, is_self_contained, roll
     return base
 
 def to_rlocation_path(ctx, file):
-    """The rlocation path for a `File`
-
-    This produces the same value as the `rlocationpath` predefined source/output path variable.
-
-    From https://bazel.build/reference/be/make-variables#predefined_genrule_variables:
-
-    > `rlocationpath`: The path a built binary can pass to the `Rlocation` function of a runfiles
-    > library to find a dependency at runtime, either in the runfiles directory (if available)
-    > or using the runfiles manifest.
-
-    > This is similar to root path (a.k.a. [short_path](https://bazel.build/rules/lib/File#short_path))
-    > in that it does not contain configuration prefixes, but differs in that it always starts with the
-    > name of the repository.
-
-    > The rlocation path of a `File` in an external repository repo will start with `repo/`, followed by the
-    > repository-relative path.
-
-    > Passing this path to a binary and resolving it to a file system path using the runfiles libraries
-    > is the preferred approach to find dependencies at runtime. Compared to root path, it has the
-    > advantage that it works on all platforms and even if the runfiles directory is not available.
+    """The path of `file` under the runfiles root, as the `rlocationpath` make variable gives it.
 
     Args:
-        ctx: starlark rule execution context
-        file: a `File` object
+        ctx: The rule context.
+        file: The `File`.
 
     Returns:
-        The rlocationpath for the `File`
+        The path, which starts with the name of the file's repository.
     """
     if file.short_path.startswith("../"):
         return file.short_path[3:]
     else:
         return ctx.workspace_name + "/" + file.short_path
 
-def package_relative_path(file, package):
-    """Re-roots `file`'s path to be relative to `package`.
+def package_relative_path(file, label):
+    """The path of `file` relative to `label`'s package, as MSBuild's is to the project.
 
     Args:
-        file: The `File` to re-root.
-        package: The Bazel package to make the path relative to (typically `ctx.label.package`).
+        file: A `File`, or anything with its `short_path` and `basename`.
+        label: The label whose package the path is relative to.
 
     Returns:
-        `file`'s path relative to `package`, or `file.basename` if `file` lies outside `package`
-        (for example a file from an external repository or an unrelated package).
+        The relative path, or the file name for a file outside the package, as
+        MSBuild falls back to.
     """
-    if not file.short_path.startswith("../"):
-        prefix = package + "/" if package else ""
-        if file.short_path.startswith(prefix):
-            return file.short_path[len(prefix):]
-    return file.basename
+
+    # A file of another repository has a `short_path` of `../<repo>/<path>`.
+    prefix = "../%s/" % label.repo_name if label.repo_name else ""
+    if label.package:
+        prefix += label.package + "/"
+
+    path = file.short_path[len(prefix):]
+    if not file.short_path.startswith(prefix) or path.startswith("../"):
+        return file.basename
+
+    return path
+
+def _batch_path(path):
+    """`path` as it has to appear between double quotes in a batch file."""
+
+    # cmd.exe expands `%` even inside quotes.
+    return path.replace("/", "\\").replace("%", "%%")
 
 def _copy_files_to_dir(actions, is_windows, file_mappings, out_dir, script_name, executables = []):
     """Copies files into `out_dir` using a single generated script.
@@ -1409,8 +1425,9 @@ def _copy_files_to_dir(actions, is_windows, file_mappings, out_dir, script_name,
         inputs.append(src)
         outputs.append(struct(file = dst, dest = rel, src = src))
         if is_windows:
-            script_body.append("if not exist \"{dir}\" @mkdir \"{dir}\" >NUL".format(dir = dst.dirname.replace("/", "\\")))
-            script_body.append("@copy /Y \"{src}\" \"{dst}\" >NUL".format(src = src.path.replace("/", "\\"), dst = dst.path.replace("/", "\\")))
+            # A batch file carries on past a failed command, hence `|| exit /b 1`.
+            script_body.append("if not exist \"{dir}\" @mkdir \"{dir}\" >NUL || exit /b 1".format(dir = _batch_path(dst.dirname)))
+            script_body.append("@copy /Y \"{src}\" \"{dst}\" >NUL || exit /b 1".format(src = _batch_path(src.path), dst = _batch_path(dst.path)))
         else:
             script_body.append("mkdir -p {dir} && cp -f {src} {dst}".format(dir = shell.quote(dst.dirname), src = shell.quote(src.path), dst = shell.quote(dst.path)))
 
@@ -1473,14 +1490,7 @@ def copy_appsettings_to_dir(target_name, actions, is_windows, appsetting_files, 
     Returns:
         A list of the staged `File`s.
     """
-    outputs = _copy_files_to_dir(
-        actions,
-        is_windows,
-        [(f, f.basename) for f in appsetting_files],
-        out_dir,
-        target_name + ".appsettings.copy",
-    )
-    return [entry.file for entry in outputs]
+    return copy_files_to_dir(target_name + ".appsettings", actions, is_windows, appsetting_files, out_dir)
 
 def copy_content_to_dir(target_name, actions, is_windows, content_file_mappings, out_dir):
     """Stages content files next to the assembly at their mapped destination paths.
@@ -1553,21 +1563,13 @@ def collect_transitive_content_files(label, assembly_info, transitive_runtime_de
 
     return inherited
 
-_RESOURCE_TEMPLATE_CSHARP = "/resource:\"%s\""
-_RESOURCE_TEMPLATE_FSHARP = "--resource:%s"
-
-def add_resource_args(args, resources, target_label, out_dll, language):
-    """Adds one resource argument per file to `args`.
-
-    Args:
-        args: The Args object for the compilation action.
-        resources: The resource files to embed.
-        target_label: (Label) The label embedding the resources.
-        out_dll: (str) Basename of the output dll, or None for a ref-only compile.
-        language: "csharp" or "fsharp".
-    """
-    for resource in resources:
-        args.add(resource, format = _resource_arg_format(resource, target_label, out_dll, language))
+def _resource_arg_template(language):
+    """The Args format of a resource argument, with a `%s` where the file's path goes."""
+    if language == "csharp":
+        return "/resource:\"%s\""
+    if language == "fsharp":
+        return "--resource:%s"
+    fail("Unsupported language: {}".format(language))
 
 def _quote_resource_name(name, language):
     # `%` is the escape character in an Args format string. csc splits response
@@ -1578,71 +1580,42 @@ def _quote_resource_name(name, language):
 def embedded_resource_name(file, target_label, out_dll):
     """The manifest name a resource file is embedded under, as MSBuild names it.
 
+    `<assembly name>.<path>`, where `<path>` is the file's path relative to the
+    target's package with `/` replaced by `.`. A file from another package or
+    repository keeps only its basename.
+
     Args:
         file: (File) The file to embed.
-        target_label: (Label) The label of the target that is embedding the resource.
-        out_dll: (str) Basename of the output assembly, if one exists.
+        target_label: (Label) The label of the target embedding the resource.
+        out_dll: (str) Basename of the output assembly, if there is one.
 
     Returns:
         The name, or None when there is no `.dll` or `.exe` to name it after.
     """
-
-    # We can only determine the embedded resource's name if we have a DLL or EXE to embed it in.
     if out_dll == None or not (out_dll.endswith(".dll") or out_dll.endswith(".exe")):
         return None
 
-    # When the file is not within a project directory, MSBuild falls back to
-    # the basename of the file.
-    simple_resource_name = "{}.{}".format(out_dll[:-4], file.basename)
+    return "{}.{}".format(out_dll[:-len(".dll")], package_relative_path(file, target_label).replace("/", "."))
 
-    if file.owner != None and file.owner.repo_name != target_label.repo_name:
-        # Fallback to the basename if the file comes from a different repository.
-        return simple_resource_name
-
-    if not target_label.package:
-        # The path is relative to the root package already, after an external
-        # repository's `../<repo>/`.
-        relative_path = file.short_path.split("/", 2)[2] if file.short_path.startswith("../") else file.short_path
-    elif not file.short_path.startswith(target_label.package):
-        # Fallback to the basename if the file is not in the target's package, because
-        # the path will not be normalized.
-        return simple_resource_name
-    else:
-        # Packages/Foo.Bar/BUILD.bazel importing Packages/Foo.Bar/a/b/c.txt -> a/b/c.txt
-        relative_path = file.short_path[len(target_label.package) + 1:]
-
-    # Foo.Bar.dll and a/b/c.txt -> Foo.Bar.a.b.c.txt
-    return "{}.{}".format(out_dll[:-4], ".".join(relative_path.split("/")))
-
-def _resource_arg_format(file, target_label, out_dll, language):
-    """The Args format string that turns a resource file into a compiler argument.
-
-    A format rather than a finished string, so the file is still added to `args`
-    as a `File` and `--experimental_output_paths=strip` can rewrite its path.
+def add_resource_args(args, resources, target_label, out_dll, language):
+    """Adds one resource argument per file to `args`, named by `embedded_resource_name`.
 
     Args:
-        file: (File) The file to embed.
-        target_label: (Label) The label of the target that is embedding the resource.
-        out_dll: (str) The output dll file, if one exists.
-        language: (str) The language of the target that is embedding the resource. Possible values are "csharp" or "fsharp".
-
-    Returns:
-        A format string with a single `%s` where the file's path goes.
+        args: The Args object for the compilation action.
+        resources: The resource files to embed.
+        target_label: (Label) The label embedding the resources.
+        out_dll: (str) Basename of the output assembly, or None for a ref-only compile.
+        language: "csharp" or "fsharp".
     """
-    if language == "csharp":
-        base_resource_fmt = _RESOURCE_TEMPLATE_CSHARP
-    elif language == "fsharp":
-        base_resource_fmt = _RESOURCE_TEMPLATE_FSHARP
-    else:
-        fail("Unsupported language: {}".format(language))
-
-    resource_name = embedded_resource_name(file, target_label, out_dll)
-    if resource_name == None:
-        return base_resource_fmt
-
-    # `%` is the escape character in an Args format string, so a resource whose
-    # name contains one has to double it to come out literal.
-    return base_resource_fmt + "," + _quote_resource_name(resource_name, language)
+    template = _resource_arg_template(language)
+    for resource in resources:
+        name = embedded_resource_name(resource, target_label, out_dll)
+        if name == None:
+            args.add(resource, format = template)
+        else:
+            # The name goes in the format rather than the path, so the path is
+            # still a `File` that `--experimental_output_paths=strip` can rewrite.
+            args.add(resource, format = template + "," + _quote_resource_name(name, language))
 
 def add_resx_resource_args(args, resx_resources, language):
     """Adds one resource argument per compiled `.resx` resource to `args`.
@@ -1653,12 +1626,6 @@ def add_resx_resource_args(args, resx_resources, language):
             its manifest resource name.
         language: (str) The language of the target that is embedding the resource ("csharp" or "fsharp").
     """
-    if language == "csharp":
-        base_resource_fmt = _RESOURCE_TEMPLATE_CSHARP
-    elif language == "fsharp":
-        base_resource_fmt = _RESOURCE_TEMPLATE_FSHARP
-    else:
-        fail("Unsupported language: {}".format(language))
-
+    template = _resource_arg_template(language)
     for (resource_file, manifest_name) in resx_resources:
-        args.add(resource_file, format = base_resource_fmt + "," + _quote_resource_name(manifest_name, language))
+        args.add(resource_file, format = template + "," + _quote_resource_name(manifest_name, language))

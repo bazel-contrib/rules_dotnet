@@ -6,15 +6,15 @@ DotnetAssemblyCompileInfo = provider(
         "version": "string: The version of the assembly",
         "project_sdk": "string: The SDK being targeted",
         "target_framework": "string: The target framework moniker the assembly was compiled for. None for an imported assembly, whose files are chosen per framework and so name no single one.",
-        "refs": "list[File]: Reference-only assemblies containing only public symbols. See docs/ReferenceAssemblies.md for more info.",
-        "irefs": "list[File]: Reference-only assemblies containing public and internal symbols. See docs/ReferenceAssemblies.md for more info.",
+        "refs": "list[File]: Reference-only assemblies containing only public symbols.",
+        "irefs": "list[File]: Reference-only assemblies containing public and internal symbols, which only the `internals_visible_to` assemblies compile against.",
         "analyzers": "list[File]: Common language analyzer dlls",
         "analyzers_csharp": "list[File]: C# analyzer dlls",
         "analyzers_fsharp": "list[File]: F# analyzer dlls",
         "analyzers_vb": "list[File]: VB analyzer dlls",
-        "internals_visible_to": "list[string]: A list of assemblies that can use the assemblies listed in iref for compilation. See docs/ReferenceAssemblies.md for more info.",
+        "internals_visible_to": "list[string]: The assemblies that compile against `irefs` rather than `refs`.",
         "compile_data": "list[File]: Compile data files",
-        "exports": "list[File]",
+        "exports": "list[File]: The reference assemblies of the target's `exports`, which its dependents compile against as if they were their own dependencies.",
         "transitive_refs": "depset[File]: Transitive reference-only assemblies containing only public symbols. Only used when strict deps are off.",
         "transitive_internals": "depset[tuple[File, File, tuple[string]]]: `(ref, iref, internals_visible_to)` for each assembly in `transitive_refs` or `exports` that grants its internals to others.",
         "transitive_compile_data": "depset[File]: Transitive compile data files. Only used when strict deps are off.",
@@ -26,7 +26,7 @@ DotnetAssemblyCompileInfo = provider(
 )
 
 DotnetAssemblyRuntimeInfo = provider(
-    doc = "A DLL or exe.",
+    doc = "What a .Net assembly needs at run time.",
     fields = {
         "name": "string: The name of the assembly",
         "version": "string: The version of the assembly",
@@ -38,10 +38,10 @@ DotnetAssemblyRuntimeInfo = provider(
         "resource_assemblies": "list[File]: Resource assemblies",
         "appsetting_files": "depset[File]: Appsetting files staged next to the assembly, flattened to their basename.",
         "content_files": "list[struct(file, dest, src)]: Content files staged next to the assembly, where `dest` is each file's path relative to the output directory and `src` is the file it was staged from. Consumers reproduce this layout (e.g. in runfiles or the publish folder).",
-        "nuget_info": "NugetInfo",
+        "nuget_info": "NuGetInfo: The package the assembly comes from, or None.",
         "framework_references": "list[string]: The framework references of the assembly itself, such as `Microsoft.AspNetCore.App`.",
         "deps": "depset[DotnetAssemblyRuntimeInfo]: The direct and transitive runtime dependencies of the assembly",
-        "direct_deps_depsjson_fragment": "struct: A struct containing the direct deps of the target. This is used during deps.json generation and is generated in the provider to avoid making the provider too bloated and thus making analysis slower.",
+        "direct_deps_depsjson_fragment": "dict[string, string]: The name and version of each direct runtime dependency: the `dependencies` of the assembly's deps.json entry.",
         "ready_to_run": """list[struct]: The ReadyToRun images of `libs`, when a publish asked for them, or None. Each carries
 
   * `assembly`: the File that was compiled.
@@ -52,9 +52,8 @@ DotnetAssemblyRuntimeInfo = provider(
 )
 
 DotnetContentFilesInfo = provider(
-    doc = "Content files with explicit destination paths, produced by the `dotnet_content_files` rule and consumed by the `content_files` attribute of the library, binary, and test rules. Lets users remap where each file lands relative to the assembly output directory (MSBuild CopyToOutputDirectory/Link parity).",
+    doc = "Content files with explicit destination paths, from `dotnet_content_files`.",
     fields = {
-        "files": "depset[File]: The source files, for DefaultInfo/runfiles propagation.",
         "mappings": "list[struct]: `struct(src = File, dest = string)` pairs, where `dest` is the destination path (relative to the assembly output directory) at which `src` should be staged.",
     },
 )
@@ -76,17 +75,6 @@ StaticWebAssetsInfo = provider(
   * `serving_path`: where it is served from, relative to `wwwroot`.
   * `scoped_css_bundle`: whether the file is the target's scoped CSS bundle,
     which an application's own bundle has to `@import`.""",
-    },
-)
-
-DotnetDepVariantInfo = provider(
-    doc = "A wrapper provider for a dependency. The dependency can be a project " +
-          "dependency, in which case the `assembly_runtime_info` will be populated" +
-          "or a NuGet dependency, in which case `assembly_runtime_info` and `nuget_info` will be populated.",
-    fields = {
-        "label": "Label: The label of the dependency",
-        "assembly_runtime_info": "DotnetAssemblyRuntimeInfo: The DotnetAssemblyRuntimeInfo provider of a dependency",
-        "nuget_info": "NuGetInfo: The NuGet info of a dependency",
     },
 )
 
@@ -190,7 +178,7 @@ DotnetTargetingPackInfo = provider(
         "assembly_runtime_infos": "list[DotnetAssemblyRuntimeInfo]: The runtime infos of the assemblies in the targeting pack",
         "assembly_compile_infos": "list[DotnetAssemblyCompileInfo]: The compile infos of the assemblies in the targeting pack",
         "targeting_pack_overrides": "map[string, string]: The merged `PackageOverride.txt` entries of every pack.",
-        "framework_list": "map[string, struct]: The merged `FrameworkList.xml` entries of every pack, resolved to the ref File that provides each assembly.",
+        "framework_list": "map[string, dict]: The merged `FrameworkList.xml` entries of every pack, by lower-cased assembly name. Each is a dict of the assembly's `version` and the ref `file` that provides it, or None.",
         "framework_files": "list[File]: The irefs of packs that do not ship a `FrameworkList.xml`.",
         "framework_files_depset": "depset[File]: `framework_files` plus the resolved files of `framework_list`, for targets that do not narrow the pack.",
         "analyzers": "list[File]: The merged common language analyzers of every pack.",
@@ -206,8 +194,8 @@ DotnetRuntimePackInfo = provider(
     doc = "Information about a .Net runtime pack.",
     fields = {
         "runtime_identifier": "string: The runtime identifier of the runtime pack",
-        "assembly_runtime_infos": "list[DotnetAssemblyRuntimeInfo]: The runtime infos of the assemblies in the targeting pack",
-        "nuget_infos": "list[NuGetInfo]: The NuGet infos of the assemblies in the targeting pack",
+        "assembly_runtime_infos": "list[DotnetAssemblyRuntimeInfo]: The runtime infos of the assemblies in the runtime pack",
+        "nuget_infos": "list[NuGetInfo]: The NuGet infos of the assemblies in the runtime pack",
     },
 )
 
@@ -239,7 +227,7 @@ DotnetNativeToolsInfo = provider(
 )
 
 DotnetApphostPackInfo = provider(
-    doc = "Information about a .Net runtime pack.",
+    doc = "Information about a .Net apphost pack.",
     fields = {
         "apphost": "File: The apphost file",
         "singlefilehost": "File: The singlefilehost file",

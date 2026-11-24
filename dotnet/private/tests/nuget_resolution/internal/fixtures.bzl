@@ -29,9 +29,12 @@ def _nuget_fixtures_impl(ctx):
 
     for test in TESTS:
         id = "fixture.%s" % test.name
-        version = "fixture_%s" % test.name
+
+        # Upper case, like some pre-release labels: the package has to find
+        # its `.nupkg` under the lower cased name `nuget_archive` downloads to.
+        version = "Fixture_%s" % test.name
         nuspec = "%s.nuspec" % id
-        nupkg = "%s.%s.nupkg" % (id, version)
+        nupkg = ("%s.%s.nupkg" % (id, version)).lower()
         prefix = "%s/" % test.name
 
         ctx.file(prefix + nuspec, _NUSPEC.format(id = id, version = version))

@@ -457,7 +457,7 @@ def reject_runtime_specific_natives(runtime_info, transitive_runtime_deps, label
             ", ".join(sorted({str(file.owner) if file.owner else file.path: None for file in info.native}.keys())),
         ))
 
-def tool_layout(tfm, binary_info, runtime_info, assembly_files, depsjson, runtimeconfig):
+def tool_layout(tfm, binary_info, runtime_info, assembly_files, depsjson, runtimeconfig, symbols):
     """Where a tool's framework-dependent publish goes for one framework.
 
     The publish is portable: `reject_runtime_specific_natives` has ruled out
@@ -471,26 +471,32 @@ def tool_layout(tfm, binary_info, runtime_info, assembly_files, depsjson, runtim
       assembly_files: What `collect_assembly_files` returned for it, `portable`.
       depsjson: The `deps.json` written for the package.
       runtimeconfig: The `runtimeconfig.json` written for the package.
+      symbols: "snupkg" to move the pdbs into the symbol package; otherwise
+        they stay beside the assemblies.
 
     Returns:
-      A list of `(path, File)` pairs.
+      A struct of `files` and `symbol_files`, each a list of `(path, File)` pairs.
     """
     prefix = tool_directory(tfm) + "/"
 
-    entries = [
+    files = [
         (prefix + path, file)
         for (path, file) in publish_layout(None, binary_info, assembly_files, [], False)
     ]
+    files.append((prefix + depsjson.basename, depsjson))
+    files.append((prefix + runtimeconfig.basename, runtimeconfig))
 
     # A publish ships the symbols of what it built, so a tool package does too.
-    for info in [runtime_info] + [dep for dep in binary_info.transitive_runtime_deps if dep.nuget_info == None]:
-        for pdb in info.pdbs:
-            entries.append((prefix + pdb.basename, pdb))
+    pdbs = [
+        (prefix + pdb.basename, pdb)
+        for info in [runtime_info] + binary_info.transitive_runtime_deps
+        if info.nuget_info == None
+        for pdb in info.pdbs
+    ]
 
-    entries.append((prefix + depsjson.basename, depsjson))
-    entries.append((prefix + runtimeconfig.basename, runtimeconfig))
-
-    return entries
+    if symbols == "snupkg":
+        return struct(files = files, symbol_files = pdbs)
+    return struct(files = files + pdbs, symbol_files = [])
 
 def dependency_group(tfm, dependencies):
     """A dependency group of the manifest, as the packer wants it.
@@ -584,11 +590,9 @@ def extra_files_layout(files, label, prefix = ""):
 def reject_placed_conflicts(entries, placed, label):
     """Fails when a placed file takes a path that a different file takes.
 
-    The package's own contents resolve a duplicate the way a publish does, by
-    `reject_conflicting_paths`, which lets files out of NuGet packages through.
-    A placed file is at a path someone chose, so a different file there is a
-    mistake whatever either file is. The same file at the same path twice is
-    one entry.
+    Stricter than `reject_conflicting_paths`, which lets files out of NuGet
+    packages through: someone chose a placed file's path, so any other file
+    there is a mistake. The same file at the same path twice is one entry.
 
     Args:
       entries: The `(path, File)` pairs of the package's own contents.

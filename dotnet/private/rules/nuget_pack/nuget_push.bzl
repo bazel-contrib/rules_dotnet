@@ -9,6 +9,10 @@ load(
 )
 load("//dotnet/private:providers.bzl", "NuGetPackInfo")
 
+def _batch_escape(value):
+    """Escapes `%`, which a batch file expands even inside quotes, as in a URL's `%20`."""
+    return value.replace("%", "%%")
+
 def _nuget_push_impl(ctx):
     toolchain = get_toolchain(ctx)
     is_windows = targets_windows(ctx)
@@ -48,8 +52,8 @@ def _nuget_push_impl(ctx):
     if is_windows:
         substitutions = {
             "TEMPLATED_packages": " ".join(["\"{}\"".format(path) for path in package_paths]),
-            "TEMPLATED_source": ctx.attr.source,
-            "TEMPLATED_push_args": " ".join(["\"{}\"".format(arg) for arg in push_args]),
+            "TEMPLATED_source": _batch_escape(ctx.attr.source),
+            "TEMPLATED_push_args": " ".join(["\"{}\"".format(_batch_escape(arg)) for arg in push_args]),
             "TEMPLATED_config_file": config_path,
         }
     else:
@@ -97,7 +101,7 @@ which stands in for `--api-key` when set (`NUGET_SYMBOL_API_KEY` likewise for
 `--symbol-api-key`). Failing both, credentials come from the user's
 `NuGet.Config` as they would for any `dotnet nuget push`. Set
 `RULES_DOTNET_NUGET_PUSH_DRY_RUN=1` to print the commands instead of running
-them.
+them; a key taken from the environment is printed as the variable's name.
 """,
     attrs = {
         "packages": attr.label_list(

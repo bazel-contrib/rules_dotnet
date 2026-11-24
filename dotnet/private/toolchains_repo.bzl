@@ -1,20 +1,9 @@
-"""Create a repository to hold the toolchains
+"""Declares the repository of `toolchain` targets for one .NET SDK.
 
-This follows guidance here:
-https://docs.bazel.build/versions/main/skylark/deploying.html#registering-toolchains
-"
-Note that in order to resolve toolchains in the analysis phase
-Bazel needs to analyze all toolchain targets that are registered.
-Bazel will not need to analyze all targets referenced by toolchain.toolchain attribute.
-If in order to register toolchains you need to perform complex computation in the repository,
-consider splitting the repository with toolchain targets
-from the repository with dotnet_toolchain targets.
-Former will be always fetched,
-and the latter will only be fetched when user actually needs to build dotnet code.
-"
-The "complex computation" in our case is simply downloading large artifacts.
-This guidance tells us how to avoid that: we put the toolchain targets in the alias repository
-with only the toolchain attribute pointing into the platform-specific repositories.
+Bazel analyzes every registered `toolchain` target to resolve toolchains, but
+not the `dotnet_toolchain` each one points at. Keeping the `toolchain` targets
+in a repository of their own means the SDK is only downloaded once a build
+needs it.
 """
 
 # The toolchain type an SDK registers for: `DOTNET_TOOLCHAIN_TYPE` for the SDK
@@ -106,8 +95,7 @@ toolchain(
 
 toolchains_repo = repository_rule(
     _toolchains_repo_impl,
-    doc = """Creates a repository with toolchain definitions for all known platforms
-     which can be registered or selected.""",
+    doc = "Creates a repository with a `toolchain` target for every platform in `PLATFORMS`.",
     attrs = {
         "toolchain_type": attr.string(
             doc = "The toolchain type the generated `toolchain` targets register for.",

@@ -1,6 +1,7 @@
 load("@bazel_skylib//rules:common_settings.bzl", "bool_flag")
 
-# A flag controlling if strict dependencies are enforced or not.
+# Whether a target compiles only against the assemblies in its own `deps`
+# (the default), or against their transitive dependencies too.
 bool_flag(
     name = "strict_deps",
     build_setting_default = True,
@@ -23,8 +24,8 @@ config_setting(
     visibility = ["//visibility:public"],
 )
 
-# The workers sit behind an alias so that a workspace that leaves them switched
-# off never analyses them.
+# The compiler workers when `use_compiler_worker` is on, and nothing otherwise.
+# Aliases, so that a build with the workers off never analyzes them.
 alias(
     name = "csharp_compiler_worker",
     actual = select({
@@ -82,7 +83,9 @@ bool_flag(
     visibility = ["//visibility:public"],
 )
 
-# Whether every .NET process the rules start runs in globalization-invariant mode.
+# Whether every .NET process the rules start, compilers, tools, binaries and
+# tests alike, runs in globalization-invariant mode.
+# See docs/README.md#globalization-and-icu.
 bool_flag(
     name = "invariant_globalization",
     build_setting_default = False,
@@ -90,6 +93,9 @@ bool_flag(
     visibility = ["//visibility:public"],
 )
 
+# The ICU shared libraries the .NET processes the rules start load on Linux,
+# instead of the system's `libicu`: `:system_icu` (the default) or
+# `:hermetic_icu`. See docs/README.md#globalization-and-icu.
 label_flag(
     name = "icu",
     build_setting_default = ":system_icu",
@@ -97,11 +103,14 @@ label_flag(
     visibility = ["//visibility:public"],
 )
 
+# Use the ICU installed on the machine.
 filegroup(
     name = "system_icu",
     visibility = ["//visibility:public"],
 )
 
+# Build ICU from the `icu` module and carry it with the build. Only Linux loads
+# ICU from shared libraries, so elsewhere this is the system's.
 alias(
     name = "hermetic_icu",
     actual = select({

@@ -54,11 +54,7 @@ bzl_library(
     name = "repositories",
     srcs = ["repositories.bzl"],
     visibility = ["//visibility:public"],
-    deps = [
-        "//dotnet/private:toolchains_repo",
-        "@bazel_tools//tools/build_defs/repo:http.bzl",
-        "@bazel_tools//tools/build_defs/repo:utils.bzl",
-    ],
+    deps = ["//dotnet/private:toolchains_repo"],
 )
 
 bzl_library(
@@ -68,6 +64,7 @@ bzl_library(
     deps = [
         ":repositories",
         "//dotnet/private:toolchains_repo",
+        "//dotnet/private/sdk:global_json",
         "//dotnet/private/sdk:pack_repos",
         "//dotnet/private/sdk:releases",
         "@bazel_skylib//lib:collections",

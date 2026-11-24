@@ -15,6 +15,7 @@ load(
     "is_standard_framework",
     "runtime_frameworks",
     "shared_framework_version",
+    "targets_windows",
     "to_rlocation_path",
 )
 load("//dotnet/private:providers.bzl", "DotnetApphostPackInfo", "DotnetAssemblyRuntimeInfo", "DotnetBinaryInfo", "DotnetNativeToolsInfo", "DotnetRuntimePackInfo", "DotnetTargetingPackInfo")
@@ -30,53 +31,7 @@ load(
 load("//dotnet/private/rules/ready_to_run:ready_to_run.bzl", "with_ready_to_run_images")
 load("//dotnet/private/sdk:packs.bzl", "resolve_framework_references")
 
-def _collect_native_dlls(assembly_runtime_info, deps):
-    """Groups the native DLLs of a target and its dependencies by RID.
-
-    Args:
-        assembly_runtime_info: The DotnetAssemblyRuntimeInfo provider for the target.
-        deps: Dependencies of the target.
-
-    Returns:
-        A dict of RID to the native DLL files built for it.
-    """
-
-    # A copy: this is the list the returned provider holds, so extending it in
-    # place would leak the transitive closure into DotnetAssemblyRuntimeInfo.
-    native_dlls = list(assembly_runtime_info.native)
-
-    for dep in deps:
-        native_dlls.extend(dep[DotnetAssemblyRuntimeInfo].native)
-
-    closure = depset(transitive = [dep[DotnetAssemblyRuntimeInfo].deps for dep in deps])
-    for transitive_dep in closure.to_list():
-        native_dlls.extend(transitive_dep.native)
-
-    result = {}
-    for dll in native_dlls:
-        result.setdefault(dll.dirname.split("/")[-2], []).append(dll)
-
-    return result
-
-def _reserved_paths(dll, runtime_provider, appsetting_files, inherited_content_files):
-    """The paths a binary writes in its output directory itself.
-
-    Returns:
-        A dict of each path, lower-cased as Windows compares them, to what it is.
-    """
-    reserved = {dll.basename: "the application's own assembly"}
-    for file in runtime_provider.pdbs + runtime_provider.xml_docs:
-        reserved[file.basename] = "an output of the application itself"
-    for file in appsetting_files:
-        reserved[file.basename] = "one of its `appsetting_files`"
-    for entry in list(runtime_provider.content_files) + inherited_content_files:
-        reserved[entry.dest] = "the content file {}".format(entry.src.short_path)
-    for file in runtime_provider.resource_assemblies:
-        reserved[satellite_path(file)] = "a satellite assembly of the application"
-    return {path.lower(): owner for (path, owner) in reserved.items()}
-
-def _create_launcher(ctx, executable, toolchain, tfm):
-    is_windows = ctx.target_platform_has_constraint(ctx.attr._windows_constraint[platform_common.ConstraintValueInfo])
+def _create_launcher(ctx, is_windows, executable, toolchain, tfm):
     launcher = ctx.actions.declare_file("{}.{}".format(executable.basename, "bat" if is_windows else "sh"), sibling = executable)
 
     if is_netframework(tfm):
@@ -148,222 +103,161 @@ def _native_tools(ctx, native_tools):
 
     return [DefaultInfo(executable = executable), native_tools]
 
-def build_binary(ctx, compile_action, toolchain, runtime_toolchain = None, winexe = False):
-    """Builds a .Net binary from a compilation action
+def _stage_inherited_content_files(ctx, out_dir, inherited_content_files):
+    """Links the dependencies' content files next to the binary.
 
-    Args:
-        ctx: Bazel build ctx.
-        compile_action: A function taking (ctx, tfm, toolchain) that compiles the srcs
-            and returns a (DotnetAssemblyCompileInfo, DotnetAssemblyRuntimeInfo,
-            generated static web assets) tuple.
-        toolchain: The .Net toolchain to build with.
-        runtime_toolchain: The .Net toolchain whose runtime the binary runs on,
-            if not `toolchain`'s.
-        winexe: Whether the binary is a Windows GUI executable. Only the
-            binary rules set it: a test is always a console one.
+    A library's content files are staged next to the library, but the app looks
+    for them under its own `AppContext.BaseDirectory`.
+
     Returns:
-        A collection of the references, runfiles and native dlls.
+        The staged Files.
     """
-    runtime_toolchain = runtime_toolchain or toolchain
-    if DotnetNativeToolsInfo in ctx.attr._native_tools:
-        return _native_tools(ctx, ctx.attr._native_tools[DotnetNativeToolsInfo])
-
-    tfm = ctx.attr._target_framework[BuildSettingInfo].value
-
-    if is_standard_framework(tfm):
-        fail("It doesn't make sense to build an executable for " + tfm)
-
-    is_netfx = is_netframework(tfm)
-
-    (compile_provider, runtime_provider, generated_assets) = compile_action(ctx, tfm, toolchain)
-    runtime_provider = with_ready_to_run_images(ctx, runtime_provider)
-    dll = runtime_provider.libs[0]
-    appsetting_files = runtime_provider.appsetting_files.to_list()
-    out_content_files = [entry.file for entry in runtime_provider.content_files]
-    default_info_files = [dll] + runtime_provider.xml_docs + appsetting_files + out_content_files
-
-    launcher = _create_launcher(ctx, dll, runtime_toolchain, tfm)
-
-    # Staged appsettings and content files must be in runfiles (not just DefaultInfo) so they're present when the target runs from an isolated runfiles tree (RBE/sandbox).
-    additional_runfiles = list(appsetting_files) + out_content_files
-
-    runtimeconfig = None
-    depsjson = None
-    framework_version = None
-    app_config_staged = None
-    netfx_layout = None
-    transitive_runtime_deps = runtime_provider.deps.to_list()
-
-    # A library's content files are staged next to the library, but the app looks
-    # for them under its own `AppContext.BaseDirectory`, so they are staged again here.
-    out_dir = "{}/{}".format(ctx.label.name, tfm)
-    assembly_name = ctx.attr.out or ctx.attr.name
-    app_config = ctx.file.app_config
-    app_config_name = dll.basename + ".config"
-    inherited_content_files = collect_transitive_content_files(
-        ctx.label,
-        runtime_provider,
-        transitive_runtime_deps,
-        reserved = [dll.basename] + [f.basename for f in appsetting_files] + [
-            assembly_name + ".runtimeconfig.json",
-            assembly_name + ".deps.json",
-        ],
-    )
+    staged = []
     for entry in inherited_content_files:
-        staged = ctx.actions.declare_file("{}/{}".format(out_dir, entry.dest))
-        ctx.actions.symlink(output = staged, target_file = entry.file)
-        default_info_files.append(staged)
-        additional_runfiles.append(staged)
+        link = ctx.actions.declare_file("{}/{}".format(out_dir, entry.dest))
+        ctx.actions.symlink(output = link, target_file = entry.file)
+        staged.append(link)
+    return staged
 
-    # A dependency can bring in Windows Forms or WPF.
-    binary_frameworks = runtime_frameworks(runtime_provider, transitive_runtime_deps)
-    check_windows_frameworks(ctx.label, tfm, binary_frameworks, transitively = True)
+def _reserved_paths(dll, runtime_provider, appsetting_files, inherited_content_files):
+    """The paths a binary writes in its output directory itself.
 
-    reserved = _reserved_paths(dll, runtime_provider, appsetting_files, inherited_content_files)
+    Returns:
+        A dict of each path, lower-cased as Windows compares them, to what it is.
+    """
+    reserved = {dll.basename: "the application's own assembly"}
+    for file in runtime_provider.pdbs + runtime_provider.xml_docs:
+        reserved[file.basename] = "an output of the application itself"
+    for file in appsetting_files:
+        reserved[file.basename] = "one of its `appsetting_files`"
+    for entry in list(runtime_provider.content_files) + inherited_content_files:
+        reserved[entry.dest] = "the content file {}".format(entry.src.short_path)
+    for file in runtime_provider.resource_assemblies:
+        reserved[satellite_path(file)] = "a satellite assembly of the application"
+    return {path.lower(): owner for (path, owner) in reserved.items()}
 
-    if not is_netfx:
-        framework_version = shared_framework_version(tfm, toolchain.dotnetinfo.runtime_version)
-        runtimeconfig = ctx.actions.declare_file("%s/%s/%s.runtimeconfig.json" % (ctx.label.name, tfm, ctx.attr.out or ctx.attr.name))
-        runtimeconfig_struct = generate_runtimeconfig(
-            target_framework = tfm,
-            frameworks = binary_frameworks,
-            is_self_contained = False,
-            roll_forward_behavior = ctx.attr.roll_forward_behavior,
-            framework_version = framework_version,
-        )
+def _stage_app_config(ctx, out_dir, dll, reserved):
+    """Links `app_config` beside a .NET assembly, where MSBuild puts it for `ConfigurationManager`.
 
-        # Add additional lookup paths so that we can avoid copying all DLLs
-        # into the output directory. The deps.json file lists each assembly by
-        # its runfiles path, and the host resolves these relative paths against
-        # its working directory: under `bazel run` and `bazel test` that is the
-        # main repository's directory in the runfiles tree, so `../` is the
-        # root of that tree.
-        #
-        # The launcher passes the root of the runfiles tree it runs from as
-        # well, which is what finds the assemblies when the binary is the tool
-        # of an action. That path is not written here: it is only known at run
-        # time, as an action that supports path mapping stages the tool's
-        # runfiles outside the output directory of its configuration.
-        runtimeconfig_struct["runtimeOptions"]["additionalProbingPaths"] = [
-            "./",
-            "./external",
-            "../",
-            "../external",
-        ]
-        ctx.actions.write(
-            output = runtimeconfig,
-            content = json.encode(runtimeconfig_struct),
-        )
+    Returns:
+        The staged File, or None without `app_config`.
+    """
+    if not ctx.file.app_config:
+        return None
 
-        depsjson = ctx.actions.declare_file("%s/%s/%s.deps.json" % (ctx.label.name, tfm, ctx.attr.out or ctx.attr.name))
-        depsjson_struct = generate_depsjson(
+    name = dll.basename + ".config"
+    owner = reserved.get(name.lower())
+    if owner:
+        fail("{}: `app_config` would be staged as {}, but that is already {}.".format(ctx.label, name, owner))
+
+    staged = ctx.actions.declare_file("{}/{}".format(out_dir, name))
+    ctx.actions.symlink(output = staged, target_file = ctx.file.app_config)
+    return staged
+
+def _netfx_application(ctx, out_dir, tfm, dll, runtime_provider, transitive_runtime_deps, appsetting_files, inherited_content_files, reserved):
+    """Stages what a .NET Framework executable runs with beside it, and lays out its publish.
+
+    Returns:
+        A struct of the staged `files`, and the `publish_layout`: the
+        `(path, File)` pairs a publish ships, without PDBs.
+    """
+    staged = stage_netfx_application(
+        ctx,
+        executable = dll,
+        out_dir = out_dir,
+        target_framework = tfm,
+        transitive_runtime_deps = transitive_runtime_deps,
+        reserved = reserved,
+        framework_files = ctx.attr._targeting_pack[0][DotnetTargetingPackInfo].framework_files_depset,
+        app_config = ctx.file.app_config,
+        auto_generate_binding_redirects = ctx.attr.auto_generate_binding_redirects,
+    )
+
+    publish_layout = (
+        [(dll.basename, dll)] +
+        [(file.basename, file) for file in appsetting_files] +
+        [(entry.dest, entry.file) for entry in list(runtime_provider.content_files) + inherited_content_files] +
+        [(satellite_path(file), file) for file in runtime_provider.resource_assemblies] +
+        staged.publish_layout
+    )
+
+    return struct(files = staged.files, publish_layout = publish_layout)
+
+# deps.json lists each assembly by its runfiles path, which the host resolves
+# against its working directory: under `bazel run` and `bazel test` that is the
+# main repository's directory in the runfiles tree, so `../` is the root of the
+# tree. When the binary is the tool of an action, the launcher passes the
+# runfiles root instead, as only it knows where that is.
+_RUNFILES_PROBING_PATHS = ["./", "./external", "../", "../external"]
+
+def _write_runtime_files(ctx, out_dir, assembly_name, tfm, toolchain, runtime_provider, transitive_runtime_deps, frameworks):
+    """Writes the runtimeconfig.json and deps.json the binary runs from its runfiles with.
+
+    Returns:
+        A struct of the `runtimeconfig` and `deps_json` Files, and the
+        `framework_version` of the shared frameworks the binary asks for.
+    """
+    framework_version = shared_framework_version(tfm, toolchain.dotnetinfo.runtime_version)
+
+    runtimeconfig_struct = generate_runtimeconfig(
+        target_framework = tfm,
+        frameworks = frameworks,
+        is_self_contained = False,
+        roll_forward_behavior = ctx.attr.roll_forward_behavior,
+        framework_version = framework_version,
+    )
+    runtimeconfig_struct["runtimeOptions"]["additionalProbingPaths"] = _RUNFILES_PROBING_PATHS
+    runtimeconfig = ctx.actions.declare_file("{}/{}.runtimeconfig.json".format(out_dir, assembly_name))
+    ctx.actions.write(
+        output = runtimeconfig,
+        content = json.encode(runtimeconfig_struct),
+    )
+
+    deps_json = ctx.actions.declare_file("{}/{}.deps.json".format(out_dir, assembly_name))
+    ctx.actions.write(
+        output = deps_json,
+        content = json.encode(generate_depsjson(
             ctx,
             target_framework = tfm,
             is_self_contained = False,
             target_assembly_runtime_info = runtime_provider,
             transitive_runtime_deps = transitive_runtime_deps,
             use_relative_paths = True,
-        )
-
-        ctx.actions.write(
-            output = depsjson,
-            content = json.encode(depsjson_struct),
-        )
-
-        # Where MSBuild puts App.config, for System.Configuration.ConfigurationManager.
-        if app_config:
-            owner = reserved.get(app_config_name.lower())
-            if owner:
-                fail("{}: `app_config` would be staged as {}, but that is already {}.".format(ctx.label, app_config_name, owner))
-            app_config_staged = ctx.actions.declare_file("{}/{}".format(out_dir, app_config_name))
-            ctx.actions.symlink(output = app_config_staged, target_file = app_config)
-            default_info_files.append(app_config_staged)
-            additional_runfiles.append(app_config_staged)
-    else:
-        netfx_staged = stage_netfx_application(
-            ctx,
-            executable = dll,
-            out_dir = out_dir,
-            target_framework = tfm,
-            transitive_runtime_deps = transitive_runtime_deps,
-            reserved = reserved,
-            framework_files = ctx.attr._targeting_pack[0][DotnetTargetingPackInfo].framework_files_depset,
-            app_config = app_config,
-            auto_generate_binding_redirects = ctx.attr.auto_generate_binding_redirects,
-        )
-        default_info_files.extend(netfx_staged.files)
-        additional_runfiles.extend(netfx_staged.files)
-
-        # Published without PDBs.
-        netfx_layout = [(dll.basename, dll)] + [
-            (f.basename, f)
-            for f in appsetting_files
-        ] + [
-            (entry.dest, entry.file)
-            for entry in list(runtime_provider.content_files) + inherited_content_files
-        ] + [
-            (satellite_path(f), f)
-            for f in runtime_provider.resource_assemblies
-        ] + netfx_staged.publish_layout
-
-    if runtimeconfig != None:
-        additional_runfiles.append(runtimeconfig)
-
-    if depsjson != None:
-        additional_runfiles.append(depsjson)
-
-    # .NET Framework executables run on the framework installed in Windows.
-    runtime_files = []
-    if not is_netfx:
-        runtime_files = [runtime_toolchain.dotnetinfo.runtime_files, icu_files(runtime_toolchain)]
-
-    runfiles = collect_transitive_runfiles(ctx, runtime_provider, ctx.attr.deps).merge(
-        ctx.runfiles(
-            files = additional_runfiles,
-            transitive_files = depset(transitive = runtime_files),
-        ),
+        )),
     )
 
-    # The apphost shimmer loads Microsoft.NET.HostModel.dll at run time.
-    # `include_host_model_dll` makes it a compile dependency; the runtime needs
-    # it staged as well. Only csharp_binary carries the attribute.
-    # Assemblies a tool of ours takes from the toolchain rather than from `deps`
-    # still have to be resolvable when it runs.
-    from_toolchain = (
-        ([toolchain.host_model] if getattr(ctx.attr, "include_host_model_dll", False) else []) +
-        (toolchain.msbuild_dlls if getattr(ctx.attr, "include_msbuild_dlls", False) else [])
+    return struct(
+        runtimeconfig = runtimeconfig,
+        deps_json = deps_json,
+        framework_version = framework_version,
     )
-    if from_toolchain:
-        runfiles = runfiles.merge(ctx.runfiles(files = [
-            lib
-            for dep in from_toolchain
-            for lib in dep[DotnetAssemblyRuntimeInfo].libs
-        ]))
 
-    # Due to how the .Net runtime loads native DLLs we need make the native
-    # DLLs available in the application root directory with the folder structure:
-    # runtimes/{rid}/native/{dlls}
-    # .NET Framework loads them from beside the executable instead.
-    native_dlls = _collect_native_dlls(runtime_provider, ctx.attr.deps) if not is_netfx else {}
-    native_symlinks = []
-    for (rid, native_files) in native_dlls.items():
-        for file in native_files:
-            output_path = "{}/{}/runtimes/{}/native/{}".format(ctx.label.name, tfm, rid, file.basename)
-            output = ctx.actions.declare_file(output_path)
-            ctx.actions.symlink(
-                output = output,
-                target_file = file,
-            )
-            default_info_files.append(output)
-            native_symlinks.append(output)
+def _stage_native_libraries(ctx, out_dir, runtime_provider, transitive_runtime_deps):
+    """Links every native library under `runtimes/<rid>/native/` next to the binary, where the host loads it from.
 
-    if native_symlinks:
-        runfiles = runfiles.merge(ctx.runfiles(files = native_symlinks))
+    Returns:
+        The staged Files.
+    """
+    by_rid = {}
+    for info in [runtime_provider] + transitive_runtime_deps:
+        for file in info.native:
+            by_rid.setdefault(file.dirname.split("/")[-2], {})[file] = None
 
-    # Laid out next to the binary, so `bazel run` sees the tree a published
-    # application has.
-    assembly_name = runtime_provider.name
-    out_dir = "{}/{}".format(ctx.label.name, tfm)
+    staged = []
+    for (rid, files) in by_rid.items():
+        for file in files:
+            link = ctx.actions.declare_file("{}/runtimes/{}/native/{}".format(out_dir, rid, file.basename))
+            ctx.actions.symlink(output = link, target_file = file)
+            staged.append(link)
+    return staged
+
+def _stage_static_web_assets(ctx, out_dir, assembly_name, generated_assets):
+    """Lays out the servable tree next to the binary, so `bazel run` serves what a publish would.
+
+    Returns:
+        A pair of the `StaticWebAssetsInfo` and the staged files, as structs of
+        a `file` and the `publish_path` it takes inside a publish directory.
+    """
     static_web_assets_info = collect_static_web_assets(
         label = ctx.label,
         assembly_name = assembly_name,
@@ -378,77 +272,158 @@ def build_binary(ctx, compile_action, toolchain, runtime_toolchain = None, winex
         out_dir = out_dir,
         assets_info = static_web_assets_info,
     )
-    static_web_files = []
-    if static_web_assets:
-        # `MapStaticAssets` serves from this manifest rather than from disk, so
-        # the tree and the manifest describing it are written together.
-        described = endpoints_manifest_action(
-            ctx.actions,
-            label = ctx.label,
-            out_dir = out_dir,
-            assembly_name = assembly_name,
-            assets = static_web_assets,
-            tool = ctx.attr._static_web_assets_tool,
-        )
+    if not static_web_assets:
+        return (static_web_assets_info, [])
 
-        # Paired with where each file goes in a publish directory, so that a
-        # publish copies this tree rather than building its own.
-        static_web_files = [
-            struct(file = asset.file, publish_path = "{}/{}".format(WEB_ROOT, asset.route))
-            for asset in static_web_assets + described.compressed
-        ] + [struct(file = described.manifest, publish_path = described.manifest.basename)]
-
-        served = [entry.file for entry in static_web_files]
-        default_info_files.extend(served)
-        runfiles = runfiles.merge(ctx.runfiles(files = served))
-
-    # Only the .NET launcher uses the Bash runfiles library.
-    if not is_netfx and not ctx.target_platform_has_constraint(ctx.attr._windows_constraint[platform_common.ConstraintValueInfo]):
-        runfiles = runfiles.merge(ctx.attr._bash_runfiles[DefaultInfo].default_runfiles)
-    default_info = DefaultInfo(
-        executable = launcher,
-        runfiles = runfiles,
-        files = depset(default_info_files),
+    # `MapStaticAssets` serves from this manifest rather than from disk, so the
+    # tree and the manifest describing it are written together.
+    described = endpoints_manifest_action(
+        ctx.actions,
+        label = ctx.label,
+        out_dir = out_dir,
+        assembly_name = assembly_name,
+        assets = static_web_assets,
+        tool = ctx.attr._static_web_assets_tool,
     )
 
-    dotnet_binary_info = DotnetBinaryInfo(
-        dll = dll,
-        deps_json = depsjson,
-        runtimeconfig_json = runtimeconfig,
-        static_web_files = static_web_files,
-        transitive_runtime_deps = transitive_runtime_deps,
-        # None for rules_dotnet's own tools, which are never published.
-        apphost_pack_info = ctx.attr._apphost_pack[0][DotnetApphostPackInfo] if ctx.attr._apphost_pack else None,
-        runtime_pack_info = ctx.attr._runtime_pack[0][DotnetRuntimePackInfo] if ctx.attr._runtime_pack else None,
-        framework_version = framework_version,
-        runtime_frameworks = binary_frameworks,
-        packed_frameworks = resolve_framework_references(ctx.attr.project_sdk, getattr(ctx.attr, "framework_references", [])).keys(),
-        winexe = winexe,
-        app_config = app_config_staged,
-        netfx_layout = netfx_layout,
+    static_web_files = [
+        struct(file = asset.file, publish_path = "{}/{}".format(WEB_ROOT, asset.route))
+        for asset in static_web_assets + described.compressed
+    ] + [struct(file = described.manifest, publish_path = described.manifest.basename)]
+
+    return (static_web_assets_info, static_web_files)
+
+def build_binary(ctx, compile_action, toolchain, runtime_toolchain = None, winexe = False):
+    """Builds a .Net binary from a compilation action
+
+    Args:
+        ctx: Bazel build ctx.
+        compile_action: A function taking (ctx, tfm, toolchain) that compiles the srcs
+            and returns a (DotnetAssemblyCompileInfo, DotnetAssemblyRuntimeInfo,
+            generated static web assets) tuple.
+        toolchain: The .Net toolchain to build with.
+        runtime_toolchain: The .Net toolchain whose runtime the binary runs on,
+            if not `toolchain`'s.
+        winexe: Whether the binary is a Windows GUI executable. Only the
+            binary rules set it: a test is always a console one.
+    Returns:
+        The binary's providers.
+    """
+    runtime_toolchain = runtime_toolchain or toolchain
+    if DotnetNativeToolsInfo in ctx.attr._native_tools:
+        return _native_tools(ctx, ctx.attr._native_tools[DotnetNativeToolsInfo])
+
+    tfm = ctx.attr._target_framework[BuildSettingInfo].value
+
+    if is_standard_framework(tfm):
+        fail("It doesn't make sense to build an executable for " + tfm)
+
+    (compile_provider, runtime_provider, generated_assets) = compile_action(ctx, tfm, toolchain)
+    runtime_provider = with_ready_to_run_images(ctx, runtime_provider)
+    transitive_runtime_deps = runtime_provider.deps.to_list()
+
+    is_netfx = is_netframework(tfm)
+    is_windows = targets_windows(ctx)
+    dll = runtime_provider.libs[0]
+    assembly_name = runtime_provider.name
+    out_dir = "{}/{}".format(ctx.label.name, tfm)
+    launcher = _create_launcher(ctx, is_windows, dll, runtime_toolchain, tfm)
+
+    # Everything staged next to the assembly is a runfile as well as an output,
+    # so that it is there when the binary runs from an isolated runfiles tree.
+    appsetting_files = runtime_provider.appsetting_files.to_list()
+    inherited_content_files = collect_transitive_content_files(
+        ctx.label,
+        runtime_provider,
+        transitive_runtime_deps,
+        reserved = [dll.basename] + [f.basename for f in appsetting_files] + [
+            assembly_name + ".runtimeconfig.json",
+            assembly_name + ".deps.json",
+        ],
+    )
+    staged = appsetting_files + [entry.file for entry in runtime_provider.content_files]
+    staged += _stage_inherited_content_files(ctx, out_dir, inherited_content_files)
+
+    # A dependency can bring in Windows Forms or WPF.
+    binary_frameworks = runtime_frameworks(runtime_provider, transitive_runtime_deps)
+    check_windows_frameworks(ctx.label, tfm, binary_frameworks, transitively = True)
+    reserved = _reserved_paths(dll, runtime_provider, appsetting_files, inherited_content_files)
+
+    # .NET runs the assembly through its host, from the runfiles; .NET
+    # Framework runs the executable, with its dependencies beside it.
+    runtime_files = None
+    app_config = None
+    netfx = None
+    if is_netfx:
+        netfx = _netfx_application(ctx, out_dir, tfm, dll, runtime_provider, transitive_runtime_deps, appsetting_files, inherited_content_files, reserved)
+        staged += netfx.files
+    else:
+        runtime_files = _write_runtime_files(ctx, out_dir, assembly_name, tfm, toolchain, runtime_provider, transitive_runtime_deps, binary_frameworks)
+        app_config = _stage_app_config(ctx, out_dir, dll, reserved)
+        staged += [app_config] if app_config else []
+
+    # .NET Framework loads native libraries from beside the executable, where
+    # they are staged with the rest.
+    native_libraries = [] if is_netfx else _stage_native_libraries(ctx, out_dir, runtime_provider, transitive_runtime_deps)
+    (static_web_assets_info, static_web_files) = _stage_static_web_assets(ctx, out_dir, assembly_name, generated_assets)
+    served = [entry.file for entry in static_web_files]
+
+    # Assemblies a tool of ours compiles against from the toolchain rather than
+    # from `deps` (`include_host_model_dll`, `include_msbuild_dlls`) are loaded
+    # at run time as well.
+    from_toolchain = (
+        ([toolchain.host_model] if getattr(ctx.attr, "include_host_model_dll", False) else []) +
+        (toolchain.msbuild_dlls if getattr(ctx.attr, "include_msbuild_dlls", False) else [])
     )
 
-    # The same two files, for a `filegroup` to select: they are runfiles, not
-    # default outputs, so nothing else names them. See BINARY_OUTPUT_GROUPS_DOC.
-    output_group_info = OutputGroupInfo(
-        deps_json = depset([depsjson] if depsjson != None else []),
-        runtimeconfig_json = depset([runtimeconfig] if runtimeconfig != None else []),
-    )
-
-    run_environment_info = RunEnvironmentInfo(
-        environment = {
-            key: expand_variables(ctx, expand_locations(ctx, value, ctx.attr.data))
-            for key, value in ctx.attr.envs.items()
-        },
-        inherited_environment = ctx.attr.env_inherit,
-    )
+    # .NET Framework runs on the framework installed in Windows, and its
+    # launcher needs no Bash runfiles library.
+    runtime = [] if is_netfx else [runtime_toolchain.dotnetinfo.runtime_files, icu_files(runtime_toolchain)]
+    runfiles = collect_transitive_runfiles(ctx, runtime_provider, ctx.attr.deps).merge_all([
+        ctx.runfiles(
+            files = staged + ([runtime_files.runtimeconfig, runtime_files.deps_json] if runtime_files else []),
+            transitive_files = depset(transitive = runtime),
+        ),
+        ctx.runfiles(files = [lib for dep in from_toolchain for lib in dep[DotnetAssemblyRuntimeInfo].libs]),
+        ctx.runfiles(files = native_libraries + served),
+    ] + ([] if is_windows or is_netfx else [ctx.attr._bash_runfiles[DefaultInfo].default_runfiles]))
 
     return [
-        default_info,
-        dotnet_binary_info,
-        output_group_info,
+        DefaultInfo(
+            executable = launcher,
+            runfiles = runfiles,
+            files = depset([dll] + runtime_provider.xml_docs + staged + native_libraries + served),
+        ),
+        DotnetBinaryInfo(
+            dll = dll,
+            deps_json = runtime_files.deps_json if runtime_files else None,
+            runtimeconfig_json = runtime_files.runtimeconfig if runtime_files else None,
+            static_web_files = static_web_files,
+            transitive_runtime_deps = transitive_runtime_deps,
+            # None for rules_dotnet's own tools, which are never published.
+            apphost_pack_info = ctx.attr._apphost_pack[0][DotnetApphostPackInfo] if ctx.attr._apphost_pack else None,
+            runtime_pack_info = ctx.attr._runtime_pack[0][DotnetRuntimePackInfo] if ctx.attr._runtime_pack else None,
+            framework_version = runtime_files.framework_version if runtime_files else None,
+            runtime_frameworks = binary_frameworks,
+            packed_frameworks = resolve_framework_references(ctx.attr.project_sdk, getattr(ctx.attr, "framework_references", [])).keys(),
+            winexe = winexe,
+            app_config = app_config,
+            netfx_layout = netfx.publish_layout if netfx else None,
+        ),
+        # The runtime files are runfiles, not default outputs, so these groups
+        # are how a `filegroup` selects them. See BINARY_OUTPUT_GROUPS_DOC.
+        OutputGroupInfo(
+            deps_json = depset([runtime_files.deps_json] if runtime_files else []),
+            runtimeconfig_json = depset([runtime_files.runtimeconfig] if runtime_files else []),
+        ),
         compile_provider,
         runtime_provider,
         static_web_assets_info,
-        run_environment_info,
+        RunEnvironmentInfo(
+            environment = {
+                key: expand_variables(ctx, expand_locations(ctx, value, ctx.attr.data))
+                for key, value in ctx.attr.envs.items()
+            },
+            inherited_environment = ctx.attr.env_inherit,
+        ),
     ]

@@ -1,0 +1,3 @@
+load(":common_unit_test.bzl", "common_unit_test_suite")
+
+common_unit_test_suite(name = "common_unit_test")
