@@ -28,6 +28,11 @@ csharp_library(
     srcs = ["SharedDep.cs"],
     out = "SharedDep",
     keyfile = ":test.snk",
+    # The German satellite assembly carries the library's version.
+    resources = [
+        "Strings.de.resx",
+        "Strings.resx",
+    ],
     target_frameworks = ["net48"],
     version = "1.0.0",
 )
@@ -37,6 +42,11 @@ csharp_library(
     srcs = ["SharedDep.cs"],
     out = "SharedDep",
     keyfile = ":test.snk",
+    # The German satellite assembly carries the library's version.
+    resources = [
+        "Strings.de.resx",
+        "Strings.resx",
+    ],
     target_frameworks = ["net48"],
     version = "2.0.0",
 )

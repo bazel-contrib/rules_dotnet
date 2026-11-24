@@ -128,6 +128,9 @@ public sealed class NetFxOutputTests
         Assert.That(AssemblyVersion(Path.Combine(outDir, "SharedDep.dll")), Is.EqualTo(new Version(2, 0, 0, 0)));
         Assert.That(File.Exists(Path.Combine(outDir, "SharedDep.pdb")), Is.True);
 
+        // Its satellite assembly comes from the same copy.
+        Assert.That(AssemblyVersion(Path.Combine(outDir, "de", "SharedDep.resources.dll")), Is.EqualTo(new Version(2, 0, 0, 0)));
+
         XDocument config = XDocument.Load(Path.Combine(outDir, "conflict_app.exe.config"));
         var redirect = Redirect(config, "SharedDep");
         Assert.That(redirect, Is.Not.Null, "Expected a bindingRedirect for SharedDep");
@@ -161,7 +164,12 @@ public sealed class NetFxOutputTests
         Assert.That(names, Is.SupersetOf(new[] { "app.exe", "app.exe.config", "SharedDep.dll", "Consumer.dll", "unsigned_dep.dll" }));
         Assert.That(names.Where(n => n.EndsWith(".pdb", StringComparison.OrdinalIgnoreCase)), Is.Empty);
         Assert.That(names.Where(n => n.EndsWith(".deps.json") || n.EndsWith(".runtimeconfig.json")), Is.Empty);
-        Assert.That(files.Select(Path.GetDirectoryName).Distinct().Count(), Is.EqualTo(1), "A publish is one flat directory");
+
+        // Published for Windows, the only platform .NET Framework runs on,
+        // wherever it is built: flat, but for satellite assemblies.
+        string root = Path.GetDirectoryName(files.Single(f => Path.GetFileName(f) == "app.exe"))!;
+        Assert.That(Path.GetFileName(root), Does.StartWith("win-"));
+        Assert.That(files.Select(Path.GetDirectoryName).Distinct(), Is.EquivalentTo(new[] { root, Path.Combine(root, "de") }));
 
         string configPath = files.Single(f => Path.GetFileName(f) == "app.exe.config");
         Assert.That(Redirect(XDocument.Load(configPath), "SharedDep")?.NewVersion, Is.EqualTo("2.0.0.0"));

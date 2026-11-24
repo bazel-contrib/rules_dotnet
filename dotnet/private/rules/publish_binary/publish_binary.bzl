@@ -7,7 +7,7 @@ load("@bazel_skylib//lib:paths.bzl", "paths")
 load("@bazel_skylib//lib:shell.bzl", "shell")
 load("@rules_cc//cc:action_names.bzl", "CPP_LINK_EXECUTABLE_ACTION_NAME")
 load("@rules_cc//cc/common:cc_common.bzl", "cc_common")
-load("//dotnet/private:common.bzl", "generate_depsjson", "generate_runtimeconfig", "get_toolchain", "is_from_nuget_package", "tfm_to_semver", "tfm_version", "to_rlocation_path")
+load("//dotnet/private:common.bzl", "generate_depsjson", "generate_runtimeconfig", "get_toolchain", "is_from_nuget_package", "netframework_runtime_identifier", "tfm_to_semver", "tfm_version", "to_rlocation_path")
 load(
     "//dotnet/private:providers.bzl",
     "DotnetAssemblyCompileInfo",
@@ -1188,9 +1188,15 @@ def _netfx_publish(ctx, binary_info, assembly_runtime_info, transitive_runtime_d
             fail(("{}: `{}` does not apply to {}, which targets .NET Framework: the framework " +
                   "installed in Windows runs it.").format(ctx.label, attribute, _binary(ctx).label))
 
+    # As the transition does for the binary: the target platform's runtime
+    # identifier, which the macro fills in, gives way to Windows.
     runtime_identifier = ctx.attr.runtime_identifier
-    if not runtime_identifier:
-        fail("{}: set `runtime_identifier` to name the directory the publish goes in.".format(ctx.label))
+    if ctx.attr.runtime_identifier_from_platform:
+        runtime_identifier = netframework_runtime_identifier(runtime_identifier)
+    if not runtime_identifier.startswith("win"):
+        fail(("{}: {} targets .NET Framework, which only runs on Windows, so it cannot be " +
+              "published for runtime identifier {}. Set `runtime_identifier` to a Windows " +
+              "one, such as win-x64, or leave it unset.").format(ctx.label, _binary(ctx).label, repr(runtime_identifier)))
 
     layout = binary_info.netfx_layout
     reject_conflicting_paths(layout, ctx.label)
@@ -1512,6 +1518,12 @@ the executable, its `<exe>.config` and the files beside it, with no
                   "See https://docs.microsoft.com/en-us/dotnet/core/rid-catalog",
             mandatory = False,
         ),
+        "runtime_identifier_from_platform": attr.bool(
+            doc = """Set by the `publish_binary` macro when `runtime_identifier` is the
+target platform's because none was given. A .NET Framework binary, which only runs
+on Windows, is then published for Windows on the same architecture.""",
+            default = False,
+        ),
         "roll_forward_behavior": attr.string(
             doc = "The roll forward behavior that should be used: https://learn.microsoft.com/en-us/dotnet/core/versions/selection#control-roll-forward-behavior",
             default = "Minor",
@@ -1650,6 +1662,7 @@ def _publish_binary_macro_impl(name, **kwargs):
 
     if rid == None:
         kwargs["runtime_identifier"] = _TARGET_RID
+        kwargs["runtime_identifier_from_platform"] = True
 
     _publish_binary(name = name, **kwargs)
 
@@ -1678,6 +1691,8 @@ def _publish_wasm(name, kwargs):
 publish_binary = macro(
     inherit_attrs = _publish_binary,
     attrs = dicts.add(_WASM_ONLY_ATTRS, {
+        # Set by the macro itself.
+        "runtime_identifier_from_platform": None,
         "wasm": attr.bool(
             doc = """Publish a Blazor WebAssembly application as a static site.
 

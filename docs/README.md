@@ -397,8 +397,11 @@ executable, so, as MSBuild's copy-local does, everything the application
 depends on is laid out next to the `.exe`: assemblies with their PDBs,
 satellite assemblies in a folder per culture, and native libraries. Where
 several dependencies ship the same assembly, the highest version is the one
-laid out, as MSBuild's `ResolveAssemblyReference` picks it, wherever each comes
-in the dependency graph.
+laid out, with its own PDB and satellite assemblies, as MSBuild's
+`ResolveAssemblyReference` picks it, wherever each comes in the dependency
+graph. As it only runs on Windows, a .NET Framework target takes the native
+libraries and runtime-specific assemblies of its NuGet packages for Windows on
+the architecture it is built for, wherever it is built.
 
 Beside the executable goes its `<assembly>.exe.config`. It starts from
 `app_config`, MSBuild's `App.config`, when there is one, and gains:
@@ -407,19 +410,23 @@ Beside the executable goes its `<assembly>.exe.config`. It starts from
   .NET SDK's `GenerateSupportedRuntime` target adds;
 - a binding redirect for each strong-named assembly that is referenced at a
   version other than the one laid out, as MSBuild's
-  `AutoGenerateBindingRedirects` writes them. A redirect `app_config` has
-  already is kept. An assembly the framework itself provides at that version or
-  later is not redirected: the CLR uses the framework's copy.
+  `AutoGenerateBindingRedirects` writes them. A `<bindingRedirect>` that
+  `app_config` has already is kept; a `<dependentAssembly>` with only a
+  `<codeBase>` gains one. An assembly the framework itself provides at that
+  version or later is not redirected: the CLR uses the framework's copy.
 
-A reference to a version newer than any the application ships fails the build,
-where MSBuild warns (MSB3277) and the application fails when it loads the
-assembly. Depend on a version recent enough, or write the redirect in
-`app_config`. `auto_generate_binding_redirects = False` leaves every redirect
-to `app_config`.
+A reference to a version newer than any the application ships or the framework
+provides fails the build, where MSBuild warns (MSB3277) and the application
+fails when it loads the assembly. Depend on a version recent enough, or write
+the redirect in `app_config`. `auto_generate_binding_redirects = False` leaves
+every redirect to `app_config`.
 
-`publish_binary` publishes the same directory, less the PDBs.
-`self_contained`, `single_file`, `ready_to_run` and `native_aot` describe how a
-.NET application is hosted, so they do not apply.
+`publish_binary` publishes the same directory, less the PDBs, under
+`publish/<runtime_identifier>`. Without a `runtime_identifier` it publishes for
+Windows on the target platform's architecture, so `win-x64` from an x64 Linux
+machine; a non-Windows one fails. `self_contained`, `single_file`,
+`ready_to_run` and `native_aot` describe how a .NET application is hosted, so
+they do not apply.
 
 Only Windows runs .NET Framework executables, although every platform can
 build them. Elsewhere `bazel run` and `bazel test` report that instead, so mark

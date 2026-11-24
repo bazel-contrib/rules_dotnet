@@ -38,7 +38,8 @@ internal static class NetFxConfig
         "usage: netfx_config --output <exe.config> --main <exe> [--label <label>] [--app-config <app.config>]\n" +
         "         [--supported-runtime <version> <sku|->] [--no-binding-redirects]\n" +
         "         [--framework <reference assembly>]... [--assembly <shipped assembly>]...\n" +
-        "         [--select <lib|resource> <output> <pdb output|-> <count> (<candidate> <pdb|->)...]...";
+        "         [--select <lib|resource> <output> <pdb output|-> <satellite count> <satellite output>...\n" +
+        "                   <candidate count> (<candidate> <pdb|-> <satellite>...)...]...";
 
     public static int Run(IReadOnlyList<string> args, TextWriter error)
     {
@@ -81,8 +82,12 @@ internal static class NetFxConfig
 
         if (options.GenerateBindingRedirects)
         {
-            Dictionary<string, string?> explicitRedirects = ExplicitRedirects(configuration);
-            Analysis analysis = Analyze(options.Main, shipped, options.Framework, explicitRedirects);
+            List<XElement> dependentAssemblies = DependentAssemblies(configuration);
+            Analysis analysis = Analyze(
+                options.Main,
+                shipped,
+                options.Framework,
+                identity => FindDependentAssembly(dependentAssemblies, identity, withRedirect: true) is not null);
 
             if (analysis.Errors.Count > 0)
             {
@@ -94,7 +99,7 @@ internal static class NetFxConfig
                 return 1;
             }
 
-            AddRedirects(configuration, analysis.Redirects, explicitRedirects, message => error.WriteLine($"warning: {options.Label}: {message}"));
+            AddRedirects(configuration, analysis.Redirects, dependentAssemblies, message => error.WriteLine($"warning: {options.Label}: {message}"));
         }
 
         Write(config, options.Output);
@@ -142,6 +147,12 @@ internal static class NetFxConfig
         {
             Copy(chosen.Pdb!, selection.PdbOutput);
         }
+
+        // Satellite assemblies only match the assembly they were built with.
+        for (int i = 0; i < selection.SatelliteOutputs.Count; i++)
+        {
+            Copy(chosen.Satellites[i], selection.SatelliteOutputs[i]);
+        }
     }
 
     private static Version VersionOf(string path) => TryReadAssembly(path)?.Identity.Version ?? new Version(0, 0, 0, 0);
@@ -161,7 +172,7 @@ internal static class NetFxConfig
         string main,
         IReadOnlyList<string> shippedPaths,
         IReadOnlyList<string> frameworkPaths,
-        IReadOnlyDictionary<string, string?> explicitRedirects)
+        Func<Identity, bool> redirectedByAppConfig)
     {
         var shipped = new Dictionary<string, AssemblyMetadata>(StringComparer.OrdinalIgnoreCase);
         foreach (string path in shippedPaths)
@@ -206,34 +217,44 @@ internal static class NetFxConfig
                 continue;
             }
 
-            // A framework assembly the framework carries at this version or
-            // newer is unified onto the framework's copy, from the GAC, which
-            // is what the SDK's conflict resolution picks as well. Redirecting
-            // it would pull its references onto the copy shipped here instead.
-            if (inBox.TryGetValue(identity.Name, out Version? frameworkVersion) && frameworkVersion >= identity.Version)
-            {
-                continue;
-            }
-
             var requests = referrers
                 .SelectMany(referrer => referrer.References
                     .Where(reference => IsSameAssembly(reference, identity))
                     .Select(reference => (Referrer: referrer, reference.Version)))
                 .ToList();
 
-            var tooNew = requests.Where(request => request.Version > identity.Version).ToList();
-            if (tooNew.Count > 0 && !explicitRedirects.ContainsKey(identity.Name))
+            // The framework's own copy, from the GAC, serves any reference it
+            // is new enough for.
+            Version? frameworkVersion = inBox.TryGetValue(identity.Name, out Version? inBoxVersion) ? inBoxVersion : null;
+            bool frameworkIsNewest = frameworkVersion is not null && frameworkVersion >= identity.Version;
+            Version newest = frameworkIsNewest ? frameworkVersion! : identity.Version;
+
+            var tooNew = requests.Where(request => request.Version > newest).ToList();
+            if (tooNew.Count > 0)
             {
-                foreach (var (referrer, version) in tooNew)
+                if (!redirectedByAppConfig(identity))
                 {
-                    errors.Add(
-                        $"{Path.GetFileName(referrer.Path)} references {identity.Name} {version}, but the newest " +
-                        $"{identity.Name} among its dependencies is {identity.Version} ({Path.GetFileName(assembly.Path)}). " +
-                        ".NET Framework does not load an older version of a strong-named assembly than the one " +
-                        "referenced, so this would fail with a FileLoadException. Depend on " +
-                        $"{identity.Name} {version} or later, or add a <bindingRedirect> for it to `app_config`.");
+                    string source = frameworkIsNewest ? "from .NET Framework" : Path.GetFileName(assembly.Path);
+                    foreach (var (referrer, version) in tooNew)
+                    {
+                        errors.Add(
+                            $"{Path.GetFileName(referrer.Path)} references {identity.Name} {version}, but the newest " +
+                            $"{identity.Name} it can load is {newest} ({source}). .NET Framework does not load an " +
+                            "older version of a strong-named assembly than the one referenced, so this would fail " +
+                            $"with a FileLoadException. Depend on {identity.Name} {version} or later, or add a " +
+                            "<bindingRedirect> for it to `app_config`.");
+                    }
                 }
 
+                continue;
+            }
+
+            // An assembly the framework carries at this version or newer is
+            // unified onto the framework's copy, which is what the SDK's
+            // conflict resolution picks as well. Redirecting it would pull its
+            // references onto the copy shipped here instead.
+            if (frameworkIsNewest)
+            {
                 continue;
             }
 
@@ -276,44 +297,63 @@ internal static class NetFxConfig
         startup.Add(supportedRuntime);
     }
 
-    /// <summary>The assemblies App.config redirects itself, by name, with the version it redirects to.</summary>
-    private static Dictionary<string, string?> ExplicitRedirects(XElement configuration)
-    {
-        var redirects = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
-        foreach (XElement dependentAssembly in configuration
+    private static List<XElement> DependentAssemblies(XElement configuration) =>
+        configuration
             .Elements("runtime")
             .Elements(Asm + "assemblyBinding")
-            .Elements(Asm + "dependentAssembly"))
-        {
-            string? name = (string?)dependentAssembly.Element(Asm + "assemblyIdentity")?.Attribute("name");
-            if (name is not null)
-            {
-                redirects.TryAdd(name, (string?)dependentAssembly.Element(Asm + "bindingRedirect")?.Attribute("newVersion"));
-            }
-        }
+            .Elements(Asm + "dependentAssembly")
+            .ToList();
 
-        return redirects;
-    }
+    /// <summary>
+    /// The <c>&lt;dependentAssembly&gt;</c> App.config has for an assembly,
+    /// with or without a <c>&lt;bindingRedirect&gt;</c>. As for the CLR, it
+    /// describes the assembly by its name, public key token and culture.
+    /// </summary>
+    private static XElement? FindDependentAssembly(IEnumerable<XElement> dependentAssemblies, Identity identity, bool withRedirect) =>
+        dependentAssemblies.FirstOrDefault(dependentAssembly =>
+        {
+            XElement? assemblyIdentity = dependentAssembly.Element(Asm + "assemblyIdentity");
+            string culture = (string?)assemblyIdentity?.Attribute("culture") ?? "neutral";
+            return assemblyIdentity is not null &&
+                string.Equals((string?)assemblyIdentity.Attribute("name"), identity.Name, StringComparison.OrdinalIgnoreCase) &&
+                string.Equals((string?)assemblyIdentity.Attribute("publicKeyToken"), identity.PublicKeyToken, StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(culture, identity.Culture, StringComparison.OrdinalIgnoreCase) &&
+                (dependentAssembly.Element(Asm + "bindingRedirect") is not null) == withRedirect;
+        });
 
     private static void AddRedirects(
         XElement configuration,
         IReadOnlyList<Identity> redirects,
-        IReadOnlyDictionary<string, string?> explicitRedirects,
+        IReadOnlyList<XElement> dependentAssemblies,
         Action<string> warn)
     {
         var generated = new List<Identity>();
         foreach (Identity redirect in redirects)
         {
-            if (!explicitRedirects.TryGetValue(redirect.Name, out string? explicitVersion))
+            // Only a <bindingRedirect> App.config writes itself takes
+            // precedence, as with MSBuild. MSBuild's MSB3836 warns when it
+            // disagrees with the one the build would write.
+            if (FindDependentAssembly(dependentAssemblies, redirect, withRedirect: true) is { } redirected)
             {
-                generated.Add(redirect);
+                string? explicitVersion = (string?)redirected.Element(Asm + "bindingRedirect")!.Attribute("newVersion");
+                if (explicitVersion != redirect.Version.ToString())
+                {
+                    warn($"`app_config` redirects {redirect.Name} to {explicitVersion ?? "nothing"}, but the application ships " +
+                         $"{redirect.Name} {redirect.Version}. The redirect in `app_config` is kept.");
+                }
+
+                continue;
             }
-            else if (explicitVersion != redirect.Version.ToString())
+
+            // A <dependentAssembly> that only says where to find the assembly,
+            // with <codeBase>, gains the redirect.
+            if (FindDependentAssembly(dependentAssemblies, redirect, withRedirect: false) is { } described)
             {
-                // MSBuild's MSB3836.
-                warn($"`app_config` redirects {redirect.Name} to {explicitVersion ?? "nothing"}, but the application ships " +
-                     $"{redirect.Name} {redirect.Version}. The redirect in `app_config` is kept.");
+                described.Add(BindingRedirect(redirect));
+                continue;
             }
+
+            generated.Add(redirect);
         }
 
         if (generated.Count == 0)
@@ -348,12 +388,15 @@ internal static class NetFxConfig
                     new XAttribute("name", redirect.Name),
                     new XAttribute("publicKeyToken", redirect.PublicKeyToken!),
                     new XAttribute("culture", redirect.Culture)),
-                new XElement(
-                    Asm + "bindingRedirect",
-                    new XAttribute("oldVersion", $"0.0.0.0-{redirect.Version}"),
-                    new XAttribute("newVersion", redirect.Version.ToString()))));
+                BindingRedirect(redirect)));
         }
     }
+
+    private static XElement BindingRedirect(Identity redirect) =>
+        new(
+            Asm + "bindingRedirect",
+            new XAttribute("oldVersion", $"0.0.0.0-{redirect.Version}"),
+            new XAttribute("newVersion", redirect.Version.ToString()));
 
     private static void Write(XDocument config, string path)
     {
@@ -446,9 +489,14 @@ internal static class NetFxConfig
 
     private sealed record Analysis(IReadOnlyList<Identity> Redirects, IReadOnlyList<string> Errors);
 
-    private sealed record Candidate(string Assembly, string? Pdb);
+    private sealed record Candidate(string Assembly, string? Pdb, IReadOnlyList<string> Satellites);
 
-    private sealed record Selection(bool IsLibrary, string Output, string? PdbOutput, IReadOnlyList<Candidate> Candidates);
+    private sealed record Selection(
+        bool IsLibrary,
+        string Output,
+        string? PdbOutput,
+        IReadOnlyList<string> SatelliteOutputs,
+        IReadOnlyList<Candidate> Candidates);
 
     private sealed record SupportedRuntime(string Version, string? Sku);
 
@@ -529,15 +577,26 @@ internal static class NetFxConfig
 
             string output = next("--select");
             string? pdbOutput = optional(next("--select"));
-            if (!int.TryParse(next("--select"), out int count) || count < 1)
+
+            int Count(string what, int minimum) =>
+                int.TryParse(next("--select"), out int count) && count >= minimum
+                    ? count
+                    : throw new ArgumentException($"--select {output} needs a {what} count of at least {minimum}");
+
+            var satelliteOutputs = new List<string>();
+            for (int i = Count("satellite", 0); i > 0; i--)
             {
-                throw new ArgumentException($"--select {output} needs a positive candidate count");
+                satelliteOutputs.Add(next("--select"));
             }
 
-            var candidates = new List<Candidate>(count);
-            for (int i = 0; i < count; i++)
+            int candidateCount = Count("candidate", 1);
+            var candidates = new List<Candidate>(candidateCount);
+            for (int i = 0; i < candidateCount; i++)
             {
-                candidates.Add(new Candidate(next("--select"), optional(next("--select"))));
+                string assembly = next("--select");
+                string? pdb = optional(next("--select"));
+                var satellites = satelliteOutputs.Select(_ => next("--select")).ToList();
+                candidates.Add(new Candidate(assembly, pdb, satellites));
             }
 
             if (pdbOutput is not null && candidates.Any(candidate => candidate.Pdb is null))
@@ -545,7 +604,7 @@ internal static class NetFxConfig
                 throw new ArgumentException($"--select {output} has a PDB output, but not every candidate has a PDB");
             }
 
-            return new Selection(kind == "lib", output, pdbOutput, candidates);
+            return new Selection(kind == "lib", output, pdbOutput, satelliteOutputs, candidates);
         }
     }
 }

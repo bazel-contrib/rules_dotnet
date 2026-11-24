@@ -99,6 +99,26 @@ def is_standard_framework(tfm):
 def is_core_framework(tfm):
     return _tfm_family(tfm) == _NETCOREAPP
 
+def is_netframework(tfm):
+    return _tfm_family(tfm) == _NETFRAMEWORK
+
+def netframework_runtime_identifier(runtime_identifier):
+    """The runtime identifier a .NET Framework application runs on, for one that was not chosen for it.
+
+    .NET Framework only runs on Windows, so an application whose runtime
+    identifier comes from another platform runs on Windows on the same
+    architecture: `linux-x64` gives `win-x64`.
+
+    Args:
+        runtime_identifier: The runtime identifier of the platform being built on or for.
+
+    Returns:
+        The Windows runtime identifier of the same architecture.
+    """
+    if runtime_identifier.startswith("win") or "-" not in runtime_identifier:
+        return runtime_identifier
+    return "win-" + runtime_identifier.rsplit("-", 1)[-1]
+
 def is_greater_or_equal_framework(tfm1, tfm2):
     """Returns true if tfm1 is greater or equal to tfm2
 

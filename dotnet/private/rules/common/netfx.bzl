@@ -22,8 +22,21 @@ def netfx_supported_runtime(target_framework):
 
     return ("v4.0", ".NETFramework,Version=v" + ".".join(digits.elems()))
 
+def satellite_path(file):
+    """Where a satellite assembly goes: a directory named after its culture.
+
+    Args:
+        file: The satellite assembly, which lives in such a directory already.
+
+    Returns:
+        Its path relative to the application's directory.
+    """
+    return "{}/{}".format(file.dirname.split("/")[-1], file.basename)
+
 def _stem(basename):
     return basename.rsplit(".", 1)[0].lower()
+
+_SATELLITE_SUFFIX = ".resources.dll"
 
 def _add(groups, path, candidate):
     """Adds a candidate for `path`, once per distinct source file."""
@@ -48,28 +61,35 @@ def _stage(state, path, source):
     state.ctx.actions.symlink(output = staged, target_file = source)
     state.files.append(staged)
 
-def _select(state, kind, group, pdb_path):
+def _declare_selected(state, path):
+    output = state.ctx.actions.declare_file("{}/{}".format(state.out_dir, path))
+    state.selected.append(output)
+    state.files.append(output)
+    return output
+
+def _select(state, kind, group, pdb_path, satellite_paths):
     """Has netfx_config copy the highest version of `group` into the output directory.
 
+    Its PDB and satellite assemblies come from the same copy.
+
     Returns:
-        The File it writes.
+        A list of the (path, File) pairs it writes, the assembly's first.
     """
-    output = state.ctx.actions.declare_file("{}/{}".format(state.out_dir, group.path))
-    pdb_output = state.ctx.actions.declare_file("{}/{}".format(state.out_dir, pdb_path)) if pdb_path else None
-    state.args.add_all(["--select", kind, output, pdb_output or "-", str(len(group.candidates))])
+    output = _declare_selected(state, group.path)
+    pdb_output = _declare_selected(state, pdb_path) if pdb_path else None
+    satellite_outputs = [_declare_selected(state, path) for path in satellite_paths]
+
+    state.args.add_all(["--select", kind, output, pdb_output or "-", str(len(satellite_outputs))])
+    state.args.add_all(satellite_outputs)
+    state.args.add(str(len(group.candidates)))
     for candidate in group.candidates:
-        state.args.add_all([candidate.file, candidate.pdb or "-"])
-        state.inputs.append(candidate.file)
+        satellites = [candidate.satellites[path.lower()] for path in satellite_paths]
+        state.args.add_all([candidate.file, candidate.pdb or "-"] + satellites)
+        state.inputs.extend([candidate.file] + satellites)
         if candidate.pdb:
             state.inputs.append(candidate.pdb)
 
-    state.selected.append(output)
-    state.files.append(output)
-    if pdb_output:
-        state.selected.append(pdb_output)
-        state.files.append(pdb_output)
-
-    return output
+    return [(group.path, output)] + [(path, satellite_outputs[i]) for (i, path) in enumerate(satellite_paths)]
 
 def _pdb_path(taken, group):
     """Where the PDB of an assembly goes, or None to leave it out.
@@ -115,7 +135,7 @@ def stage_netfx_application(
         reserved: The paths, relative to `out_dir`, that the binary writes there
             itself, each with a description of what it is, for error messages.
         framework_files: A depset of the targeting pack's reference assemblies,
-            which say what the framework itself provides.
+            which say what the framework itself provides, and at which version.
         app_config: The user's `App.config`, or None.
         auto_generate_binding_redirects: Whether to write binding redirects.
 
@@ -140,14 +160,29 @@ def stage_netfx_application(
     natives = {}
     for dep in transitive_runtime_deps:
         pdbs = {_stem(pdb.basename): pdb for pdb in dep.pdbs}
-        for lib in dep.libs:
-            _add(libs, lib.basename, struct(file = lib, pdb = pdbs.get(_stem(lib.basename)), owner = dep.name))
+
+        # A satellite assembly belongs to the assembly of its name in the same
+        # dependency, and travels with it.
+        satellites = {}
         for resource in dep.resource_assemblies:
-            # A satellite assembly lives in a directory named after its culture.
-            path = "{}/{}".format(resource.dirname.split("/")[-1], resource.basename)
-            _add(resources, path, struct(file = resource, pdb = None, owner = dep.name))
+            stem = resource.basename[:-len(_SATELLITE_SUFFIX)].lower() if resource.basename.lower().endswith(_SATELLITE_SUFFIX) else None
+            satellites.setdefault(stem, {})[satellite_path(resource).lower()] = resource
+
+        for lib in dep.libs:
+            _add(libs, lib.basename, struct(
+                file = lib,
+                pdb = pdbs.get(_stem(lib.basename)),
+                satellites = satellites.pop(_stem(lib.basename), {}),
+                owner = dep.name,
+            ))
+
+        # Satellite assemblies of no assembly here are shipped on their own.
+        for orphans in satellites.values():
+            for resource in orphans.values():
+                _add(resources, satellite_path(resource), struct(file = resource, pdb = None, satellites = {}, owner = dep.name))
+
         for native in dep.native:
-            _add(natives, native.basename, struct(file = native, pdb = None, owner = dep.name))
+            _add(natives, native.basename, struct(file = native, pdb = None, satellites = {}, owner = dep.name))
 
     args = ctx.actions.args()
     args.set_param_file_format("multiline")
@@ -166,8 +201,12 @@ def stage_netfx_application(
     )
     publish_layout = []
 
+    # The satellite assemblies that ship with their assembly.
+    with_assembly = {}
+
     for group in libs.values():
-        _claim(label, taken, group.path, "the assembly {} of `{}`".format(group.path, group.candidates[0].owner))
+        owner = group.candidates[0].owner
+        _claim(label, taken, group.path, "the assembly {} of `{}`".format(group.path, owner))
         pdb_path = _pdb_path(taken, group)
 
         if len(group.candidates) == 1:
@@ -178,11 +217,33 @@ def stage_netfx_application(
             state.inputs.append(candidate.file)
             if pdb_path:
                 _stage(state, pdb_path, candidate.pdb)
+            for satellite in candidate.satellites.values():
+                path = satellite_path(satellite)
+                _claim(label, taken, path, "the satellite assembly {} of `{}`".format(path, owner))
+                with_assembly[path.lower()] = True
+                _stage(state, path, satellite)
+                publish_layout.append((path, satellite))
         else:
-            output = _select(state, "lib", group, pdb_path)
-            publish_layout.append((group.path, output))
+            # Only the chosen copy's satellite assemblies match it, and which
+            # copy that is is only known once the action runs. So a culture
+            # only some copies have is left out, falling back to the
+            # assembly's own resources.
+            satellite_paths = [
+                satellite_path(satellite)
+                for (key, satellite) in group.candidates[0].satellites.items()
+                if all([key in candidate.satellites for candidate in group.candidates])
+            ]
+            for path in satellite_paths:
+                _claim(label, taken, path, "the satellite assembly {} of `{}`".format(path, owner))
+                with_assembly[path.lower()] = True
+            publish_layout.extend(_select(state, "lib", group, pdb_path, satellite_paths))
 
     for group in resources.values():
+        # A language pack's satellite assembly gives way to the one that
+        # ships with the assembly itself, which matches its version.
+        if group.path.lower() in with_assembly:
+            continue
+
         _claim(label, taken, group.path, "the satellite assembly {} of `{}`".format(group.path, group.candidates[0].owner))
 
         if len(group.candidates) == 1:
@@ -190,8 +251,7 @@ def stage_netfx_application(
             _stage(state, group.path, candidate.file)
             publish_layout.append((group.path, candidate.file))
         else:
-            output = _select(state, "resource", group, None)
-            publish_layout.append((group.path, output))
+            publish_layout.extend(_select(state, "resource", group, None, []))
 
     for group in natives.values():
         if len(group.candidates) > 1:
@@ -222,10 +282,15 @@ def stage_netfx_application(
     (runtime_version, sku) = netfx_supported_runtime(target_framework)
     args.add_all(["--supported-runtime", runtime_version, sku or "-"])
 
-    transitive_inputs = []
     if auto_generate_binding_redirects:
-        args.add_all(framework_files, before_each = "--framework")
-        transitive_inputs.append(framework_files)
+        # Only the framework's copies of assemblies the application ships
+        # matter, so the tool reads those rather than the whole targeting pack,
+        # which is a few hundred files.
+        framework_by_name = {file.basename.lower(): file for file in framework_files.to_list()}
+        for name in libs:
+            if name in framework_by_name:
+                args.add("--framework", framework_by_name[name])
+                state.inputs.append(framework_by_name[name])
     else:
         args.add("--no-binding-redirects")
 
@@ -234,7 +299,7 @@ def stage_netfx_application(
         progress_message = "Generating {} for %{{label}}".format(config_name),
         executable = ctx.attr._netfx_config_tool.files_to_run,
         arguments = [args],
-        inputs = depset(state.inputs, transitive = transitive_inputs),
+        inputs = depset(state.inputs),
         outputs = [config] + state.selected,
     )
 

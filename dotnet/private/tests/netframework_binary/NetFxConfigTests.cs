@@ -39,6 +39,24 @@ public sealed class NetFxConfigTests
 
     private string Output => Path.Combine(_dir, "app.exe.config");
 
+    // The test key is generated at build time, so its token is read back.
+    private static string SharedDepToken => Convert.ToHexStringLower(AssemblyName.GetAssemblyName(SharedDepV1).GetPublicKeyToken()!);
+
+    private string AppConfig(string dependentAssembly)
+    {
+        string path = Path.Combine(_dir, "App.config");
+        File.WriteAllText(path, $"""
+            <configuration>
+              <runtime>
+                <assemblyBinding xmlns="urn:schemas-microsoft-com:asm.v1">
+                  {dependentAssembly}
+                </assemblyBinding>
+              </runtime>
+            </configuration>
+            """);
+        return path;
+    }
+
     [SetUp]
     public void CreateDirectory()
     {
@@ -71,7 +89,7 @@ public sealed class NetFxConfigTests
 
         int exitCode = Run(
             "--main", Consumer,
-            "--select", "lib", chosen, "-", "2", candidates[0], "-", candidates[1], "-");
+            "--select", "lib", chosen, "-", "0", "2", candidates[0], "-", candidates[1], "-");
 
         Assert.That(exitCode, Is.EqualTo(0), _error.ToString());
         Assert.That(AssemblyName.GetAssemblyName(chosen).Version, Is.EqualTo(new Version(2, 0, 0, 0)));
@@ -89,10 +107,30 @@ public sealed class NetFxConfigTests
 
         int exitCode = Run(
             "--main", Consumer,
-            "--select", "lib", Path.Combine(_dir, "SharedDep.dll"), chosenPdb, "2", SharedDepV1, v1Pdb, SharedDepV2, v2Pdb);
+            "--select", "lib", Path.Combine(_dir, "SharedDep.dll"), chosenPdb, "0", "2", SharedDepV1, v1Pdb, SharedDepV2, v2Pdb);
 
         Assert.That(exitCode, Is.EqualTo(0), _error.ToString());
         Assert.That(File.ReadAllText(chosenPdb), Is.EqualTo("v2"));
+    }
+
+    [Test]
+    public void SelectCarriesTheSatelliteAssembliesOfTheCopyItShips()
+    {
+        string v1German = Path.Combine(_dir, "v1", "SharedDep.resources.dll");
+        string v2German = Path.Combine(_dir, "v2", "SharedDep.resources.dll");
+        Directory.CreateDirectory(Path.GetDirectoryName(v1German)!);
+        Directory.CreateDirectory(Path.GetDirectoryName(v2German)!);
+        File.WriteAllText(v1German, "v1");
+        File.WriteAllText(v2German, "v2");
+        string chosenGerman = Path.Combine(_dir, "de", "SharedDep.resources.dll");
+
+        int exitCode = Run(
+            "--main", Consumer,
+            "--select", "lib", Path.Combine(_dir, "SharedDep.dll"), "-", "1", chosenGerman,
+            "2", SharedDepV2, "-", v2German, SharedDepV1, "-", v1German);
+
+        Assert.That(exitCode, Is.EqualTo(0), _error.ToString());
+        Assert.That(File.ReadAllText(chosenGerman), Is.EqualTo("v2"));
     }
 
     [Test]
@@ -121,25 +159,38 @@ public sealed class NetFxConfigTests
         int exitCode = Run("--main", UsesV2, "--assembly", SharedDepV1);
 
         Assert.That(exitCode, Is.EqualTo(1));
-        Assert.That(_error.ToString(), Does.Contain("uses_v2.dll references SharedDep 2.0.0.0, but the newest SharedDep among its dependencies is 1.0.0.0"));
+        Assert.That(_error.ToString(), Does.Contain("uses_v2.dll references SharedDep 2.0.0.0, but the newest SharedDep it can load is 1.0.0.0 (SharedDep.dll)"));
         Assert.That(File.Exists(Output), Is.False);
+    }
+
+    [Test]
+    public void AReferenceNewerThanTheFrameworksCopyFailsTheBuild()
+    {
+        // The framework provides SharedDep 1.0.0.0 as well, which is no newer.
+        int exitCode = Run("--main", UsesV2, "--assembly", SharedDepV1, "--framework", SharedDepV1);
+
+        Assert.That(exitCode, Is.EqualTo(1));
+        Assert.That(_error.ToString(), Does.Contain("uses_v2.dll references SharedDep 2.0.0.0, but the newest SharedDep it can load is 1.0.0.0 (from .NET Framework)"));
+    }
+
+    [Test]
+    public void AReferenceTheFrameworksCopyServesNeedsNoRedirect()
+    {
+        // The framework provides SharedDep 2.0.0.0, newer than the copy shipped.
+        int exitCode = Run("--main", UsesV2, "--assembly", SharedDepV1, "--framework", SharedDepV2);
+
+        Assert.That(exitCode, Is.EqualTo(0), _error.ToString());
+        Assert.That(RedirectTo(Config(), "SharedDep"), Is.Null);
     }
 
     [Test]
     public void AnExplicitRedirectInAppConfigTakesResponsibilityForTheAssembly()
     {
-        string appConfig = Path.Combine(_dir, "App.config");
-        File.WriteAllText(appConfig, """
-            <configuration>
-              <runtime>
-                <assemblyBinding xmlns="urn:schemas-microsoft-com:asm.v1">
-                  <dependentAssembly>
-                    <assemblyIdentity name="SharedDep" publicKeyToken="0000000000000000" culture="neutral" />
-                    <bindingRedirect oldVersion="0.0.0.0-9.0.0.0" newVersion="1.0.0.0" />
-                  </dependentAssembly>
-                </assemblyBinding>
-              </runtime>
-            </configuration>
+        string appConfig = AppConfig($"""
+            <dependentAssembly>
+              <assemblyIdentity name="SharedDep" publicKeyToken="{SharedDepToken}" culture="neutral" />
+              <bindingRedirect oldVersion="0.0.0.0-9.0.0.0" newVersion="1.0.0.0" />
+            </dependentAssembly>
             """);
 
         int exitCode = Run("--main", UsesV2, "--app-config", appConfig, "--assembly", SharedDepV1);
@@ -152,18 +203,11 @@ public sealed class NetFxConfigTests
     [Test]
     public void AnExplicitRedirectThatDisagreesIsKeptWithAWarning()
     {
-        string appConfig = Path.Combine(_dir, "App.config");
-        File.WriteAllText(appConfig, """
-            <configuration>
-              <runtime>
-                <assemblyBinding xmlns="urn:schemas-microsoft-com:asm.v1">
-                  <dependentAssembly>
-                    <assemblyIdentity name="SharedDep" culture="neutral" />
-                    <bindingRedirect oldVersion="0.0.0.0-1.5.0.0" newVersion="1.5.0.0" />
-                  </dependentAssembly>
-                </assemblyBinding>
-              </runtime>
-            </configuration>
+        string appConfig = AppConfig($"""
+            <dependentAssembly>
+              <assemblyIdentity name="SharedDep" publicKeyToken="{SharedDepToken}" />
+              <bindingRedirect oldVersion="0.0.0.0-1.5.0.0" newVersion="1.5.0.0" />
+            </dependentAssembly>
             """);
 
         int exitCode = Run("--main", Consumer, "--app-config", appConfig, "--assembly", SharedDepV2);
@@ -171,6 +215,40 @@ public sealed class NetFxConfigTests
         Assert.That(exitCode, Is.EqualTo(0), _error.ToString());
         Assert.That(RedirectTo(Config(), "SharedDep"), Is.EqualTo("1.5.0.0"));
         Assert.That(_error.ToString(), Does.Contain("warning: //test:app: `app_config` redirects SharedDep to 1.5.0.0"));
+    }
+
+    [Test]
+    public void ADependentAssemblyWithOnlyACodeBaseGainsTheRedirect()
+    {
+        string appConfig = AppConfig($"""
+            <dependentAssembly>
+              <assemblyIdentity name="SharedDep" publicKeyToken="{SharedDepToken}" culture="neutral" />
+              <codeBase version="2.0.0.0" href="lib/SharedDep.dll" />
+            </dependentAssembly>
+            """);
+
+        int exitCode = Run("--main", Consumer, "--app-config", appConfig, "--assembly", SharedDepV2);
+
+        Assert.That(exitCode, Is.EqualTo(0), _error.ToString());
+        XElement dependentAssembly = Config().Descendants(Asm + "dependentAssembly").Single();
+        Assert.That(dependentAssembly.Element(Asm + "codeBase"), Is.Not.Null);
+        Assert.That((string?)dependentAssembly.Element(Asm + "bindingRedirect")?.Attribute("newVersion"), Is.EqualTo("2.0.0.0"));
+    }
+
+    [Test]
+    public void ADependentAssemblyWithOnlyACodeBaseDoesNotSilenceTheCheck()
+    {
+        string appConfig = AppConfig($"""
+            <dependentAssembly>
+              <assemblyIdentity name="SharedDep" publicKeyToken="{SharedDepToken}" culture="neutral" />
+              <codeBase version="1.0.0.0" href="lib/SharedDep.dll" />
+            </dependentAssembly>
+            """);
+
+        int exitCode = Run("--main", UsesV2, "--app-config", appConfig, "--assembly", SharedDepV1);
+
+        Assert.That(exitCode, Is.EqualTo(1));
+        Assert.That(_error.ToString(), Does.Contain("references SharedDep 2.0.0.0"));
     }
 
     [Test]

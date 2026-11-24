@@ -5,6 +5,9 @@ load(
     "//dotnet/private:common.bzl",
     "FRAMEWORK_COMPATIBILITY",
     "get_highest_compatible_target_framework",
+    "is_core_framework",
+    "is_netframework",
+    "netframework_runtime_identifier",
 )
 load("//dotnet/private/sdk:packs.bzl", "frameworks_key", "resolve_framework_references")
 load(
@@ -72,9 +75,18 @@ def _impl(settings, attr):
     runtime_identifier = settings["//dotnet:rid"]
     if hasattr(attr, "runtime_identifier") and attr.runtime_identifier != "":
         runtime_identifier = attr.runtime_identifier
+
+        # `publish_binary` names the target platform's when none is given.
+        if getattr(attr, "runtime_identifier_from_platform", False) and is_netframework(transitioned_tfm):
+            runtime_identifier = netframework_runtime_identifier(runtime_identifier)
     elif runtime_identifier == "base":
         # If the runtime_identifier attribute is not set and the incoming value is "base", we will use the platform to determine the rid since no upstream target has set the runtime identifier
         runtime_identifier = platform_to_rid()
+
+        # .NET Framework only runs on Windows, so its NuGet packages' native
+        # libraries and RID-specific assemblies are Windows ones, wherever it is built.
+        if is_netframework(transitioned_tfm):
+            runtime_identifier = netframework_runtime_identifier(runtime_identifier)
 
     return dicts.add({"//dotnet:target_framework": transitioned_tfm}, {"//dotnet:rid": runtime_identifier}, FRAMEWORK_COMPATABILITY_TRANSITION_OUTPUTS[transitioned_tfm], rid_compatability_transition_outputs(runtime_identifier), _ready_to_run(settings, attr, transitioned_tfm))
 
@@ -85,8 +97,16 @@ tfm_transition = transition(
 )
 
 def _publish_binary_impl(settings, attr):
+    binary = _impl(settings, attr)
+
+    # Nothing is compiled ahead of time for .NET Framework, which the publish
+    # rejects itself, naming the setting, rather than the binary failing to
+    # find a runtime pack to compile against.
+    if not is_core_framework(binary["//dotnet:target_framework"]):
+        return {"binary": dicts.add(binary, {PUBLISHED: True})}
+
     # Any framework asks for images; the binary replaces it with its own.
-    binary = dicts.add(_impl(settings, attr), {
+    binary = dicts.add(binary, {
         PUBLISHED: True,
         READY_TO_RUN_FRAMEWORK: attr.target_framework if attr.ready_to_run and not attr.ready_to_run_composite else "",
         # NativeAOT is the only publish of a .NET binary that trims it.
