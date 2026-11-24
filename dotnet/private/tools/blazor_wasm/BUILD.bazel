@@ -16,6 +16,6 @@ bootstrap_tool_binary(
     ],
     include_msbuild_dlls = True,
     nullable = "enable",
-    target_frameworks = ["net10.0"],
+    target_frameworks = ["net11.0"],
     visibility = ["//visibility:public"],
 )

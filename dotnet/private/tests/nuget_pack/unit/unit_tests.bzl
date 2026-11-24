@@ -151,7 +151,41 @@ def _without_ref_assembly_test_impl(ctx):
     asserts.equals(env, ["ref/net9.0/A.dll", "ref/net9.0/A.xml", "runtimes/linux-x64/lib/net9.0/A.dll"], sorted([path for (path, _) in layout.files]))
     return unittest.end(env)
 
+# (version, other, whether `version` is the newer).
+_ORDERINGS = [
+    ("11.0.0", "10.0.15", True),
+    ("10.0.15", "11.0.0", False),
+    # A missing component is zero.
+    ("10.0.14.0", "10.0.14", False),
+    ("10.0.14", "10.0.14.0", False),
+    ("1.0.0.1", "1.0.0", True),
+    # A release orders after its pre-releases.
+    ("11.0", "11.0.0-rc.2", True),
+    ("11.0.0-rc.2", "11.0", False),
+    # Pre-release identifiers: numbers numerically, before words, ignoring case.
+    ("1.0.0-beta.10", "1.0.0-beta.9", True),
+    ("1.0.0-beta", "1.0.0-1", True),
+    ("1.0.0-beta.1", "1.0.0-beta", True),
+    ("1.0.0-Beta", "1.0.0-beta", False),
+    ("1.0.0-beta", "1.0.0-Beta", False),
+    # Build metadata does not order.
+    ("1.0.0+abc", "1.0.0", False),
+    # A package version need not fit an AssemblyVersion.
+    ("4.5.20240101", "4.5.1", True),
+    # What is not a version is never newer, and nothing is newer than it.
+    ("", "10.0.15", False),
+    ("10.0.15", "", False),
+    ("not a version", "1.0", False),
+]
+
+def _ordering_test_impl(ctx):
+    env = unittest.begin(ctx)
+    for (version, other, newer) in _ORDERINGS:
+        asserts.equals(env, newer, nuget_version.is_newer(version, other), "is {} newer than {}".format(repr(version), repr(other)))
+    return unittest.end(env)
+
 valid_versions_test = unittest.make(_valid_versions_test_impl)
+ordering_test = unittest.make(_ordering_test_impl)
 invalid_versions_test = unittest.make(_invalid_versions_test_impl)
 spellings_test = unittest.make(_spellings_test_impl)
 round_trip_test = unittest.make(_round_trip_test_impl)
@@ -163,6 +197,7 @@ def unit_test_suite(name):
     unittest.suite(
         name,
         valid_versions_test,
+        ordering_test,
         invalid_versions_test,
         spellings_test,
         round_trip_test,

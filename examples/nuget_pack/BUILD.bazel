@@ -207,7 +207,7 @@ csharp_library(
     project_sdk = "razor",
     root_namespace = "Example.Components",
     static_web_assets = glob(["components/wwwroot/**"]),
-    target_frameworks = ["net10.0"],
+    target_frameworks = ["net11.0"],
     version = "1.0.0",
 )
 
@@ -218,7 +218,7 @@ nuget_pack(
     library = ":components",
     license_expression = "Apache-2.0",
     package_id = "Example.Components",
-    target_frameworks = ["net10.0"],
+    target_frameworks = ["net11.0"],
 )
 
 # --- A tool package ----------------------------------------------------------

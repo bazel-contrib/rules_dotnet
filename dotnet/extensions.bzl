@@ -15,7 +15,7 @@ _BOOTSTRAP_MODULE = "rules_dotnet"
 
 _VERSION_ATTRS = {
     "dotnet_version": attr.string(
-        doc = """Version of the .Net SDK, such as `10.0.100`.
+        doc = """Version of the .Net SDK, such as `11.0.100`.
 
 Any SDK in Microsoft's release metadata can be used. Its archives and their
 hashes are looked up there the first time and recorded in `MODULE.bazel.lock`,

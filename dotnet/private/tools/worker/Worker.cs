@@ -219,6 +219,119 @@ namespace RulesDotnet
         }
 
         /// <summary>
+        /// Points a compiler at a directory where the runtime can keep the state
+        /// of its named mutexes, which csc and Roslyn's build server coordinate
+        /// through, when the one its environment points at will not do.
+        /// </summary>
+        /// <remarks>
+        /// From .NET 11 that state is the user's own. On Linux it lives under
+        /// XDG_RUNTIME_DIR, or else under HOME, and on macOS under TMPDIR, which
+        /// the runtime will not follow a link to reach. A sandbox or a remote
+        /// executor can leave HOME, or XDG_RUNTIME_DIR, unwritable, and a test's
+        /// TMPDIR is /tmp, which on macOS is a link. Either fails every named
+        /// mutex in the process: csc then compiles on its own instead of on the
+        /// build server, every time.
+        ///
+        /// Whether the runtime can use what the environment points at is tried
+        /// in this process, whose environment csc inherits. Only when it cannot
+        /// does Linux get a directory of the user's own under the temporary
+        /// directory, named for the user's id so that every worker of theirs
+        /// finds the server one of them started, and used only when it is theirs
+        /// alone. Without one, the runtime's own choice stands, and with it the
+        /// fallback to compiling on its own.
+        /// </remarks>
+        internal static void GiveNamedMutexesADirectory(IDictionary<string, string?> environment)
+        {
+            if (NamedMutexesWork.Value)
+            {
+                return;
+            }
+
+            try
+            {
+                if (OperatingSystem.IsLinux())
+                {
+                    var directory = Path.Combine(Path.GetTempPath(), "rules_dotnet-" + GetEffectiveUserId());
+                    if (IsPrivateDirectory(directory))
+                    {
+                        environment["XDG_RUNTIME_DIR"] = directory;
+                    }
+                }
+                else if (OperatingSystem.IsMacOS())
+                {
+                    var temp = environment.TryGetValue("TMPDIR", out var value) && !string.IsNullOrEmpty(value) ? value : "/tmp";
+                    var target = new DirectoryInfo(temp.TrimEnd('/')).ResolveLinkTarget(returnFinalTarget: true);
+                    if (target != null)
+                    {
+                        environment["TMPDIR"] = target.FullName;
+                    }
+                }
+            }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException or ArgumentException or DllNotFoundException or EntryPointNotFoundException)
+            {
+                // The runtime's own choice stands.
+            }
+        }
+
+        /// <summary>Whether this process can hold a named mutex where its environment points the runtime.</summary>
+        private static readonly Lazy<bool> NamedMutexesWork = new(() =>
+        {
+            try
+            {
+                using var mutex = new System.Threading.Mutex(false, "rules_dotnet-" + Environment.ProcessId);
+                return true;
+            }
+            catch (Exception e) when (e is TypeInitializationException or IOException or UnauthorizedAccessException)
+            {
+                return false;
+            }
+        });
+
+        /// <summary>
+        /// Makes <paramref name="path"/> if it is missing, and reports whether it is
+        /// a directory no one but this user can reach: not a link, owned by the
+        /// effective user, and with no permission for the group or others. Another
+        /// user can make it first, under a temporary directory everyone writes to.
+        /// </summary>
+        [System.Runtime.Versioning.SupportedOSPlatform("linux")]
+        private static bool IsPrivateDirectory(string path)
+        {
+            Directory.CreateDirectory(path, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+
+            var status = new byte[StatxSize];
+            if (Statx(AtCurrentDirectory, path, AtSymlinkNoFollow, StatxType | StatxMode | StatxUid, status) != 0)
+            {
+                return false;
+            }
+
+            var mask = BitConverter.ToUInt32(status, 0);
+            var owner = BitConverter.ToUInt32(status, 20);
+            var mode = BitConverter.ToUInt16(status, 28);
+            return (mask & (StatxType | StatxMode | StatxUid)) == (StatxType | StatxMode | StatxUid)
+                && (mode & FileTypeMask) == DirectoryFileType
+                && owner == GetEffectiveUserId()
+                && (mode & GroupAndOtherPermissions) == 0;
+        }
+
+        // statx(2), whose layout, unlike stat's, is the same on every
+        // architecture: stx_mask at 0, stx_uid at 20 and stx_mode at 28.
+        private const int StatxSize = 256;
+        private const int AtCurrentDirectory = -100;
+        private const int AtSymlinkNoFollow = 0x100;
+        private const uint StatxType = 0x1;
+        private const uint StatxMode = 0x2;
+        private const uint StatxUid = 0x8;
+        private const int FileTypeMask = 0xF000;
+        private const int DirectoryFileType = 0x4000;
+        private const int GroupAndOtherPermissions = 0x3F;
+
+        [DllImport("libc", EntryPoint = "geteuid")]
+        private static extern uint GetEffectiveUserId();
+
+        [DllImport("libc", EntryPoint = "statx", SetLastError = true)]
+        private static extern int Statx(int directory, [MarshalAs(UnmanagedType.LPUTF8Str)] string path, int flags, uint mask, byte[] status);
+
+        /// <summary>
         /// Runs <c>dotnet &lt;compiler&gt; [flags] @&lt;response file&gt; &lt;pathmap&gt;</c>
         /// and appends everything it writes to <paramref name="output"/>.
         /// </summary>
@@ -257,6 +370,7 @@ namespace RulesDotnet
             var host = LinkTarget(dotnet) ?? Path.GetFullPath(dotnet);
             startInfo.Environment["DOTNET_HOST_PATH"] = host;
             startInfo.Environment["DOTNET_ROOT"] = Path.GetDirectoryName(host);
+            GiveNamedMutexesADirectory(startInfo.Environment);
 
             startInfo.ArgumentList.Add(compiler);
             foreach (var flag in flags)
