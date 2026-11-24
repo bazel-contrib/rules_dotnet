@@ -142,6 +142,45 @@ public class CompilerWorkersTest
     }
 
     [Test]
+    public void ACSharpCompileIsServedByTheBuildServerWhereTheUsersDirectoriesAreUnusable()
+    {
+        // Arrange: from .NET 11 the runtime keeps the state of a named mutex in a
+        // directory of the user's own, which csc and the build server need. A
+        // sandbox or a remote executor can hand a worker a HOME it cannot write
+        // to, and a test's TMPDIR is /tmp, which on macOS is a link the runtime
+        // will not follow.
+        var log = Path.Combine(_directory, "roslyn.log");
+        var csc = CopyOfTheCSharpCompiler();
+        var workingDirectory = Directory.CreateDirectory(Path.Combine(_directory, "execroot")).FullName;
+        var temp = Path.Combine(_directory, "tmp-link");
+        try
+        {
+            Directory.CreateSymbolicLink(temp, Directory.CreateDirectory(Path.Combine(_directory, "tmp")).FullName);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            Assert.Ignore("Symlinks cannot be created here: " + e.Message);
+        }
+
+        // Below a file, so that it cannot be created either.
+        var file = Path.Combine(_directory, "a-file");
+        File.WriteAllText(file, "");
+        var unusable = new Dictionary<string, string?>
+        {
+            ["HOME"] = Path.Combine(file, "home"),
+            ["XDG_RUNTIME_DIR"] = null,
+            ["TMPDIR"] = temp,
+        };
+
+        // Act
+        var responses = CompileCSharpTwice(csc, workingDirectory, log, dotnetRoot: null, unusable);
+
+        // Assert
+        Assert.That(responses.Select(response => response.ExitCode), Is.EqualTo(new[] { 0, 0 }), string.Join("\n", responses.Select(r => r.Output)));
+        AssertTheBuildServerServedEveryCompile(log, compiles: 2);
+    }
+
+    [Test]
     public void AnFSharpErrorRaisedDuringCodeGenerationFailsTheRequestAndTheWorkerServesTheNext(
         [Values] WorkerEncoding encoding)
     {
@@ -218,7 +257,8 @@ public class CompilerWorkersTest
         string csc,
         string workingDirectory,
         string log,
-        string? dotnetRoot)
+        string? dotnetRoot,
+        IDictionary<string, string?>? extraEnvironment = null)
     {
         var source = WriteSource("Library.cs", "public static class Library { public static int F() => 42; }\n");
         var environment = new Dictionary<string, string?>
@@ -229,6 +269,11 @@ public class CompilerWorkersTest
         if (dotnetRoot != null)
         {
             environment["DOTNET_ROOT"] = dotnetRoot;
+        }
+
+        foreach (var (name, value) in extraEnvironment ?? new Dictionary<string, string?>())
+        {
+            environment[name] = value;
         }
 
         var responses = new List<(int, string)>();

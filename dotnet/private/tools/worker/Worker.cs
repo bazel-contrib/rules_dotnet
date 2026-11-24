@@ -219,6 +219,48 @@ namespace RulesDotnet
         }
 
         /// <summary>
+        /// Points a compiler at a directory where the runtime can keep the state
+        /// of its named mutexes, which csc and Roslyn's build server coordinate
+        /// through.
+        /// </summary>
+        /// <remarks>
+        /// From .NET 11 that state is the user's own. On Linux it lives under
+        /// XDG_RUNTIME_DIR, or else under HOME, and on macOS under TMPDIR, which
+        /// the runtime will not follow a link to reach. A sandbox or a remote
+        /// executor can leave HOME unwritable, and a test's TMPDIR is /tmp, which
+        /// on macOS is a link. Either fails every named mutex in the process: csc
+        /// then compiles on its own instead of on the build server, every time.
+        /// The directory on Linux is the same for every worker of the user, so
+        /// that they all see the server one of them started.
+        /// </remarks>
+        internal static void GiveNamedMutexesADirectory(IDictionary<string, string?> environment)
+        {
+            try
+            {
+                if (OperatingSystem.IsLinux() && string.IsNullOrEmpty(environment.TryGetValue("XDG_RUNTIME_DIR", out var runtime) ? runtime : null))
+                {
+                    var directory = Path.Combine(Path.GetTempPath(), "rules_dotnet-" + Environment.UserName);
+                    Directory.CreateDirectory(directory, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+                    environment["XDG_RUNTIME_DIR"] = directory;
+                }
+                else if (OperatingSystem.IsMacOS())
+                {
+                    var temp = environment.TryGetValue("TMPDIR", out var value) && !string.IsNullOrEmpty(value) ? value : "/tmp";
+                    var target = new DirectoryInfo(temp.TrimEnd('/')).ResolveLinkTarget(returnFinalTarget: true);
+                    if (target != null)
+                    {
+                        environment["TMPDIR"] = target.FullName;
+                    }
+                }
+            }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException or ArgumentException)
+            {
+                // The runtime's own choice stands; csc falls back to compiling on
+                // its own if that fails too, as it would without this.
+            }
+        }
+
+        /// <summary>
         /// Runs <c>dotnet &lt;compiler&gt; [flags] @&lt;response file&gt; &lt;pathmap&gt;</c>
         /// and appends everything it writes to <paramref name="output"/>.
         /// </summary>
@@ -257,6 +299,7 @@ namespace RulesDotnet
             var host = LinkTarget(dotnet) ?? Path.GetFullPath(dotnet);
             startInfo.Environment["DOTNET_HOST_PATH"] = host;
             startInfo.Environment["DOTNET_ROOT"] = Path.GetDirectoryName(host);
+            GiveNamedMutexesADirectory(startInfo.Environment);
 
             startInfo.ArgumentList.Add(compiler);
             foreach (var flag in flags)
