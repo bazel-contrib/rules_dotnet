@@ -1254,8 +1254,9 @@ def _copy_files_to_dir(actions, is_windows, file_mappings, out_dir, script_name,
         executables: Basenames to mark executable on Unix.
 
     Returns:
-        A list of `struct(file, dest)` in the same order as `file_mappings`, where `file` is the
-        copied `File` and `dest` is its `rel_path` relative to `out_dir`.
+        A list of `struct(file, dest, src)` in the same order as `file_mappings`, where `file` is
+        the copied `File`, `dest` is its `rel_path` relative to `out_dir` and `src` is the `File`
+        it was copied from.
     """
     script_body = ["@echo off"] if is_windows else ["#! /usr/bin/env bash", "set -eou pipefail"]
 
@@ -1264,7 +1265,7 @@ def _copy_files_to_dir(actions, is_windows, file_mappings, out_dir, script_name,
     for src, rel in file_mappings:
         dst = actions.declare_file("%s/%s" % (out_dir, rel))
         inputs.append(src)
-        outputs.append(struct(file = dst, dest = rel))
+        outputs.append(struct(file = dst, dest = rel, src = src))
         if is_windows:
             script_body.append("if not exist \"{dir}\" @mkdir \"{dir}\" >NUL".format(dir = dst.dirname.replace("/", "\\")))
             script_body.append("@copy /Y \"{src}\" \"{dst}\" >NUL".format(src = src.path.replace("/", "\\"), dst = dst.path.replace("/", "\\")))
@@ -1351,8 +1352,8 @@ def copy_content_to_dir(target_name, actions, is_windows, content_file_mappings,
         out_dir: The assembly output directory to stage into.
 
     Returns:
-        A list of `struct(file, dest)`, where `file` is the staged `File` and `dest` is its path
-        relative to `out_dir`.
+        A list of `struct(file, dest, src)`, where `file` is the staged `File`, `dest` is its path
+        relative to `out_dir` and `src` is the `File` it was staged from.
     """
     return _copy_files_to_dir(
         actions,
@@ -1361,6 +1362,54 @@ def copy_content_to_dir(target_name, actions, is_windows, content_file_mappings,
         out_dir,
         target_name + ".content.copy",
     )
+
+def collect_transitive_content_files(label, assembly_info, transitive_runtime_deps, reserved = []):
+    """Collects the content files a target inherits from its dependencies.
+
+    Every content file lands at its `dest` next to the consuming assembly, so two
+    different files cannot share one. Rather than let whichever dependency comes
+    first win, a clash fails the build and names both sides. The same source file
+    reaching the same `dest` through several libraries is not a clash.
+
+    Args:
+        label: The `Label` of the consuming target, for error messages.
+        assembly_info: The consuming target's `DotnetAssemblyRuntimeInfo`.
+        transitive_runtime_deps: The `DotnetAssemblyRuntimeInfo`s of its transitive dependencies.
+        reserved: Paths, relative to the output directory, that the consuming
+            target writes itself (its assembly, its appsettings files, ...).
+
+    Returns:
+        The dependencies' content files as a list of `struct(file, dest, src)`,
+        without the ones `assembly_info` stages itself.
+    """
+
+    # dest -> (source File or None, who put it there)
+    claimed = {path: (None, "an output of %s itself" % label) for path in reserved}
+    for entry in assembly_info.content_files:
+        claimed[entry.dest] = (entry.src, "the `content_files` of %s" % label)
+
+    inherited = []
+    for dep in transitive_runtime_deps:
+        for entry in dep.content_files:
+            if entry.dest not in claimed:
+                claimed[entry.dest] = (entry.src, "the `content_files` of its dependency `%s`" % dep.name)
+                inherited.append(entry)
+                continue
+
+            (src, owner) = claimed[entry.dest]
+            if src != entry.src:
+                fail(("%s: the content file %s of its dependency `%s` would be staged at %r, " +
+                      "but that path is already taken by %s%s. Give one of them another " +
+                      "destination, for example with `dotnet_content_files`.") % (
+                    label,
+                    entry.src.short_path,
+                    dep.name,
+                    entry.dest,
+                    owner,
+                    " (%s)" % src.short_path if src else "",
+                ))
+
+    return inherited
 
 _RESOURCE_TEMPLATE_CSHARP = "/resource:\"%s\""
 _RESOURCE_TEMPLATE_FSHARP = "--resource:%s"

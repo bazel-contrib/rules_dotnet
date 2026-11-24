@@ -1,14 +1,14 @@
 """The `dotnet_content_files` rule and helpers for resolving `content_files` targets.
 
 `dotnet_content_files` groups a set of data files and gives explicit control over where each
-one is copied relative to a consuming binary/test's output directory. It mirrors MSBuild's
+one is copied relative to a consuming assembly's output directory. It mirrors MSBuild's
 [`CopyToOutputDirectory`](https://learn.microsoft.com/en-us/visualstudio/msbuild/common-msbuild-project-items)
 combined with [`Link`/`TargetPath`](https://learn.microsoft.com/en-us/visualstudio/msbuild/common-msbuild-project-items#content):
 `strip_prefix` removes a leading directory from each file's package-relative path and `prefix`
 prepends a destination directory, so you can flatten, relocate, or re-root arbitrary trees.
 
-Pass the resulting target to the `content_files` attribute of a `csharp_binary`,
-`csharp_test`, `fsharp_binary`, or `fsharp_test`.
+Pass the resulting target to the `content_files` attribute of a `csharp_library`,
+`csharp_binary`, `csharp_test`, `fsharp_library`, `fsharp_binary`, or `fsharp_test`.
 """
 
 load("//dotnet/private:common.bzl", "package_relative_path")
@@ -55,10 +55,11 @@ dotnet_content_files = rule(
     implementation = _dotnet_content_files_impl,
     doc = """Groups data files and controls where they are copied next to a consuming assembly.
 
-Reference the target from the `content_files` attribute of a `csharp_binary`, `csharp_test`,
-`fsharp_binary`, or `fsharp_test`. Each source file's destination (relative to the assembly
-output directory, resolvable at runtime via `AppContext.BaseDirectory`) is computed from its
-path relative to this target's Bazel package, after applying `strip_prefix` and `prefix`.
+Reference the target from the `content_files` attribute of a `csharp_library`, `csharp_binary`,
+`csharp_test`, `fsharp_library`, `fsharp_binary`, or `fsharp_test`. Each source file's
+destination (relative to the assembly output directory, resolvable at runtime via
+`AppContext.BaseDirectory`) is computed from its path relative to this target's Bazel package,
+after applying `strip_prefix` and `prefix`.
 
 This mirrors an MSBuild
 [`Content`](https://learn.microsoft.com/en-us/visualstudio/msbuild/common-msbuild-project-items#content)

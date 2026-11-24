@@ -14,6 +14,7 @@ load(
 load("//dotnet/private/rules/common:attrs.bzl", "FSHARP_LIBRARY_COMMON_ATTRS")
 load("//dotnet/private/rules/common:library.bzl", "build_library")
 load("//dotnet/private/rules/common:resx.bzl", "split_resources")
+load("//dotnet/private/rules/content_files:content_files.bzl", "resolve_content_file_mappings")
 load("//dotnet/private/rules/fsharp/actions:fsharp_assembly.bzl", "AssemblyAction")
 load("//dotnet/private/transitions:tfm_transition.bzl", "tfm_transition")
 
@@ -39,7 +40,7 @@ def _compile_action(ctx, tfm, toolchain):
         srcs = ctx.files.srcs,
         data = ctx.files.data,
         appsetting_files = [],
-        content_file_mappings = [],
+        content_file_mappings = resolve_content_file_mappings(ctx.attr.content_files, ctx.label.package),
         compile_data = ctx.files.compile_data,
         out = ctx.attr.out,
         target = "library",
