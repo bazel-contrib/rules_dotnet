@@ -45,6 +45,11 @@ group rules_dotnet_static_web_assets_tests
     # The Blazor WebAssembly host, for the publish test.
     nuget Microsoft.AspNetCore.Components.WebAssembly 10.0.0
 
+    # A package older than the WebAssembly runtime pack's copy of its assembly,
+    # and one newer, for the tests of which copy a site ships.
+    nuget System.Text.Json == 8.0.5
+    nuget System.Collections.Immutable == 11.0.0
+
 group rules_dotnet_nuget_packages
     framework: net9.0
     source https://api.nuget.org/v3/index.json

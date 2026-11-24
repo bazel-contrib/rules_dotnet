@@ -27,8 +27,11 @@ def _valid_identifiers(part):
                 return False
     return True
 
-def _check(version):
-    """Parses `version`, returning a `(parsed, error)` pair with exactly one side set."""
+def _check(version, max_component = _MAX_COMPONENT):
+    """Parses `version`, returning a `(parsed, error)` pair with exactly one side set.
+
+    `max_component` bounds each release component, or is None for no bound.
+    """
     if type(version) != "string" or not version:
         return (None, "a version must be a non-empty string, got {}".format(repr(version)))
 
@@ -50,8 +53,8 @@ def _check(version):
         if not part.isdigit():
             return (None, "version {}: component {} is not a number".format(repr(version), repr(part)))
         number = int(part)
-        if number > _MAX_COMPONENT:
-            return (None, "version {}: component {} exceeds {}, the AssemblyVersion limit".format(repr(version), part, _MAX_COMPONENT))
+        if max_component != None and number > max_component:
+            return (None, "version {}: component {} exceeds {}, the AssemblyVersion limit".format(repr(version), part, max_component))
         numbers.append(number)
 
     for _ in range(4 - len(numbers)):
@@ -119,8 +122,61 @@ def _normalize(version):
         normalized += "-" + parsed.prerelease
     return normalized
 
+def _compare_labels(left, right):
+    """Orders two pre-release labels, as NuGet does: SemVer 2.0, ignoring case."""
+    left = left.split(".") if left else []
+    right = right.split(".") if right else []
+    for (a, b) in zip(left, right):
+        if a.isdigit() and b.isdigit():
+            (a, b) = (int(a), int(b))
+        elif a.isdigit() or b.isdigit():
+            # A numeric identifier sorts before an alphanumeric one.
+            return -1 if a.isdigit() else 1
+        else:
+            (a, b) = (a.lower(), b.lower())
+
+        if a != b:
+            return -1 if a < b else 1
+
+    if len(left) == len(right):
+        return 0
+    return -1 if len(left) < len(right) else 1
+
+def _is_newer(version, other):
+    """Whether `version` orders after `other`, as NuGet orders versions.
+
+    Release components are compared as four numbers, a missing one being zero,
+    so `10.0.14.0` is `10.0.14`. A release orders after its pre-releases, and
+    build metadata is ignored. A version that is not one - an empty string
+    among them, which is what a target that sets none has - is never newer,
+    and nothing is newer than it.
+
+    Args:
+      version: The version that might be newer.
+      other: The version to compare it with.
+
+    Returns:
+      True if `version` is the newer of the two.
+    """
+    (a, error) = _check(version, max_component = None)
+    if error:
+        return False
+    (b, error) = _check(other, max_component = None)
+    if error:
+        return False
+
+    for (x, y) in [(a.major, b.major), (a.minor, b.minor), (a.patch, b.patch), (a.revision, b.revision)]:
+        if x != y:
+            return x > y
+
+    if not a.prerelease or not b.prerelease:
+        return not a.prerelease and bool(b.prerelease)
+
+    return _compare_labels(a.prerelease, b.prerelease) > 0
+
 nuget_version = struct(
     error = _error,
     assembly_version = _assembly_version,
+    is_newer = _is_newer,
     normalize = _normalize,
 )

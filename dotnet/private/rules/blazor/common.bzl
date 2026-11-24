@@ -7,7 +7,8 @@ configuration goes - is the same, and lives here.
 """
 
 load("@bazel_skylib//lib:dicts.bzl", "dicts")
-load("//dotnet/private:common.bzl", "get_toolchain", "is_newer_version")
+load("//dotnet/private:common.bzl", "get_toolchain")
+load("//dotnet/private:nuget_version.bzl", "nuget_version")
 load(
     "//dotnet/private:providers.bzl",
     "BlazorWasmSiteInfo",
@@ -50,7 +51,9 @@ def _managed_assemblies(runtime_info, pack):
     conflict and as a self-contained publish's `deps.json` does: a package
     from an older release, such as one a library still asks for after the
     framework took it in, would otherwise replace the assembly the framework's
-    own assemblies were built against, and they would fail to load it.
+    own assemblies were built against, and they would fail to load it. Of
+    several dependencies that are newer, the newest wins. One that sets no
+    version, as an import need not, is never taken to be the newer.
 
     Args:
       runtime_info: The application's `DotnetAssemblyRuntimeInfo`.
@@ -60,25 +63,29 @@ def _managed_assemblies(runtime_info, pack):
       A dict of file name to `File`.
     """
     assemblies = {}
-    pack_versions = {}
+
+    # The version of whatever holds each of the pack's assemblies: the pack, or
+    # the dependency that beat it.
+    versions = {}
 
     for info in pack.assembly_runtime_infos:
         for lib in info.libs:
             assemblies[lib.basename] = lib
-            pack_versions[lib.basename] = info.version
+            versions[lib.basename] = info.version
 
         # The Mono pack keeps `System.Private.CoreLib.dll` among its native
         # files, but it is managed like any other.
         for native in info.native:
             if native.basename.endswith(".dll"):
                 assemblies[native.basename] = native
-                pack_versions[native.basename] = info.version
+                versions[native.basename] = info.version
 
     for dep in runtime_info.deps.to_list():
         for lib in dep.libs:
-            pack_version = pack_versions.get(lib.basename)
-            if pack_version and not is_newer_version(dep.version, pack_version):
-                continue
+            if lib.basename in versions:
+                if not nuget_version.is_newer(dep.version, versions[lib.basename]):
+                    continue
+                versions[lib.basename] = dep.version
 
             assemblies[lib.basename] = lib
 
@@ -184,21 +191,27 @@ def _application_assets(ctx, binary, tfm):
         files = routes.values(),
     )
 
-def _application_symbols(runtime_info):
+def _application_symbols(runtime_info, assemblies):
     """The symbols of the application's own assemblies.
 
     A NuGet package hardly ever ships symbols, so this naturally yields
-    first-party code only.
+    first-party code only. A dependency's symbols go only where its assembly
+    does: one that lost to the runtime pack's copy would leave a debugger
+    symbols that match nothing the site ships.
 
     Args:
       runtime_info: The application's `DotnetAssemblyRuntimeInfo`.
+      assemblies: What `_managed_assemblies` chose, by file name.
 
     Returns:
       A list of `File`.
     """
     symbols = list(runtime_info.pdbs)
     for dep in runtime_info.deps.to_list():
-        symbols.extend(dep.pdbs)
+        for pdb in dep.pdbs:
+            shipped = assemblies.get(pdb.basename.removesuffix(".pdb") + ".dll")
+            if shipped and shipped in dep.libs:
+                symbols.append(pdb)
 
     return symbols
 
@@ -231,7 +244,7 @@ def _assemble_action(ctx, binary, tfm, output, trimmed = None, trim_mode = "part
     # SDK's runtime, as under MSBuild, rather than on the one this tool runs on.
     illink_host = get_toolchain(ctx).compiler_host if trimmed else None
 
-    symbols = _application_symbols(runtime_info) if debug else []
+    symbols = _application_symbols(runtime_info, assemblies) if debug else []
 
     # Beside the directory it describes, so that the two rules that assemble an
     # application do not collide on a package-relative path.
