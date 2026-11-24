@@ -6,7 +6,12 @@
 
 The minimal supported Bazel version is 9.0.0.
 
-From the release you wish to use: https://github.com/bazel-contrib/rules_dotnet/releases copy the WORKSPACE snippet into your WORKSPACE file.
+Add `rules_dotnet` to your `MODULE.bazel`, using the version from the
+[release](https://github.com/bazel-contrib/rules_dotnet/releases) you want:
+
+```starlark
+bazel_dep(name = "rules_dotnet", version = "<version>")
+```
 
 If you are using Windows you need to make sure that symlinks and runfiles are enabled.
 You can do that by adding the following snippet to your `.bazelrc` file:
@@ -38,41 +43,41 @@ register_toolchains("@dotnet_toolchains//:all")
 
 To pin the SDK in one place for Bazel and for the `dotnet` CLI and IDEs, read
 the version from a `global.json` instead. Bazel uses exactly its `sdk.version`;
-`rollForward` does not apply.
+`rollForward` and `allowPrerelease` do not apply. Comments and trailing commas
+are allowed, as they are for the `dotnet` CLI.
 
 ```starlark
 dotnet.toolchain(global_json = "//:global.json")
 ```
 
-
 ## Design
 
 ### Dependency resolution
 
-These rules try their best to follow the conventions that are used in the
-project files that MSBuild uses. MSBuild is not used behind the scenes
-but the compilers and tools that are part of the .Net toolchain are
-used directly instead.
+These rules follow the conventions of MSBuild project files, but call the
+compilers and tools of the .NET SDK directly instead of running MSBuild.
 
-The biggest change compared to MSBuild out of the box is that by default
-these rules do not propagate transitive dependencies to compilation actions.
-This is similar to setting `<DisableTransitiveProjectReferences>true</DisableTransitiveProjectReferences>`
+The biggest difference from MSBuild's defaults is that transitive dependencies
+are not passed to the compiler: a target can only use the assemblies it lists
+in `deps`. This is the same as setting
+`<DisableTransitiveProjectReferences>true</DisableTransitiveProjectReferences>`
 in MSBuild.
 
-This behaviour can be overridden by using the following flag when invoking bazel:
+To compile against transitive dependencies as well, use the following flag, or
+add it to your `.bazelrc` to make it the default:
+
 ```
 --@rules_dotnet//dotnet/settings:strict_deps=false
 ```
-You can add this flag to your `.bazelrc` file to make it the default.
 
 ### Debug/Release configurations
-These rules follow the Bazel idiomatic way of handling compilation modes by reading the `--compilation_mode` flag.
-If the flag is set to either `dbg` or `fastbuild` the rules will compile with relase optimizations disabled.
-If the flag is set to `opt` the rules will compile with the release optimizations enabled.
 
-By default Bazel sets the compilation mode to `fastbuild`.
+The rules follow Bazel's `--compilation_mode` flag. With `dbg` or `fastbuild`
+(Bazel's default) assemblies are compiled without optimizations, as in a Debug
+build; with `opt` they are compiled with optimizations, as in a Release build.
 
-If you want to e.g. enable optimizations in CI you can add `common --compilation_mode=opt` to your CI `.bazelrc` file.
+To build optimized assemblies in CI, for example, add
+`common --compilation_mode=opt` to your CI `.bazelrc` file.
 
 ### Embedded sources
 
@@ -105,7 +110,7 @@ csharp_library(
     srcs = ["Greeter.cs"],
     resources = glob(["**/*.resx"]),
     root_namespace = "Localization",  # Strings.resx -> Localization.Strings
-    target_frameworks = ["net9.0"],
+    target_frameworks = ["net11.0"],
 )
 ```
 
@@ -128,8 +133,7 @@ csharp_library(
 ```
 
 Use `"razor"` for a Razor class library and `"web"` for an ASP.NET Core
-application. Both compile Razor and resolve the ASP.NET Core reference pack,
-because `Microsoft.NET.Sdk.Web` imports `Microsoft.NET.Sdk.Razor`.
+application. Both compile Razor and reference ASP.NET Core.
 
 A component's namespace and its `@page` route come from `root_namespace` plus
 the source's path relative to the package that compiles it, so a Razor source
@@ -137,9 +141,8 @@ has to live in that package or below it.
 
 ### Scoped CSS
 
-A `Foo.razor.css` beside `Foo.razor` styles only that component. It goes in
-`srcs` next to the component, mirroring how MSBuild picks it up from beside the
-`.razor`:
+A `Foo.razor.css` beside `Foo.razor` styles only that component. List it in
+`srcs` next to the component:
 
 ```python
 csharp_library(
@@ -166,18 +169,15 @@ csharp_library(
 ```
 
 Each file is served at its path relative to the `wwwroot` directory it sits
-under. A library's assets are served below `_content/<assembly name>`, matching
-the base path MSBuild gives a Razor class library, so two libraries shipping
-`site.css` do not collide. A binary's own assets sit at the root.
+under. A library's assets are served below `_content/<assembly name>`, as MSBuild
+does for a Razor class library, so two libraries shipping `site.css` do not
+collide. A binary's own assets are served from the root.
 
-The tree is laid out next to the binary the way a published application expects
-it, with the endpoint manifest beside the assembly, so `app.MapStaticAssets()`
-works under `bazel run` with no further setup.
+`app.MapStaticAssets()` finds them under `bazel run` with no further setup.
 
-Assets that arrive inside a NuGet package are picked up too. A packed Razor
-class library ships them in a `staticwebassets` folder, and they are served from
-`_content/<package id>` just like a library target's `wwwroot`, so referencing
-the package is all that is needed.
+Static web assets that come with a NuGet package, such as a packed Razor class
+library, are served from `_content/<package id>`. Referencing the package is all
+that is needed.
 
 ## Blazor WebAssembly
 
@@ -221,8 +221,7 @@ blazor_devserver(
 )
 ```
 
-`net10.0` or later is required: the WebAssembly toolchain only ships as NuGet
-packages from .NET 10 onwards.
+Blazor WebAssembly requires `net10.0` or later.
 
 ## Shared frameworks
 
@@ -309,30 +308,25 @@ will do their best to guide if needed.
 ## NativeAOT and the C/C++ toolchain
 
 `publish_binary(native_aot = True)` compiles the application ahead of time to a
-single native executable. It is the only publish model that links native code,
-so unlike every other rule in `rules_dotnet` it needs a **C/C++ toolchain**. The
-toolchain is resolved through Bazel's standard mechanism and requested
-optionally, so a build that never publishes NativeAOT does not need one to
-exist.
+single native executable. The binary has to be built for .NET 10 or later.
 
-The binary has to be built for .NET 10 or later.
+NativeAOT links native code, so it needs a registered **C/C++ toolchain**.
+Builds that do not publish with NativeAOT do not need one.
 
 ### Recommended: a hermetic toolchain
 
 The [`llvm`](https://registry.bazel.build/modules/llvm) module supplies a
 hermetic LLVM toolchain and downloads Apple's official SDK for Apple targets, so
 NativeAOT builds the same way on Linux and macOS and can cross-compile — a
-`linux-x64` binary from macOS, say, with nothing installed on the host. It is
-what `rules_dotnet` uses for its own test suite on Unix.
+`linux-x64` binary from macOS, say, with nothing installed on the host.
 
 ```starlark
 bazel_dep(name = "llvm", version = "0.8.19")
 
 register_toolchains("@llvm//toolchain:all")
 
-# Apple targets only. The .NET runtime links against CryptoKit, GSS and Network,
-# which the module's minimal sysroot leaves out, and naming any framework
-# replaces the default set rather than extending it.
+# Apple targets only: the frameworks the .NET runtime links against. Listing
+# frameworks replaces the module's default set, so list all of them.
 osx_sysroot = use_extension("@llvm//extensions:osx.bzl", "osx")
 osx_sysroot.frameworks(names = [
     "CoreFoundation",
@@ -355,10 +349,9 @@ publishes NativeAOT — Xcode's command line tools on macOS, clang or gcc on
 Linux, or Visual Studio's C++ build tools on Windows — and it cannot
 cross-compile, because a host toolchain only targets its own platform.
 
-A Windows publish is linked the way the .NET SDK links it, so the toolchain has
-to link with `link.exe` or `lld-link`: MSVC or clang-cl, not MinGW. The
-executable links the C runtime statically and needs no Visual C++
-redistributable, whichever compilation mode Bazel builds in.
+On Windows the toolchain has to link with `link.exe` or `lld-link`, so use MSVC
+or clang-cl; MinGW is not supported. The executable links the C runtime
+statically and needs no Visual C++ redistributable.
 
 ## Single-file executables
 
@@ -466,10 +459,17 @@ nuget FSharp.Core 11.0.101
 nuget Argu 6.2.3
 ```
 
-Run `@rules_dotnet//tools/paket -- install` in the same directory as the 
-`paket.dependencies` file to generate the `paket.lock` file.
+Generate `paket.lock` by running Paket in the directory that holds
+`paket.dependencies`. `rules_dotnet` ships the Paket CLI, so no local .NET
+install is needed:
 
-Add the following snippet to your MODULE.bazel file:
+```
+bazel run @rules_dotnet//tools/paket -- install
+```
+
+Every other Paket command (`update`, `outdated`, `why`, ...) works the same way.
+
+Then add the following snippet to your `MODULE.bazel` file:
 
 ```starlark
 paket = use_extension("@rules_dotnet//dotnet:paket.bzl", "paket")
@@ -480,16 +480,11 @@ paket.parse(
 use_repo(paket, "paket.main")
 ```
 
-`@rules_dotnet//tools/paket`. Every Paket command works (`update`,
-`outdated`, `why`), and it runs in the directory you invoke it from.
-
 ### Referring to packages
 
 Each [dependency group](https://fsprojects.github.io/Paket/groups.html) becomes
-a repository named after it, holding one lower cased target per package:
-
-Example:
-If you have the following `paket.dependencies`:
+a repository named `paket.<group>`, holding one lower cased target per package.
+For example, with this `paket.dependencies`:
 
 ```text
 source https://api.nuget.org/v3/index.json
@@ -503,9 +498,8 @@ group iaac
     nuget Pulumi 3.101.2
 ```
 
-The top-level group becomes `@paket.main`, and the `iaac` group becomes `@paket.iaac`.
-and you can refer to them in your Bazel targets using the `@paket.<group>//<package>` syntax
-in the `deps` attribute of your Bazel targets.
+the top-level group becomes `@paket.main` and the `iaac` group becomes
+`@paket.iaac`. Refer to a package as `@paket.<group>//<package>` in `deps`:
 
 ```starlark
 csharp_binary(
@@ -530,7 +524,7 @@ binary, and `nuget_push` publishes it. See
 
 ## Remote execution
 
-The rules support remote execution out of the box. The remote runners do need to have the required .Net
+The rules support remote execution out of the box. The remote runners do need to have the required .NET
 system dependencies installed though. A common missing system dependency in existing RBE images is `libicu`;
 [Globalization and ICU](#globalization-and-icu) covers how to build without it.
 
@@ -545,25 +539,24 @@ Couldn't find a valid ICU package installed on the system.
 
 There are two ways to work around this:
 
-1. Run everything in [globalization-invariant mode](https://learn.microsoft.com/dotnet/core/runtime-config/globalization#invariant-mode) by setting the `invariant_globalization` flag.
+1. Run everything in [globalization-invariant mode](https://learn.microsoft.com/dotnet/core/runtime-config/globalization#invariant-mode) by setting the `invariant_globalization` flag:
 
-```
-build --@rules_dotnet//dotnet/settings:invariant_globalization=true
-```
+   ```
+   build --@rules_dotnet//dotnet/settings:invariant_globalization=true
+   ```
 
-2. Use the hermetic ICU provided by rules_dotnet
+2. Use the hermetic ICU from the [`icu`](https://registry.bazel.build/modules/icu) module:
 
-This pulls a hermetic ICU into the build using [icu module](https://registry.bazel.build/modules/icu) from the Bazel registry.
+   ```
+   build --@rules_dotnet//dotnet/settings:icu=@rules_dotnet//dotnet/settings:hermetic_icu
+   ```
 
-```
-build --@rules_dotnet//dotnet/settings:icu=@rules_dotnet//dotnet/settings:hermetic_icu
-```
+   It needs a C++ toolchain, the auto-configured one or a hermetic one, and the first build spends a
+   few minutes compiling ICU. The flag has no effect on macOS and Windows, where the runtime uses the
+   ICU the operating system ships.
 
-It needs a C++ toolchain, the auto-configured one or a hermetic one, and the first build spends a few minutes
-compiling ICU. The flag has no effect on macOS and Windows, whose runtime uses the ICU the operating system
-ships.
-
-A published application do not carry this ICU. This is purely for the build and test environment within Bazel.
+   The hermetic ICU is only used for building, running and testing inside Bazel; a published
+   application does not carry it.
 
 ## Persistent workers
 
@@ -583,8 +576,7 @@ build --worker_max_instances=FSharpCompile=HOST_CPUS
 
 ### Remote persistent workers
 
-The workers also run as persistent workers on remote executors that support them, over either the
-JSON or the protobuf worker protocol. Enable it with:
+The workers also run as persistent workers on remote executors that support them. Enable it with:
 
 ```
 build --experimental_remote_mark_tool_inputs
@@ -592,10 +584,10 @@ build --experimental_remote_mark_tool_inputs
 
 ## Path mapping
 
-The rules_dotnet compile actions support
+The compile actions support
 [path mapping](https://bazel.build/reference/command-line-reference#flag--experimental_output_paths),
-which strips the configuration segment out of the paths a compile action sees, so the *same*
-compilation reached through two different configurations produces one cache **key** instead of two.
+so the *same* compilation reached through two different configurations is cached once instead of
+twice.
 
 You also need to have disk/remote caching enabled for Bazel to take full advantage of path mapping.
 
@@ -606,9 +598,10 @@ common --disk_cache=path/to/cache
 
 ### It cannot be used on Windows
 
-Bazel has [no sandboxing on Windows](https://github.com/bazelbuild/bazel/discussions/18401), so
-there is no strategy there that can satisfy the requirement and *every* compile fails with the
-error above. You can use platform specific configuration to enable path mapping only on supported platforms:
+Path mapping requires sandboxing, which Bazel
+[does not have on Windows](https://github.com/bazelbuild/bazel/discussions/18401), so every compile
+action fails there when it is enabled. Use platform-specific configuration to enable path mapping only
+on the platforms that support it:
 
 ```
 common --enable_platform_specific_config
