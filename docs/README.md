@@ -431,6 +431,9 @@ Mark .NET Framework tests with
 - NuGet packages' copies of assemblies that .NET Framework provides, such as
   `System.Net.Http`, are copied next to the executable but not redirected to,
   so the framework's copy is used. The .NET SDK leaves them out.
+- A binding redirect written in `app_config` is kept even when it does not
+  cover the version the application references. MSBuild replaces it with the
+  one it generates and warns (MSB3836).
 
 ## Container images
 
