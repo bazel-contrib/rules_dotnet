@@ -276,6 +276,11 @@ publishes NativeAOT — Xcode's command line tools on macOS, clang or gcc on
 Linux, or Visual Studio's C++ build tools on Windows — and it cannot
 cross-compile, because a host toolchain only targets its own platform.
 
+A Windows publish is linked the way the .NET SDK links it, so the toolchain has
+to link with `link.exe` or `lld-link`: MSVC or clang-cl, not MinGW. The
+executable links the C runtime statically and needs no Visual C++
+redistributable, whichever compilation mode Bazel builds in.
+
 ## Single-file executables
 
 `publish_binary(single_file = True)` bundles a self-contained publish into one

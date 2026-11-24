@@ -167,15 +167,13 @@ _AOT_FEATURE_SWITCHES = {
 
 _AOT_SWITCHES_WITHOUT_KNOB = ["System.Diagnostics.Debugger.IsSupported"]
 
-# The order the runtime's static libraries have to reach the linker. Names are
-# given without the platform's `lib` prefix or archive extension; entries the
-# pack does not ship (the cryptography library differs by platform) are skipped.
+# The order the runtime's static libraries have to reach a Unix linker. Names
+# are given without the `lib` prefix or archive extension; entries the pack does
+# not ship (the cryptography library differs by platform) are skipped.
 _AOT_LINK_ORDER = [
     "System.Native",
     "System.Globalization.Native",
-    "System.Globalization.Native.Aot",
     "System.IO.Compression.Native",
-    "System.IO.Compression.Native.Aot",
     "System.Net.Security.Native",
     "System.Security.Cryptography.Native.Apple",
     "System.Security.Cryptography.Native.OpenSsl",
@@ -187,11 +185,40 @@ _AOT_LINK_ORDER = [
     "aotminipal",
     "stdc++compat",
     "z",
-    "zlibstatic",
     "brotlienc",
     "brotlidec",
     "brotlicommon",
 ]
+
+# What the Windows pack contributes to the link, as
+# Microsoft.NETCore.Native.Windows.targets lists it. The pack ships every one of
+# these, so unlike on Unix a missing file is an error.
+_AOT_WINDOWS_LINK_INPUTS = [
+    "bootstrapper.obj",
+    "Runtime.WorkstationGC.lib",
+    "eventpipe-disabled.lib",
+    "standalonegc-disabled.lib",
+    "aotminipal.lib",
+    "zlibstatic.lib",
+    "brotlicommon.lib",
+    "brotlienc.lib",
+    "brotlidec.lib",
+    "System.Globalization.Native.Aot.lib",
+    "System.IO.Compression.Native.Aot.lib",
+]
+
+# The vectorised sort the garbage collector can use only exists for x64, so
+# only that pack carries the library that stubs it out.
+_AOT_WINDOWS_X64_LINK_INPUTS = ["Runtime.VxsortDisabled.lib"]
+
+# The linkers that take link.exe's command line. A Windows toolchain that
+# links through a GNU-style driver would read `/OUT:app.exe` as an input file.
+_AOT_MSVC_STYLE_LINKERS = ["link", "lld-link"]
+
+# C runtimes a Bazel toolchain may name as a default library but the NativeAOT
+# runtime cannot link against: its objects are built for the static release
+# runtime, `libcmt.lib`, which they ask for themselves.
+_AOT_WINDOWS_FOREIGN_CRTS = ["msvcrt", "msvcrtd", "libcmtd"]
 
 # Libraries the runtime expects from the platform rather than from its pack,
 # keyed by the target operating systems a publish can link for. The C++ runtime
@@ -263,14 +290,24 @@ def _aot_closure(assembly_info, transitive_runtime_deps):
         content_files = list(assembly_info.content_files),
     )
 
-def _aot_link_libraries(link_inputs, is_windows):
+def _aot_link_libraries(aot):
     """The pack's static libraries, in the order the linker needs them."""
+    link_inputs = aot.pack.link_inputs
+
+    if aot.os == "windows":
+        basenames = _AOT_WINDOWS_LINK_INPUTS + (_AOT_WINDOWS_X64_LINK_INPUTS if aot.arch == "x64" else [])
+        missing = [basename for basename in basenames if basename not in link_inputs]
+
+        if missing:
+            fail("The NativeAOT pack for {} does not ship {}".format(aot.rid, ", ".join(missing)))
+
+        return [link_inputs[basename] for basename in basenames]
+
     libraries = []
-    patterns = ["{}.obj", "{}.lib"] if is_windows else ["lib{}.a", "lib{}.o"]
 
     for name in _AOT_LINK_ORDER:
-        for pattern in patterns:
-            library = link_inputs.get(pattern.format(name))
+        for basename in ["lib{}.a".format(name), "lib{}.o".format(name)]:
+            library = link_inputs.get(basename)
 
             if library:
                 libraries.append(library)
@@ -304,7 +341,12 @@ def _ilc_compile(ctx, dll, closure, aot):
     args.add("--targetarch:" + aot.arch)
     args.add_all(references.values(), format_each = "-r:%s")
     args.add("-O")
-    args.add("--dehydrate")
+
+    # Dehydrated data is smaller on disk and slower to start. The SDK only
+    # makes that trade by default where relocations are expensive, which on
+    # Windows they are not.
+    if not is_windows:
+        args.add("--dehydrate")
     args.add(exports_file, format = "--exportsfile:%s")
     if is_windows:
         args.add("--export-dynamic-symbol:DotNetRuntimeDebugHeader,DATA")
@@ -360,6 +402,10 @@ def _ilc_compile(ctx, dll, closure, aot):
 
     return struct(object_file = object_file, exports_file = exports_file)
 
+def _linker_name(linker):
+    """A linker's name, without its directory or the Windows `.exe` suffix."""
+    return linker.replace("\\", "/").rsplit("/", 1)[-1].lower().removesuffix(".exe")
+
 def _ilc_link(ctx, compiled, aot):
     """Links the compiled object into a native executable."""
     toolchain = _native_tools(ctx).cc_link_toolchain
@@ -385,7 +431,11 @@ def _ilc_link(ctx, compiled, aot):
 
     is_apple = aot.os == "osx"
     is_windows = aot.os == "windows"
-    libraries = _aot_link_libraries(aot.pack.link_inputs, is_windows)
+    libraries = _aot_link_libraries(aot)
+
+    if is_windows and _linker_name(linker) not in _AOT_MSVC_STYLE_LINKERS:
+        fail("NativeAOT links for Windows with link.exe or lld-link, but the C/C++ toolchain links with {}".format(linker))
+
     executable = ctx.actions.declare_file(aot.prefix + (".exe" if is_windows else ""))
 
     # Ordered the way a Unix linker reads its command line: the object first,
@@ -423,6 +473,14 @@ def _ilc_link(ctx, compiled, aot):
             args.add("/CETCOMPAT")
         args.add("/NODEFAULTLIB:libucrt.lib")
         args.add("/DEFAULTLIB:ucrt.lib")
+
+        # The SDK takes a linker and its library paths from the toolchain and
+        # nothing else. Bazel's toolchain also picks a C runtime and a debug
+        # format for the compilation mode, which would link the debug runtime
+        # under `-c dbg` and leave the executable needing vcruntime140.dll
+        # otherwise, so both choices are undone here.
+        args.add_all(_AOT_WINDOWS_FOREIGN_CRTS, format_each = "/NODEFAULTLIB:%s.lib")
+        args.add("/DEBUG:NONE")
         args.add("/OPT:REF")
         args.add("/OPT:ICF")
     else:
