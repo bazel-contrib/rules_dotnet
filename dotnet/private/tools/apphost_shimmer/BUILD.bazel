@@ -11,7 +11,7 @@ bootstrap_tool_binary(
         "SingleFileBundler.cs",
     ],
     include_host_model_dll = True,
-    target_frameworks = ["net10.0"],
+    target_frameworks = ["net11.0"],
     visibility = ["//visibility:public"],
     deps = [
     ],

@@ -9,6 +9,6 @@ compiler_worker_binary(
         "Program.cs",
         "//dotnet/private/tools/worker:srcs",
     ],
-    target_frameworks = ["net10.0"],
+    target_frameworks = ["net11.0"],
     visibility = ["//visibility:public"],
 )

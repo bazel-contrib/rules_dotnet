@@ -32,7 +32,7 @@ Requirements:
 bazel_dep(name = "rules_dotnet", version = "${TAG:1}")
 
 dotnet = use_extension("@rules_dotnet//dotnet:extensions.bzl", "dotnet")
-dotnet.toolchain(dotnet_version = "8.0.200")
+dotnet.toolchain(dotnet_version = "11.0.100")
 use_repo(dotnet, "dotnet_toolchains")
 
 register_toolchains("@dotnet_toolchains//:all")

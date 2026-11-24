@@ -27,16 +27,10 @@ def _valid_identifiers(part):
                 return False
     return True
 
-def _check(version, assembly_version_limit = True):
+def _check(version, max_component = _MAX_COMPONENT):
     """Parses `version`, returning a `(parsed, error)` pair with exactly one side set.
 
-    Args:
-      version: The version string.
-      assembly_version_limit: Whether to hold each release component to what an
-        `AssemblyVersion` can store. A package version can go past that.
-
-    Returns:
-      The `(parsed, error)` pair.
+    `max_component` bounds each release component, or is None for no bound.
     """
     if type(version) != "string" or not version:
         return (None, "a version must be a non-empty string, got {}".format(repr(version)))
@@ -59,8 +53,8 @@ def _check(version, assembly_version_limit = True):
         if not part.isdigit():
             return (None, "version {}: component {} is not a number".format(repr(version), repr(part)))
         number = int(part)
-        if assembly_version_limit and number > _MAX_COMPONENT:
-            return (None, "version {}: component {} exceeds {}, the AssemblyVersion limit".format(repr(version), part, _MAX_COMPONENT))
+        if max_component != None and number > max_component:
+            return (None, "version {}: component {} exceeds {}, the AssemblyVersion limit".format(repr(version), part, max_component))
         numbers.append(number)
 
     for _ in range(4 - len(numbers)):
@@ -128,47 +122,61 @@ def _normalize(version):
         normalized += "-" + parsed.prerelease
     return normalized
 
-def _order(parsed):
-    """A key that sorts parsed versions in NuGet's order."""
-    return (
-        (parsed.major, parsed.minor, parsed.patch, parsed.revision),
-        # A release comes after its pre-releases.
-        0 if parsed.prerelease else 1,
-        # Identifier by identifier, numbers by value and before any word, words
-        # without regard to case. A label that another starts with comes first,
-        # as a list that another starts with does.
-        [
-            (0, int(identifier), "") if identifier.isdigit() else (1, 0, identifier.upper())
-            for identifier in parsed.prerelease.split(".")
-        ] if parsed.prerelease else [],
-    )
+def _compare_labels(left, right):
+    """Orders two pre-release labels, as NuGet does: SemVer 2.0, ignoring case."""
+    left = left.split(".") if left else []
+    right = right.split(".") if right else []
+    for (a, b) in zip(left, right):
+        if a.isdigit() and b.isdigit():
+            (a, b) = (int(a), int(b))
+        elif a.isdigit() or b.isdigit():
+            # A numeric identifier sorts before an alphanumeric one.
+            return -1 if a.isdigit() else 1
+        else:
+            (a, b) = (a.lower(), b.lower())
+
+        if a != b:
+            return -1 if a < b else 1
+
+    if len(left) == len(right):
+        return 0
+    return -1 if len(left) < len(right) else 1
 
 def _is_newer(version, other):
-    """Whether `version` comes after `other` in NuGet's order.
+    """Whether `version` orders after `other`, as NuGet orders versions.
 
-    The four release components are compared as numbers, a missing one being
-    zero, so `10.0.14.0` is `10.0.14`. A release comes after its pre-releases,
-    whose labels are compared as SemVer's are but without regard to case.
-    Build metadata is ignored. A component is not held to the `AssemblyVersion`
-    limit, as a package version can go past it.
+    Release components are compared as four numbers, a missing one being zero,
+    so `10.0.14.0` is `10.0.14`. A release orders after its pre-releases, and
+    build metadata is ignored. A version that is not one - an empty string
+    among them, which is what a target that sets none has - is never newer,
+    and nothing is newer than it.
 
     Args:
-      version: The version string, such as a dependency's.
-      other: The version string to compare it with, such as a framework's.
+      version: The version that might be newer.
+      other: The version to compare it with.
 
     Returns:
-      True when `version` is strictly newer than `other`. False when either is
-      not a valid version, so a dependency that sets none is never newer.
+      True if `version` is the newer of the two.
     """
-    (parsed, error) = _check(version, assembly_version_limit = False)
-    (parsed_other, error_other) = _check(other, assembly_version_limit = False)
-    if error or error_other:
+    (a, error) = _check(version, max_component = None)
+    if error:
         return False
-    return _order(parsed) > _order(parsed_other)
+    (b, error) = _check(other, max_component = None)
+    if error:
+        return False
+
+    for (x, y) in [(a.major, b.major), (a.minor, b.minor), (a.patch, b.patch), (a.revision, b.revision)]:
+        if x != y:
+            return x > y
+
+    if not a.prerelease or not b.prerelease:
+        return not a.prerelease and bool(b.prerelease)
+
+    return _compare_labels(a.prerelease, b.prerelease) > 0
 
 nuget_version = struct(
     error = _error,
     assembly_version = _assembly_version,
-    normalize = _normalize,
     is_newer = _is_newer,
+    normalize = _normalize,
 )

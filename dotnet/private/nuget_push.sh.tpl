@@ -29,6 +29,13 @@ export DOTNET_CLI_WORKLOAD_UPDATE_NOTIFY_DISABLE="1"
 # HOME and DOTNET_CLI_HOME stay as they are: `dotnet nuget push` reads the
 # user's NuGet.Config, API keys and credential providers from there.
 
+# On its first run `dotnet` takes a named mutex, whose state .NET 11 keeps
+# under TMPDIR on macOS and will not reach through a link, which /tmp is there.
+if [[ -d "${TMPDIR:-/tmp}" ]]; then
+  TMPDIR="$(cd "${TMPDIR:-/tmp}" && pwd -P)"
+  export TMPDIR
+fi
+
 dotnet="$(rlocation TEMPLATED_dotnet)"
 export DOTNET_ROOT="$(dirname "$dotnet")"
 

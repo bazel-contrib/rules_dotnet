@@ -27,11 +27,11 @@ csharp_binary(
     # model has to be declared in for `@model` to find it.
     root_namespace = "Example.RazorApp",
     static_web_assets = glob(["wwwroot/**"]),
-    target_frameworks = ["net10.0"],
+    target_frameworks = ["net11.0"],
 )
 
 publish_binary(
     name = "publish",
     binary = ":razor_app",
-    target_framework = "net10.0",
+    target_framework = "net11.0",
 )

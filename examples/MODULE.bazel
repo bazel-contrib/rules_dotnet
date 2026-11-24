@@ -21,7 +21,7 @@ local_path_override(
 )
 
 dotnet = use_extension("@rules_dotnet//dotnet:extensions.bzl", "dotnet")
-dotnet.toolchain(dotnet_version = "10.0.401")
+dotnet.toolchain(dotnet_version = "11.0.100")
 use_repo(dotnet, "dotnet_toolchains")
 
 register_toolchains("@dotnet_toolchains//:all")
@@ -56,9 +56,9 @@ pull = use_repo_rule("@rules_img//img:pull.bzl", "pull")
 # `dotnet/runtime` or `dotnet/aspnet`.
 pull(
     name = "dotnet_runtime_deps",
-    digest = "sha256:099f6f87ed745377dd27bd722f0d1a352bca71b4fddaabfd75e7c064bcaa82da",
+    digest = "sha256:b392cb6e185b0c02cd8066b8b3b2e78d58f7cc15ba5d52ea3e2bfe8f3c0060f9",
     platforms = ["linux/amd64"],
     registry = "mcr.microsoft.com",
     repository = "dotnet/runtime-deps",
-    tag = "10.0",
+    tag = "11.0",
 )

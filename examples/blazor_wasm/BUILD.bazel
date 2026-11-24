@@ -25,7 +25,7 @@ csharp_binary(
     project_sdk = "blazorwasm",
     root_namespace = "Example.BlazorWasm",
     static_web_assets = glob(["wwwroot/**"]),
-    target_frameworks = ["net10.0"],
+    target_frameworks = ["net11.0"],
     deps = ["@paket.blazor_deps//microsoft.aspnetcore.components.webassembly"],
 )
 
@@ -34,7 +34,7 @@ csharp_binary(
 publish_binary(
     name = "publish",
     binary = ":app",
-    target_framework = "net10.0",
+    target_framework = "net11.0",
     wasm = True,
 )
 

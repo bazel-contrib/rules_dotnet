@@ -12,7 +12,7 @@ fsharp_binary(
     srcs = ["Main.fs"],
     project_sdk = "blazorwasm",
     static_web_assets = glob(["wwwroot/**"]),
-    target_frameworks = ["net10.0"],
+    target_frameworks = ["net11.0"],
     deps = [
         "@paket.bolero_deps//bolero",
         "@paket.bolero_deps//elmish",
@@ -23,7 +23,7 @@ fsharp_binary(
 publish_binary(
     name = "publish",
     binary = ":app",
-    target_framework = "net10.0",
+    target_framework = "net11.0",
     wasm = True,
 )
 

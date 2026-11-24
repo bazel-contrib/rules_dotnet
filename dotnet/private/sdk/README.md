@@ -69,7 +69,8 @@ Only these need a release of rules_dotnet:
 3. Moving `_NEWEST_DECLARED_MAJOR` on, once a decade.
 
 Moving `rules_dotnet` itself onto a newer SDK is just a matter of changing
-`dotnet_version` in `MODULE.bazel`, and in `examples/` and `e2e/` as wanted.
+`dotnet_version` in `MODULE.bazel`, the `target_frameworks` of the tools in
+`dotnet/private/tools` to its framework, and `examples/` and `e2e/` as wanted.
 
 ## References
 
