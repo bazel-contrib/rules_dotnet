@@ -98,13 +98,6 @@ bzl_library(
     ],
 )
 
-# The Windows APIs ilc binds directly instead of resolving at run time. Copied
-# unchanged from src/coreclr/nativeaot/BuildIntegration in dotnet/runtime's
-# release/10.0 branch, MIT licensed. The SDK reads it from the
-# Microsoft.DotNet.ILCompiler package, which is not one these rules download;
-# refresh the copy when adding a .NET major release.
-exports_files(["WindowsAPIs.txt"])
-
 bzl_library(
     name = "publish_binary",
     srcs = ["publish_binary.bzl"],

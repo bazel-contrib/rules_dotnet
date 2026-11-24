@@ -13,6 +13,7 @@ load(
     "WEB_SDK",
     "apphost_pack",
     "crossgen2_pack",
+    "ilcompiler_build_pack",
     "ilcompiler_pack",
     "nativeaot_pack",
     "runtime_pack_rids",
@@ -275,6 +276,15 @@ def _pack_ids_test_impl(ctx):
         nativeaot_pack("net9.0", "osx-arm64", bands = _BANDS),
     )
     asserts.equals(env, None, ilcompiler_pack("net8.0", "linux-x64", bands = _BANDS), "NativeAOT has a pack of its own from .NET 9")
+
+    # What the SDK's own build hands to ilc ships once, and only a Windows
+    # publish reads any of it.
+    asserts.equals(
+        env,
+        ("Microsoft.DotNet.ILCompiler", "9.0.22"),
+        ilcompiler_build_pack("net9.0", "win-x64", bands = _BANDS),
+    )
+    asserts.equals(env, None, ilcompiler_build_pack("net9.0", "linux-x64", bands = _BANDS))
     return unittest.end(env)
 
 _pack_ids_test = unittest.make(_pack_ids_test_impl)

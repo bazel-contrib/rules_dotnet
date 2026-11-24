@@ -48,6 +48,7 @@ load(
     "host_platform_setting",
     "host_rids",
     "host_tool_tfms",
+    "ilcompiler_build_pack",
     "ilcompiler_pack",
     "nativeaot_pack",
     "runtime_pack_rids",
@@ -378,10 +379,21 @@ def _nativeaot(sdk):
                 continue
 
             packages.append(pack)
-            targets.append(("nativeaot_pack", {
+            attrs = {
                 "name": rid,
                 "pack_files": "@{}//:files".format(nuget_archive_name(*pack)),
-            }))
+            }
+
+            # The SDK reads the list from beside its own targets, so that it
+            # always matches the ilc it is handed to.
+            build_pack = ilcompiler_build_pack(tfm, rid, bands = sdk.bands)
+            if build_pack != None:
+                packages.append(build_pack)
+                attrs["direct_pinvoke_lists"] = [
+                    "@{}//:build/WindowsAPIs.txt".format(nuget_archive_name(*build_pack)),
+                ]
+
+            targets.append(("nativeaot_pack", attrs))
 
         build_files["{}/BUILD.bazel".format(tfm)] = _build_file(targets)
 
@@ -576,7 +588,8 @@ def declare_pack_repos(module_ctx, sdk, bootstrap, releases):
 
     # The kinds cannot share a package: their ids end in `.Ref`,
     # `.Runtime.<rid>`, `.Host.<rid>`, `.Crossgen2.<rid>` and
-    # `.Runtime.NativeAOT.<rid>`, and ILCompiler packs are `runtime.<rid>.*`.
+    # `.Runtime.NativeAOT.<rid>`, and ILCompiler packs are `runtime.<rid>.*`,
+    # unlike the `Microsoft.DotNet.ILCompiler` a Windows NativeAOT pack reads.
     packages = [pack for (_, kind) in kinds for pack in kind.packages]
 
     resolved = {}

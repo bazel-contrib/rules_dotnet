@@ -207,6 +207,7 @@ DotnetNativeAotPackInfo = provider(
     fields = {
         "libs": "list[File]: The framework assemblies ilc compiles against.",
         "link_inputs": "map[string, File]: The static libraries and objects the native link consumes, by basename.",
+        "direct_pinvoke_lists": "list[File]: Lists of the platform's own APIs that ilc may bind directly, as the SDK ships them. Empty except on Windows.",
     },
 )
 

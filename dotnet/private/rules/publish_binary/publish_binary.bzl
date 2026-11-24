@@ -358,8 +358,7 @@ def _ilc_compile(ctx, dll, closure, aot):
     # entry points, which only exist if ilc is asked to emit them.
     args.add("--generateunmanagedentrypoints:System.Private.CoreLib")
     args.add_all(_direct_pinvokes(aot.pack.link_inputs), format_each = "--directpinvoke:%s")
-    direct_pinvoke_lists = [ctx.file._windows_apis] if is_windows else []
-    args.add_all(direct_pinvoke_lists, format_each = "--directpinvokelist:%s")
+    args.add_all(aot.pack.direct_pinvoke_lists, format_each = "--directpinvokelist:%s")
 
     switches = dict(_AOT_FEATURE_SWITCHES)
     if is_windows:
@@ -391,7 +390,7 @@ def _ilc_compile(ctx, dll, closure, aot):
         executable = ilc.tool,
         arguments = [args],
         inputs = depset(
-            [dll] + references.values() + direct_pinvoke_lists,
+            [dll] + references.values() + aot.pack.direct_pinvoke_lists,
             transitive = [ilc.files],
         ),
         outputs = [object_file, exports_file],
@@ -1410,10 +1409,6 @@ Requires `single_file = True`.""",
             executable = True,
             default = "//dotnet/private/tools/apphost_shimmer:apphost_shimmer",
             cfg = "exec",
-        ),
-        "_windows_apis": attr.label(
-            allow_single_file = True,
-            default = "//dotnet/private/rules/publish_binary:WindowsAPIs.txt",
         ),
     },
     toolchains = ["//dotnet/toolchain:toolchain_type"],

@@ -20,12 +20,20 @@ def _nativeaot_pack_impl(ctx):
         elif "/native/" in file.path and file.extension in _LINK_EXTENSIONS:
             link_inputs[file.basename] = file
 
-    return [DotnetNativeAotPackInfo(libs = libs, link_inputs = link_inputs)]
+    return [DotnetNativeAotPackInfo(
+        libs = libs,
+        link_inputs = link_inputs,
+        direct_pinvoke_lists = ctx.files.direct_pinvoke_lists,
+    )]
 
 nativeaot_pack = rule(
     _nativeaot_pack_impl,
     doc = ".Net NativeAOT runtime pack",
     attrs = {
+        "direct_pinvoke_lists": attr.label_list(
+            doc = "Lists of the platform's own APIs that ilc may bind directly instead of resolving at run time",
+            allow_files = True,
+        ),
         "pack_files": attr.label(
             doc = "Every file in the NativeAOT runtime pack nuget package",
         ),
