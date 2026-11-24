@@ -5,7 +5,17 @@ each what the SDK will.
 """
 
 load("@bazel_skylib//lib:unittest.bzl", "asserts", "unittest")
-load("//dotnet/private:common.bzl", "shared_framework_version")
+load(
+    "//dotnet/private:common.bzl",
+    "framework_preprocessor_symbols",
+    "get_highest_compatible_target_framework",
+    "get_nearest_compatible_target_framework",
+    "nuget_framework_to_tfm",
+    "shared_framework_version",
+    "target_platform",
+    "tfm_to_nuget_framework",
+    "tfm_version",
+)
 load(
     "//dotnet/private/sdk:frameworks.bzl",
     "DEFAULT_TARGET_FRAMEWORK",
@@ -14,6 +24,8 @@ load(
     "SDK_NETCOREAPP_FRAMEWORKS",
     "SDK_NETFRAMEWORK_FRAMEWORKS",
     "SDK_NETSTANDARD_FRAMEWORKS",
+    "SDK_WINDOWS_FRAMEWORKS",
+    "base_framework",
 )
 
 def _lang_versions_test_impl(ctx):
@@ -34,12 +46,14 @@ def _lang_versions_test_impl(ctx):
         "net20.0": "24.0",
         "netstandard2.0": "7.3",
         "netstandard2.1": "8.0",
+        # A Windows specific framework takes its release's.
+        "net8.0-windows": "12.0",
     }.items():
         asserts.equals(env, expected, SDK_LANG_VERSIONS[tfm], tfm)
 
     asserts.equals(
         env,
-        sorted(SDK_NETSTANDARD_FRAMEWORKS + SDK_NETFRAMEWORK_FRAMEWORKS + SDK_NETCOREAPP_FRAMEWORKS),
+        sorted(SDK_NETSTANDARD_FRAMEWORKS + SDK_NETFRAMEWORK_FRAMEWORKS + SDK_NETCOREAPP_FRAMEWORKS + SDK_WINDOWS_FRAMEWORKS),
         sorted(SDK_LANG_VERSIONS.keys()),
         "every framework the SDK lists has a language version, and nothing else does",
     )
@@ -75,7 +89,16 @@ def _compatibility_test_impl(ctx):
     asserts.equals(env, "netstandard", keys[0])
     asserts.equals(env, keys.index("netstandard2.1") + 1, keys.index("net11"))
     asserts.equals(env, keys.index("net481") + 1, keys.index("netcoreapp1.0"))
-    asserts.equals(env, SDK_NETCOREAPP_FRAMEWORKS[-1], keys[-1])
+    asserts.equals(env, SDK_NETCOREAPP_FRAMEWORKS[-1] + "-windows", keys[-1])
+
+    # A Windows specific framework sits right after the one it is specific to,
+    # so that the table ranks a package's assets as NuGet does.
+    for tfm in SDK_WINDOWS_FRAMEWORKS:
+        asserts.equals(env, keys.index(base_framework(tfm)) + 1, keys.index(tfm), tfm)
+    asserts.equals(env, ["net5.0"], FRAMEWORK_COMPATIBILITY["net5.0-windows"])
+    asserts.equals(env, ["net8.0", "net7.0-windows"], FRAMEWORK_COMPATIBILITY["net8.0-windows"])
+    asserts.equals(env, ["net8.0"], FRAMEWORK_COMPATIBILITY["net9.0"], "a plain framework consumes no Windows specific one")
+    asserts.equals(env, "net5.0-windows", SDK_WINDOWS_FRAMEWORKS[0], "platform specific frameworks start with .NET 5")
 
     # Releases are declared ahead, a decade on, and nothing but the SDK limits
     # which of them a target builds for.
@@ -104,10 +127,58 @@ def _shared_framework_version_test_impl(ctx):
 
 _shared_framework_version_test = unittest.make(_shared_framework_version_test_impl)
 
+def _windows_frameworks_test_impl(ctx):
+    env = unittest.begin(ctx)
+
+    asserts.equals(env, [8, 0], tfm_version("net8.0-windows"))
+
+    # As the SDK spells it in package metadata and folders, and back.
+    asserts.equals(env, "net8.0-windows7.0", tfm_to_nuget_framework("net8.0-windows"))
+    for (framework, expected) in {
+        "net8.0-windows": "net8.0-windows",
+        "net8.0-windows7.0": "net8.0-windows",
+        "NET8.0-Windows7.0": "net8.0-windows",
+        ".NETCoreApp8.0-windows7.0": "net8.0-windows",
+        "netcoreapp3.1-windows": None,
+        # A later version of Windows needs the Windows SDK projections.
+        "net8.0-windows10.0.19041.0": None,
+        "net8.0-android": None,
+    }.items():
+        asserts.equals(env, expected, nuget_framework_to_tfm(framework), framework)
+
+    # GenerateTargetPlatformDefineConstants and GeneratePlatformCompatibleDefineConstants.
+    symbols = framework_preprocessor_symbols("net8.0-windows")
+    for symbol in ["NET", "NET8_0", "NET8_0_OR_GREATER", "NETCOREAPP", "WINDOWS", "WINDOWS7_0", "WINDOWS7_0_OR_GREATER"]:
+        asserts.true(env, symbol in symbols, "net8.0-windows defines {}".format(symbol))
+    asserts.false(env, "WINDOWS" in framework_preprocessor_symbols("net8.0"))
+
+    asserts.equals(env, "Windows7.0", target_platform("net8.0-windows"))
+    asserts.equals(env, None, target_platform("net8.0"))
+
+    # NuGet's nearest framework: the release first, then the platform.
+    asserts.equals(env, "net8.0-windows", get_nearest_compatible_target_framework("net8.0-windows", ["net8.0", "net8.0-windows"]))
+    asserts.equals(env, "net8.0", get_nearest_compatible_target_framework("net8.0-windows", ["net8.0", "net7.0-windows"]))
+    asserts.equals(env, "net7.0-windows", get_nearest_compatible_target_framework("net8.0-windows", ["net7.0", "net7.0-windows"]))
+    asserts.equals(env, "net7.0", get_nearest_compatible_target_framework("net8.0", ["net7.0", "net7.0-windows"]))
+
+    # What a dependency builds for.
+    asserts.equals(env, "net8.0", get_highest_compatible_target_framework("net8.0-windows", ["net8.0", "net9.0"]))
+    asserts.equals(env, "net8.0-windows", get_highest_compatible_target_framework("net9.0-windows", ["net8.0-windows", "net8.0"]))
+    asserts.equals(env, None, get_highest_compatible_target_framework("net9.0", ["net8.0-windows"]))
+    asserts.equals(env, "net8.0", get_highest_compatible_target_framework("net9.0", ["net8.0-windows", "net8.0"]))
+
+    # Built directly, a target builds for the newest it lists.
+    asserts.equals(env, "net8.0-windows", get_highest_compatible_target_framework(DEFAULT_TARGET_FRAMEWORK, ["net8.0-windows"]))
+
+    return unittest.end(env)
+
+_windows_frameworks_test = unittest.make(_windows_frameworks_test_impl)
+
 def frameworks_test_suite(name):
     unittest.suite(
         name,
         _compatibility_test,
+        _windows_frameworks_test,
         _lang_versions_test,
         _shared_framework_version_test,
     )

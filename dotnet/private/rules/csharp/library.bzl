@@ -19,6 +19,7 @@ load("//dotnet/private/rules/common:library.bzl", "build_library")
 load("//dotnet/private/rules/common:resx.bzl", "split_resources")
 load("//dotnet/private/rules/content_files:content_files.bzl", "resolve_content_file_mappings")
 load("//dotnet/private/rules/csharp/actions:csharp_assembly.bzl", "AssemblyAction")
+load("//dotnet/private/sdk:packs.bzl", "resolve_framework_references")
 load("//dotnet/private/transitions:tfm_transition.bzl", "tfm_transition")
 
 def _compile_action(ctx, tfm, toolchain):
@@ -63,8 +64,11 @@ def _compile_action(ctx, tfm, toolchain):
         warning_level = ctx.attr.warning_level,
         nowarn = ctx.attr.nowarn,
         project_sdk = ctx.attr.project_sdk,
+        frameworks = resolve_framework_references(ctx.attr.project_sdk, getattr(ctx.attr, "framework_references", [])),
         root_namespace = ctx.attr.root_namespace,
         scoped_css_tool = ctx.attr._scoped_css_tool,
+        xaml_tool = ctx.attr._xaml_tool,
+        wpf_resources = ctx.files.wpf_resources,
         allow_unsafe_blocks = ctx.attr.allow_unsafe_blocks,
         nullable = ctx.attr.nullable,
         run_analyzers = ctx.attr.run_analyzers,

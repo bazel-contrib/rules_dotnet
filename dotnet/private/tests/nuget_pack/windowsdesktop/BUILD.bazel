@@ -1,0 +1,40 @@
+# A WPF library package: consumers get WPF through its framework reference, and
+# its assemblies sit under the folder `dotnet pack` names after the version of
+# Windows the framework targets.
+#
+# NU5131 is as for every package with a `ref/` folder.
+
+load("//dotnet:defs.bzl", "csharp_library", "nuget_pack")
+load("//dotnet/private/tests/nuget_pack:nuget_pack_test.bzl", "nuget_pack_test")
+
+csharp_library(
+    name = "controls",
+    srcs = ["Controls.cs"],
+    out = "RulesDotnet.Tests.WpfControls",
+    framework_references = ["Microsoft.WindowsDesktop.App.WPF"],
+    target_frameworks = ["net10.0-windows"],
+    version = "1.0.0",
+)
+
+nuget_pack(
+    name = "controls_pack",
+    authors = ["rules_dotnet"],
+    description = "A WPF library packed by rules_dotnet's own tests.",
+    library = ":controls",
+    package_id = "RulesDotnet.Tests.WpfControls",
+    target_frameworks = ["net10.0-windows"],
+)
+
+nuget_pack_test(
+    name = "controls_pack_test",
+    contents = {
+        "expected/controls_pack.nuspec": "RulesDotnet.Tests.WpfControls.nuspec",
+    },
+    files = [
+        "lib/net10.0-windows7.0/RulesDotnet.Tests.WpfControls.dll",
+        "lib/net10.0-windows7.0/RulesDotnet.Tests.WpfControls.xml",
+        "ref/net10.0-windows7.0/RulesDotnet.Tests.WpfControls.dll",
+    ],
+    package = ":controls_pack",
+    warnings = ["NU5131"],
+)

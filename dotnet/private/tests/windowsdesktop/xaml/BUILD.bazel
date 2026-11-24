@@ -1,0 +1,53 @@
+# WPF XAML: an application and a control library, compiled with the SDK's own
+# PresentationBuildTasks. `App.xaml` at the root of the package is the
+# application definition, as in a C# project.
+
+load("//dotnet:defs.bzl", "csharp_binary", "csharp_library", "csharp_nunit_test")
+
+csharp_library(
+    name = "controls",
+    srcs = [
+        "controls/Badge.xaml",
+        "controls/Badge.xaml.cs",
+    ],
+    out = "XamlControls",
+    framework_references = ["Microsoft.WindowsDesktop.App.WPF"],
+    target_frameworks = ["net10.0-windows"],
+)
+
+csharp_binary(
+    name = "xaml_app",
+    srcs = [
+        "App.xaml",
+        "App.xaml.cs",
+        "Converters.cs",
+        "Views/MainWindow.xaml",
+        "Views/MainWindow.xaml.cs",
+    ],
+    framework_references = ["Microsoft.WindowsDesktop.App.WPF"],
+    target_frameworks = ["net10.0-windows"],
+    winexe = True,
+    wpf_resources = ["Assets/greeting.txt"],
+    deps = [":controls"],
+)
+
+csharp_nunit_test(
+    name = "xaml_resources_test",
+    srcs = ["XamlTests.cs"],
+    data = [
+        ":controls",
+        ":xaml_app",
+    ],
+    target_frameworks = ["net10.0"],
+    deps = ["//tools/runfiles"],
+)
+
+csharp_nunit_test(
+    name = "run_xaml_test",
+    srcs = ["RunXamlTests.cs"],
+    framework_references = ["Microsoft.WindowsDesktop.App.WPF"],
+    nullable = "enable",
+    target_compatible_with = ["@platforms//os:windows"],
+    target_frameworks = ["net10.0-windows"],
+    deps = [":controls"],
+)

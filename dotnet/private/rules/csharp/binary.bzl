@@ -17,12 +17,12 @@ load(
     "targets_windows",
 )
 load("//dotnet/private:toolchains_repo.bzl", "BOOTSTRAP_TOOLCHAIN_TYPE", "DOTNET_TOOLCHAIN_TYPE")
-load("//dotnet/private/rules/common:attrs.bzl", "CSHARP_BINARY_COMMON_ATTRS")
+load("//dotnet/private/rules/common:attrs.bzl", "CSHARP_BINARY_COMMON_ATTRS", "WINEXE_ATTRS")
 load("//dotnet/private/rules/common:binary.bzl", "BINARY_OUTPUT_GROUPS_DOC", "build_binary")
 load("//dotnet/private/rules/common:resx.bzl", "split_resources")
 load("//dotnet/private/rules/content_files:content_files.bzl", "resolve_content_file_mappings")
 load("//dotnet/private/rules/csharp/actions:csharp_assembly.bzl", "AssemblyAction")
-load("//dotnet/private/sdk:packs.bzl", "BOOTSTRAP_PACKS")
+load("//dotnet/private/sdk:packs.bzl", "BOOTSTRAP_PACKS", "resolve_framework_references")
 load("//dotnet/private/transitions:bootstrap_tool_transition.bzl", "bootstrap_tool_transition")
 load("//dotnet/private/transitions:tfm_transition.bzl", "tfm_transition")
 
@@ -67,8 +67,11 @@ def _compile_action(ctx, tfm, toolchain):
         warning_level = ctx.attr.warning_level,
         nowarn = ctx.attr.nowarn,
         project_sdk = ctx.attr.project_sdk,
+        frameworks = resolve_framework_references(ctx.attr.project_sdk, getattr(ctx.attr, "framework_references", [])),
         root_namespace = ctx.attr.root_namespace,
         scoped_css_tool = ctx.attr._scoped_css_tool,
+        xaml_tool = ctx.attr._xaml_tool,
+        wpf_resources = ctx.files.wpf_resources,
         allow_unsafe_blocks = ctx.attr.allow_unsafe_blocks,
         nullable = ctx.attr.nullable,
         run_analyzers = ctx.attr.run_analyzers,
@@ -120,6 +123,7 @@ _BOOTSTRAP_TOOLCHAINS = [
 
 _BINARY_ATTRS = dicts.add(
     CSHARP_BINARY_COMMON_ATTRS,
+    WINEXE_ATTRS,
     {
         "include_host_model_dll": attr.bool(
             doc = "Whether to include Microsoft.NET.HostModel from the toolchain. This is only required to build tha apphost shimmer.",
@@ -160,6 +164,7 @@ _BOOTSTRAP_ATTRS = dicts.add(
     {
         "_pack_set": attr.string(default = BOOTSTRAP_PACKS),
         "_scoped_css_tool": attr.label(default = "//dotnet/private:no_tool", cfg = "exec"),
+        "_xaml_tool": attr.label(default = "//dotnet/private:no_tool", cfg = "exec"),
         "_resx_tool": attr.label(default = "//dotnet/private:no_tool", cfg = "exec"),
         "_static_web_assets_tool": attr.label(default = "//dotnet/private:no_tool", cfg = "exec"),
         "_apphost_pack": attr.label_list(default = []),

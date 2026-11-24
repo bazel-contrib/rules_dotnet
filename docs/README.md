@@ -224,6 +224,100 @@ blazor_devserver(
 `net10.0` or later is required: the WebAssembly toolchain only ships as NuGet
 packages from .NET 10 onwards.
 
+## Shared frameworks
+
+A target references Microsoft.NETCore.App by default. `framework_references`
+adds the other shared frameworks, as MSBuild's `<FrameworkReference>` items do:
+
+```python
+csharp_library(
+    name = "middleware",
+    srcs = glob(["**/*.cs"]),
+    framework_references = ["Microsoft.AspNetCore.App"],
+    target_frameworks = ["net11.0"],
+)
+```
+
+| Reference | MSBuild |
+| --- | --- |
+| `Microsoft.AspNetCore.App` | `<FrameworkReference Include="Microsoft.AspNetCore.App" />`, which `project_sdk = "web"` implies |
+| `Microsoft.WindowsDesktop.App.WPF` | `<UseWPF>true</UseWPF>` |
+| `Microsoft.WindowsDesktop.App.WindowsForms` | `<UseWindowsForms>true</UseWindowsForms>` |
+| `Microsoft.WindowsDesktop.App` | both, with the assemblies that integrate WPF and Windows Forms |
+
+A target compiles against the reference assemblies and analyzers of the
+frameworks it references itself, narrowed to the WPF or Windows Forms profile
+where one is named, as in MSBuild. List a framework on every target whose code
+uses it.
+
+An application runs on the shared frameworks of everything it carries: its own,
+its dependencies' and those NuGet packages declare in their `.nuspec`. Its
+`runtimeconfig.json` asks for all of them, as MSBuild's does. A self-contained
+`publish_binary` carries the runtime packs of the frameworks the binary itself
+references, so it fails, naming the framework, if a dependency needs one the
+binary does not list.
+
+`nuget_pack` writes a library's framework references into the package, so
+that its consumers get them too.
+
+## Windows Forms and WPF
+
+From .NET 5 on, Windows Forms and WPF need a Windows specific target framework,
+`net11.0-windows`, as in MSBuild:
+
+```python
+csharp_binary(
+    name = "app",
+    srcs = glob(["**/*.cs", "**/*.xaml"]),
+    framework_references = ["Microsoft.WindowsDesktop.App.WPF"],
+    target_frameworks = ["net11.0-windows"],
+    winexe = True,
+    wpf_resources = glob(["Assets/**"]),
+)
+```
+
+A `-windows` framework behaves as it does in MSBuild:
+
+- It can consume what the framework it is specific to can, and NuGet assets for
+  either, preferring `lib/net8.0-windows7.0` to `lib/net8.0` and a newer release
+  to an older Windows specific one.
+- It defines `WINDOWS`, `WINDOWS7_0` and `WINDOWS7_0_OR_GREATER`, and marks the
+  assembly `[TargetPlatform("Windows7.0")]` and `[SupportedOSPlatform("Windows7.0")]`.
+- A plain framework cannot consume it.
+
+Only Windows 7.0, the version `-windows` stands for, is supported. A framework
+for a later version, such as `net8.0-windows10.0.19041.0`, compiles against the
+Windows SDK projections, which these rules do not provide, so NuGet assets for
+one are passed over.
+
+Windows Forms and WPF compile on any host: the reference packs are plain NuGet
+packages, as MSBuild's `EnableWindowsTargeting` has it. Running them, and
+publishing them, takes Windows: `publish_binary` needs a `win-*`
+`runtime_identifier`. They do not support trimming, so they cannot be published
+with `native_aot`.
+
+`winexe = True` builds a Windows GUI executable, MSBuild's
+`<OutputType>WinExe</OutputType>`: the assembly, and the apphost, single-file
+host or NativeAOT executable a publish creates for Windows, get the Windows GUI
+subsystem, so that starting the application opens no console window. As in the
+SDK since .NET 6, referencing Windows Forms or WPF does not imply it.
+
+### XAML
+
+`.xaml` files in `srcs` are compiled with the SDK's own PresentationBuildTasks,
+as `Microsoft.WinFX.targets` compiles them. An `App.xaml` at the root of the
+target's package is the application definition, which generates the
+application's `Main`; every other `.xaml` file is a page. `wpf_resources` are
+MSBuild's `<Resource>` items: embedded with the compiled XAML and addressed by
+their path relative to the package.
+
+XAML that names a type of the assembly being built, such as a value converter
+it declares, is compiled against a temporary assembly of the sources, as MSBuild
+does when it needs one. Here the temporary assembly is always compiled, since
+whether it is needed only shows once the XAML has been read.
+
+Only C# compiles XAML.
+
 ## Unsupported workloads
 
 The following workloads are not supported by these rules at this given time:

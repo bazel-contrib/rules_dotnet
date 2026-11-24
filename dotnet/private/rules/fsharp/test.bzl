@@ -19,6 +19,7 @@ load("//dotnet/private/rules/common:binary.bzl", "BINARY_OUTPUT_GROUPS_DOC", "bu
 load("//dotnet/private/rules/common:resx.bzl", "split_resources")
 load("//dotnet/private/rules/content_files:content_files.bzl", "resolve_content_file_mappings")
 load("//dotnet/private/rules/fsharp/actions:fsharp_assembly.bzl", "AssemblyAction")
+load("//dotnet/private/sdk:packs.bzl", "resolve_framework_references")
 load("//dotnet/private/transitions:tfm_transition.bzl", "tfm_transition")
 
 def _compile_action(ctx, tfm, toolchain):
@@ -61,6 +62,7 @@ def _compile_action(ctx, tfm, toolchain):
         nowarn = ctx.attr.nowarn,
         nullable = ctx.attr.nullable,
         project_sdk = ctx.attr.project_sdk,
+        frameworks = resolve_framework_references(ctx.attr.project_sdk, getattr(ctx.attr, "framework_references", [])),
         compiler_options = ctx.attr.compiler_options,
         is_windows = targets_windows(ctx),
     )

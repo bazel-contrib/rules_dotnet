@@ -20,15 +20,172 @@ DEFAULT_SDK = "default"
 WEB_SDK = "web"
 RAZOR_SDK = "razor"
 BLAZORWASM_SDK = "blazorwasm"
-WINDOWSDESKTOP_SDK = "windowsdesktop"
 
 # The SDKs that have a pack set of their own. `razor` and `blazorwasm` resolve
 # the same packs as `web`, so they have no set of their own and are normalized
 # away before lookup.
-PROJECT_SDKS = [DEFAULT_SDK, WEB_SDK, WINDOWSDESKTOP_SDK]
+PROJECT_SDKS = [DEFAULT_SDK, WEB_SDK]
 
 # What a user may write in `project_sdk`.
 USER_PROJECT_SDKS = PROJECT_SDKS + [RAZOR_SDK, BLAZORWASM_SDK]
+
+# The shared frameworks a target can reference on top of Microsoft.NETCore.App,
+# which every .NET Core target references. In the order their packs are listed.
+NETCORE_FRAMEWORK = "Microsoft.NETCore.App"
+ASPNETCORE_FRAMEWORK = "Microsoft.AspNetCore.App"
+WINDOWSDESKTOP_FRAMEWORK = "Microsoft.WindowsDesktop.App"
+SHARED_FRAMEWORKS = [ASPNETCORE_FRAMEWORK, WINDOWSDESKTOP_FRAMEWORK]
+
+# The shared frameworks that only exist on Windows. The SDK only builds against
+# them for a Windows target framework, and only ships their runtime packs for
+# Windows runtime identifiers.
+WINDOWS_ONLY_FRAMEWORKS = [WINDOWSDESKTOP_FRAMEWORK]
+
+# What `framework_references` accepts: the SDK's KnownFrameworkReference items,
+# each with the shared framework it resolves to and the profile of it, if any. A
+# profile narrows the framework's reference assemblies and analyzers to those
+# its FrameworkList.xml marks for it; the runtime framework is the whole one.
+FRAMEWORK_REFERENCES = {
+    "Microsoft.AspNetCore.App": (ASPNETCORE_FRAMEWORK, None),
+    "Microsoft.WindowsDesktop.App": (WINDOWSDESKTOP_FRAMEWORK, None),
+    "Microsoft.WindowsDesktop.App.WPF": (WINDOWSDESKTOP_FRAMEWORK, "WPF"),
+    "Microsoft.WindowsDesktop.App.WindowsForms": (WINDOWSDESKTOP_FRAMEWORK, "WindowsForms"),
+}
+
+# How each shared framework is spelled in the package names of the pack
+# repositories.
+_FRAMEWORK_KEYS = {
+    ASPNETCORE_FRAMEWORK: "aspnetcore",
+    WINDOWSDESKTOP_FRAMEWORK: "windowsdesktop",
+}
+
+# The profiles each shared framework's FrameworkList.xml defines.
+_FRAMEWORK_PROFILES = {
+    ASPNETCORE_FRAMEWORK: [],
+    WINDOWSDESKTOP_FRAMEWORK: ["WPF", "WindowsForms"],
+}
+
+# The package of the pack repositories that holds a target referencing only
+# Microsoft.NETCore.App.
+NO_SHARED_FRAMEWORKS = "default"
+
+def resolve_framework_references(project_sdk, framework_references):
+    """The shared frameworks a target references, and the profiles of each.
+
+    `project_sdk = "web"`, and the Razor and Blazor SDKs that build on it,
+    reference all of Microsoft.AspNetCore.App, as `Microsoft.NET.Sdk.Web` does.
+
+    As in the SDK's ResolveTargetingPackAssets, several references to one
+    framework add up: a reference without a profile takes all of it, and
+    references with profiles take what any of the profiles does.
+
+    Args:
+      project_sdk: The `project_sdk` of the target.
+      framework_references: The `framework_references` of the target.
+
+    Returns:
+      A dict of shared framework to a sorted list of the profiles referenced,
+      or to None for the whole framework. Microsoft.NETCore.App is implied and
+      never in it.
+    """
+    references = list(framework_references)
+    if normalize_project_sdk(project_sdk) == WEB_SDK:
+        references.append(ASPNETCORE_FRAMEWORK)
+
+    frameworks = {}
+    for reference in references:
+        if reference == NETCORE_FRAMEWORK:
+            fail("Microsoft.NETCore.App is referenced implicitly; leave it out of `framework_references`.")
+
+        if reference not in FRAMEWORK_REFERENCES:
+            fail("Unknown framework reference {}. Known ones are {}.".format(
+                repr(reference),
+                ", ".join(FRAMEWORK_REFERENCES.keys()),
+            ))
+
+        (framework, profile) = FRAMEWORK_REFERENCES[reference]
+        if profile == None or frameworks.get(framework, []) == None:
+            frameworks[framework] = None
+        else:
+            frameworks[framework] = sorted({p: None for p in frameworks.get(framework, []) + [profile]}.keys())
+
+    return {framework: frameworks[framework] for framework in SHARED_FRAMEWORKS if framework in frameworks}
+
+def framework_references_of(frameworks):
+    """The `framework_references` that reference exactly `frameworks`.
+
+    Args:
+      frameworks: The shared frameworks, as `resolve_framework_references`
+        returns them.
+
+    Returns:
+      A list of framework reference names, as a NuGet package lists them.
+    """
+    references = []
+    for (framework, profiles) in frameworks.items():
+        if profiles == None:
+            references.append(framework)
+        else:
+            references.extend(["{}.{}".format(framework, profile) for profile in profiles])
+
+    return references
+
+def frameworks_key(frameworks, profiles = True):
+    """The package of the pack repositories that holds a set of shared frameworks.
+
+    Args:
+      frameworks: The shared frameworks, as `resolve_framework_references`
+        returns them.
+      profiles: Whether the key tells profiles apart. Targeting packs narrow to
+        a profile; runtime packs always carry the whole framework.
+
+    Returns:
+      The package name, `default` for none.
+    """
+    parts = []
+    for framework in SHARED_FRAMEWORKS:
+        if framework not in frameworks:
+            continue
+
+        part = _FRAMEWORK_KEYS[framework]
+        if profiles and frameworks[framework] != None:
+            part += "." + ".".join([profile.lower() for profile in frameworks[framework]])
+
+        parts.append(part)
+
+    return "_".join(parts) if parts else NO_SHARED_FRAMEWORKS
+
+def _framework_combinations(profiles):
+    """Every set of shared frameworks a target can reference.
+
+    Args:
+      profiles: Whether sets that differ only in profiles count as different.
+
+    Returns:
+      A list of dicts, as `resolve_framework_references` returns them.
+    """
+    combinations = [{}]
+    for framework in SHARED_FRAMEWORKS:
+        choices = [None]
+        if profiles:
+            available = _FRAMEWORK_PROFILES[framework]
+
+            # Every non-empty subset of the framework's profiles.
+            for mask in range(1, 1 << len(available)):
+                choices.append(sorted([available[i] for i in range(len(available)) if mask & (1 << i)]))
+
+        combinations = combinations + [
+            combination | {framework: choice}
+            for combination in combinations
+            for choice in choices
+        ]
+
+    return combinations
+
+# Every set of shared frameworks a target can compile against, and every one a
+# binary can run on.
+TARGETING_FRAMEWORK_SETS = _framework_combinations(profiles = True)
+RUNTIME_FRAMEWORK_SETS = _framework_combinations(profiles = False)
 
 def normalize_project_sdk(project_sdk):
     """Maps a project SDK onto the one whose packs back it.
@@ -94,83 +251,123 @@ def _app_pack_id(tfm, aspnet, suffix = ""):
     # runtime pack; before that one package carried both.
     return base if tfm.startswith("netcoreapp1") or tfm.startswith("netcoreapp2") else base + ".Ref"
 
-def targeting_packs(tfm, project_sdk = DEFAULT_SDK, *, bands):
+def _has_framework(band, framework):
+    """Whether a band shipped a shared framework at all."""
+    if framework == ASPNETCORE_FRAMEWORK:
+        return "web_ref" in band
+
+    # Windows Forms and WPF came to .NET Core with 3.0, the first release with
+    # runtime packs.
+    return "windowsdesktop_rids" in band
+
+def _shared_framework_ref_pack(tfm, framework, band):
+    if framework == ASPNETCORE_FRAMEWORK:
+        return (_app_pack_id(tfm, True), band["web_ref"])
+
+    return ("Microsoft.WindowsDesktop.App.Ref", band["ref"])
+
+def targeting_packs(tfm, frameworks = {}, *, bands):
     """Returns the targeting packs a target framework compiles against.
+
+    On .NET Framework, Windows Forms and WPF are part of the framework's own
+    reference assemblies, so referencing them adds no pack. On .NET Standard
+    they do not apply.
 
     Args:
       tfm: The target framework.
-      project_sdk: The project SDK, `default` or `web`.
+      frameworks: The shared frameworks referenced beyond Microsoft.NETCore.App,
+        as `resolve_framework_references` returns them.
       bands: The bands to take versions from: `PACK_BANDS` where only which
         packs exist matters.
 
     Returns:
       A list of (package id, version) tuples, empty if the combination has no
-      targeting pack.
+      targeting pack. The shared frameworks' packs come first.
     """
-    if project_sdk not in PROJECT_SDKS:
-        return []
 
-    if project_sdk == DEFAULT_SDK:
-        if tfm in _NETSTANDARD_PACKS:
-            return [_NETSTANDARD_PACKS[tfm]]
+    # Windows Forms and WPF only apply to .NET Core and .NET, as `<UseWPF>`
+    # and `<UseWindowsForms>` do, so that a library can target .NET Standard
+    # beside them. ASP.NET Core does not exist anywhere else.
+    if tfm in _NETSTANDARD_PACKS or tfm in _NETFRAMEWORK_TFMS:
+        if [framework for framework in frameworks if framework not in WINDOWS_ONLY_FRAMEWORKS]:
+            return []
 
-        if tfm in _NETFRAMEWORK_TFMS:
-            return [("Microsoft.NETFramework.ReferenceAssemblies." + tfm, _NETFRAMEWORK_PACK_VERSION)]
+    if tfm in _NETSTANDARD_PACKS:
+        return [_NETSTANDARD_PACKS[tfm]]
 
-    if project_sdk == WINDOWSDESKTOP_SDK and tfm in _NETFRAMEWORK_TFMS:
+    if tfm in _NETFRAMEWORK_TFMS:
         return [("Microsoft.NETFramework.ReferenceAssemblies." + tfm, _NETFRAMEWORK_PACK_VERSION)]
 
     band = bands.get(tfm)
     if band == None:
         return []
 
-    if project_sdk == DEFAULT_SDK:
-        return [(_app_pack_id(tfm, False), band["ref"])]
+    packs = []
+    for framework in SHARED_FRAMEWORKS:
+        if framework not in frameworks:
+            continue
 
-    if project_sdk == WINDOWSDESKTOP_SDK:
-        if "runtime" not in band:
+        if not _has_framework(band, framework):
             return []
 
-        return [
-            ("Microsoft.WindowsDesktop.App.Ref", band["ref"]),
-            (_app_pack_id(tfm, False), band["ref"]),
-        ]
+        packs.append(_shared_framework_ref_pack(tfm, framework, band))
 
-    if "web_ref" not in band:
-        return []
+    return packs + [(_app_pack_id(tfm, False), band["ref"])]
 
-    return [
-        (_app_pack_id(tfm, True), band["web_ref"]),
-        (_app_pack_id(tfm, False), band["ref"]),
-    ]
+def targeting_pack_profiles(tfm, frameworks):
+    """The profile each targeting pack is narrowed to, where one is.
 
-def runtime_packs(tfm, rid, project_sdk = DEFAULT_SDK, *, bands):
+    Args:
+      tfm: The target framework.
+      frameworks: The shared frameworks, as `resolve_framework_references`
+        returns them.
+
+    Returns:
+      A dict of package id to the list of profiles to keep.
+    """
+    if tfm in _NETFRAMEWORK_TFMS or tfm in _NETSTANDARD_PACKS:
+        return {}
+
+    band = PACK_BANDS.get(tfm)
+    if band == None:
+        return {}
+
+    return {
+        _shared_framework_ref_pack(tfm, framework, band)[0]: profiles
+        for (framework, profiles) in frameworks.items()
+        if profiles != None and _has_framework(band, framework)
+    }
+
+def runtime_packs(tfm, rid, frameworks = {}, *, bands):
     """Returns the runtime packs a self-contained publish needs.
 
     Args:
       tfm: The target framework.
       rid: The runtime identifier.
-      project_sdk: The project SDK, `default`, `web`, or `windowsdesktop`.
+      frameworks: The shared frameworks referenced beyond Microsoft.NETCore.App,
+        as `resolve_framework_references` returns them. Profiles do not
+        matter: a runtime pack is always the whole framework.
       bands: The bands to take versions from: `PACK_BANDS` where only which
         packs exist matters.
 
     Returns:
       A list of (package id, version) tuples, empty if the combination has no
-      runtime pack.
+      runtime pack. The shared frameworks' packs come first.
     """
-    if rid not in runtime_pack_rids(tfm, project_sdk):
+    if rid not in runtime_pack_rids(tfm, frameworks):
         return []
 
     band = bands[tfm]
 
-    packs = [(_app_pack_id(tfm, False, "Runtime." + rid), band["runtime"])]
+    packs = []
+    for framework in SHARED_FRAMEWORKS:
+        if framework not in frameworks:
+            continue
 
-    if project_sdk == WEB_SDK:
-        packs.insert(0, (_app_pack_id(tfm, True, "Runtime." + rid), band["runtime"]))
-    elif project_sdk == WINDOWSDESKTOP_SDK:
-        packs.insert(0, ("Microsoft.WindowsDesktop.App.Runtime." + rid, band["runtime"]))
+        pack_id = _app_pack_id(tfm, True, "Runtime." + rid) if framework == ASPNETCORE_FRAMEWORK else "Microsoft.WindowsDesktop.App.Runtime." + rid
+        packs.append((pack_id, band["runtime"]))
 
-    return packs
+    return packs + [(_app_pack_id(tfm, False, "Runtime." + rid), band["runtime"])]
 
 # Blazor WebAssembly has exactly one target, so unlike every other runtime pack
 # this one's runtime identifier is fixed.
@@ -389,52 +586,50 @@ def ilcompiler_build_pack(tfm, rid, *, bands):
 
     return ("Microsoft.DotNet.ILCompiler", bands[tfm]["ilcompiler"])
 
-def runtime_pack_rids(tfm, project_sdk = DEFAULT_SDK):
+def runtime_pack_rids(tfm, frameworks = {}):
     """Returns the runtime identifiers a target framework shipped packs for.
 
     Args:
       tfm: The target framework.
-      project_sdk: The project SDK, `default` or `web`.
+      frameworks: The shared frameworks referenced beyond Microsoft.NETCore.App,
+        as `resolve_framework_references` returns them. A runtime identifier
+        counts only if every one of them shipped a runtime pack for it.
 
     Returns:
       A list of runtime identifiers, empty if there are no runtime packs.
     """
-    if project_sdk not in PROJECT_SDKS:
-        return []
-
     band = PACK_BANDS.get(tfm)
     if band == None or "runtime" not in band:
         return []
 
-    if project_sdk == WEB_SDK:
-        return band.get("web_rids", band["rids"])
+    rids = band["rids"]
+    for framework in SHARED_FRAMEWORKS:
+        if framework not in frameworks:
+            continue
 
-    if project_sdk == WINDOWSDESKTOP_SDK:
-        if tfm in ["netcoreapp3.0", "netcoreapp3.1"]:
-            return ["win-x64"]
-        return [rid for rid in band["rids"] if rid.startswith("win-")]
+        if not _has_framework(band, framework):
+            return []
 
-    return band["rids"]
+        shipped = band.get("web_rids", band["rids"]) if framework == ASPNETCORE_FRAMEWORK else band["windowsdesktop_rids"]
+        rids = [rid for rid in rids if rid in shipped]
 
-def targeting_pack_tfms(project_sdk = DEFAULT_SDK):
+    return rids
+
+def targeting_pack_tfms(frameworks = {}):
     """Returns the target frameworks that have a targeting pack.
 
     Args:
-      project_sdk: The project SDK, `default`, `web`, or `windowsdesktop`.
+      frameworks: The shared frameworks referenced beyond Microsoft.NETCore.App,
+        as `resolve_framework_references` returns them.
 
     Returns:
       A list of target frameworks.
     """
-    if project_sdk == WEB_SDK:
-        return [tfm for tfm in PACK_BANDS if "web_ref" in PACK_BANDS[tfm]]
-
-    if project_sdk == WINDOWSDESKTOP_SDK:
-        return _NETFRAMEWORK_TFMS + [tfm for tfm in PACK_BANDS if "runtime" in PACK_BANDS[tfm]]
-
-    if project_sdk not in PROJECT_SDKS:
-        return []
-
-    return list(_NETSTANDARD_PACKS.keys()) + _NETFRAMEWORK_TFMS + list(PACK_BANDS.keys())
+    return [
+        tfm
+        for tfm in list(_NETSTANDARD_PACKS.keys()) + _NETFRAMEWORK_TFMS + list(PACK_BANDS.keys())
+        if targeting_packs(tfm, frameworks, bands = PACK_BANDS)
+    ]
 
 def runtime_pack_tfms():
     """Returns the target frameworks that have runtime and apphost packs.
@@ -465,13 +660,14 @@ WASM_PACK_REPO = "dotnet.wasm_packs"
 # framework, and those for a framework older than every band.
 NEWEST_BAND = "newest"
 
+# By pack set, then by `frameworks_key`, then by target framework.
 TARGETING_PACK_LOOKUP_TABLE = {
     pack_set: {
-        project_sdk: {
-            tfm: "@{}//{}/{}:{}".format(TARGETING_PACK_REPO, pack_set, project_sdk, tfm)
-            for tfm in targeting_pack_tfms(project_sdk)
+        frameworks_key(frameworks): {
+            tfm: "@{}//{}/{}:{}".format(TARGETING_PACK_REPO, pack_set, frameworks_key(frameworks), tfm)
+            for tfm in targeting_pack_tfms(frameworks)
         }
-        for project_sdk in PROJECT_SDKS
+        for frameworks in TARGETING_FRAMEWORK_SETS
     }
     for pack_set in PACK_SETS
 }
@@ -539,15 +735,17 @@ CROSSGEN2_PACK_LOOKUP_TABLE = _host_tool_bands(CROSSGEN2_PACK_REPO, crossgen2_pa
 
 ILCOMPILER_PACK_LOOKUP_TABLE = _host_tool_bands(ILCOMPILER_PACK_REPO, ilcompiler_pack)
 
+# By `frameworks_key(frameworks, profiles = False)`, then by target framework,
+# then by runtime identifier.
 RUNTIME_PACK_LOOKUP_TABLE = {
-    project_sdk: {
+    frameworks_key(frameworks, profiles = False): {
         tfm: {
-            rid: "@{}//{}/{}:{}".format(RUNTIME_PACK_REPO, project_sdk, tfm, rid)
-            for rid in runtime_pack_rids(tfm, project_sdk)
+            rid: "@{}//{}/{}:{}".format(RUNTIME_PACK_REPO, frameworks_key(frameworks, profiles = False), tfm, rid)
+            for rid in runtime_pack_rids(tfm, frameworks)
         }
         for tfm in runtime_pack_tfms()
     }
-    for project_sdk in PROJECT_SDKS
+    for frameworks in RUNTIME_FRAMEWORK_SETS
 }
 
 APPHOST_PACK_LOOKUP_TABLE = {

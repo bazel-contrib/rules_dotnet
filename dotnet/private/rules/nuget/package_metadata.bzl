@@ -34,6 +34,9 @@ def parse_nuspec(content):
         dependency_groups: Package ids keyed by target framework. Frameworks
           rules_dotnet does not support are dropped, and dependencies that are
           not tied to a framework are keyed by ANY_FRAMEWORK.
+        framework_reference_groups: The shared frameworks the package needs,
+          as framework reference names keyed by target framework. Frameworks
+          rules_dotnet does not support are dropped.
     """
     package = xml.parse(content)
     if package == None:
@@ -71,13 +74,30 @@ def parse_nuspec(content):
             if tfm != None:
                 _add_dependencies(dependency_groups, tfm, group)
 
+    # The shared frameworks a package needs, which NuGet hands on to every
+    # project that consumes it, directly or not.
+    framework_reference_groups = {}
+    for group in xml.children(xml.child(metadata, "frameworkReferences"), "group"):
+        tfm = nuget_framework_to_tfm(xml.attr(group, "targetFramework") or "")
+        if tfm == None:
+            continue
+
+        names = framework_reference_groups.setdefault(tfm, [])
+        for reference in xml.children(group, "frameworkReference"):
+            name = xml.attr(reference, "name")
+            if name and name not in names:
+                names.append(name)
+
     return struct(
         dependency_groups = dependency_groups,
+        framework_reference_groups = framework_reference_groups,
         is_dotnet_tool = _DOTNET_TOOL_PACKAGE_TYPE in package_types,
     )
 
 def parse_framework_list(content):
     """Reads `data/FrameworkList.xml` from a targeting pack.
+
+    A runtime pack's `data/RuntimeList.xml` has the same shape.
 
     Args:
       content: The contents of the `FrameworkList.xml` file.
@@ -85,19 +105,63 @@ def parse_framework_list(content):
     Returns:
       A dict of lower cased assembly name to assembly version.
     """
+    return parse_framework_list_metadata(content).assemblies
+
+def parse_framework_list_metadata(content):
+    """Reads everything rules_dotnet uses from a `FrameworkList.xml` or `RuntimeList.xml`.
+
+    Args:
+      content: The contents of the file.
+
+    Returns:
+      A struct with, each a dict keyed by lower cased assembly name unless
+      said otherwise:
+        assemblies: The assembly version of each managed assembly.
+        file_versions: The file version of each managed assembly, which
+          settles a tie between two packs shipping the same assembly version.
+        profiles: The `;` separated profiles of each managed assembly that is
+          in any. One in none is only part of the whole framework.
+        analyzer_profiles: The `;` separated profiles of each analyzer, keyed
+          by its path inside the package, empty for one in no profile.
+    """
     file_list = xml.parse(content)
     assemblies = {}
+    file_versions = {}
+    profiles = {}
+    analyzer_profiles = {}
 
     for file in xml.children(file_list, "File"):
-        if xml.attr(file, "Type") != "Managed":
+        kind = xml.attr(file, "Type")
+        profile = xml.attr(file, "Profile") or ""
+
+        if kind == "Analyzer":
+            path = xml.attr(file, "Path")
+            if path:
+                analyzer_profiles[path] = profile
+            continue
+
+        if kind != "Managed":
             continue
 
         name = xml.attr(file, "AssemblyName")
         version = xml.attr(file, "AssemblyVersion")
-        if name and version:
-            assemblies[name.lower()] = version.lower()
+        if not name or not version:
+            continue
 
-    return assemblies
+        name = name.lower()
+        assemblies[name] = version.lower()
+        file_version = xml.attr(file, "FileVersion")
+        if file_version:
+            file_versions[name] = file_version
+        if profile:
+            profiles[name] = profile
+
+    return struct(
+        assemblies = assemblies,
+        file_versions = file_versions,
+        profiles = profiles,
+        analyzer_profiles = analyzer_profiles,
+    )
 
 def parse_package_overrides(content):
     """Reads `data/PackageOverrides.txt` from a targeting pack.

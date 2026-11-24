@@ -47,3 +47,10 @@ bzl_library(
         "@bazel_lib//lib:base64",
     ],
 )
+
+bzl_library(
+    name = "xaml",
+    srcs = ["xaml.bzl"],
+    visibility = ["//dotnet:__subpackages__"],
+    deps = ["//dotnet/private/sdk:packs"],
+)

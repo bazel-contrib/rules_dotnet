@@ -8,18 +8,21 @@ load("@bazel_skylib//lib:unittest.bzl", "asserts", "unittest")
 load("//dotnet/private/sdk:pack_bands.bzl", "PACK_BANDS", "SDK_BAND_TFMS", "pack_bands", "sdk_band_tfms")
 load(
     "//dotnet/private/sdk:packs.bzl",
-    "DEFAULT_SDK",
-    "PROJECT_SDKS",
-    "WEB_SDK",
-    "WINDOWSDESKTOP_SDK",
+    "ASPNETCORE_FRAMEWORK",
+    "RUNTIME_FRAMEWORK_SETS",
+    "TARGETING_FRAMEWORK_SETS",
+    "WINDOWSDESKTOP_FRAMEWORK",
     "apphost_pack",
     "crossgen2_pack",
+    "frameworks_key",
     "ilcompiler_build_pack",
     "ilcompiler_pack",
     "nativeaot_pack",
+    "resolve_framework_references",
     "runtime_pack_rids",
     "runtime_pack_tfms",
     "runtime_packs",
+    "targeting_pack_profiles",
     "targeting_pack_tfms",
     "targeting_packs",
     "wasm_pack_tfms",
@@ -66,35 +69,59 @@ _PRE_NET6_RIDS = [
 # release. Each ships what the newest spelled out does.
 _DECLARED_AHEAD = SDK_BAND_TFMS[SDK_BAND_TFMS.index("net10.0") + 1:]
 
-_BAND_TFMS = {
-    "default": [
+_CORE_TFMS = [
+    "net10.0",
+    "net5.0",
+    "net6.0",
+    "net7.0",
+    "net8.0",
+    "net9.0",
+    "netcoreapp1.0",
+    "netcoreapp1.1",
+    "netcoreapp2.0",
+    "netcoreapp2.1",
+    "netcoreapp2.2",
+    "netcoreapp3.0",
+    "netcoreapp3.1",
+]
+
+_NETFRAMEWORK_TFMS = [
+    "net20",
+    "net35",
+    "net40",
+    "net45",
+    "net451",
+    "net452",
+    "net46",
+    "net461",
+    "net462",
+    "net47",
+    "net471",
+    "net472",
+    "net48",
+    "net481",
+]
+
+# The .NET Standard versions that have a targeting pack.
+_NETSTANDARD_TFMS = ["netstandard1.6", "netstandard2.0", "netstandard2.1"]
+
+# The bands each shared framework has a targeting pack in.
+_FRAMEWORK_TFMS = {
+    ASPNETCORE_FRAMEWORK: [
         "net10.0",
         "net5.0",
         "net6.0",
         "net7.0",
         "net8.0",
         "net9.0",
-        "netcoreapp1.0",
-        "netcoreapp1.1",
-        "netcoreapp2.0",
         "netcoreapp2.1",
         "netcoreapp2.2",
         "netcoreapp3.0",
         "netcoreapp3.1",
     ],
-    "web": [
-        "net10.0",
-        "net5.0",
-        "net6.0",
-        "net7.0",
-        "net8.0",
-        "net9.0",
-        "netcoreapp2.1",
-        "netcoreapp2.2",
-        "netcoreapp3.0",
-        "netcoreapp3.1",
-    ],
-    "windowsdesktop": [
+    # And every .NET Framework, whose own reference assemblies carry Windows
+    # Forms and WPF, and .NET Standard, which they leave alone.
+    WINDOWSDESKTOP_FRAMEWORK: [
         "net10.0",
         "net5.0",
         "net6.0",
@@ -103,8 +130,15 @@ _BAND_TFMS = {
         "net9.0",
         "netcoreapp3.0",
         "netcoreapp3.1",
-    ],
+    ] + _NETFRAMEWORK_TFMS + _NETSTANDARD_TFMS,
 }
+
+def _expected_targeting_tfms(frameworks):
+    tfms = _CORE_TFMS + _NETFRAMEWORK_TFMS + _NETSTANDARD_TFMS
+    for framework in frameworks:
+        tfms = [tfm for tfm in tfms if tfm in _FRAMEWORK_TFMS[framework]]
+
+    return sorted(tfms)
 
 _RUNTIME_PACK_RIDS = {
     "net10.0": _ALL_RIDS,
@@ -117,45 +151,54 @@ _RUNTIME_PACK_RIDS = {
     "netcoreapp3.1": _PRE_NET6_RIDS,
 }
 
-# ASP.NET Core did not ship a win-arm64 runtime pack for 3.0.
-_WEB_RUNTIME_PACK_RIDS = {
-    "netcoreapp3.0": [rid for rid in _PRE_NET6_RIDS if rid != "win-arm64"],
+# The runtime identifiers each shared framework ships a runtime pack for, where
+# they differ from Microsoft.NETCore.App's.
+_FRAMEWORK_RIDS = {
+    # ASP.NET Core did not ship a win-arm64 runtime pack for 3.0.
+    ASPNETCORE_FRAMEWORK: {
+        "netcoreapp3.0": [rid for rid in _PRE_NET6_RIDS if rid != "win-arm64"],
+    },
+    # Windows Forms and WPF ship for Windows alone, and for Arm64 from .NET 5.
+    WINDOWSDESKTOP_FRAMEWORK: {
+        "netcoreapp3.0": ["win-x64"],
+        "netcoreapp3.1": ["win-x64"],
+    },
 }
 
-_WINDOWSDESKTOP_RUNTIME_PACK_RIDS = {
-    "net10.0": ["win-arm64", "win-x64"],
-    "net5.0": ["win-arm64", "win-x64"],
-    "net6.0": ["win-arm64", "win-x64"],
-    "net7.0": ["win-arm64", "win-x64"],
-    "net8.0": ["win-arm64", "win-x64"],
-    "net9.0": ["win-arm64", "win-x64"],
-    "netcoreapp3.0": ["win-x64"],
-    "netcoreapp3.1": ["win-x64"],
-}
+def _expected_runtime_rids(tfm, frameworks):
+    rids = _RUNTIME_PACK_RIDS.get(tfm, _ALL_RIDS)
+    for framework in frameworks:
+        shipped = _FRAMEWORK_RIDS[framework].get(tfm)
+        if shipped == None:
+            shipped = [rid for rid in rids if rid.startswith("win-")] if framework == WINDOWSDESKTOP_FRAMEWORK else rids
+        rids = [rid for rid in rids if rid in shipped]
+
+    return rids
 
 def _targeting_table_test_impl(ctx):
     env = unittest.begin(ctx)
 
-    for project_sdk in PROJECT_SDKS:
-        bands = _BAND_TFMS[project_sdk]
+    for frameworks in TARGETING_FRAMEWORK_SETS:
+        key = frameworks_key(frameworks)
+        expected = _expected_targeting_tfms(frameworks)
         asserts.equals(
             env,
-            bands,
-            sorted([tfm for tfm in targeting_pack_tfms(project_sdk) if tfm in bands]),
-            "bands with a targeting pack for the {} SDK".format(project_sdk),
+            expected,
+            sorted([tfm for tfm in targeting_pack_tfms(frameworks) if tfm in _CORE_TFMS + _NETFRAMEWORK_TFMS + _NETSTANDARD_TFMS]),
+            "bands with a targeting pack for {}".format(key),
         )
         asserts.equals(
             env,
             _DECLARED_AHEAD,
-            targeting_pack_tfms(project_sdk)[-len(_DECLARED_AHEAD):],
-            "releases declared ahead with a targeting pack for the {} SDK".format(project_sdk),
+            targeting_pack_tfms(frameworks)[-len(_DECLARED_AHEAD):],
+            "releases declared ahead with a targeting pack for {}".format(key),
         )
 
-        for tfm in targeting_pack_tfms(project_sdk):
+        for tfm in targeting_pack_tfms(frameworks):
             asserts.true(
                 env,
-                len(targeting_packs(tfm, project_sdk, bands = PACK_BANDS)) > 0,
-                "{}/{} resolves to at least one targeting pack".format(project_sdk, tfm),
+                len(targeting_packs(tfm, frameworks, bands = PACK_BANDS)) > 0,
+                "{}/{} resolves to at least one targeting pack".format(key, tfm),
             )
 
     return unittest.end(env)
@@ -167,25 +210,22 @@ def _runtime_table_test_impl(ctx):
 
     asserts.equals(env, sorted(_RUNTIME_PACK_RIDS.keys() + _DECLARED_AHEAD), sorted(runtime_pack_tfms()))
 
-    for project_sdk in PROJECT_SDKS:
+    for frameworks in RUNTIME_FRAMEWORK_SETS:
+        key = frameworks_key(frameworks, profiles = False)
         for tfm in runtime_pack_tfms():
-            expected = _RUNTIME_PACK_RIDS.get(tfm, _ALL_RIDS)
-            if project_sdk == WEB_SDK:
-                expected = _WEB_RUNTIME_PACK_RIDS.get(tfm, expected)
-            elif project_sdk == WINDOWSDESKTOP_SDK:
-                expected = _WINDOWSDESKTOP_RUNTIME_PACK_RIDS.get(tfm, ["win-arm64", "win-x64"])
+            expected = _expected_runtime_rids(tfm, frameworks)
             asserts.equals(
                 env,
                 expected,
-                sorted(runtime_pack_rids(tfm, project_sdk)),
-                "runtime pack RIDs for {}/{}".format(project_sdk, tfm),
+                sorted(runtime_pack_rids(tfm, frameworks)),
+                "runtime pack RIDs for {}/{}".format(key, tfm),
             )
 
             for rid in expected:
                 asserts.true(
                     env,
-                    len(runtime_packs(tfm, rid, project_sdk, bands = PACK_BANDS)) > 0,
-                    "{}/{}/{} resolves to at least one runtime pack".format(project_sdk, tfm, rid),
+                    len(runtime_packs(tfm, rid, frameworks, bands = PACK_BANDS)) > 0,
+                    "{}/{}/{} resolves to at least one runtime pack".format(key, tfm, rid),
                 )
 
     return unittest.end(env)
@@ -232,57 +272,70 @@ def _crossgen2_table_test_impl(ctx):
 
 _crossgen2_table_test = unittest.make(_crossgen2_table_test_impl)
 
+_WEB = {ASPNETCORE_FRAMEWORK: None}
+_WPF = {WINDOWSDESKTOP_FRAMEWORK: ["WPF"]}
+
 # One case per package id shape.
 _TARGETING_PACKS = [
-    (("netstandard2.0", DEFAULT_SDK), [("NETStandard.Library", "2.0.3")]),
-    (("netstandard2.1", DEFAULT_SDK), [("NETStandard.Library.Ref", "2.1.0")]),
-    (("net48", DEFAULT_SDK), [("Microsoft.NETFramework.ReferenceAssemblies.net48", "1.0.3")]),
-    (("netcoreapp2.1", DEFAULT_SDK), [("Microsoft.NETCore.App", "2.1.30")]),
-    (("net10.0", DEFAULT_SDK), [("Microsoft.NETCore.App.Ref", "10.0.14")]),
-    (("net8.0", WEB_SDK), [
+    (("netstandard2.0", {}), [("NETStandard.Library", "2.0.3")]),
+    (("netstandard2.1", {}), [("NETStandard.Library.Ref", "2.1.0")]),
+    (("net48", {}), [("Microsoft.NETFramework.ReferenceAssemblies.net48", "1.0.3")]),
+    (("netcoreapp2.1", {}), [("Microsoft.NETCore.App", "2.1.30")]),
+    (("net10.0", {}), [("Microsoft.NETCore.App.Ref", "10.0.14")]),
+    (("net8.0", _WEB), [
         ("Microsoft.AspNetCore.App.Ref", "8.0.33"),
         ("Microsoft.NETCore.App.Ref", "8.0.33"),
     ]),
-    (("netcoreapp2.1", WEB_SDK), [
+    (("netcoreapp2.1", _WEB), [
         ("Microsoft.AspNetCore.App", "2.1.34"),
         ("Microsoft.NETCore.App", "2.1.30"),
     ]),
-    (("netcoreapp3.1", WEB_SDK), [
+    (("netcoreapp3.1", _WEB), [
         ("Microsoft.AspNetCore.App.Ref", "3.1.10"),
         ("Microsoft.NETCore.App.Ref", "3.1.0"),
     ]),
-    (("net48", WINDOWSDESKTOP_SDK), [("Microsoft.NETFramework.ReferenceAssemblies.net48", "1.0.3")]),
-    (("net10.0", WINDOWSDESKTOP_SDK), [
+    # .NET Framework's own reference assemblies carry Windows Forms and WPF.
+    (("net48", _WPF), [("Microsoft.NETFramework.ReferenceAssemblies.net48", "1.0.3")]),
+    (("net48", _WEB), []),
+    (("netstandard2.0", _WPF), [("NETStandard.Library", "2.0.3")]),
+    (("netstandard2.0", _WEB), []),
+    (("netcoreapp2.1", _WPF), []),
+    (("net10.0", _WPF), [
         ("Microsoft.WindowsDesktop.App.Ref", "10.0.14"),
         ("Microsoft.NETCore.App.Ref", "10.0.14"),
     ]),
-    (("net10.0", "nonsense"), []),
+    (("net10.0", _WEB | _WPF), [
+        ("Microsoft.AspNetCore.App.Ref", "10.0.14"),
+        ("Microsoft.WindowsDesktop.App.Ref", "10.0.14"),
+        ("Microsoft.NETCore.App.Ref", "10.0.14"),
+    ]),
 ]
 
 _RUNTIME_PACKS = [
-    (("net5.0", "linux-x64", DEFAULT_SDK), [("Microsoft.NETCore.App.Runtime.linux-x64", "5.0.17")]),
-    (("net10.0", "win-arm64", WEB_SDK), [
+    (("net5.0", "linux-x64", {}), [("Microsoft.NETCore.App.Runtime.linux-x64", "5.0.17")]),
+    (("net10.0", "win-arm64", _WEB), [
         ("Microsoft.AspNetCore.App.Runtime.win-arm64", "10.0.14"),
         ("Microsoft.NETCore.App.Runtime.win-arm64", "10.0.14"),
     ]),
-    (("net10.0", "win-x64", WINDOWSDESKTOP_SDK), [
+    (("net10.0", "win-x64", _WPF), [
         ("Microsoft.WindowsDesktop.App.Runtime.win-x64", "10.0.14"),
         ("Microsoft.NETCore.App.Runtime.win-x64", "10.0.14"),
     ]),
+    (("net10.0", "linux-x64", _WPF), []),
 ]
 
 def _pack_ids_test_impl(ctx):
     env = unittest.begin(ctx)
 
-    for ((tfm, project_sdk), expected) in _TARGETING_PACKS:
-        asserts.equals(env, expected, targeting_packs(tfm, project_sdk, bands = _BANDS), "{}/{}".format(project_sdk, tfm))
+    for ((tfm, frameworks), expected) in _TARGETING_PACKS:
+        asserts.equals(env, expected, targeting_packs(tfm, frameworks, bands = _BANDS), "{}/{}".format(frameworks_key(frameworks), tfm))
 
-    for ((tfm, rid, project_sdk), expected) in _RUNTIME_PACKS:
+    for ((tfm, rid, frameworks), expected) in _RUNTIME_PACKS:
         asserts.equals(
             env,
             expected,
-            runtime_packs(tfm, rid, project_sdk, bands = _BANDS),
-            "{}/{}/{}".format(project_sdk, tfm, rid),
+            runtime_packs(tfm, rid, frameworks, bands = _BANDS),
+            "{}/{}/{}".format(frameworks_key(frameworks), tfm, rid),
         )
 
     asserts.equals(
@@ -395,7 +448,7 @@ def _sdk_bands_test_impl(ctx):
         versions = {
             field: version
             for (field, version) in bands[tfm].items()
-            if field != "rids"
+            if not field.endswith("rids")
         }
         asserts.equals(
             env,
@@ -411,10 +464,55 @@ def _sdk_bands_test_impl(ctx):
 
 _sdk_bands_test = unittest.make(_sdk_bands_test_impl)
 
+def _framework_references_test_impl(ctx):
+    env = unittest.begin(ctx)
+
+    asserts.equals(env, {}, resolve_framework_references("default", []))
+    asserts.equals(env, _WEB, resolve_framework_references("web", []))
+    asserts.equals(env, _WEB, resolve_framework_references("razor", []))
+    asserts.equals(env, _WEB, resolve_framework_references("default", ["Microsoft.AspNetCore.App"]))
+    asserts.equals(env, _WPF, resolve_framework_references("default", ["Microsoft.WindowsDesktop.App.WPF"]))
+
+    # References to one framework add up: profiles to the union of them, and
+    # one without a profile to the whole framework.
+    asserts.equals(
+        env,
+        {WINDOWSDESKTOP_FRAMEWORK: ["WPF", "WindowsForms"]},
+        resolve_framework_references("default", ["Microsoft.WindowsDesktop.App.WindowsForms", "Microsoft.WindowsDesktop.App.WPF"]),
+    )
+    asserts.equals(
+        env,
+        {WINDOWSDESKTOP_FRAMEWORK: None},
+        resolve_framework_references("default", ["Microsoft.WindowsDesktop.App.WPF", "Microsoft.WindowsDesktop.App"]),
+    )
+
+    # Packages are keyed by the frameworks, in a fixed order, profiles only
+    # where they narrow the targeting packs.
+    asserts.equals(env, "default", frameworks_key({}))
+    asserts.equals(env, "aspnetcore_windowsdesktop.wpf.windowsforms", frameworks_key(_WEB | {WINDOWSDESKTOP_FRAMEWORK: ["WPF", "WindowsForms"]}))
+    asserts.equals(env, "aspnetcore_windowsdesktop", frameworks_key(_WEB | _WPF, profiles = False))
+    asserts.equals(env, 10, len(TARGETING_FRAMEWORK_SETS))
+    asserts.equals(env, 4, len(RUNTIME_FRAMEWORK_SETS))
+    asserts.equals(
+        env,
+        len(TARGETING_FRAMEWORK_SETS),
+        len({frameworks_key(frameworks): None for frameworks in TARGETING_FRAMEWORK_SETS}),
+        "every set of frameworks has a package of its own",
+    )
+
+    asserts.equals(env, {"Microsoft.WindowsDesktop.App.Ref": ["WPF"]}, targeting_pack_profiles("net10.0", _WPF))
+    asserts.equals(env, {}, targeting_pack_profiles("net10.0", {WINDOWSDESKTOP_FRAMEWORK: None}))
+    asserts.equals(env, {}, targeting_pack_profiles("net48", _WPF))
+
+    return unittest.end(env)
+
+_framework_references_test = unittest.make(_framework_references_test_impl)
+
 def packs_test_suite(name):
     unittest.suite(
         name,
         _apphost_table_test,
+        _framework_references_test,
         _crossgen2_table_test,
         _pack_ids_test,
         _runtime_table_test,

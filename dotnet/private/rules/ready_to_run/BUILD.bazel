@@ -11,10 +11,11 @@ string_setting(
     visibility = ["//visibility:public"],
 )
 
-# The project SDK of the published binary, which decides whether that
-# framework includes ASP.NET Core.
+# The shared frameworks the published binary runs on beyond Microsoft.NETCore.App,
+# as `frameworks_key` names its runtime packs, which decide what that framework
+# includes.
 string_setting(
-    name = "project_sdk",
+    name = "shared_frameworks",
     build_setting_default = "",
     scope = "target",
     visibility = ["//visibility:public"],

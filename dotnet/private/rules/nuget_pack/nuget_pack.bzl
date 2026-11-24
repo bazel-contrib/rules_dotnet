@@ -117,7 +117,7 @@ def _check_built_framework(ctx, target, compile_info, tfm):
     if built != tfm:
         _fail_wrong_framework(ctx.label, target.label, tfm, "{} for it".format(built))
 
-def _pack_tool(ctx, tfm, target, compile_info, runtime_info):
+def _pack_tool(ctx, tfm, target, runtime_info):
     """The files of a tool package for one framework, and where they go."""
     if not is_core_framework(tfm):
         fail("{}: a .NET tool runs on .NET; {} is not a .NET framework".format(ctx.label, tfm))
@@ -145,7 +145,7 @@ def _pack_tool(ctx, tfm, target, compile_info, runtime_info):
     runtimeconfig = ctx.actions.declare_file("{}/{}/{}.runtimeconfig.json".format(ctx.label.name, tfm, name))
     ctx.actions.write(runtimeconfig, json.encode(generate_runtimeconfig(
         target_framework = tfm,
-        project_sdk = compile_info.project_sdk,
+        frameworks = binary_info.runtime_frameworks,
         is_self_contained = False,
         roll_forward_behavior = ctx.attr.roll_forward_behavior,
         framework_version = binary_info.framework_version,
@@ -289,7 +289,7 @@ def _nuget_pack_impl(ctx):
                   "one id and one version").format(ctx.label, target.label, runtime_info.name, runtime_info.version, tfm, identity.name, identity.version))
 
         if is_tool:
-            entries += _pack_tool(ctx, tfm, target, compile_info, runtime_info)
+            entries += _pack_tool(ctx, tfm, target, runtime_info)
             tool_directories.append(tool_directory(tfm))
             groups[tfm] = dependency_group(tfm, [])
             continue
@@ -322,7 +322,7 @@ def _nuget_pack_impl(ctx):
         group = dependency_group(tfm, plan.dependencies)
         if first_of_tfm:
             groups[tfm] = group
-            references = framework_reference_group(tfm, compile_info.project_sdk)
+            references = framework_reference_group(tfm, getattr(runtime_info, "framework_references", None) or [])
             if references != None:
                 framework_references.append(references)
         elif groups[tfm] != group:

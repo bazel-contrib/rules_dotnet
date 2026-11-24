@@ -2,13 +2,14 @@
 
 load("@bazel_skylib//lib:dicts.bzl", "dicts")
 load("//dotnet/private:common.bzl", "get_highest_compatible_runtime_identifier")
+load("//dotnet/private/sdk:frameworks.bzl", "base_framework")
 load("//dotnet/private/sdk:packs.bzl", "NATIVEAOT_PACK_LOOKUP_TABLE")
 load("//dotnet/private/transitions:common.bzl", "NO_READY_TO_RUN")
 
 _SETTING = "//dotnet/private/sdk/nativeaot_packs:nativeaot_pack"
 
 def _impl(settings, _attr):
-    by_rid = NATIVEAOT_PACK_LOOKUP_TABLE.get(settings["//dotnet:target_framework"], {})
+    by_rid = NATIVEAOT_PACK_LOOKUP_TABLE.get(base_framework(settings["//dotnet:target_framework"]), {})
     rid = get_highest_compatible_runtime_identifier(settings["//dotnet:rid"], by_rid.keys())
 
     # A framework or platform without a pack keeps the empty default, and the

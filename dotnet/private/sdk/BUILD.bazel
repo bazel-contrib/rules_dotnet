@@ -62,9 +62,16 @@ bzl_library(
     srcs = ["tool_pack.bzl"],
     visibility = ["//dotnet:__subpackages__"],
     deps = [
+        ":frameworks",
         ":packs",
         "//dotnet/private:providers",
     ],
+)
+
+bzl_library(
+    name = "framework_list",
+    srcs = ["framework_list.bzl"],
+    visibility = ["//dotnet:__subpackages__"],
 )
 
 bzl_library(

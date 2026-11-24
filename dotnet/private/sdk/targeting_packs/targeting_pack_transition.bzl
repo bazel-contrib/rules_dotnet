@@ -1,20 +1,24 @@
 "A transition that transitions between compatible target frameworks"
 
 load("@bazel_skylib//lib:dicts.bzl", "dicts")
-load("//dotnet/private/sdk:packs.bzl", "TARGETING_PACK_LOOKUP_TABLE", "normalize_project_sdk")
+load("//dotnet/private/sdk:frameworks.bzl", "base_framework")
+load("//dotnet/private/sdk:packs.bzl", "TARGETING_PACK_LOOKUP_TABLE", "frameworks_key", "resolve_framework_references")
 load("//dotnet/private/transitions:common.bzl", "NO_READY_TO_RUN")
 
 def _impl(settings, attr):
-    project_sdk = normalize_project_sdk(attr.project_sdk)
+    frameworks = resolve_framework_references(attr.project_sdk, getattr(attr, "framework_references", []))
     incoming_target_framework = settings["//dotnet:target_framework"]
 
-    supported_tfms = TARGETING_PACK_LOOKUP_TABLE[attr._pack_set].get(project_sdk)
-    if supported_tfms:
-        targeting_pack = supported_tfms.get(incoming_target_framework)
-        if targeting_pack:
-            return dicts.add({"//dotnet/private/sdk/targeting_packs:targeting_pack": targeting_pack}, NO_READY_TO_RUN)
+    # A platform specific framework, such as `net8.0-windows`, compiles
+    # against the packs of the framework it is specific to.
+    targeting_pack = TARGETING_PACK_LOOKUP_TABLE[attr._pack_set].get(frameworks_key(frameworks), {}).get(base_framework(incoming_target_framework))
+    if targeting_pack:
+        return dicts.add({"//dotnet/private/sdk/targeting_packs:targeting_pack": targeting_pack}, NO_READY_TO_RUN)
 
-    fail("No targeting pack found for project SDK/target framework: {}/{}".format(project_sdk, incoming_target_framework))
+    fail("No targeting pack found for the shared frameworks {} and target framework {}".format(
+        ", ".join(["Microsoft.NETCore.App"] + frameworks.keys()),
+        incoming_target_framework,
+    ))
 
 # A pack's assemblies are never compiled to ReadyToRun.
 targeting_pack_transition = transition(

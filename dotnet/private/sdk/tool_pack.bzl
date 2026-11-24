@@ -2,6 +2,7 @@
 
 load("//dotnet/private:common.bzl", "copy_files_to_dir")
 load("//dotnet/private:providers.bzl", "DotnetToolPackInfo")
+load("//dotnet/private/sdk:frameworks.bzl", "base_framework")
 load("//dotnet/private/sdk:packs.bzl", "NEWEST_BAND")
 
 def tool_pack_rule(tool_name):
@@ -53,7 +54,7 @@ _HOST_TOOL_BAND = "//dotnet/private/sdk:host_tool_band"
 def _host_tool_band_impl(settings, attr):
     bands = attr.bands
 
-    return {_HOST_TOOL_BAND: bands.get(settings["//dotnet:target_framework"]) or bands[NEWEST_BAND]}
+    return {_HOST_TOOL_BAND: bands.get(base_framework(settings["//dotnet:target_framework"])) or bands[NEWEST_BAND]}
 
 # A label setting rather than a select, as for the other packs, so that an
 # unconfigured query sees only the setting's default and fetches no tool pack.

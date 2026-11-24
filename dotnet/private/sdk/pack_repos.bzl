@@ -29,22 +29,24 @@ load("//dotnet/private/sdk:pack_bands.bzl", "PACK_BANDS", "pack_bands", "sdk_ban
 load(
     "//dotnet/private/sdk:packs.bzl",
     "APPHOST_PACK_REPO",
+    "ASPNETCORE_FRAMEWORK",
     "BOOTSTRAP_PACKS",
     "CROSSGEN2_PACK_REPO",
     "ILCOMPILER_PACK_REPO",
     "NATIVEAOT_PACK_REPO",
     "NEWEST_BAND",
-    "PROJECT_SDKS",
+    "RUNTIME_FRAMEWORK_SETS",
     "RUNTIME_PACK_REPO",
+    "TARGETING_FRAMEWORK_SETS",
     "TARGETING_PACK_REPO",
     "USER_PACKS",
     "WASM_PACK_REPO",
     "WASM_RID",
-    "WEB_SDK",
     "aot_pack_rids",
     "aot_pack_tfms",
     "apphost_pack",
     "crossgen2_pack",
+    "frameworks_key",
     "host_platform_setting",
     "host_rids",
     "host_tool_tfms",
@@ -54,6 +56,7 @@ load(
     "runtime_pack_rids",
     "runtime_pack_tfms",
     "runtime_packs",
+    "targeting_pack_profiles",
     "targeting_pack_tfms",
     "targeting_packs",
     "wasm_pack_tfms",
@@ -81,7 +84,7 @@ def _reference_packs(tfm):
     band's other packs either, and the reference packs are the first to stop
     being serviced. ilc ships from a build of its own, so it is checked too.
     """
-    packs = [id for (id, _) in targeting_packs(tfm, WEB_SDK, bands = PACK_BANDS)]
+    packs = [id for (id, _) in targeting_packs(tfm, {ASPNETCORE_FRAMEWORK: None}, bands = PACK_BANDS)]
 
     ilcompiler = ilcompiler_pack(tfm, "linux-x64", bands = PACK_BANDS)
     if ilcompiler != None:
@@ -149,7 +152,7 @@ def _unknown(packs):
     return any([version == None for (_, version) in packs])
 
 def _targeting(pack_sets):
-    """One package per (pack set, project SDK), each at its own SDK's bands.
+    """One package per (pack set, set of shared frameworks), each at its own SDK's bands.
 
     Args:
       pack_sets: The SDK behind each pack set, as a struct of its `version`
@@ -162,11 +165,11 @@ def _targeting(pack_sets):
     build_files = {}
 
     for (pack_set, sdk) in pack_sets.items():
-        for project_sdk in PROJECT_SDKS:
+        for frameworks in TARGETING_FRAMEWORK_SETS:
             targets = []
 
-            for tfm in targeting_pack_tfms(project_sdk):
-                packs = targeting_packs(tfm, project_sdk, bands = sdk.bands)
+            for tfm in targeting_pack_tfms(frameworks):
+                packs = targeting_packs(tfm, frameworks, bands = sdk.bands)
                 if _unknown(packs):
                     targets.append(_too_new(tfm, tfm, sdk.version))
                     continue
@@ -175,10 +178,16 @@ def _targeting(pack_sets):
                 targets.append(("targeting_pack", {
                     "name": tfm,
                     "packs": [nuget_package_label(id, version) for (id, version) in packs],
+                    # `pack id:profile`, as a dict would render as a select.
+                    "profiles": [
+                        "{}:{}".format(id, profile)
+                        for (id, profiles) in targeting_pack_profiles(tfm, frameworks).items()
+                        for profile in profiles
+                    ],
                     "target_framework": tfm,
                 }))
 
-            build_files["{}/{}/BUILD.bazel".format(pack_set, project_sdk)] = _build_file(targets)
+            build_files["{}/{}/BUILD.bazel".format(pack_set, frameworks_key(frameworks))] = _build_file(targets)
 
     return struct(build_files = build_files, packages = collections.uniq(packages))
 
@@ -186,12 +195,12 @@ def _runtime(sdk):
     packages = []
     build_files = {}
 
-    for project_sdk in PROJECT_SDKS:
+    for frameworks in RUNTIME_FRAMEWORK_SETS:
         for tfm in runtime_pack_tfms():
             targets = []
 
-            for rid in runtime_pack_rids(tfm, project_sdk):
-                packs = runtime_packs(tfm, rid, project_sdk, bands = sdk.bands)
+            for rid in runtime_pack_rids(tfm, frameworks):
+                packs = runtime_packs(tfm, rid, frameworks, bands = sdk.bands)
                 if _unknown(packs):
                     targets.append(_too_new(rid, tfm, sdk.version))
                     continue
@@ -204,7 +213,7 @@ def _runtime(sdk):
                     "target_framework": tfm,
                 }))
 
-            build_files["{}/{}/BUILD.bazel".format(project_sdk, tfm)] = _build_file(targets)
+            build_files["{}/{}/BUILD.bazel".format(frameworks_key(frameworks, profiles = False), tfm)] = _build_file(targets)
 
     return struct(build_files = build_files, packages = collections.uniq(packages))
 

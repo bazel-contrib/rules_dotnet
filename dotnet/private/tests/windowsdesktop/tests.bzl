@@ -1,60 +1,354 @@
-"Tests for windowsdesktop project_sdk and winexe target."
+"Tests for Windows Forms, WPF and Windows GUI executables."
 
-load("//dotnet:defs.bzl", "csharp_binary", "csharp_nunit_test", "fsharp_binary", "publish_binary")
+load("@bazel_skylib//lib:unittest.bzl", "analysistest", "asserts")
+load("//dotnet:defs.bzl", "csharp_binary", "csharp_library", "csharp_nunit_test", "fsharp_binary", "publish_binary")
 load("//dotnet/private/tests:utils.bzl", "action_args_test")
+
+_WINDOWS_ONLY = ["@platforms//os:windows"]
+
+def _files(argv, prefix, basename):
+    """The arguments that start with `prefix` and name a file called `basename`."""
+    return [
+        arg
+        for arg in argv
+        if arg.startswith(prefix) and (arg.rstrip("\"").endswith("/" + basename) or arg.rstrip("\"").endswith("\\" + basename))
+    ]
+
+def _compile_inputs_test_impl(ctx):
+    env = analysistest.begin(ctx)
+
+    actions = [action for action in analysistest.target_actions(env) if action.mnemonic == "CSharpCompile"]
+    asserts.true(env, len(actions) > 0, "the target compiles C#")
+
+    for action in actions:
+        for basename in ctx.attr.references:
+            asserts.equals(env, 1, len(_files(action.argv, "-r:", basename)), "references {} once".format(basename))
+        for basename in ctx.attr.no_references:
+            asserts.equals(env, [], _files(action.argv, "-r:", basename), "does not reference {}".format(basename))
+        for (basename, package) in ctx.attr.reference_from.items():
+            for arg in _files(action.argv, "-r:", basename):
+                asserts.true(env, package in arg.lower(), "takes {} from {}: {}".format(basename, package, arg))
+        for basename in ctx.attr.analyzers:
+            asserts.equals(env, 1, len(_files(action.argv, "/analyzer:", basename)), "runs {}".format(basename))
+        for basename in ctx.attr.no_analyzers:
+            asserts.equals(env, [], _files(action.argv, "/analyzer:", basename), "does not run {}".format(basename))
+
+    return analysistest.end(env)
+
+# What a compilation references and which analyzers it runs, by file name.
+_compile_inputs_test = analysistest.make(
+    _compile_inputs_test_impl,
+    attrs = {
+        "references": attr.string_list(),
+        "no_references": attr.string_list(),
+        "reference_from": attr.string_dict(doc = "The package a reference has to come from, by file name."),
+        "analyzers": attr.string_list(),
+        "no_analyzers": attr.string_list(),
+    },
+)
+
+def _failure_test_impl(ctx):
+    env = analysistest.begin(ctx)
+
+    for fragment in ctx.attr.expected_message_fragments:
+        asserts.expect_failure(env, fragment)
+
+    return analysistest.end(env)
+
+_failure_test = analysistest.make(
+    _failure_test_impl,
+    expect_failure = True,
+    attrs = {
+        "expected_message_fragments": attr.string_list(mandatory = True),
+    },
+)
 
 # buildifier: disable=function-docstring
 # buildifier: disable=unnamed-macro
 def windowsdesktop_tests():
+    # An app on all of Microsoft.WindowsDesktop.App, as `<UseWPF>` and
+    # `<UseWindowsForms>` together have it.
     csharp_binary(
-        name = "winexe_csharp_app",
-        srcs = ["Program.cs"],
-        project_sdk = "windowsdesktop",
+        name = "app",
+        srcs = ["app/Program.cs"],
+        framework_references = ["Microsoft.WindowsDesktop.App"],
+        target_frameworks = ["net10.0-windows"],
+        winexe = True,
+    )
+
+    action_args_test(
+        name = "app_compile_args_test",
+        target_under_test = ":app",
+        action_mnemonic = "CSharpCompile",
+        expected_partial_args = [
+            "/target:winexe",
+            "/d:NET10_0",
+            "/d:WINDOWS",
+            "/d:WINDOWS7_0",
+            "/d:WINDOWS7_0_OR_GREATER",
+        ],
+        expected_nonexistent_partial_args = ["/target:exe"],
+    )
+
+    _compile_inputs_test(
+        name = "app_compile_inputs_test",
+        target_under_test = ":app",
+        references = [
+            "PresentationCore.dll",
+            "System.Windows.Forms.dll",
+            # Only part of the whole framework, not of either profile.
+            "WindowsFormsIntegration.dll",
+            # Both shared frameworks ship these; Windows Forms' is newer.
+            "System.Drawing.dll",
+            "Microsoft.VisualBasic.dll",
+        ],
+        reference_from = {
+            "System.Drawing.dll": "windowsdesktop.app.ref",
+            "Microsoft.VisualBasic.dll": "windowsdesktop.app.ref",
+        },
+        analyzers = ["System.Windows.Forms.Analyzers.CSharp.dll"],
+    )
+
+    # WPF alone, as `<UseWPF>` has it: none of Windows Forms.
+    csharp_library(
+        name = "wpf",
+        srcs = ["wpf/Wpf.cs"],
+        framework_references = ["Microsoft.WindowsDesktop.App.WPF"],
+        target_frameworks = ["net10.0-windows"],
+    )
+
+    _compile_inputs_test(
+        name = "wpf_compile_inputs_test",
+        target_under_test = ":wpf",
+        references = ["PresentationCore.dll", "WindowsBase.dll", "System.Xaml.dll"],
+        # Microsoft.NETCore.App ships a facade of it too; WPF's is newer.
+        reference_from = {"WindowsBase.dll": "windowsdesktop.app.ref"},
+        no_references = ["System.Windows.Forms.dll", "WindowsFormsIntegration.dll"],
+        no_analyzers = [
+            "System.Windows.Forms.Analyzers.dll",
+            "System.Windows.Forms.Analyzers.CSharp.dll",
+        ],
+    )
+
+    # Windows Forms alone, as `<UseWindowsForms>` has it: none of WPF.
+    csharp_library(
+        name = "winforms",
+        srcs = ["winforms/WinForms.cs"],
+        framework_references = ["Microsoft.WindowsDesktop.App.WindowsForms"],
+        target_frameworks = ["net10.0-windows"],
+    )
+
+    _compile_inputs_test(
+        name = "winforms_compile_inputs_test",
+        target_under_test = ":winforms",
+        # Without WPF, `WindowsBase.dll` is Microsoft.NETCore.App's facade.
+        references = ["System.Windows.Forms.dll", "WindowsBase.dll"],
+        reference_from = {"WindowsBase.dll": "netcore.app.ref"},
+        no_references = ["PresentationCore.dll", "System.Xaml.dll", "WindowsFormsIntegration.dll"],
+        analyzers = ["System.Windows.Forms.Analyzers.CSharp.dll"],
+    )
+
+    # An app that references no shared framework itself, but depends on a
+    # library that references WPF.
+    csharp_binary(
+        name = "uses_wpf",
+        srcs = ["uses_wpf/Program.cs"],
+        target_frameworks = ["net10.0-windows"],
+        deps = [":wpf"],
+    )
+
+    # WPF leaves a .NET Standard build alone, so a library can target it
+    # beside a Windows specific framework, and a plain app can use that build.
+    csharp_library(
+        name = "multi",
+        srcs = ["multi/Multi.cs"],
+        framework_references = ["Microsoft.WindowsDesktop.App.WPF"],
+        target_frameworks = [
+            "netstandard2.0",
+            "net10.0-windows",
+        ],
+    )
+
+    csharp_binary(
+        name = "uses_multi",
+        srcs = ["multi/Program.cs"],
+        target_frameworks = ["net10.0"],
+        deps = [":multi"],
+    )
+
+    native.filegroup(
+        name = "uses_multi_runtimeconfig",
+        srcs = [":uses_multi"],
+        output_group = "runtimeconfig_json",
+    )
+
+    native.filegroup(
+        name = "uses_wpf_runtimeconfig",
+        srcs = [":uses_wpf"],
+        output_group = "runtimeconfig_json",
+    )
+
+    # A Windows GUI executable that uses neither, and its console sibling.
+    csharp_binary(
+        name = "gui",
+        srcs = ["gui/Program.cs"],
         target_frameworks = ["net10.0"],
         winexe = True,
-        tags = ["manual"],
+    )
+
+    csharp_binary(
+        name = "console",
+        srcs = ["gui/Program.cs"],
+        target_frameworks = ["net10.0"],
+    )
+
+    fsharp_binary(
+        name = "fsharp_gui",
+        srcs = ["gui/Program.fs"],
+        target_frameworks = ["net10.0"],
+        winexe = True,
+    )
+
+    action_args_test(
+        name = "fsharp_gui_compile_args_test",
+        target_under_test = ":fsharp_gui",
+        action_mnemonic = "FSharpCompile",
+        expected_partial_args = ["--target:winexe"],
+        expected_nonexistent_partial_args = ["--target:exe"],
     )
 
     publish_binary(
-        name = "winexe_csharp_publish",
-        binary = ":winexe_csharp_app",
+        name = "app_publish",
+        binary = ":app",
         runtime_identifier = "win-x64",
-        self_contained = False,
+        target_framework = "net10.0-windows",
+    )
+
+    publish_binary(
+        name = "app_self_contained",
+        binary = ":app",
+        runtime_identifier = "win-x64",
+        self_contained = True,
+        target_framework = "net10.0-windows",
+    )
+
+    publish_binary(
+        name = "app_single_file",
+        binary = ":app",
+        runtime_identifier = "win-x64",
+        self_contained = True,
+        single_file = True,
+        target_framework = "net10.0-windows",
+    )
+
+    publish_binary(
+        name = "console_publish",
+        binary = ":console",
+        runtime_identifier = "win-x64",
         target_framework = "net10.0",
-        tags = ["manual"],
     )
 
     csharp_nunit_test(
-        name = "windowsdesktop_test",
-        srcs = ["WindowsDesktopTest.cs"],
-        data = [":winexe_csharp_publish"],
-        project_sdk = "windowsdesktop",
-        target_compatible_with = ["@platforms//os:windows"],
+        name = "publish_test",
+        srcs = ["PublishTests.cs"],
+        data = [
+            ":app_publish",
+            ":app_self_contained",
+            ":app_single_file",
+            ":console_publish",
+            ":uses_multi_runtimeconfig",
+            ":uses_wpf_runtimeconfig",
+        ],
         target_frameworks = ["net10.0"],
         deps = ["//tools/runfiles"],
     )
 
-    action_args_test(
-        name = "winexe_csharp_compile_args_test",
-        target_under_test = ":winexe_csharp_app",
-        action_mnemonic = "CSharpCompile",
-        expected_partial_args = ["/target:winexe"],
-        expected_nonexistent_partial_args = ["/target:exe"],
-        expected_args_containing = ["WindowsBase.dll", "System.Windows.Forms.dll"],
+    # Runs Windows Forms and WPF, which only a Windows SDK carries.
+    csharp_nunit_test(
+        name = "run_test",
+        srcs = ["RunTests.cs"],
+        framework_references = ["Microsoft.WindowsDesktop.App"],
+        target_compatible_with = _WINDOWS_ONLY,
+        target_frameworks = ["net10.0-windows"],
     )
 
-    fsharp_binary(
-        name = "winexe_fsharp_app",
-        srcs = ["Program.fs"],
-        target_frameworks = ["net10.0"],
-        winexe = True,
+    # A NativeAOT executable gets the Windows GUI subsystem from the linker.
+    # It is only linked for Windows on Windows.
+    publish_binary(
+        name = "gui_native_aot",
+        binary = ":gui",
+        native_aot = True,
+        self_contained = True,
         tags = ["manual"],
+        target_compatible_with = _WINDOWS_ONLY,
+        target_framework = "net10.0",
     )
 
     action_args_test(
-        name = "winexe_fsharp_compile_args_test",
-        target_under_test = ":winexe_fsharp_app",
-        action_mnemonic = "FSharpCompile",
-        expected_partial_args = ["--target:winexe"],
-        expected_nonexistent_partial_args = ["--target:exe"],
+        name = "gui_native_aot_link_args_test",
+        target_under_test = ":gui_native_aot",
+        action_mnemonic = "IlcLink",
+        expected_partial_args = ["/SUBSYSTEM:WINDOWS"],
+        expected_nonexistent_partial_args = ["/SUBSYSTEM:CONSOLE"],
+        target_compatible_with = _WINDOWS_ONLY,
+    )
+
+    # What the SDK refuses.
+    csharp_library(
+        name = "wpf_without_windows_framework",
+        srcs = ["wpf/Wpf.cs"],
+        framework_references = ["Microsoft.WindowsDesktop.App.WPF"],
+        tags = ["manual"],
+        target_frameworks = ["net10.0"],
+    )
+
+    _failure_test(
+        name = "wpf_without_windows_framework_test",
+        target_under_test = ":wpf_without_windows_framework",
+        expected_message_fragments = ["use net10.0-windows rather than net10.0", "NETSDK1136"],
+    )
+
+    publish_binary(
+        name = "app_native_aot",
+        binary = ":app",
+        native_aot = True,
+        runtime_identifier = "win-x64",
+        self_contained = True,
+        tags = ["manual"],
+        target_framework = "net10.0-windows",
+    )
+
+    _failure_test(
+        name = "app_native_aot_test",
+        target_under_test = ":app_native_aot",
+        expected_message_fragments = ["native_aot cannot publish", "do not support trimming"],
+    )
+
+    publish_binary(
+        name = "app_for_linux",
+        binary = ":app",
+        runtime_identifier = "linux-x64",
+        tags = ["manual"],
+        target_framework = "net10.0-windows",
+    )
+
+    _failure_test(
+        name = "app_for_linux_test",
+        target_under_test = ":app_for_linux",
+        expected_message_fragments = ["only exists on Windows", "runtime_identifier"],
+    )
+
+    publish_binary(
+        name = "uses_wpf_self_contained",
+        binary = ":uses_wpf",
+        runtime_identifier = "win-x64",
+        self_contained = True,
+        tags = ["manual"],
+        target_framework = "net10.0-windows",
+    )
+
+    _failure_test(
+        name = "uses_wpf_self_contained_test",
+        target_under_test = ":uses_wpf_self_contained",
+        expected_message_fragments = ["Microsoft.WindowsDesktop.App", "framework_references"],
     )

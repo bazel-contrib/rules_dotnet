@@ -41,7 +41,7 @@ load(
     "ready_to_run_framework",
     "ready_to_run_references",
 )
-load("//dotnet/private/sdk:packs.bzl", "WASM_RID")
+load("//dotnet/private/sdk:packs.bzl", "WASM_RID", "WINDOWS_ONLY_FRAMEWORKS")
 load("//dotnet/private/transitions:tfm_transition.bzl", "publish_binary_transition", "tfm_transition")
 
 # How many sources one `cp` invocation takes. A self-contained publish copies
@@ -482,7 +482,11 @@ def _ilc_link(ctx, compiled, aot):
         args.add("/MERGE:.managedcode=.text")
         args.add("/MERGE:hydrated=.bss")
         args.add("/INCREMENTAL:NO")
-        args.add("/SUBSYSTEM:CONSOLE")
+
+        # As the SDK's Microsoft.NETCore.Native.Windows.targets has it, a
+        # WinExe gets the Windows GUI subsystem and keeps the console entry
+        # point, which starts the managed Main either way.
+        args.add("/SUBSYSTEM:WINDOWS" if aot.windows_gui else "/SUBSYSTEM:CONSOLE")
         args.add("/ENTRY:wmainCRTStartup")
         args.add("/NOEXP")
         args.add("/NOIMPLIB")
@@ -560,11 +564,12 @@ def _ilc_link(ctx, compiled, aot):
 
     return executable
 
-def _native_aot_executable(ctx, dll, closure, runtime_identifier, target_framework, compiler_framework):
+def _native_aot_executable(ctx, dll, closure, runtime_identifier, target_framework, compiler_framework, winexe):
     """Compiles the managed closure to native code and links it into one executable.
 
     `compiler_framework` is the framework the binary is built for, whose band
     ilc comes from. It can be lower than the `target_framework` published for.
+    `winexe` gives a Windows executable the Windows GUI subsystem.
     """
     pack = _native_tools(ctx).nativeaot_pack
 
@@ -590,6 +595,7 @@ def _native_aot_executable(ctx, dll, closure, runtime_identifier, target_framewo
         debugger_contract = "DotNetRuntimeContractDescriptor" if net11 else "DotNetRuntimeDebugHeader",
         pull_debugger_contract = net11,
         windows_system_libs = _AOT_WINDOWS_NET11_SYSTEM_LIBS if net11 else [],
+        windows_gui = winexe and target_os == "windows",
         # The executable's path; the object and the export list sit beside it
         # under their own extensions.
         prefix = "{}/aot/{}/{}".format(ctx.label.name, runtime_identifier, name),
@@ -1118,8 +1124,8 @@ def _executable_publish(ctx, executable, beside, data, dependency_layers):
         OutputGroupInfo(**output_groups),
     ]
 
-def _generate_runtimeconfig(ctx, output, target_framework, project_sdk, is_self_contained, roll_forward_behavior, runtime_pack_info, framework_version):
-    runtimeconfig_struct = generate_runtimeconfig(target_framework, project_sdk, is_self_contained, roll_forward_behavior, runtime_pack_info, framework_version)
+def _generate_runtimeconfig(ctx, output, target_framework, frameworks, is_self_contained, roll_forward_behavior, runtime_pack_info, framework_version):
+    runtimeconfig_struct = generate_runtimeconfig(target_framework, frameworks, is_self_contained, roll_forward_behavior, runtime_pack_info, framework_version)
 
     ctx.actions.write(
         output = output,
@@ -1176,13 +1182,44 @@ def _publish_binary_impl(ctx):
     if (ctx.attr.include_native_libraries_for_self_extract or ctx.attr.enable_compression_in_single_file) and not ctx.attr.single_file:
         fail("include_native_libraries_for_self_extract and enable_compression_in_single_file require single_file")
 
+    windows_only = [framework for framework in binary_info.runtime_frameworks if framework in WINDOWS_ONLY_FRAMEWORKS]
+
+    # The SDK refuses to trim Windows Forms and WPF, and NativeAOT trims.
+    if ctx.attr.native_aot and windows_only:
+        fail("{}: native_aot cannot publish {}, which runs on {}: Windows Forms and WPF do not support trimming, which NativeAOT implies.".format(
+            ctx.label,
+            _binary(ctx).label,
+            ", ".join(windows_only),
+        ))
+
     assembly_name = assembly_runtime_info.name
     runtime_pack_info = binary_info.runtime_pack_info if is_self_contained else None
     runtime_identifier = ctx.attr.runtime_identifier if ctx.attr.runtime_identifier else binary_info.runtime_pack_info.runtime_identifier
+
+    if windows_only and not (runtime_identifier or "").startswith("win-"):
+        fail("{}: {} runs on {}, which only exists on Windows. Set `runtime_identifier` to a Windows one, such as win-x64.".format(
+            ctx.label,
+            _binary(ctx).label,
+            ", ".join(windows_only),
+        ))
+
     if not runtime_identifier or (is_self_contained and not runtime_pack_info.assembly_runtime_infos):
         fail("No runtime pack found for target framework {} and runtime identifier {}".format(
             target_framework,
             ctx.attr.runtime_identifier or "<host>",
+        ))
+
+    # The binary's runtime pack carries the shared frameworks it references
+    # itself. One a dependency needs, which its runtimeconfig.json asks for,
+    # would be missing from a self-contained publish.
+    missing = [framework for framework in binary_info.runtime_frameworks if framework not in binary_info.packed_frameworks]
+    if is_self_contained and missing:
+        fail("{}: {} runs on {}, which one of its dependencies references, but a self-contained publish only carries the runtime packs of the shared frameworks the binary references itself. Add {} to the `framework_references` of {}.".format(
+            ctx.label,
+            _binary(ctx).label,
+            ", ".join(missing),
+            " and ".join(["\"{}\"".format(framework) for framework in missing]),
+            _binary(ctx).label,
         ))
     roll_forward_behavior = ctx.attr.roll_forward_behavior
 
@@ -1197,6 +1234,7 @@ def _publish_binary_impl(ctx):
             runtime_identifier,
             target_framework,
             assembly_compile_info.target_framework,
+            binary_info.winexe,
         )
 
         # A NativeAOT publish keeps nothing managed, but it still serves the
@@ -1241,7 +1279,7 @@ def _publish_binary_impl(ctx):
         ctx,
         runtimeconfig,
         target_framework,
-        assembly_compile_info.project_sdk,
+        binary_info.runtime_frameworks,
         is_self_contained,
         roll_forward_behavior,
         runtime_pack_info,

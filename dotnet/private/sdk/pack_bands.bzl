@@ -32,6 +32,9 @@ _ALL_RIDS = [
 # Apple silicon packs only exist from .NET 6 onwards.
 _PRE_NET6_RIDS = [rid for rid in _ALL_RIDS if rid != "osx-arm64"]
 
+# Microsoft.WindowsDesktop.App only ships for Windows.
+_WINDOWS_RIDS = [rid for rid in _ALL_RIDS if rid.startswith("win-")]
+
 _HISTORICAL_BANDS = {
     "netcoreapp1.0": {"ref": "1.0.16"},
     "netcoreapp1.1": {"ref": "1.1.13"},
@@ -45,6 +48,9 @@ _HISTORICAL_BANDS = {
         "rids": _PRE_NET6_RIDS,
         # ASP.NET Core did not ship a win-arm64 runtime pack for 3.0.
         "web_rids": [rid for rid in _PRE_NET6_RIDS if rid != "win-arm64"],
+        # The WindowsDesktop30RuntimePackRids the .NET SDK lists, less win-x86,
+        # which rules_dotnet does not publish for.
+        "windowsdesktop_rids": ["win-x64"],
         # crossgen2 first shipped as a package in .NET 5.
         "crossgen2_rids": [],
     },
@@ -53,6 +59,7 @@ _HISTORICAL_BANDS = {
         "web_ref": "3.1.10",
         "runtime": "3.1.32",
         "rids": _PRE_NET6_RIDS,
+        "windowsdesktop_rids": ["win-x64"],
         "crossgen2_rids": [],
     },
     "net5.0": {
@@ -60,6 +67,8 @@ _HISTORICAL_BANDS = {
         "web_ref": "5.0.0",
         "runtime": "5.0.17",
         "rids": _PRE_NET6_RIDS,
+        # Windows Forms and WPF first shipped for Arm64 in .NET 5.
+        "windowsdesktop_rids": _WINDOWS_RIDS,
         # The Crossgen2RuntimeIdentifiers the .NET SDK lists for net5.0: it
         # first shipped for x64 hosts alone.
         "crossgen2_rids": ["linux-musl-x64", "linux-x64", "win-x64"],
@@ -110,7 +119,7 @@ def sdk_band_tfms(sdk_tfm):
     return [tfm for tfm in SDK_BAND_TFMS if _major(tfm) <= _major(sdk_tfm)]
 
 def _sdk_band(tfm, version):
-    band = {"rids": _ALL_RIDS}
+    band = {"rids": _ALL_RIDS, "windowsdesktop_rids": _WINDOWS_RIDS}
 
     for (major, packs) in _PACKS_SINCE:
         if _major(tfm) >= major:

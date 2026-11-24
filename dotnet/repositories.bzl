@@ -55,16 +55,12 @@ filegroup(
         "@bazel_tools//src/conditions:windows": ["dotnet.exe"],
         "//conditions:default": ["dotnet"],
     }}),
-    data = glob(
-        [
-            "host/**/*",
-            "sdk/**/*",
-            "shared/Microsoft.AspNetCore.App/**/*",
-            "shared/Microsoft.NETCore.App/**/*",
-            "shared/Microsoft.WindowsDesktop.App/**/*",
-        ],
-        allow_empty = True,
-    ),
+    data = glob([
+        "host/**/*",
+        "sdk/**/*",
+        "shared/Microsoft.AspNetCore.App/**/*",
+        "shared/Microsoft.NETCore.App/**/*",
+    ]),
     visibility = ["//visibility:public"],
 )
 
@@ -134,6 +130,23 @@ filegroup(
             "sdk/{sdk_version}/Microsoft.Build.Tasks.Core.dll",
             "sdk/{sdk_version}/System.Resources.Extensions.dll",
         ],
+        allow_empty = True,
+    ),
+    visibility = ["//visibility:public"],
+)
+
+# The tasks that compile WPF XAML, and what they load from the SDK itself rather
+# than from beside them. The net472 copies are for MSBuild.exe on .NET
+# Framework; ours run on the .NET host.
+filegroup(
+    name = "wpf_build_tasks",
+    srcs = glob(
+        [
+            "sdk/{sdk_version}/Sdks/Microsoft.NET.Sdk.WindowsDesktop/tools/*/PresentationBuildTasks.dll",
+            "sdk/{sdk_version}/System.CodeDom.dll",
+            "sdk/{sdk_version}/System.Reflection.MetadataLoadContext.dll",
+        ],
+        exclude = ["**/net472/**"],
         allow_empty = True,
     ),
     visibility = ["//visibility:public"],
@@ -246,6 +259,7 @@ dotnet_toolchain(
     web_sdk_analyzers = ":web_sdk_analyzers",
     static_web_assets_tasks = ":static_web_assets_tasks",
     msbuild_tasks = ":msbuild_tasks",
+    wpf_build_tasks = ":wpf_build_tasks",
     msbuild_dlls = [":msbuild_framework", ":msbuild_utilities", ":msbuild_string_tools"],
     os = "{os}",
     sdk_version = "{sdk_version}",

@@ -1,0 +1,15 @@
+<Window x:Class="XamlApp.Views.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="clr-namespace:XamlApp.Converters"
+        xmlns:controls="clr-namespace:XamlControls;assembly=XamlControls"
+        Title="XAML">
+  <Window.Resources>
+    <!-- A type of this assembly, which only MarkupCompilePass2 can resolve. -->
+    <local:UpperConverter x:Key="Upper" />
+  </Window.Resources>
+  <StackPanel>
+    <TextBlock x:Name="Greeting" Text="{Binding Converter={StaticResource Upper}}" Foreground="{StaticResource Accent}" />
+    <controls:Badge x:Name="Badge" />
+  </StackPanel>
+</Window>

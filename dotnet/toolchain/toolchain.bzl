@@ -142,6 +142,7 @@ def _dotnet_toolchain_impl(ctx):
         web_sdk_analyzers = ctx.attr.web_sdk_analyzers,
         static_web_assets_tasks = ctx.attr.static_web_assets_tasks,
         msbuild_tasks = ctx.attr.msbuild_tasks,
+        wpf_build_tasks = ctx.attr.wpf_build_tasks,
         msbuild_dlls = ctx.attr.msbuild_dlls,
         strict_deps = ctx.attr._strict_deps,
         invariant_globalization = ctx.attr._invariant_globalization,
@@ -225,6 +226,16 @@ Carries the scoped CSS implementation: `ComputeCssScope`, `RewriteCss` and
         ),
         "msbuild_tasks": attr.label(
             doc = "`Microsoft.Build.Tasks.Core` and its dependencies, for `GenerateResource`.",
+            mandatory = False,
+            allow_files = True,
+            cfg = "exec",
+        ),
+        "wpf_build_tasks": attr.label(
+            doc = """`PresentationBuildTasks` from `Microsoft.NET.Sdk.WindowsDesktop`, and the
+`System.Reflection.MetadataLoadContext` it loads from the SDK.
+
+Compiles WPF XAML: `MarkupCompilePass1`, `MarkupCompilePass2` and
+`ResourcesGenerator`.""",
             mandatory = False,
             allow_files = True,
             cfg = "exec",

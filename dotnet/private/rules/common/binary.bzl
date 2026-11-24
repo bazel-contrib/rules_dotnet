@@ -6,12 +6,14 @@ load("@bazel_lib//lib:expand_make_vars.bzl", "expand_locations", "expand_variabl
 load("@bazel_skylib//rules:common_settings.bzl", "BuildSettingInfo")
 load(
     "//dotnet/private:common.bzl",
+    "check_windows_frameworks",
     "collect_transitive_content_files",
     "collect_transitive_runfiles",
     "generate_depsjson",
     "generate_runtimeconfig",
     "is_core_framework",
     "is_standard_framework",
+    "runtime_frameworks",
     "shared_framework_version",
     "to_rlocation_path",
 )
@@ -25,6 +27,7 @@ load(
     "plan_static_web_assets",
 )
 load("//dotnet/private/rules/ready_to_run:ready_to_run.bzl", "with_ready_to_run_images")
+load("//dotnet/private/sdk:packs.bzl", "resolve_framework_references")
 
 def _collect_native_dlls(assembly_runtime_info, deps):
     """Groups the native DLLs of a target and its dependencies by RID.
@@ -172,12 +175,17 @@ def build_binary(ctx, compile_action, toolchain, runtime_toolchain = None):
         default_info_files.append(staged)
         additional_runfiles.append(staged)
 
+    # NuGet packages hand their framework references on, so a dependency can
+    # bring Windows Forms or WPF to a binary that does not reference them.
+    binary_frameworks = runtime_frameworks(runtime_provider, transitive_runtime_deps)
+    check_windows_frameworks(ctx.label, tfm, binary_frameworks, transitively = True)
+
     if is_core_framework(tfm):
         framework_version = shared_framework_version(tfm, toolchain.dotnetinfo.runtime_version)
         runtimeconfig = ctx.actions.declare_file("%s/%s/%s.runtimeconfig.json" % (ctx.label.name, tfm, ctx.attr.out or ctx.attr.name))
         runtimeconfig_struct = generate_runtimeconfig(
             target_framework = tfm,
-            project_sdk = ctx.attr.project_sdk,
+            frameworks = binary_frameworks,
             is_self_contained = False,
             roll_forward_behavior = ctx.attr.roll_forward_behavior,
             framework_version = framework_version,
@@ -332,6 +340,9 @@ def build_binary(ctx, compile_action, toolchain, runtime_toolchain = None):
         apphost_pack_info = ctx.attr._apphost_pack[0][DotnetApphostPackInfo] if ctx.attr._apphost_pack else None,
         runtime_pack_info = ctx.attr._runtime_pack[0][DotnetRuntimePackInfo] if ctx.attr._runtime_pack else None,
         framework_version = framework_version,
+        runtime_frameworks = binary_frameworks,
+        packed_frameworks = resolve_framework_references(ctx.attr.project_sdk, getattr(ctx.attr, "framework_references", [])).keys(),
+        # Only the binary rules have it: a test is always a console executable.
         winexe = getattr(ctx.attr, "winexe", False),
     )
 

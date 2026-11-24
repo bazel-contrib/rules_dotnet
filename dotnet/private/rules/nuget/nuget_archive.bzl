@@ -27,10 +27,11 @@ load(
 load(
     "//dotnet/private/rules/nuget:package_metadata.bzl",
     "parse_dotnet_tool_settings",
-    "parse_framework_list",
+    "parse_framework_list_metadata",
     "parse_nuspec",
     "parse_package_overrides",
 )
+load("//dotnet/private/sdk:frameworks.bzl", "framework_platform", "normalize_platform_framework")
 load(
     "//dotnet/private/sdk:rids.bzl",
     "RUNTIME_GRAPH",
@@ -195,7 +196,7 @@ def _normalize_tfm(folder):
     Returns:
       The target framework, or None when it is not one rules_dotnet configures on.
     """
-    tfm = folder.lower()
+    tfm = normalize_platform_framework(folder.lower())
     tfm = _NON_STANDARD_TFMS.get(tfm, tfm)
 
     return tfm if tfm in FRAMEWORK_COMPATIBILITY else None
@@ -213,7 +214,8 @@ def _process_group_with_tfm(groups, group_name, file):
 
     if tfm == None:
         # A framework rules_dotnet cannot configure on: a platform specific TFM
-        # such as `net8.0-windows`, a portable profile, a Xamarin target. A
+        # other than `-windows`, such as `net8.0-android` or
+        # `net8.0-windows10.0.19041.0`, a portable profile, a Xamarin target. A
         # package whose every folder lands here supports nothing we can build,
         # which is an incompatible package.
         groups["unsupported_tfms"][folder] = True
@@ -509,6 +511,10 @@ DEPENDENCY_GROUPS = {dependency_groups}
 
 FRAMEWORK_LIST = {framework_list}
 
+FRAMEWORK_LIST_METADATA = {framework_list_metadata}
+
+FRAMEWORK_REFERENCE_GROUPS = {framework_reference_groups}
+
 TARGETING_PACK_OVERRIDES = {targeting_pack_overrides}
 
 TOOLS = {tools}
@@ -541,6 +547,7 @@ def _write_package_info(ctx, id, all_files, tool_files, prefix):
     """
     nuspec = None
     framework_list = {}
+    framework_list_metadata = {"analyzer_profiles": {}, "file_versions": {}, "profiles": {}}
     targeting_pack_overrides = {}
 
     # From .NET 11, a package lists its static web assets in a manifest of
@@ -555,19 +562,29 @@ def _write_package_info(ctx, id, all_files, tool_files, prefix):
 
         if lower.endswith(".nuspec") and file.find("/") == -1:
             nuspec = file
-        elif lower == "data/frameworklist.xml":
-            framework_list = parse_framework_list(ctx.read(prefix + file))
+        elif lower in ["data/frameworklist.xml", "data/runtimelist.xml"]:
+            # A targeting pack's FrameworkList.xml and a runtime pack's
+            # RuntimeList.xml list their assemblies the same way.
+            metadata = parse_framework_list_metadata(ctx.read(prefix + file))
+            framework_list = metadata.assemblies
+            framework_list_metadata = {
+                "analyzer_profiles": metadata.analyzer_profiles,
+                "file_versions": metadata.file_versions,
+                "profiles": metadata.profiles,
+            }
         elif lower == "data/packageoverrides.txt":
             targeting_pack_overrides = parse_package_overrides(ctx.read(prefix + file))
         elif lower == static_web_assets_manifest:
             static_web_assets_base_path = _static_web_assets_base_path(ctx.read(prefix + file))
 
     dependency_groups = {}
+    framework_reference_groups = {}
     is_dotnet_tool = False
 
     if nuspec != None:
         manifest = parse_nuspec(ctx.read(prefix + nuspec))
         dependency_groups = manifest.dependency_groups
+        framework_reference_groups = manifest.framework_reference_groups
         is_dotnet_tool = manifest.is_dotnet_tool
 
     # Tool name -> target framework -> entrypoint. Packages that are not
@@ -589,6 +606,8 @@ def _write_package_info(ctx, id, all_files, tool_files, prefix):
     ctx.file(prefix + "package_info.bzl", _PACKAGE_INFO_TEMPLATE.format(
         dependency_groups = json.encode(dependency_groups),
         framework_list = json.encode(framework_list),
+        framework_list_metadata = json.encode(framework_list_metadata),
+        framework_reference_groups = json.encode(framework_reference_groups),
         targeting_pack_overrides = json.encode(targeting_pack_overrides),
         tools = json.encode(tools),
         static_web_assets_base_path = json.encode(static_web_assets_base_path),
@@ -831,6 +850,20 @@ def _tfm_alias(name, targets_by_tfm, default_target):
     Returns:
       The alias.
     """
+
+    # A Windows specific framework has two predecessors, `net8.0-windows` both
+    # `net8.0` and `net7.0-windows`, so a configuration for `net9.0-windows`
+    # matches the branches of a package's `net9.0` and `net8.0-windows` alike,
+    # neither more specific than the other. A branch for every framework of
+    # .NET Core resolved as NuGet would leaves its own as the most specific.
+    if any([framework_platform(tfm) for tfm in targets_by_tfm]):
+        resolved = {}
+        for tfm in COR_FRAMEWORKS:
+            nearest = get_nearest_compatible_target_framework(tfm, targets_by_tfm.keys())
+            if nearest != None:
+                resolved[tfm] = targets_by_tfm[nearest]
+        targets_by_tfm = {tfm: target for (tfm, target) in targets_by_tfm.items() if tfm not in COR_FRAMEWORKS} | resolved
+
     std = []
     net = []
     cor = []

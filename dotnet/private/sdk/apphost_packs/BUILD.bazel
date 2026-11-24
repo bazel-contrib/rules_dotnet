@@ -21,6 +21,7 @@ bzl_library(
     srcs = ["apphost_pack_transition.bzl"],
     visibility = ["//dotnet:__subpackages__"],
     deps = [
+        "//dotnet/private/sdk:frameworks",
         "//dotnet/private/sdk:packs",
         "//dotnet/private/transitions:common",
         "@bazel_skylib//lib:dicts",
