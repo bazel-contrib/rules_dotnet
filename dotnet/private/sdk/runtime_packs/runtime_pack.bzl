@@ -1,7 +1,9 @@
 ".Net Runtime Pack"
 
+load("//dotnet/private:common.bzl", "shared_framework_of_runtime_pack")
 load("//dotnet/private:providers.bzl", "DotnetAssemblyRuntimeInfo", "DotnetRuntimePackInfo", "NuGetInfo")
 load("//dotnet/private/sdk:framework_list.bzl", "framework_assembly_key")
+load("//dotnet/private/sdk:packs.bzl", "NETCORE_FRAMEWORK")
 load("//dotnet/private/transitions:tfm_transition.bzl", "tfm_transition")
 
 def _assembly_name(file):
@@ -48,16 +50,44 @@ def _without_shadowed_assemblies(runtime_infos, nuget_infos):
 
     return narrowed
 
-def _runtime_pack_impl(ctx):
-    nuget_infos = [pack[NuGetInfo] for pack in ctx.attr.packs]
-
-    return [DotnetRuntimePackInfo(
-        runtime_identifier = ctx.attr.runtime_identifier,
-        assembly_runtime_infos = _without_shadowed_assemblies(
-            [pack[DotnetAssemblyRuntimeInfo] for pack in ctx.attr.packs],
-            nuget_infos,
-        ),
+def _runtime_pack_info(runtime_identifier, runtime_infos, nuget_infos):
+    return DotnetRuntimePackInfo(
+        runtime_identifier = runtime_identifier,
+        assembly_runtime_infos = _without_shadowed_assemblies(runtime_infos, nuget_infos),
         nuget_infos = nuget_infos,
+        all_assembly_runtime_infos = runtime_infos,
+    )
+
+def runtime_pack_of_frameworks(runtime_pack_info, frameworks):
+    """Narrows a runtime pack to Microsoft.NETCore.App and some shared frameworks.
+
+    Args:
+        runtime_pack_info: The DotnetRuntimePackInfo to narrow.
+        frameworks: The shared frameworks to keep beyond Microsoft.NETCore.App.
+
+    Returns:
+        A DotnetRuntimePackInfo of the packs of those frameworks alone.
+    """
+    kept_frameworks = [NETCORE_FRAMEWORK] + list(frameworks)
+    kept = [
+        i
+        for (i, runtime_info) in enumerate(runtime_pack_info.all_assembly_runtime_infos)
+        if shared_framework_of_runtime_pack(runtime_info.name) in kept_frameworks
+    ]
+    if len(kept) == len(runtime_pack_info.all_assembly_runtime_infos):
+        return runtime_pack_info
+
+    return _runtime_pack_info(
+        runtime_pack_info.runtime_identifier,
+        [runtime_pack_info.all_assembly_runtime_infos[i] for i in kept],
+        [runtime_pack_info.nuget_infos[i] for i in kept],
+    )
+
+def _runtime_pack_impl(ctx):
+    return [_runtime_pack_info(
+        ctx.attr.runtime_identifier,
+        [pack[DotnetAssemblyRuntimeInfo] for pack in ctx.attr.packs],
+        [pack[NuGetInfo] for pack in ctx.attr.packs],
     )]
 
 runtime_pack = rule(

@@ -27,7 +27,15 @@ load(
     _DEFAULT_TARGET_FRAMEWORK = "DEFAULT_TARGET_FRAMEWORK",
     _FRAMEWORK_COMPATIBILITY = "FRAMEWORK_COMPATIBILITY",
 )
-load("//dotnet/private/sdk:packs.bzl", "FRAMEWORK_REFERENCES", "NETCORE_FRAMEWORK", "SHARED_FRAMEWORKS", "WINDOWS_ONLY_FRAMEWORKS")
+load(
+    "//dotnet/private/sdk:packs.bzl",
+    "FRAMEWORK_REFERENCES",
+    "NETCORE_FRAMEWORK",
+    "RUNTIME_PACK_LOOKUP_TABLE",
+    "SHARED_FRAMEWORKS",
+    "WINDOWS_ONLY_FRAMEWORKS",
+    "frameworks_key",
+)
 load("//dotnet/private/sdk:rids.bzl", "RUNTIME_GRAPH")
 
 def _collect_transitive():
@@ -744,6 +752,25 @@ def get_highest_compatible_runtime_identifier(incoming_rid, rids):
 
     return None
 
+def shipped_shared_frameworks(target_framework, runtime_identifier):
+    """The shared frameworks that ship a runtime pack for a framework and runtime identifier.
+
+    Args:
+      target_framework: The target framework.
+      runtime_identifier: The runtime identifier.
+
+    Returns:
+      The shared frameworks, as `resolve_framework_references` returns them.
+    """
+    frameworks = {}
+    for framework in SHARED_FRAMEWORKS:
+        candidate = frameworks | {framework: None}
+        rids = RUNTIME_PACK_LOOKUP_TABLE[frameworks_key(candidate, profiles = False)].get(base_framework(target_framework), {})
+        if get_highest_compatible_runtime_identifier(runtime_identifier, rids.keys()):
+            frameworks = candidate
+
+    return frameworks
+
 def get_nuget_relative_path(file):
     """Returns NuGet package relative path of a file that is part of a NuGet package
 
@@ -1439,8 +1466,18 @@ def runtime_frameworks(assembly_runtime_info, transitive_runtime_deps):
 
     return [framework for framework in SHARED_FRAMEWORKS if framework in frameworks]
 
-def _shared_framework_of_runtime_pack(pack_id):
-    """The shared framework a runtime pack carries: Microsoft.NETCore.App for Microsoft.NETCore.App.Runtime.win-x64."""
+def shared_framework_of_runtime_pack(pack_id):
+    """The shared framework a runtime pack carries.
+
+    Microsoft.NETCore.App for Microsoft.NETCore.App.Runtime.win-x64 and for
+    Microsoft.NETCore.App.Runtime.Mono.browser-wasm.
+
+    Args:
+        pack_id: The id of the runtime pack.
+
+    Returns:
+        The name of the shared framework.
+    """
     return pack_id.partition(".Runtime.")[0]
 
 # For runtimeconfig.json spec see https://github.com/dotnet/sdk/blob/main/documentation/specs/runtime-configuration-file.md
@@ -1471,7 +1508,7 @@ def generate_runtimeconfig(target_framework, frameworks, is_self_contained, roll
     if is_self_contained:
         # Named as the host knows them: `Microsoft.NETCore.App`, not the runtime pack.
         base["runtimeOptions"]["includedFrameworks"] = [
-            {"name": _shared_framework_of_runtime_pack(assembly_runtime_info.name), "version": assembly_runtime_info.version}
+            {"name": shared_framework_of_runtime_pack(assembly_runtime_info.name), "version": assembly_runtime_info.version}
             for assembly_runtime_info in runtime_pack_info.assembly_runtime_infos
         ]
     else:

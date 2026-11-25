@@ -15,14 +15,16 @@ READY_TO_RUN_FRAMEWORK = "//dotnet/private/rules/ready_to_run:framework"
 READY_TO_RUN_SHARED_FRAMEWORKS = "//dotnet/private/rules/ready_to_run:shared_frameworks"
 
 # Set on the edge from a publish to its binary: that the binary is the one
-# published, the native compiler the publish asks it for, and whether the
-# publish trims it. See //dotnet/private/rules/publish_binary.
+# published, the native compiler the publish asks it for, whether the publish
+# trims it, and whether it takes the runtime packs of every shared framework.
+# See //dotnet/private/rules/publish_binary.
 PUBLISHED = "//dotnet/private/rules/publish_binary:published"
+ALL_SHARED_FRAMEWORKS = "//dotnet/private/rules/publish_binary:all_shared_frameworks"
 NATIVE_COMPILER = "//dotnet/private/rules/publish_binary:native_compiler"
 TRIMMED = "//dotnet/private/rules/publish_binary:trimmed"
 
 # What every transition but the publish's leaves them at.
-NO_READY_TO_RUN = {READY_TO_RUN_FRAMEWORK: "", READY_TO_RUN_SHARED_FRAMEWORKS: "", NATIVE_COMPILER: "", PUBLISHED: False, TRIMMED: False}
+NO_READY_TO_RUN = {READY_TO_RUN_FRAMEWORK: "", READY_TO_RUN_SHARED_FRAMEWORKS: "", NATIVE_COMPILER: "", PUBLISHED: False, TRIMMED: False, ALL_SHARED_FRAMEWORKS: False}
 
 # Whether //dotnet:target_framework is the framework of a .NET target that
 # depends on this one, rather than the command line's or a reset default. It

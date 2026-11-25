@@ -17,6 +17,19 @@ runtime_pack(
 )
 
 bzl_library(
+    name = "runtime_pack_bzl",
+    srcs = ["runtime_pack.bzl"],
+    visibility = ["//dotnet:__subpackages__"],
+    deps = [
+        "//dotnet/private:common",
+        "//dotnet/private:providers",
+        "//dotnet/private/sdk:framework_list",
+        "//dotnet/private/sdk:packs",
+        "//dotnet/private/transitions:tfm_transition",
+    ],
+)
+
+bzl_library(
     name = "runtime_pack_transition",
     srcs = ["runtime_pack_transition.bzl"],
     visibility = ["//dotnet:__subpackages__"],

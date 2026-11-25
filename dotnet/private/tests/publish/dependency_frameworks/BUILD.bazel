@@ -1,0 +1,150 @@
+load("@rules_pkg//pkg:tar.bzl", "pkg_tar")
+load("@rules_shell//shell:sh_test.bzl", "sh_test")
+load(
+    "//dotnet:defs.bzl",
+    "csharp_binary",
+    "csharp_library",
+    "publish_binary",
+)
+load(":tests.bzl", "dependency_frameworks_test_suite")
+
+config_setting(
+    name = "strict_framework_references_off",
+    flag_values = {"//dotnet/settings:strict_framework_references": "False"},
+)
+
+# A publish that follows the flag fails when strict and only a dependency
+# references the framework.
+NON_STRICT_ONLY = select({
+    ":strict_framework_references_off": [],
+    "//conditions:default": ["@platforms//:incompatible"],
+})
+
+csharp_library(
+    name = "lib",
+    srcs = ["Lib.cs"],
+    framework_references = ["Microsoft.AspNetCore.App"],
+    nullable = "enable",
+    target_frameworks = ["net10.0"],
+)
+
+csharp_library(
+    name = "plain_lib",
+    srcs = ["PlainLib.cs"],
+    target_frameworks = ["net10.0"],
+)
+
+# References no shared framework itself: only its dependency does.
+csharp_binary(
+    name = "app",
+    srcs = ["Main.cs"],
+    target_frameworks = ["net10.0"],
+    deps = [
+        ":lib",
+        ":plain_lib",
+    ],
+)
+
+# Nothing this binary depends on references a shared framework.
+csharp_binary(
+    name = "plain_app",
+    srcs = ["PlainMain.cs"],
+    target_frameworks = ["net10.0"],
+    deps = [":plain_lib"],
+)
+
+publish_binary(
+    name = "self_contained",
+    binary = ":app",
+    self_contained = True,
+    strict_framework_references = False,
+    target_framework = "net10.0",
+)
+
+publish_binary(
+    name = "ready_to_run",
+    binary = ":app",
+    ready_to_run = True,
+    self_contained = True,
+    strict_framework_references = False,
+    target_framework = "net10.0",
+)
+
+# Runs on an installed runtime, so the test only looks at its files.
+publish_binary(
+    name = "framework_dependent_ready_to_run",
+    binary = ":app",
+    ready_to_run = True,
+    strict_framework_references = False,
+    target_framework = "net10.0",
+)
+
+publish_binary(
+    name = "no_shared_frameworks",
+    binary = ":plain_app",
+    self_contained = True,
+    strict_framework_references = False,
+    target_framework = "net10.0",
+)
+
+# Takes the frameworks of dependencies because the flag says so.
+publish_binary(
+    name = "flag_self_contained",
+    binary = ":app",
+    target_compatible_with = NON_STRICT_ONLY,
+    self_contained = True,
+    target_framework = "net10.0",
+)
+
+[
+    pkg_tar(
+        name = publish + "_tar",
+        srcs = [":" + publish],
+        include_runfiles = True,
+        mode = "0755",
+        package_dir = "/" + publish,
+        target_compatible_with = NON_STRICT_ONLY if publish.startswith("flag_") else [],
+        strip_prefix = select({
+            "//dotnet/private:linux-x64": publish + "/publish/linux-x64",
+            "//dotnet/private:linux-arm64": publish + "/publish/linux-arm64",
+            "//dotnet/private:osx-x64": publish + "/publish/osx-x64",
+            "//dotnet/private:osx-arm64": publish + "/publish/osx-arm64",
+            "//dotnet/private:windows-x64": publish + "/publish/win-x64",
+            "//dotnet/private:windows-arm64": publish + "/publish/win-arm64",
+        }),
+    )
+    for publish in [
+        "self_contained",
+        "ready_to_run",
+        "framework_dependent_ready_to_run",
+        "no_shared_frameworks",
+        "flag_self_contained",
+    ]
+]
+
+sh_test(
+    name = "dependency_frameworks_test",
+    srcs = ["test.sh"],
+    args = [
+        "self_contained",
+        "ready_to_run",
+        "framework_dependent_ready_to_run",
+        "no_shared_frameworks",
+    ],
+    data = [
+        ":framework_dependent_ready_to_run_tar",
+        ":no_shared_frameworks_tar",
+        ":ready_to_run_tar",
+        ":self_contained_tar",
+    ],
+)
+
+sh_test(
+    name = "flag_dependency_frameworks_test",
+    srcs = ["test.sh"],
+    args = ["flag_self_contained"],
+    data = [":flag_self_contained_tar"],
+    target_compatible_with = NON_STRICT_ONLY,
+)
+
+dependency_frameworks_test_suite(name = "dependency_frameworks_test_suite")

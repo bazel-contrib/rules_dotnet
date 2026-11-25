@@ -1,7 +1,7 @@
 "A transition that transitions between compatible target frameworks"
 
 load("@bazel_skylib//lib:dicts.bzl", "dicts")
-load("//dotnet/private:common.bzl", "get_highest_compatible_runtime_identifier", "is_core_framework")
+load("//dotnet/private:common.bzl", "get_highest_compatible_runtime_identifier", "is_core_framework", "shipped_shared_frameworks")
 load("//dotnet/private/sdk:frameworks.bzl", "base_framework")
 load(
     "//dotnet/private/sdk:packs.bzl",
@@ -10,17 +10,24 @@ load(
     "frameworks_key",
     "resolve_framework_references",
 )
-load("//dotnet/private/transitions:common.bzl", "NO_READY_TO_RUN")
+load("//dotnet/private/transitions:common.bzl", "ALL_SHARED_FRAMEWORKS", "NO_READY_TO_RUN")
 
 _EMPTY_PACK = "//dotnet/private/sdk/runtime_packs:empty_pack"
 
 def _impl(settings, attr):
-    frameworks = resolve_framework_references(attr.project_sdk, getattr(attr, "framework_references", []))
     incoming_target_framework = settings["//dotnet:target_framework"]
     incoming_rid = settings["//dotnet:rid"]
 
     if not is_core_framework(incoming_target_framework):
         return dicts.add({"//dotnet/private/sdk/runtime_packs:runtime_pack": _EMPTY_PACK}, NO_READY_TO_RUN)
+
+    # Unless framework references are strict, a dependency can bring in a
+    # shared framework the binary does not reference. A transition cannot see
+    # that, so the publish narrows the packs itself.
+    if settings[ALL_SHARED_FRAMEWORKS]:
+        frameworks = shipped_shared_frameworks(incoming_target_framework, incoming_rid)
+    else:
+        frameworks = resolve_framework_references(attr.project_sdk, getattr(attr, "framework_references", []))
 
     supported_rids = RUNTIME_PACK_LOOKUP_TABLE[frameworks_key(frameworks, profiles = False)].get(base_framework(incoming_target_framework))
     if supported_rids:
@@ -44,6 +51,6 @@ def _impl(settings, attr):
 # A pack's assemblies are never compiled to ReadyToRun.
 runtime_pack_transition = transition(
     implementation = _impl,
-    inputs = ["//dotnet/private/sdk/runtime_packs:runtime_pack", "//dotnet:target_framework", "//dotnet:rid"],
+    inputs = ["//dotnet/private/sdk/runtime_packs:runtime_pack", "//dotnet:target_framework", "//dotnet:rid", ALL_SHARED_FRAMEWORKS],
     outputs = ["//dotnet/private/sdk/runtime_packs:runtime_pack"] + NO_READY_TO_RUN.keys(),
 )

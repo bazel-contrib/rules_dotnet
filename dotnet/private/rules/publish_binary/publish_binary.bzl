@@ -4,7 +4,7 @@ Rule for assembling the publish output of a .NET binary.
 
 load("@bazel_skylib//lib:dicts.bzl", "dicts")
 load("@bazel_skylib//lib:paths.bzl", "paths")
-load("//dotnet/private:common.bzl", "generate_depsjson", "generate_runtimeconfig", "is_from_nuget_package", "netframework_runtime_identifier", "select_runtime_variants", "tfm_to_semver", "tfm_version", "to_rlocation_path")
+load("//dotnet/private:common.bzl", "generate_depsjson", "generate_runtimeconfig", "is_from_nuget_package", "netframework_runtime_identifier", "select_runtime_variants", "shared_framework_of_runtime_pack", "tfm_to_semver", "tfm_version", "to_rlocation_path")
 load(
     "//dotnet/private:providers.bzl",
     "DotnetAssemblyCompileInfo",
@@ -41,6 +41,7 @@ load(
     "ready_to_run_references",
 )
 load("//dotnet/private/sdk:packs.bzl", "WASM_RID", "WINDOWS_ONLY_FRAMEWORKS")
+load("//dotnet/private/sdk/runtime_packs:runtime_pack.bzl", "runtime_pack_of_frameworks")
 load("//dotnet/private/transitions:tfm_transition.bzl", "publish_binary_transition", "tfm_transition")
 
 def _binary(ctx):
@@ -127,8 +128,10 @@ def _publish_inputs(ctx):
         # framework the publish asked for.
         binary_framework = compile_info.target_framework,
         runtime_identifier = ctx.attr.runtime_identifier or binary_info.runtime_pack_info.runtime_identifier,
-        # Only a self-contained publish ships the runtime.
-        runtime_pack_info = binary_info.runtime_pack_info if ctx.attr.self_contained else None,
+        # Only a self-contained publish ships the runtime: the shared frameworks
+        # the binary runs on, which `_check_runtime` holds to its own when
+        # framework references are strict.
+        runtime_pack_info = runtime_pack_of_frameworks(binary_info.runtime_pack_info, binary_info.runtime_frameworks) if ctx.attr.self_contained else None,
     )
 
 def _check_runtime(ctx, publish):
@@ -149,15 +152,15 @@ def _check_runtime(ctx, publish):
             ctx.attr.runtime_identifier or "<host>",
         ))
 
-    # The runtime packs are those of the shared frameworks the binary
-    # references itself, not those its dependencies bring in.
+    # Under strict framework references the runtime packs are those of the
+    # shared frameworks the binary references itself.
     missing = [
         framework
         for framework in publish.binary_info.runtime_frameworks
-        if framework not in publish.binary_info.packed_frameworks
+        if framework not in publish.binary_info.own_frameworks
     ]
-    if (ctx.attr.self_contained or ctx.attr.ready_to_run) and missing:
-        fail("{}: {} runs on {}, which one of its dependencies references, but a {} publish only takes the runtime packs of the shared frameworks the binary references itself. Add {} to the `framework_references` of {}.".format(
+    if ctx.attr.strict_framework_references and (ctx.attr.self_contained or ctx.attr.ready_to_run) and missing:
+        fail("{}: {} runs on {}, which one of its dependencies references, but a {} publish only takes the runtime packs of the shared frameworks the binary references itself. Add {} to the `framework_references` of {}, or take the frameworks of dependencies too with `strict_framework_references = False` on the publish or --@rules_dotnet//dotnet/settings:strict_framework_references=false.".format(
             ctx.label,
             binary,
             ", ".join(missing),
@@ -165,6 +168,21 @@ def _check_runtime(ctx, publish):
             " and ".join(["\"{}\"".format(framework) for framework in missing]),
             binary,
         ))
+
+    # Otherwise the runtime packs are those of every shared framework with one
+    # for the runtime identifier, which need not include each the binary runs
+    # on. NativeAOT compiles the runtime in instead.
+    if (ctx.attr.self_contained or ctx.attr.ready_to_run) and not ctx.attr.native_aot:
+        packed = [shared_framework_of_runtime_pack(pack.name) for pack in publish.binary_info.runtime_pack_info.assembly_runtime_infos]
+        unpacked = [framework for framework in publish.binary_info.runtime_frameworks if framework not in packed]
+        if unpacked:
+            fail("{}: {} runs on {}, which has no runtime pack for {} and runtime identifier {}.".format(
+                ctx.label,
+                binary,
+                ", ".join(unpacked),
+                publish.binary_framework,
+                publish.binary_info.runtime_pack_info.runtime_identifier,
+            ))
 
 def _native_aot_publish(ctx, publish):
     """One native executable, with what it loads or serves at run time beside it."""
@@ -609,7 +627,9 @@ def _ready_to_run_images(ctx, publish, assembly_files, runtime_pack_files):
         A struct of `replace`, the image of each assembly keyed by the
         assembly's path, and `extra`, images published besides.
     """
-    framework = ready_to_run_framework(publish.binary_info.runtime_pack_info)
+    # The shared frameworks the binary runs on, as each target below it
+    # compiled its images against those it runs on.
+    framework = ready_to_run_framework(publish.binary_info.runtime_pack_info, publish.binary_info.runtime_frameworks)
 
     # Runtime pack assemblies already ship as ReadyToRun images; only a
     # composite image, which has to cover the framework, recompiles them.
@@ -903,6 +923,17 @@ Mirrors MSBuild's `<EnableCompressionInSingleFile>true</EnableCompressionInSingl
 Requires `single_file`.""",
             default = False,
         ),
+        "strict_framework_references": attr.bool(
+            doc = """Whether a self-contained or ReadyToRun publish only takes the runtime packs of the shared frameworks its binary references itself.
+
+`True` takes only those, and fails when a dependency references another shared
+framework. `False` takes those of the binary's dependencies too, as MSBuild
+does unless `DisableTransitiveFrameworkReferences` is set, at the cost of
+fetching the runtime packs of every shared framework. Unset, it follows
+`--@rules_dotnet//dotnet/settings:strict_framework_references`, which is true
+by default.""",
+            default = True,
+        ),
         "_apphost_shimmer": attr.label(
             providers = [DotnetAssemblyCompileInfo, DotnetAssemblyRuntimeInfo],
             executable = True,
@@ -925,6 +956,7 @@ _NOT_FOR_WASM = [
     "include_native_libraries_for_self_extract",
     "enable_compression_in_single_file",
     "roll_forward_behavior",
+    "strict_framework_references",
 ]
 
 # Settings only a WebAssembly publish has, declared on the macro itself.
@@ -943,6 +975,13 @@ _WASM_ONLY_ATTRS = {
         configurable = False,
     ),
 }
+
+# The flag, for a publish that does not set `strict_framework_references`
+# itself. Resolved here because an unset attribute only reaches the macro.
+_STRICT_FRAMEWORK_REFERENCES = select({
+    "@rules_dotnet//dotnet/private/rules/publish_binary:strict_framework_references_off": False,
+    "//conditions:default": True,
+})
 
 # Resolved here because the TFM/RID transition cannot see the target platform.
 _TARGET_RID = select({
@@ -982,6 +1021,9 @@ def _publish_binary_macro_impl(name, **kwargs):
     if rid == None:
         kwargs["runtime_identifier"] = _TARGET_RID
         kwargs["runtime_identifier_from_platform"] = True
+
+    if kwargs.get("strict_framework_references", None) == None:
+        kwargs["strict_framework_references"] = _STRICT_FRAMEWORK_REFERENCES
 
     _publish_binary(name = name, **kwargs)
 

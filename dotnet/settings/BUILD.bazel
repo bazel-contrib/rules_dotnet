@@ -9,6 +9,20 @@ bool_flag(
     visibility = ["//visibility:public"],
 )
 
+# Whether a self-contained or ReadyToRun `publish_binary` only takes the runtime
+# packs of the shared frameworks its binary references itself (the default),
+# and fails when a dependency references another one. When false, it takes
+# those its dependencies reference too, which costs fetching the runtime packs
+# of every shared framework. A publish's `strict_framework_references` overrides
+# it. A binary runs on the frameworks of its dependencies either way. See
+# docs/README.md#shared-frameworks.
+bool_flag(
+    name = "strict_framework_references",
+    build_setting_default = True,
+    scope = "universal",
+    visibility = ["//visibility:public"],
+)
+
 # Whether the C# and F# compile actions run in a persistent worker.
 # See docs/README.md#persistent-workers.
 bool_flag(

@@ -389,11 +389,14 @@ def windowsdesktop_tests():
         expected_message_fragments = ["only exists on Windows", "runtime_identifier"],
     )
 
+    # Strict, whatever the flag says: otherwise the publish takes the frameworks
+    # of the binary's dependencies too.
     publish_binary(
         name = "uses_wpf_self_contained",
         binary = ":uses_wpf",
         runtime_identifier = "win-x64",
         self_contained = True,
+        strict_framework_references = True,
         tags = ["manual"],
         target_framework = "net10.0-windows",
     )
@@ -410,6 +413,7 @@ def windowsdesktop_tests():
         binary = ":uses_wpf",
         ready_to_run = True,
         runtime_identifier = "win-x64",
+        strict_framework_references = True,
         tags = ["manual"],
         target_framework = "net10.0-windows",
     )

@@ -9,10 +9,12 @@ load(
     "is_core_framework",
     "is_netframework",
     "netframework_runtime_identifier",
+    "shipped_shared_frameworks",
 )
 load("//dotnet/private/sdk:packs.bzl", "frameworks_key", "resolve_framework_references")
 load(
     "//dotnet/private/transitions:common.bzl",
+    "ALL_SHARED_FRAMEWORKS",
     "FRAMEWORK_COMPATABILITY_TRANSITION_OUTPUTS",
     "FRAMEWORK_FROM_CONSUMER",
     "NATIVE_COMPILER",
@@ -26,13 +28,14 @@ load(
     "rid_compatability_transition_outputs",
 )
 
-def _ready_to_run(settings, attr, transitioned_tfm):
+def _ready_to_run(settings, attr, transitioned_tfm, runtime_identifier):
     """The ReadyToRun settings a target passes down.
 
-    The published binary keeps the native compiler its publish asked for and
-    whether the publish trims it, and names the runtime the images below it are
-    compiled against: its own framework and shared frameworks. Everything else passes
-    the framework on.
+    The published binary keeps the native compiler its publish asked for,
+    whether the publish trims it and whether it takes every shared framework,
+    and names the runtime the images below it are compiled against: its own
+    framework and shared frameworks, or every shared framework when it takes
+    them all. Everything else passes the framework on.
     """
 
     # A publish asks its binary through publish_binary_transition.
@@ -47,14 +50,22 @@ def _ready_to_run(settings, attr, transitioned_tfm):
             READY_TO_RUN_SHARED_FRAMEWORKS: settings[READY_TO_RUN_SHARED_FRAMEWORKS],
         })
 
+    # The same packs as runtime_pack_transition gives the binary, so that the
+    # images below it match the publish's.
+    shared_frameworks = ""
+    if framework:
+        if settings[ALL_SHARED_FRAMEWORKS]:
+            frameworks = shipped_shared_frameworks(transitioned_tfm, runtime_identifier)
+        else:
+            frameworks = resolve_framework_references(attr.project_sdk, getattr(attr, "framework_references", []))
+        shared_frameworks = frameworks_key(frameworks, profiles = False)
+
     return dicts.add(NO_READY_TO_RUN, {
         NATIVE_COMPILER: settings[NATIVE_COMPILER],
         TRIMMED: settings[TRIMMED],
+        ALL_SHARED_FRAMEWORKS: settings[ALL_SHARED_FRAMEWORKS],
         READY_TO_RUN_FRAMEWORK: transitioned_tfm if framework else "",
-        READY_TO_RUN_SHARED_FRAMEWORKS: frameworks_key(
-            resolve_framework_references(attr.project_sdk, getattr(attr, "framework_references", [])),
-            profiles = False,
-        ) if framework else "",
+        READY_TO_RUN_SHARED_FRAMEWORKS: shared_frameworks,
     })
 
 def _impl(settings, attr):
@@ -97,7 +108,7 @@ def _impl(settings, attr):
         {"//dotnet:target_framework": transitioned_tfm, "//dotnet:rid": runtime_identifier, FRAMEWORK_FROM_CONSUMER: True},
         FRAMEWORK_COMPATABILITY_TRANSITION_OUTPUTS[transitioned_tfm],
         rid_compatability_transition_outputs(runtime_identifier),
-        _ready_to_run(settings, attr, transitioned_tfm),
+        _ready_to_run(settings, attr, transitioned_tfm, runtime_identifier),
     )
 
 tfm_transition = transition(
@@ -120,6 +131,11 @@ def _publish_binary_impl(settings, attr):
         READY_TO_RUN_FRAMEWORK: attr.target_framework if attr.ready_to_run and not attr.ready_to_run_composite else "",
         # NativeAOT is the only publish of a .NET binary that trims it.
         TRIMMED: attr.native_aot,
+        # Only a publish that ships the runtime or compiles against it needs
+        # its packs, and only when the frameworks of the binary's dependencies
+        # count too. Otherwise the binary keeps the configuration it has
+        # outside a publish. NativeAOT compiles the runtime in.
+        ALL_SHARED_FRAMEWORKS: (attr.self_contained or attr.ready_to_run) and not attr.native_aot and not attr.strict_framework_references,
     })
 
     if attr.native_aot:

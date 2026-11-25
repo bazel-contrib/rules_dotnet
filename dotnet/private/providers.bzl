@@ -162,10 +162,10 @@ the `publish_path` it takes inside a publish directory. Already materialized by 
 binary, so a publish copies these rather than laying the tree out a second time.""",
         "transitive_runtime_deps": "list[DotnetAssemblyRuntimeInfo]: The transitive runtime dependencies of the binary",
         "apphost_pack_info": "DotnetApphostPackInfo: The apphost pack for the binary",
-        "runtime_pack_info": "DotnetRuntimePackInfo: The runtime pack for the binary",
+        "runtime_pack_info": "DotnetRuntimePackInfo: The runtime pack for the binary: the shared frameworks it references itself, or every shared framework when a publish ships or compiles against the runtime and framework references are not strict.",
         "framework_version": "string: The version of the shared frameworks the binary asks for when it is not self-contained",
         "runtime_frameworks": "list[string]: The shared frameworks beyond Microsoft.NETCore.App that the binary and its dependencies reference.",
-        "packed_frameworks": "list[string]: The shared frameworks beyond Microsoft.NETCore.App that the binary itself references, which `runtime_pack_info` carries.",
+        "own_frameworks": "list[string]: The shared frameworks beyond Microsoft.NETCore.App that the binary itself references.",
         "winexe": "bool: True if the binary is a Windows GUI executable (Subsystem.WindowsGui)",
         "app_config": "File: The `app_config` of a .NET binary, as `<assembly>.dll.config`, or None.",
         "netfx_layout": "list[(string, File)]: The files a .NET Framework binary publishes, with their paths in the publish directory. None for other binaries.",
@@ -196,6 +196,7 @@ DotnetRuntimePackInfo = provider(
         "runtime_identifier": "string: The runtime identifier of the runtime pack",
         "assembly_runtime_infos": "list[DotnetAssemblyRuntimeInfo]: The runtime infos of the assemblies in the runtime pack",
         "nuget_infos": "list[NuGetInfo]: The NuGet infos of the assemblies in the runtime pack",
+        "all_assembly_runtime_infos": "list[DotnetAssemblyRuntimeInfo]: `assembly_runtime_infos` before the assemblies another pack shadows are dropped, for `runtime_pack_of_frameworks`.",
     },
 )
 

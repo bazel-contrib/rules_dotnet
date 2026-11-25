@@ -8,10 +8,11 @@ that framework that ships it.
 """
 
 load("@bazel_skylib//lib:dicts.bzl", "dicts")
-load("//dotnet/private:common.bzl", "FRAMEWORK_COMPATIBILITY", "get_highest_compatible_runtime_identifier")
+load("//dotnet/private:common.bzl", "FRAMEWORK_COMPATIBILITY", "get_highest_compatible_runtime_identifier", "runtime_frameworks", "shared_framework_of_runtime_pack")
 load("//dotnet/private:providers.bzl", "DotnetAssemblyRuntimeInfo", "DotnetRuntimePackInfo", "DotnetToolPackInfo")
 load("//dotnet/private/sdk:frameworks.bzl", "base_framework")
-load("//dotnet/private/sdk:packs.bzl", "RUNTIME_PACK_LOOKUP_TABLE")
+load("//dotnet/private/sdk:packs.bzl", "NETCORE_FRAMEWORK", "RUNTIME_PACK_LOOKUP_TABLE")
+load("//dotnet/private/sdk/runtime_packs:runtime_pack.bzl", "runtime_pack_of_frameworks")
 load(
     "//dotnet/private/transitions:common.bzl",
     "FRAMEWORK_COMPATABILITY_TRANSITION_OUTPUTS",
@@ -25,6 +26,8 @@ DotnetReadyToRunToolsInfo = provider(
     fields = {
         "crossgen2": "DotnetToolPackInfo: crossgen2, for the execution platform.",
         "framework": "struct: The framework, as `ready_to_run_framework` returns it.",
+        "shared_frameworks": "list[string]: The shared frameworks beyond Microsoft.NETCore.App that `framework` carries.",
+        "narrowed_frameworks": "dict[string, struct]: `framework` narrowed to each combination of `shared_frameworks`, by `_frameworks_id`.",
     },
 )
 
@@ -47,26 +50,42 @@ def native_target(runtime_identifier):
 
     return ("windows" if parts[0] == "win" else parts[0], parts[-1])
 
-def ready_to_run_framework(runtime_pack_info):
+def ready_to_run_framework(runtime_pack_info, frameworks = None):
     """The framework a ReadyToRun image resolves against: a runtime pack.
 
     Args:
         runtime_pack_info: The DotnetRuntimePackInfo of the runtime pack.
+        frameworks: The shared frameworks beyond Microsoft.NETCore.App to
+            resolve against, or None for every one the pack carries. An image
+            only needs those its assembly runs on, and fewer keep crossgen2's
+            inputs small. The key stays the whole pack's, so that a publish of
+            the pack still finds the image.
 
     Returns:
         A struct of `runtime_identifier`, `libs`, the assemblies in the order
         crossgen2 takes them, `files`, the same as a depset, and `key`, which
         tells frameworks apart without comparing their assemblies.
     """
-    packs = runtime_pack_info.assembly_runtime_infos
-    libs = [lib for pack in packs for lib in pack.libs]
+    key = " ".join([runtime_pack_info.runtime_identifier] + ["{}/{}".format(pack.name, pack.version) for pack in runtime_pack_info.assembly_runtime_infos])
+
+    if frameworks != None:
+        runtime_pack_info = runtime_pack_of_frameworks(runtime_pack_info, frameworks)
+
+    libs = [lib for pack in runtime_pack_info.assembly_runtime_infos for lib in pack.libs]
 
     return struct(
         runtime_identifier = runtime_pack_info.runtime_identifier,
         libs = libs,
         files = depset(libs),
-        key = " ".join([runtime_pack_info.runtime_identifier] + ["{}/{}".format(pack.name, pack.version) for pack in packs]),
+        key = key,
     )
+
+def _frameworks_id(frameworks):
+    return ",".join(sorted(frameworks))
+
+def _narrowed_framework(tools, frameworks):
+    """The tools' framework narrowed to the shared frameworks an assembly runs on."""
+    return tools.narrowed_frameworks[_frameworks_id([framework for framework in frameworks if framework in tools.shared_frameworks])]
 
 def _mapped_path(file):
     """The path of `file` as `--experimental_output_paths=strip` passes it to an action."""
@@ -94,9 +113,12 @@ def ready_to_run_references(libs, deps):
     Returns:
         A struct of `files`, a tuple, and the same as a depset in `depset`.
     """
+    return _references(libs, deps.to_list())
+
+def _references(libs, dep_infos):
     by_path = {file.path: file for file in libs}
 
-    for dep in deps.to_list():
+    for dep in dep_infos:
         for file in dep.libs:
             by_path[file.path] = file
 
@@ -159,8 +181,11 @@ def compile_ready_to_run(actions, crossgen2, framework, references, assembly, im
         execution_requirements = {"supports-path-mapping": "1"},
     )
 
-def compile_ready_to_run_images(actions, tools, label, libs, deps):
+def compile_ready_to_run_images(actions, tools, label, libs, deps, framework_references = []):
     """Compiles a target's own assemblies to ReadyToRun, when a publish asked for them.
+
+    Each is compiled against Microsoft.NETCore.App and the shared frameworks it
+    runs on: those the target and its dependencies reference.
 
     Args:
         actions: The `ctx.actions` to declare the actions with.
@@ -169,6 +194,8 @@ def compile_ready_to_run_images(actions, tools, label, libs, deps):
         label: The label of the target, whose package the images go in.
         libs: The target's own assemblies.
         deps: The depset of the DotnetAssemblyRuntimeInfo the target depends on.
+        framework_references: The target's own `framework_references`, as its
+            DotnetAssemblyRuntimeInfo carries them.
 
     Returns:
         A list with a struct per assembly, carrying the `assembly` compiled, its
@@ -178,16 +205,18 @@ def compile_ready_to_run_images(actions, tools, label, libs, deps):
     if tools == None or not libs:
         return []
 
-    references = ready_to_run_references(libs, deps)
+    dep_infos = deps.to_list()
+    references = _references(libs, dep_infos)
+    framework = _narrowed_framework(tools, runtime_frameworks(struct(framework_references = framework_references), dep_infos))
     images = []
 
     for assembly in libs:
         image = actions.declare_file("{}/r2r/{}".format(label.name, assembly.basename))
-        compile_ready_to_run(actions, tools.crossgen2, tools.framework, references, assembly, image)
+        compile_ready_to_run(actions, tools.crossgen2, framework, references, assembly, image)
         images.append(struct(
             assembly = assembly,
             image = image,
-            framework = tools.framework.key,
+            framework = framework.key,
             references = references.files,
         ))
 
@@ -236,7 +265,7 @@ def with_ready_to_run_images(ctx, runtime_info):
         framework_references = getattr(runtime_info, "framework_references", None) or [],
         deps = runtime_info.deps,
         direct_deps_depsjson_fragment = runtime_info.direct_deps_depsjson_fragment,
-        ready_to_run = compile_ready_to_run_images(ctx.actions, tools, ctx.label, runtime_info.libs, runtime_info.deps),
+        ready_to_run = compile_ready_to_run_images(ctx.actions, tools, ctx.label, runtime_info.libs, runtime_info.deps, getattr(runtime_info, "framework_references", None) or []),
     )
 
 READY_TO_RUN_ATTRS = {
@@ -293,9 +322,26 @@ _runtime_pack_transition = transition(
 )
 
 def _ready_to_run_tools_impl(ctx):
+    runtime_pack_info = ctx.attr._runtime_pack[0][DotnetRuntimePackInfo]
+    shared_frameworks = [
+        framework
+        for framework in [shared_framework_of_runtime_pack(pack.name) for pack in runtime_pack_info.assembly_runtime_infos]
+        if framework != NETCORE_FRAMEWORK
+    ]
+
+    # Every combination, here rather than in each target below the publish.
+    combinations = [[]]
+    for framework in shared_frameworks:
+        combinations = combinations + [combination + [framework] for combination in combinations]
+
     return [DotnetReadyToRunToolsInfo(
         crossgen2 = ctx.attr._crossgen2_pack[DotnetToolPackInfo],
-        framework = ready_to_run_framework(ctx.attr._runtime_pack[0][DotnetRuntimePackInfo]),
+        framework = ready_to_run_framework(runtime_pack_info),
+        shared_frameworks = shared_frameworks,
+        narrowed_frameworks = {
+            _frameworks_id(combination): ready_to_run_framework(runtime_pack_info, combination)
+            for combination in combinations
+        },
     )]
 
 ready_to_run_tools = rule(

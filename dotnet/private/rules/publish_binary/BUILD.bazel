@@ -21,6 +21,26 @@ bool_setting(
     visibility = ["//visibility:public"],
 )
 
+# Whether the binary takes the runtime packs of every shared framework: set when
+# a publish ships the runtime or compiles against it and framework references
+# are not strict, since only the publish can tell which of them the binary's
+# dependencies reference. Only the binary keeps it; see
+# //dotnet/private/transitions:tfm_transition.
+bool_setting(
+    name = "all_shared_frameworks",
+    build_setting_default = False,
+    scope = "target",
+    visibility = ["//visibility:public"],
+)
+
+# What a `publish_binary` that does not set `strict_framework_references`
+# takes it from.
+config_setting(
+    name = "strict_framework_references_off",
+    flag_values = {"//dotnet/settings:strict_framework_references": "False"},
+    visibility = ["//visibility:public"],
+)
+
 # The native compiler a ReadyToRun or NativeAOT publish asks its binary for.
 # Only the binary keeps it; see //dotnet/private/transitions:tfm_transition.
 string_setting(
@@ -137,6 +157,8 @@ bzl_library(
         "//dotnet/private/rules/common:publish_layout",
         "//dotnet/private/rules/ready_to_run",
         "//dotnet/private/sdk:packs",
+        "//dotnet/private/sdk/runtime_packs:runtime_pack_bzl",
+        "//dotnet/private/transitions:common",
         "//dotnet/private/transitions:tfm_transition",
         "@bazel_skylib//lib:dicts",
         "@bazel_skylib//lib:paths",
