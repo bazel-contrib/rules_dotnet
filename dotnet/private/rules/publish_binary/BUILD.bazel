@@ -149,6 +149,8 @@ bzl_library(
         "//dotnet/private/rules/common:publish_layout",
         "//dotnet/private/rules/ready_to_run",
         "//dotnet/private/sdk:packs",
+        "//dotnet/private/sdk/runtime_packs:runtime_pack_bzl",
+        "//dotnet/private/transitions:common",
         "//dotnet/private/transitions:tfm_transition",
         "@bazel_skylib//lib:dicts",
         "@bazel_skylib//lib:paths",
