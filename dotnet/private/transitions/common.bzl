@@ -23,25 +23,6 @@ ALL_SHARED_FRAMEWORKS = "//dotnet/private/rules/publish_binary:all_shared_framew
 NATIVE_COMPILER = "//dotnet/private/rules/publish_binary:native_compiler"
 TRIMMED = "//dotnet/private/rules/publish_binary:trimmed"
 
-# Whether a publish only takes the shared frameworks its binary references
-# itself, unless its `strict_framework_references` says otherwise.
-# publish_binary_transition folds it into ALL_SHARED_FRAMEWORKS, which is all
-# that the transitions below the publish read.
-STRICT_FRAMEWORK_REFERENCES = "//dotnet/settings:strict_framework_references"
-
-def strict_framework_references(value, flag):
-    """Whether a publish only takes the shared frameworks its binary references itself.
-
-    Args:
-        value: The publish's `strict_framework_references`: 1 or 0, or -1 to
-            follow the flag.
-        flag: The value of //dotnet/settings:strict_framework_references.
-
-    Returns:
-        True if the publish's framework references are strict.
-    """
-    return flag if value == -1 else value == 1
-
 # What every transition but the publish's leaves them at.
 NO_READY_TO_RUN = {READY_TO_RUN_FRAMEWORK: "", READY_TO_RUN_SHARED_FRAMEWORKS: "", NATIVE_COMPILER: "", PUBLISHED: False, TRIMMED: False, ALL_SHARED_FRAMEWORKS: False}
 

@@ -22,12 +22,10 @@ load(
     "PUBLISHED",
     "READY_TO_RUN_FRAMEWORK",
     "READY_TO_RUN_SHARED_FRAMEWORKS",
-    "STRICT_FRAMEWORK_REFERENCES",
     "TFM_RID_TRANSITION_OUTPUTS",
     "TRIMMED",
     "platform_to_rid",
     "rid_compatability_transition_outputs",
-    "strict_framework_references",
 )
 
 def _ready_to_run(settings, attr, transitioned_tfm, runtime_identifier):
@@ -137,7 +135,7 @@ def _publish_binary_impl(settings, attr):
         # its packs, and only when the frameworks of the binary's dependencies
         # count too. Otherwise the binary keeps the configuration it has
         # outside a publish. NativeAOT compiles the runtime in.
-        ALL_SHARED_FRAMEWORKS: (attr.self_contained or attr.ready_to_run) and not attr.native_aot and not strict_framework_references(attr.strict_framework_references, settings[STRICT_FRAMEWORK_REFERENCES]),
+        ALL_SHARED_FRAMEWORKS: (attr.self_contained or attr.ready_to_run) and not attr.native_aot and not attr.strict_framework_references,
     })
 
     if attr.native_aot:
@@ -158,6 +156,6 @@ def _publish_binary_impl(settings, attr):
 # `native_tools`, the native compiler for the binary's framework.
 publish_binary_transition = transition(
     implementation = _publish_binary_impl,
-    inputs = ["//dotnet:target_framework", "//dotnet:rid", FRAMEWORK_FROM_CONSUMER, STRICT_FRAMEWORK_REFERENCES] + NO_READY_TO_RUN.keys(),
+    inputs = ["//dotnet:target_framework", "//dotnet:rid", FRAMEWORK_FROM_CONSUMER] + NO_READY_TO_RUN.keys(),
     outputs = TFM_RID_TRANSITION_OUTPUTS,
 )

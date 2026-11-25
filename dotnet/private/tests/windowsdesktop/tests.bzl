@@ -396,7 +396,7 @@ def windowsdesktop_tests():
         binary = ":uses_wpf",
         runtime_identifier = "win-x64",
         self_contained = True,
-        strict_framework_references = 1,
+        strict_framework_references = True,
         tags = ["manual"],
         target_framework = "net10.0-windows",
     )
@@ -413,7 +413,7 @@ def windowsdesktop_tests():
         binary = ":uses_wpf",
         ready_to_run = True,
         runtime_identifier = "win-x64",
-        strict_framework_references = 1,
+        strict_framework_references = True,
         tags = ["manual"],
         target_framework = "net10.0-windows",
     )

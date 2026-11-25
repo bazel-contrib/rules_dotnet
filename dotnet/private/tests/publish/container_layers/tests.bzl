@@ -180,7 +180,7 @@ def _ready_to_run_test(name):
     # Strict, whatever the flag says: otherwise the images are compiled against
     # a runtime pack of every shared framework, narrowed to what each assembly
     # runs on, which dependency_frameworks tests.
-    _publish_test(name, _ready_to_run_test_impl, ready_to_run = True, self_contained = True, strict_framework_references = 1)
+    _publish_test(name, _ready_to_run_test_impl, ready_to_run = True, self_contained = True, strict_framework_references = True)
 
 def _ready_to_run_images(target):
     """The ReadyToRun images a publish ships, keyed by basename."""

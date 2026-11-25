@@ -12,7 +12,7 @@ def _strict_publish_fails(name):
         name = name + "_publish",
         binary = ":app",
         self_contained = True,
-        strict_framework_references = 1,
+        strict_framework_references = True,
         tags = ["manual"],
         target_framework = "net10.0",
     )
@@ -54,7 +54,7 @@ def _missing_runtime_pack(name):
         binary = name + "_app",
         runtime_identifier = "win-arm64",
         self_contained = True,
-        strict_framework_references = 0,
+        strict_framework_references = False,
         tags = ["manual"],
         target_framework = "netcoreapp3.1",
     )
@@ -76,7 +76,7 @@ def _strict_publish_shares_binary(name):
         name = name + "_publish",
         binary = ":plain_app",
         self_contained = True,
-        strict_framework_references = 1,
+        strict_framework_references = True,
         tags = ["manual"],
         target_framework = "net10.0",
     )

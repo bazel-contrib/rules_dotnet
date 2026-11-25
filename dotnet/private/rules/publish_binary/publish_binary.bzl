@@ -4,7 +4,6 @@ Rule for assembling the publish output of a .NET binary.
 
 load("@bazel_skylib//lib:dicts.bzl", "dicts")
 load("@bazel_skylib//lib:paths.bzl", "paths")
-load("@bazel_skylib//rules:common_settings.bzl", "BuildSettingInfo")
 load("//dotnet/private:common.bzl", "generate_depsjson", "generate_runtimeconfig", "is_from_nuget_package", "netframework_runtime_identifier", "select_runtime_variants", "shared_framework_of_runtime_pack", "tfm_to_semver", "tfm_version", "to_rlocation_path")
 load(
     "//dotnet/private:providers.bzl",
@@ -43,7 +42,6 @@ load(
 )
 load("//dotnet/private/sdk:packs.bzl", "WASM_RID", "WINDOWS_ONLY_FRAMEWORKS")
 load("//dotnet/private/sdk/runtime_packs:runtime_pack.bzl", "runtime_pack_of_frameworks")
-load("//dotnet/private/transitions:common.bzl", "strict_framework_references")
 load("//dotnet/private/transitions:tfm_transition.bzl", "publish_binary_transition", "tfm_transition")
 
 def _binary(ctx):
@@ -161,9 +159,8 @@ def _check_runtime(ctx, publish):
         for framework in publish.binary_info.runtime_frameworks
         if framework not in publish.binary_info.own_frameworks
     ]
-    strict = strict_framework_references(ctx.attr.strict_framework_references, ctx.attr._strict_framework_references[BuildSettingInfo].value)
-    if strict and (ctx.attr.self_contained or ctx.attr.ready_to_run) and missing:
-        fail("{}: {} runs on {}, which one of its dependencies references, but a {} publish only takes the runtime packs of the shared frameworks the binary references itself. Add {} to the `framework_references` of {}, or take the frameworks of dependencies too with `strict_framework_references = 0` on the publish or --@rules_dotnet//dotnet/settings:strict_framework_references=false.".format(
+    if ctx.attr.strict_framework_references and (ctx.attr.self_contained or ctx.attr.ready_to_run) and missing:
+        fail("{}: {} runs on {}, which one of its dependencies references, but a {} publish only takes the runtime packs of the shared frameworks the binary references itself. Add {} to the `framework_references` of {}, or take the frameworks of dependencies too with `strict_framework_references = False` on the publish or --@rules_dotnet//dotnet/settings:strict_framework_references=false.".format(
             ctx.label,
             binary,
             ", ".join(missing),
@@ -926,20 +923,16 @@ Mirrors MSBuild's `<EnableCompressionInSingleFile>true</EnableCompressionInSingl
 Requires `single_file`.""",
             default = False,
         ),
-        "strict_framework_references": attr.int(
+        "strict_framework_references": attr.bool(
             doc = """Whether a self-contained or ReadyToRun publish only takes the runtime packs of the shared frameworks its binary references itself.
 
-`1` takes only those, and fails when a dependency references another shared
-framework. `0` takes those of the binary's dependencies too, as MSBuild does
-unless `DisableTransitiveFrameworkReferences` is set, at the cost of fetching
-the runtime packs of every shared framework. `-1`, the default, follows
-`--@rules_dotnet//dotnet/settings:strict_framework_references`.""",
-            default = -1,
-            values = [-1, 0, 1],
-        ),
-        "_strict_framework_references": attr.label(
-            doc = "Whether the publish only takes the shared frameworks the binary references itself, unless `strict_framework_references` says otherwise",
-            default = "//dotnet/settings:strict_framework_references",
+`True` takes only those, and fails when a dependency references another shared
+framework. `False` takes those of the binary's dependencies too, as MSBuild
+does unless `DisableTransitiveFrameworkReferences` is set, at the cost of
+fetching the runtime packs of every shared framework. Unset, it follows
+`--@rules_dotnet//dotnet/settings:strict_framework_references`, which is true
+by default.""",
+            default = True,
         ),
         "_apphost_shimmer": attr.label(
             providers = [DotnetAssemblyCompileInfo, DotnetAssemblyRuntimeInfo],
@@ -983,6 +976,13 @@ _WASM_ONLY_ATTRS = {
     ),
 }
 
+# The flag, for a publish that does not set `strict_framework_references`
+# itself. Resolved here because an unset attribute only reaches the macro.
+_STRICT_FRAMEWORK_REFERENCES = select({
+    "@rules_dotnet//dotnet/private/rules/publish_binary:strict_framework_references_off": False,
+    "//conditions:default": True,
+})
+
 # Resolved here because the TFM/RID transition cannot see the target platform.
 _TARGET_RID = select({
     "@rules_dotnet//dotnet/private:linux-arm64": "linux-arm64",
@@ -1021,6 +1021,9 @@ def _publish_binary_macro_impl(name, **kwargs):
     if rid == None:
         kwargs["runtime_identifier"] = _TARGET_RID
         kwargs["runtime_identifier_from_platform"] = True
+
+    if kwargs.get("strict_framework_references", None) == None:
+        kwargs["strict_framework_references"] = _STRICT_FRAMEWORK_REFERENCES
 
     _publish_binary(name = name, **kwargs)
 

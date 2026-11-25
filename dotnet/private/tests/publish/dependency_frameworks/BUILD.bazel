@@ -57,7 +57,7 @@ publish_binary(
     name = "self_contained",
     binary = ":app",
     self_contained = True,
-    strict_framework_references = 0,
+    strict_framework_references = False,
     target_framework = "net10.0",
 )
 
@@ -66,7 +66,7 @@ publish_binary(
     binary = ":app",
     ready_to_run = True,
     self_contained = True,
-    strict_framework_references = 0,
+    strict_framework_references = False,
     target_framework = "net10.0",
 )
 
@@ -75,7 +75,7 @@ publish_binary(
     name = "framework_dependent_ready_to_run",
     binary = ":app",
     ready_to_run = True,
-    strict_framework_references = 0,
+    strict_framework_references = False,
     target_framework = "net10.0",
 )
 
@@ -83,7 +83,7 @@ publish_binary(
     name = "no_shared_frameworks",
     binary = ":plain_app",
     self_contained = True,
-    strict_framework_references = 0,
+    strict_framework_references = False,
     target_framework = "net10.0",
 )
 

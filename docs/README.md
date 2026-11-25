@@ -254,7 +254,7 @@ one. This is stricter than MSBuild, where a `FrameworkReference` flows through
 project and package references unless
 `<DisableTransitiveFrameworkReferences>true</DisableTransitiveFrameworkReferences>`
 is set. To publish the frameworks of dependencies as well, set
-`strict_framework_references = 0` on the `publish_binary`, or use the following
+`strict_framework_references = False` on the `publish_binary`, or use the following
 flag, or add it to your `.bazelrc` to make it the default:
 
 ```

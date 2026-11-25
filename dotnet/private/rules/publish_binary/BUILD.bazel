@@ -33,6 +33,14 @@ bool_setting(
     visibility = ["//visibility:public"],
 )
 
+# What a `publish_binary` that does not set `strict_framework_references`
+# takes it from.
+config_setting(
+    name = "strict_framework_references_off",
+    flag_values = {"//dotnet/settings:strict_framework_references": "False"},
+    visibility = ["//visibility:public"],
+)
+
 # The native compiler a ReadyToRun or NativeAOT publish asks its binary for.
 # Only the binary keeps it; see //dotnet/private/transitions:tfm_transition.
 string_setting(
