@@ -91,8 +91,8 @@ publish_binary(
 publish_binary(
     name = "flag_self_contained",
     binary = ":app",
-    target_compatible_with = NON_STRICT_ONLY,
     self_contained = True,
+    target_compatible_with = NON_STRICT_ONLY,
     target_framework = "net10.0",
 )
 
@@ -103,7 +103,6 @@ publish_binary(
         include_runfiles = True,
         mode = "0755",
         package_dir = "/" + publish,
-        target_compatible_with = NON_STRICT_ONLY if publish.startswith("flag_") else [],
         strip_prefix = select({
             "//dotnet/private:linux-x64": publish + "/publish/linux-x64",
             "//dotnet/private:linux-arm64": publish + "/publish/linux-arm64",
@@ -112,6 +111,7 @@ publish_binary(
             "//dotnet/private:windows-x64": publish + "/publish/win-x64",
             "//dotnet/private:windows-arm64": publish + "/publish/win-arm64",
         }),
+        target_compatible_with = NON_STRICT_ONLY if publish.startswith("flag_") else [],
     )
     for publish in [
         "self_contained",

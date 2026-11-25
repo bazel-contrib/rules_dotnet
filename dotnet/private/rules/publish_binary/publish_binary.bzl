@@ -627,6 +627,7 @@ def _ready_to_run_images(ctx, publish, assembly_files, runtime_pack_files):
         A struct of `replace`, the image of each assembly keyed by the
         assembly's path, and `extra`, images published besides.
     """
+
     # The shared frameworks the binary runs on, as each target below it
     # compiled its images against those it runs on.
     framework = ready_to_run_framework(publish.binary_info.runtime_pack_info, publish.binary_info.runtime_frameworks)
