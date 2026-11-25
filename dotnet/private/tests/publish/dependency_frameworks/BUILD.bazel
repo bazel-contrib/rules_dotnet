@@ -7,6 +7,17 @@ load(
     "publish_binary",
 )
 
+config_setting(
+    name = "strict_framework_references_off",
+    flag_values = {"//dotnet/settings:strict_framework_references": "False"},
+)
+
+# A strict publish fails when only a dependency references the framework.
+NON_STRICT_ONLY = select({
+    ":strict_framework_references_off": [],
+    "//conditions:default": ["@platforms//:incompatible"],
+})
+
 csharp_library(
     name = "lib",
     srcs = ["Lib.cs"],
@@ -26,6 +37,7 @@ csharp_binary(
 publish_binary(
     name = "self_contained",
     binary = ":app",
+    target_compatible_with = NON_STRICT_ONLY,
     self_contained = True,
     target_framework = "net10.0",
 )
@@ -33,6 +45,7 @@ publish_binary(
 publish_binary(
     name = "ready_to_run",
     binary = ":app",
+    target_compatible_with = NON_STRICT_ONLY,
     ready_to_run = True,
     self_contained = True,
     target_framework = "net10.0",
@@ -53,6 +66,7 @@ publish_binary(
         include_runfiles = True,
         mode = "0755",
         package_dir = "/" + publish,
+        target_compatible_with = [] if publish == "no_shared_frameworks" else NON_STRICT_ONLY,
         strip_prefix = select({
             "//dotnet/private:linux-x64": publish + "/publish/linux-x64",
             "//dotnet/private:linux-arm64": publish + "/publish/linux-arm64",
@@ -77,4 +91,5 @@ sh_test(
         ":ready_to_run_tar",
         ":self_contained_tar",
     ],
+    target_compatible_with = NON_STRICT_ONLY,
 )

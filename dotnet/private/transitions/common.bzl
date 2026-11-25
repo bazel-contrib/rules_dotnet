@@ -23,6 +23,9 @@ ALL_SHARED_FRAMEWORKS = "//dotnet/private/rules/publish_binary:all_shared_framew
 NATIVE_COMPILER = "//dotnet/private/rules/publish_binary:native_compiler"
 TRIMMED = "//dotnet/private/rules/publish_binary:trimmed"
 
+# Whether a binary only takes the shared frameworks it references itself.
+STRICT_FRAMEWORK_REFERENCES = "//dotnet/settings:strict_framework_references"
+
 # What every transition but the publish's leaves them at.
 NO_READY_TO_RUN = {READY_TO_RUN_FRAMEWORK: "", READY_TO_RUN_SHARED_FRAMEWORKS: "", NATIVE_COMPILER: "", PUBLISHED: False, TRIMMED: False, ALL_SHARED_FRAMEWORKS: False}
 

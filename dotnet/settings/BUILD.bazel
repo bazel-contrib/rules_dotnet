@@ -9,6 +9,17 @@ bool_flag(
     visibility = ["//visibility:public"],
 )
 
+# Whether a binary runs only on the shared frameworks it references itself
+# (the default), or on those its dependencies reference too. A self-contained
+# or ReadyToRun `publish_binary` fails when strict and a dependency references
+# another one. See docs/README.md#shared-frameworks.
+bool_flag(
+    name = "strict_framework_references",
+    build_setting_default = True,
+    scope = "universal",
+    visibility = ["//visibility:public"],
+)
+
 # Whether the C# and F# compile actions run in a persistent worker.
 # See docs/README.md#persistent-workers.
 bool_flag(

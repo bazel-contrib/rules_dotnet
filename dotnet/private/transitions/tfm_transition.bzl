@@ -11,7 +11,7 @@ load(
     "netframework_runtime_identifier",
     "shipped_shared_frameworks",
 )
-load("//dotnet/private/sdk:packs.bzl", "frameworks_key")
+load("//dotnet/private/sdk:packs.bzl", "frameworks_key", "resolve_framework_references")
 load(
     "//dotnet/private/transitions:common.bzl",
     "ALL_SHARED_FRAMEWORKS",
@@ -22,6 +22,7 @@ load(
     "PUBLISHED",
     "READY_TO_RUN_FRAMEWORK",
     "READY_TO_RUN_SHARED_FRAMEWORKS",
+    "STRICT_FRAMEWORK_REFERENCES",
     "TFM_RID_TRANSITION_OUTPUTS",
     "TRIMMED",
     "platform_to_rid",
@@ -34,8 +35,8 @@ def _ready_to_run(settings, attr, transitioned_tfm, runtime_identifier):
     The published binary keeps the native compiler its publish asked for,
     whether the publish trims it and whether it needs every shared framework,
     and names the runtime the images below it are compiled against: its own
-    framework, and every shared framework, since a dependency can reference one
-    the binary does not. Everything else passes the framework on.
+    framework and shared frameworks, or every shared framework when its
+    dependencies can bring one in. Everything else passes the framework on.
     """
 
     # A publish asks its binary through publish_binary_transition.
@@ -56,7 +57,9 @@ def _ready_to_run(settings, attr, transitioned_tfm, runtime_identifier):
         ALL_SHARED_FRAMEWORKS: settings[ALL_SHARED_FRAMEWORKS],
         READY_TO_RUN_FRAMEWORK: transitioned_tfm if framework else "",
         READY_TO_RUN_SHARED_FRAMEWORKS: frameworks_key(
-            shipped_shared_frameworks(transitioned_tfm, runtime_identifier),
+            (
+                resolve_framework_references(attr.project_sdk, getattr(attr, "framework_references", [])) if settings[STRICT_FRAMEWORK_REFERENCES] else shipped_shared_frameworks(transitioned_tfm, runtime_identifier)
+            ),
             profiles = False,
         ) if framework else "",
     })
@@ -106,7 +109,7 @@ def _impl(settings, attr):
 
 tfm_transition = transition(
     implementation = _impl,
-    inputs = ["//dotnet:target_framework", "//dotnet:rid", FRAMEWORK_FROM_CONSUMER] + NO_READY_TO_RUN.keys(),
+    inputs = ["//dotnet:target_framework", "//dotnet:rid", FRAMEWORK_FROM_CONSUMER, STRICT_FRAMEWORK_REFERENCES] + NO_READY_TO_RUN.keys(),
     outputs = TFM_RID_TRANSITION_OUTPUTS,
 )
 
@@ -145,6 +148,6 @@ def _publish_binary_impl(settings, attr):
 # `native_tools`, the native compiler for the binary's framework.
 publish_binary_transition = transition(
     implementation = _publish_binary_impl,
-    inputs = ["//dotnet:target_framework", "//dotnet:rid", FRAMEWORK_FROM_CONSUMER] + NO_READY_TO_RUN.keys(),
+    inputs = ["//dotnet:target_framework", "//dotnet:rid", FRAMEWORK_FROM_CONSUMER, STRICT_FRAMEWORK_REFERENCES] + NO_READY_TO_RUN.keys(),
     outputs = TFM_RID_TRANSITION_OUTPUTS,
 )

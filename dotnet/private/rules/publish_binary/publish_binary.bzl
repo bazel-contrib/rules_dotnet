@@ -4,6 +4,7 @@ Rule for assembling the publish output of a .NET binary.
 
 load("@bazel_skylib//lib:dicts.bzl", "dicts")
 load("@bazel_skylib//lib:paths.bzl", "paths")
+load("@bazel_skylib//rules:common_settings.bzl", "BuildSettingInfo")
 load("//dotnet/private:common.bzl", "generate_depsjson", "generate_runtimeconfig", "is_from_nuget_package", "netframework_runtime_identifier", "select_runtime_variants", "tfm_to_semver", "tfm_version", "to_rlocation_path")
 load(
     "//dotnet/private:providers.bzl",
@@ -129,7 +130,8 @@ def _publish_inputs(ctx):
         binary_framework = compile_info.target_framework,
         runtime_identifier = ctx.attr.runtime_identifier or binary_info.runtime_pack_info.runtime_identifier,
         # Only a self-contained publish ships the runtime: the shared frameworks
-        # the binary and its dependencies reference, as MSBuild publishes them.
+        # the binary runs on, which `_check_runtime` holds to its own when
+        # framework references are strict.
         runtime_pack_info = runtime_pack_of_frameworks(binary_info.runtime_pack_info, binary_info.runtime_frameworks) if ctx.attr.self_contained else None,
     )
 
@@ -149,6 +151,23 @@ def _check_runtime(ctx, publish):
         fail("No runtime pack found for target framework {} and runtime identifier {}".format(
             ctx.attr.target_framework,
             ctx.attr.runtime_identifier or "<host>",
+        ))
+
+    # Under strict framework references the runtime packs are those of the
+    # shared frameworks the binary references itself.
+    missing = [
+        framework
+        for framework in publish.binary_info.runtime_frameworks
+        if framework not in publish.binary_info.own_frameworks
+    ]
+    if ctx.attr._strict_framework_references[BuildSettingInfo].value and (ctx.attr.self_contained or ctx.attr.ready_to_run) and missing:
+        fail("{}: {} runs on {}, which one of its dependencies references, but a {} publish only takes the runtime packs of the shared frameworks the binary references itself. Add {} to the `framework_references` of {}, or take the frameworks of dependencies too with --@rules_dotnet//dotnet/settings:strict_framework_references=false.".format(
+            ctx.label,
+            binary,
+            ", ".join(missing),
+            "self-contained" if ctx.attr.self_contained else "ReadyToRun",
+            " and ".join(["\"{}\"".format(framework) for framework in missing]),
+            binary,
         ))
 
 
@@ -888,6 +907,10 @@ Requires `single_file`.""",
 Mirrors MSBuild's `<EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>`.
 Requires `single_file`.""",
             default = False,
+        ),
+        "_strict_framework_references": attr.label(
+            doc = "Whether the publish only takes the shared frameworks the binary references itself",
+            default = "//dotnet/settings:strict_framework_references",
         ),
         "_apphost_shimmer": attr.label(
             providers = [DotnetAssemblyCompileInfo, DotnetAssemblyRuntimeInfo],

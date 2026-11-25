@@ -29,6 +29,7 @@ load(
     "plan_static_web_assets",
 )
 load("//dotnet/private/rules/ready_to_run:ready_to_run.bzl", "with_ready_to_run_images")
+load("//dotnet/private/sdk:packs.bzl", "resolve_framework_references")
 
 def _create_launcher(ctx, is_windows, executable, toolchain, tfm):
     launcher = ctx.actions.declare_file("{}.{}".format(executable.basename, "bat" if is_windows else "sh"), sibling = executable)
@@ -404,6 +405,7 @@ def build_binary(ctx, compile_action, toolchain, runtime_toolchain = None, winex
             runtime_pack_info = ctx.attr._runtime_pack[0][DotnetRuntimePackInfo] if ctx.attr._runtime_pack else None,
             framework_version = runtime_files.framework_version if runtime_files else None,
             runtime_frameworks = binary_frameworks,
+            own_frameworks = resolve_framework_references(ctx.attr.project_sdk, getattr(ctx.attr, "framework_references", [])).keys(),
             winexe = winexe,
             app_config = app_config,
             netfx_layout = netfx.publish_layout if netfx else None,
