@@ -117,6 +117,38 @@ csharp_library(
 Use `resx_resource` to set a logical name or culture, or to provide files
 referenced by `ResXFileRef`. See [`examples/localization`](../examples/localization).
 
+## Content files
+
+`content_files` copies loose files next to the compiled assembly and into the
+output of `publish_binary` and `nuget_pack`, matching MSBuild's
+`<Content CopyToOutputDirectory="PreserveNewest" />`:
+
+```starlark
+dotnet_content_files(
+    name = "config",
+    srcs = glob(["assets/**"]),
+    strip_prefix = "assets",
+    prefix = "config",
+)
+
+csharp_library(
+    name = "lib",
+    srcs = ["Lib.cs"],
+    content_files = [":config"],
+    target_frameworks = ["net10.0"],
+)
+```
+
+- As in MSBuild (`CopyConflictingTransitiveContent=false`), a target's own
+  `content_files` override conflicting transitive `content_files` from `deps` at
+  the same destination path, while collisions between two dependencies fail the
+  build unless the consuming target overrides the path itself.
+- Set `overwrite = False` on `dotnet_content_files` to fail instead of
+  overriding a dependency's content file at the same destination path.
+- Set `transitive = False` on `dotnet_content_files` to copy files only to the
+  declaring library's own output directory without propagating them to
+  consumers, matching `<MSBuildCopyContentTransitively>false</MSBuildCopyContentTransitively>`.
+
 ## Razor
 
 `.razor` and `.cshtml` files go in `srcs` alongside `.cs`, and `project_sdk`

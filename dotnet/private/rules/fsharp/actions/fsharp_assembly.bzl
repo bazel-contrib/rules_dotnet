@@ -357,6 +357,7 @@ def AssemblyAction(
         appsetting_files = depset(out_appsetting_files),
         content_files = out_content_files,
         native = [],
+        direct_deps = [dep[DotnetAssemblyRuntimeInfo] for dep in deps],
         deps = depset([dep[DotnetAssemblyRuntimeInfo] for dep in deps], transitive = [dep[DotnetAssemblyRuntimeInfo].deps for dep in deps]),
         nuget_info = None,
         framework_references = framework_references_of(frameworks),

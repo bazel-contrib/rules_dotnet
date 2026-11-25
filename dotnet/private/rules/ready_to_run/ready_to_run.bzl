@@ -263,6 +263,7 @@ def with_ready_to_run_images(ctx, runtime_info):
         content_files = runtime_info.content_files,
         nuget_info = runtime_info.nuget_info,
         framework_references = getattr(runtime_info, "framework_references", None) or [],
+        direct_deps = getattr(runtime_info, "direct_deps", None) or [],
         deps = runtime_info.deps,
         direct_deps_depsjson_fragment = runtime_info.direct_deps_depsjson_fragment,
         ready_to_run = compile_ready_to_run_images(ctx.actions, tools, ctx.label, runtime_info.libs, runtime_info.deps, getattr(runtime_info, "framework_references", None) or []),

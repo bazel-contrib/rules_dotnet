@@ -37,9 +37,10 @@ DotnetAssemblyRuntimeInfo = provider(
         "data": "list[File]: Runtime data files",
         "resource_assemblies": "list[File]: Resource assemblies",
         "appsetting_files": "depset[File]: Appsetting files staged next to the assembly, flattened to their basename.",
-        "content_files": "list[struct(file, dest, src)]: Content files staged next to the assembly, where `dest` is each file's path relative to the output directory and `src` is the file it was staged from. Consumers reproduce this layout (e.g. in runfiles or the publish folder).",
+        "content_files": "list[struct(file, dest, src, overwrite, transitive)]: Content files staged next to the assembly, where `dest` is each file's path relative to the output directory, `src` is the file it was staged from, `overwrite` controls whether it supersedes conflicting transitive `content_files` at `dest`, and `transitive` controls whether dependents inherit it.",
         "nuget_info": "NuGetInfo: The package the assembly comes from, or None.",
         "framework_references": "list[string]: The framework references of the assembly itself, such as `Microsoft.AspNetCore.App`.",
+        "direct_deps": "list[DotnetAssemblyRuntimeInfo]: The direct runtime dependencies of the assembly.",
         "deps": "depset[DotnetAssemblyRuntimeInfo]: The direct and transitive runtime dependencies of the assembly",
         "direct_deps_depsjson_fragment": "dict[string, string]: The name and version of each direct runtime dependency: the `dependencies` of the assembly's deps.json entry.",
         "ready_to_run": """list[struct]: The ReadyToRun images of `libs`, when a publish asked for them, or None. Each carries
@@ -52,9 +53,9 @@ DotnetAssemblyRuntimeInfo = provider(
 )
 
 DotnetContentFilesInfo = provider(
-    doc = "Content files with explicit destination paths, from `dotnet_content_files`.",
+    doc = "Content files with explicit destination paths and propagation options, from `dotnet_content_files`.",
     fields = {
-        "mappings": "list[struct]: `struct(src = File, dest = string)` pairs, where `dest` is the destination path (relative to the assembly output directory) at which `src` should be staged.",
+        "mappings": "list[struct]: `struct(src = File, dest = string, overwrite = bool, transitive = bool)` entries, where `dest` is the destination path (relative to the assembly output directory) at which `src` should be staged.",
     },
 )
 

@@ -744,6 +744,7 @@ def AssemblyAction(
         # `compile_deps` rather than `deps`: an assembly pulled in from the
         # toolchain has to be resolvable at run time too, which is what puts it
         # in deps.json.
+        direct_deps = [dep[DotnetAssemblyRuntimeInfo] for dep in compile_deps if not _runs_only_in_the_compiler(dep)] if not is_any_analyzer else [],
         deps = depset(
             [dep[DotnetAssemblyRuntimeInfo] for dep in compile_deps if not _runs_only_in_the_compiler(dep)],
             transitive = [dep[DotnetAssemblyRuntimeInfo].deps for dep in deps],

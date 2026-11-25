@@ -32,7 +32,12 @@ def _dotnet_content_files_impl(ctx):
         if dest in seen:
             fail("dotnet_content_files %s: sources %s and %s both map to destination %r; adjust `srcs`, `strip_prefix`, or `prefix` to disambiguate." % (ctx.label, seen[dest], f.short_path, dest))
         seen[dest] = f.short_path
-        mappings.append(struct(src = f, dest = dest))
+        mappings.append(struct(
+            src = f,
+            dest = dest,
+            overwrite = ctx.attr.overwrite,
+            transitive = ctx.attr.transitive,
+        ))
 
     return [
         DefaultInfo(files = depset(ctx.files.srcs)),
@@ -90,6 +95,19 @@ csharp_binary(
                   "Must not contain `..`.",
             default = "",
         ),
+        "overwrite": attr.bool(
+            doc = "Whether these files supersede conflicting `content_files` inherited from `deps` " +
+                  "at the same destination path, matching MSBuild's default " +
+                  "`CopyConflictingTransitiveContent=false`. When `False`, a destination clash with " +
+                  "a transitive dependency fails the build.",
+            default = True,
+        ),
+        "transitive": attr.bool(
+            doc = "Whether dependents of a library inherit these files, matching MSBuild's " +
+                  "`MSBuildCopyContentTransitively`. When `False`, the files are staged only for " +
+                  "the declaring target itself.",
+            default = True,
+        ),
     },
 )
 
@@ -105,7 +123,7 @@ def resolve_content_file_mappings(content_targets, label):
         label: The label of the consuming target.
 
     Returns:
-        A list of `struct(src = File, dest = string)` mappings, one per destination.
+        A list of `struct(src = File, dest = string, overwrite = bool, transitive = bool)` mappings, one per destination.
     """
     sources = {}
     mappings = []
@@ -113,7 +131,15 @@ def resolve_content_file_mappings(content_targets, label):
         if DotnetContentFilesInfo in t:
             target_mappings = t[DotnetContentFilesInfo].mappings
         else:
-            target_mappings = [struct(src = f, dest = package_relative_path(f, label)) for f in t[DefaultInfo].files.to_list()]
+            target_mappings = [
+                struct(
+                    src = f,
+                    dest = package_relative_path(f, label),
+                    overwrite = True,
+                    transitive = True,
+                )
+                for f in t[DefaultInfo].files.to_list()
+            ]
 
         for mapping in target_mappings:
             previous = sources.get(mapping.dest)

@@ -56,3 +56,38 @@ csharp_nunit_test(
     target_frameworks = ["net6.0"],
     deps = [":library_with_content"],
 )
+
+dotnet_content_files(
+    name = "library_default_settings",
+    srcs = ["conflict/settings.json"],
+    prefix = "content",
+    strip_prefix = "conflict",
+)
+
+dotnet_content_files(
+    name = "library_private_content",
+    srcs = ["content/nested/data.txt"],
+    prefix = "private",
+    strip_prefix = "content",
+    transitive = False,
+)
+
+csharp_library(
+    name = "library_with_overridable_and_private_content",
+    srcs = ["Main.cs"],
+    out = "OverridableLibrary",
+    content_files = [
+        ":library_default_settings",
+        ":library_private_content",
+        "content/nested/data.txt",
+    ],
+    target_frameworks = ["net6.0"],
+)
+
+csharp_nunit_test(
+    name = "content_files_override_runtime_test",
+    srcs = ["ContentFilesOverrideTest.cs"],
+    content_files = ["content/settings.json"],
+    target_frameworks = ["net6.0"],
+    deps = [":library_with_overridable_and_private_content"],
+)

@@ -1655,6 +1655,75 @@ def copy_appsettings_to_dir(target_name, actions, is_windows, appsetting_files, 
     """
     return copy_files_to_dir(target_name + ".appsettings", actions, is_windows, appsetting_files, out_dir)
 
+def _runtime_dep_key(dep):
+    identity = _library_identity(dep)
+    if identity != None:
+        return identity
+    if dep.content_files:
+        return str(dep.content_files[0].file.owner)
+    return (dep.name, dep.version)
+
+def _unoverridden_reachable_deps(assembly_info):
+    """Dependency keys reachable per overridden destination without crossing an overriding library."""
+    deps = getattr(assembly_info, "deps", None)
+    if not deps:
+        return {}
+    all_deps = deps.to_list()
+    overriding_dests_by_key = {}
+    candidate_dests = {}
+    for dep in all_deps:
+        overridden = {
+            entry.dest: True
+            for entry in dep.content_files
+            if getattr(entry, "transitive", True) and getattr(entry, "overwrite", True)
+        }
+        if overridden and getattr(dep, "direct_deps", None):
+            overriding_dests_by_key[_runtime_dep_key(dep)] = overridden
+            for dest in overridden:
+                candidate_dests[dest] = True
+
+    if not candidate_dests:
+        return {}
+
+    root_key = ("__root__",)
+    adj = {root_key: [_runtime_dep_key(d) for d in getattr(assembly_info, "direct_deps", None) or []]}
+    for child_key in adj[root_key]:
+        adj.setdefault(child_key, [])
+    for dep in all_deps:
+        key = _runtime_dep_key(dep)
+        children = adj.setdefault(key, [])
+        for child in getattr(dep, "direct_deps", None) or []:
+            child_key = _runtime_dep_key(child)
+            children.append(child_key)
+            adj.setdefault(child_key, [])
+
+    reachable_for_dest = {}
+    for dest in candidate_dests:
+        visited = {}
+        queue = []
+        for child_key in adj[root_key]:
+            if child_key not in visited:
+                visited[child_key] = True
+                queue.append(child_key)
+
+        for idx in range(len(adj)):
+            if idx >= len(queue):
+                break
+            curr = queue[idx]
+
+            # `curr` itself is reached (so its own content file at `dest` is
+            # inherited), but it supersedes `dest` along paths through `curr`.
+            if dest in overriding_dests_by_key.get(curr, {}):
+                continue
+            for next_key in adj.get(curr, []):
+                if next_key not in visited:
+                    visited[next_key] = True
+                    queue.append(next_key)
+
+        reachable_for_dest[dest] = visited
+
+    return reachable_for_dest
+
 def copy_content_to_dir(target_name, actions, is_windows, content_file_mappings, out_dir):
     """Stages content files next to the assembly at their mapped destination paths.
 
@@ -1662,29 +1731,41 @@ def copy_content_to_dir(target_name, actions, is_windows, content_file_mappings,
         target_name: The name of the executing target.
         actions: The actions object.
         is_windows: If the OS is Windows.
-        content_file_mappings: A list of `struct(src = File, dest = string)`; each `src` is staged
-            at `dest` relative to `out_dir`.
+        content_file_mappings: A list of `struct(src = File, dest = string, ...)`; each `src` is
+            staged at `dest` relative to `out_dir`.
         out_dir: The assembly output directory to stage into.
 
     Returns:
-        A list of `struct(file, dest, src)`, where `file` is the staged `File`, `dest` is its path
-        relative to `out_dir` and `src` is the `File` it was staged from.
+        A list of `struct(file, dest, src, overwrite, transitive)`, where `file` is the staged
+        `File`, `dest` is its path relative to `out_dir`, and `src` is the `File` it was staged from.
     """
-    return _copy_files_to_dir(
+    staged = _copy_files_to_dir(
         actions,
         is_windows,
         [(m.src, m.dest) for m in content_file_mappings],
         out_dir,
         target_name + ".content.copy",
     )
+    return [
+        struct(
+            file = entry.file,
+            dest = entry.dest,
+            src = entry.src,
+            overwrite = getattr(m, "overwrite", True),
+            transitive = getattr(m, "transitive", True),
+        )
+        for (entry, m) in zip(staged, content_file_mappings)
+    ]
 
 def collect_transitive_content_files(label, assembly_info, transitive_runtime_deps, reserved = []):
     """Collects the content files a target inherits from its dependencies.
 
-    Every content file lands at its `dest` next to the consuming assembly, so two
-    different files cannot share one. Rather than let whichever dependency comes
-    first win, a clash fails the build and names both sides. The same source file
-    reaching the same `dest` through several libraries is not a clash.
+    Matches MSBuild's `CopyConflictingTransitiveContent=false` and `NETSDK1152`
+    semantics: a target's own `content_files` supersede conflicting transitive
+    `content_files` at the same `dest` unless `overwrite = False` was set, while
+    two peer dependencies staging different files at the same `dest` fail the
+    build unless the consuming target overrides `dest` itself. Entries marked
+    `transitive = False` are not inherited by dependents.
 
     Args:
         label: The `Label` of the consuming target, for error messages.
@@ -1694,25 +1775,55 @@ def collect_transitive_content_files(label, assembly_info, transitive_runtime_de
             target writes itself (its assembly, its appsettings files, ...).
 
     Returns:
-        The dependencies' content files as a list of `struct(file, dest, src)`,
-        without the ones `assembly_info` stages itself.
+        The dependencies' content files as a list of `struct(file, dest, src, ...)`,
+        without the ones `assembly_info` stages itself or non-transitive entries.
     """
+    if not any([dep.content_files for dep in transitive_runtime_deps]):
+        return []
 
-    # dest -> (source File or None, who put it there)
-    claimed = {path: (None, "an output of %s itself" % label) for path in reserved}
+    # dest -> struct(src = File or None, owner = string, supersedes_transitive = bool)
+    claimed = {
+        path: struct(src = None, owner = "an output of %s itself" % label, supersedes_transitive = False)
+        for path in reserved
+    }
     for entry in assembly_info.content_files:
-        claimed[entry.dest] = (entry.src, "the `content_files` of %s" % label)
+        if entry.dest not in claimed:
+            claimed[entry.dest] = struct(
+                src = entry.src,
+                owner = "the `content_files` of %s" % label,
+                supersedes_transitive = getattr(entry, "overwrite", True),
+            )
+
+    # An intermediate library whose `content_files` has `overwrite = True` and
+    # `transitive = True` supersedes matching `dest` paths along dependency
+    # paths through that library; if an ancestor is still reachable through
+    # another branch without an override, its entry remains active and triggers
+    # a peer conflict unless the consumer overrides `dest` itself.
+    reachable_for_dest = _unoverridden_reachable_deps(assembly_info)
 
     inherited = []
     for dep in transitive_runtime_deps:
+        dep_key = _runtime_dep_key(dep)
         for entry in dep.content_files:
+            if not getattr(entry, "transitive", True):
+                continue
+            if entry.dest in reachable_for_dest and dep_key not in reachable_for_dest[entry.dest]:
+                continue
+
             if entry.dest not in claimed:
-                claimed[entry.dest] = (entry.src, "the `content_files` of its dependency `%s`" % dep.name)
+                claimed[entry.dest] = struct(
+                    src = entry.src,
+                    owner = "the `content_files` of its dependency `%s`" % dep.name,
+                    supersedes_transitive = False,
+                )
                 inherited.append(entry)
                 continue
 
-            (src, owner) = claimed[entry.dest]
-            if src != entry.src:
+            existing = claimed[entry.dest]
+            if existing.supersedes_transitive:
+                continue
+
+            if existing.src != entry.src:
                 fail(("%s: the content file %s of its dependency `%s` would be staged at %r, " +
                       "but that path is already taken by %s%s. Give one of them another " +
                       "destination, for example with `dotnet_content_files`.") % (
@@ -1720,8 +1831,8 @@ def collect_transitive_content_files(label, assembly_info, transitive_runtime_de
                     entry.src.short_path,
                     dep.name,
                     entry.dest,
-                    owner,
-                    " (%s)" % src.short_path if src else "",
+                    existing.owner,
+                    " (%s)" % existing.src.short_path if existing.src else "",
                 ))
 
     return inherited
