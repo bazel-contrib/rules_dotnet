@@ -255,15 +255,15 @@ def resolve_enable_net_analyzers(ctx):
 def resolve_enforce_code_style_in_build(ctx):
     return resolve_tristate(ctx.attr.enforce_code_style_in_build, ctx.attr._enforce_code_style_in_build[BuildSettingInfo].value)
 
-# Assemblies that must not be handed to the compiler as references.
+# Assemblies that must not be handed to the compiler or PresentationBuildTasks as references.
 # See https://github.com/bazel-contrib/rules_dotnet/issues/405
-_UNREFERENCEABLE_ASSEMBLIES = ("System.EnterpriseServices.Thunk.dll", "System.EnterpriseServices.Wrapper.dll")
+UNREFERENCEABLE_ASSEMBLIES = ("System.EnterpriseServices.Thunk.dll", "System.EnterpriseServices.Wrapper.dll")
 
 def _format_ref(assembly):
-    return None if assembly.path.endswith(_UNREFERENCEABLE_ASSEMBLIES) else "-r:" + assembly.path
+    return None if assembly.path.endswith(UNREFERENCEABLE_ASSEMBLIES) else "-r:" + assembly.path
 
 def _format_quoted_ref(assembly):
-    return None if assembly.path.endswith(_UNREFERENCEABLE_ASSEMBLIES) else "-r:\"" + assembly.path + "\""
+    return None if assembly.path.endswith(UNREFERENCEABLE_ASSEMBLIES) else "-r:\"" + assembly.path + "\""
 
 def format_ref_arg(args, refs, quote = False):
     """Adds a `-r:` argument for each reference assembly to `args`.

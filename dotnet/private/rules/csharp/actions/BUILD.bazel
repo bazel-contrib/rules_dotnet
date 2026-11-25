@@ -53,5 +53,8 @@ bzl_library(
     name = "xaml",
     srcs = ["xaml.bzl"],
     visibility = ["//dotnet:__subpackages__"],
-    deps = ["//dotnet/private/sdk:packs"],
+    deps = [
+        "//dotnet/private:common",
+        "//dotnet/private/sdk:packs",
+    ],
 )

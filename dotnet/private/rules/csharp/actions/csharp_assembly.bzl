@@ -18,6 +18,7 @@ load(
     "get_framework_version_info",
     "is_core_framework",
     "is_greater_or_equal_framework",
+    "is_netframework",
     "resolve_tristate",
     "target_platform",
     "use_highentropyva",
@@ -778,13 +779,14 @@ def _xaml(compilation, *, partitioned, srcs, analyzer_inputs, frameworks, wpf_re
     """
     c = compilation
     is_core = is_core_framework(c.target_framework)
+    is_netfx_wpf = is_netframework(c.target_framework) and is_greater_or_equal_framework(c.target_framework, "net35")
 
     if not partitioned.xaml:
         if not wpf_resources:
             return None
 
         # The resources are embedded even without XAML.
-        check_wpf(c.label, frameworks, is_core, "`wpf_resources`")
+        check_wpf(c.label, frameworks, is_core, "`wpf_resources`", target_framework_is_netfx = is_netfx_wpf)
         return xaml_pass2(
             c.actions,
             c.label,
@@ -801,7 +803,7 @@ def _xaml(compilation, *, partitioned, srcs, analyzer_inputs, frameworks, wpf_re
             toolchain = c.toolchain,
         )
 
-    plan = xaml_plan(c.label, partitioned.xaml, frameworks, is_core)
+    plan = xaml_plan(c.label, partitioned.xaml, frameworks, is_core, target_framework_is_netfx = is_netfx_wpf)
     references = depset(transitive = [c.refs, c.framework_files])
     pass1 = xaml_pass1(
         c.actions,

@@ -359,6 +359,34 @@ def windowsdesktop_tests():
         expected_message_fragments = ["use net10.0-windows rather than net10.0", "NETSDK1136"],
     )
 
+    csharp_library(
+        name = "xaml_on_netstandard",
+        srcs = ["wpf/Wpf.cs"],
+        tags = ["manual"],
+        target_frameworks = ["netstandard2.0"],
+        wpf_resources = ["wpf/Wpf.cs"],
+    )
+
+    _failure_test(
+        name = "xaml_on_netstandard_test",
+        target_under_test = ":xaml_on_netstandard",
+        expected_message_fragments = ["only compiled for .NET Core 3.0 and later or .NET Framework 3.5 and later"],
+    )
+
+    csharp_library(
+        name = "xaml_on_net20",
+        srcs = ["wpf/Wpf.cs"],
+        tags = ["manual"],
+        target_frameworks = ["net20"],
+        wpf_resources = ["wpf/Wpf.cs"],
+    )
+
+    _failure_test(
+        name = "xaml_on_net20_test",
+        target_under_test = ":xaml_on_net20",
+        expected_message_fragments = ["only compiled for .NET Core 3.0 and later or .NET Framework 3.5 and later"],
+    )
+
     publish_binary(
         name = "app_native_aot",
         binary = ":app",

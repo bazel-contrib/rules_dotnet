@@ -15,6 +15,7 @@ file is. Its BAML is still embedded under its `package_path`, the URI WPF
 loads it by.
 """
 
+load("//dotnet/private:common.bzl", "UNREFERENCEABLE_ASSEMBLIES")
 load("//dotnet/private/sdk:packs.bzl", "WINDOWSDESKTOP_FRAMEWORK")
 
 # The application definition a C# project picks up implicitly.
@@ -56,7 +57,7 @@ def _uses_wpf(frameworks):
     profiles = frameworks[WINDOWSDESKTOP_FRAMEWORK]
     return profiles == None or "WPF" in profiles
 
-def check_wpf(label, frameworks, target_framework_is_core, what):
+def check_wpf(label, frameworks, target_framework_is_core, what, target_framework_is_netfx = False):
     """Fails unless a target that compiles WPF XAML or resources references WPF.
 
     Args:
@@ -64,9 +65,13 @@ def check_wpf(label, frameworks, target_framework_is_core, what):
       frameworks: Its shared frameworks, as `resolve_framework_references` returns them.
       target_framework_is_core: Whether it is built for .NET Core or .NET.
       what: What it has, for the message.
+      target_framework_is_netfx: Whether it is built for .NET Framework 3.5+, which includes WPF.
     """
+    if target_framework_is_netfx:
+        return
+
     if not target_framework_is_core:
-        fail("%s: %s are only compiled for .NET Core 3.0 and later." % (label, what))
+        fail("%s: %s are only compiled for .NET Core 3.0 and later or .NET Framework 3.5 and later." % (label, what))
 
     if not _uses_wpf(frameworks):
         fail(
@@ -103,7 +108,7 @@ def _path_in_package(file, label):
 
     return path
 
-def xaml_plan(label, xaml_srcs, frameworks, target_framework_is_core):
+def xaml_plan(label, xaml_srcs, frameworks, target_framework_is_core, target_framework_is_netfx = False):
     """Checks a target's XAML sources and splits them into the application definition and the pages.
 
     Args:
@@ -111,11 +116,12 @@ def xaml_plan(label, xaml_srcs, frameworks, target_framework_is_core):
       xaml_srcs: The `.xaml` files among its `srcs`.
       frameworks: Its shared frameworks, as `resolve_framework_references` returns them.
       target_framework_is_core: Whether it is built for .NET Core or .NET.
+      target_framework_is_netfx: Whether it is built for .NET Framework 3.5+, which includes WPF.
 
     Returns:
       A struct of the `application` definition, or None, and the `pages`.
     """
-    check_wpf(label, frameworks, target_framework_is_core, "XAML sources")
+    check_wpf(label, frameworks, target_framework_is_core, "XAML sources", target_framework_is_netfx = target_framework_is_netfx)
     _check_unique_names(
         label,
         [(src, _compiled_path(src, label) + ".baml") for src in xaml_srcs],
@@ -180,6 +186,9 @@ def _project_dir(label):
     """The directory the tasks run in, as MSBuild runs them in the project's."""
     return "/".join([part for part in [label.workspace_root, label.package] if part]) or "."
 
+def _reference_path(assembly):
+    return None if assembly.path.endswith(UNREFERENCEABLE_ASSEMBLIES) else assembly.path
+
 def _common_args(actions, label, tasks, assembly_name, root_namespace, target, references):
     args = actions.args()
     args.set_param_file_format("multiline")
@@ -191,7 +200,7 @@ def _common_args(actions, label, tasks, assembly_name, root_namespace, target, r
     args.add("--assembly-name", assembly_name)
     args.add("--root-namespace", root_namespace)
     args.add("--output-type", _OUTPUT_TYPES[target])
-    args.add_all(references, before_each = "--reference")
+    args.add_all(references, map_each = _reference_path, before_each = "--reference")
 
     return args
 

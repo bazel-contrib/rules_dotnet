@@ -69,4 +69,12 @@ public sealed class XamlResourceTests
             GeneratedResources("controls/net10.0-windows/XamlControls.dll", "XamlControls.g.resources"),
             Is.EqualTo(new[] { "controls/badge.baml" }));
     }
+
+    [Test]
+    public void ANetFrameworkLibraryEmbedsItsBaml()
+    {
+        Assert.That(
+            GeneratedResources("controls_net48/net48/XamlControlsNet48.dll", "XamlControlsNet48.g.resources"),
+            Is.EqualTo(new[] { "controls/badge.baml" }));
+    }
 }
