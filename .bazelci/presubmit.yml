@@ -7,11 +7,11 @@ matrix:
   platform:
     [
       "windows",
-      "ubuntu2004",
-      "rbe_ubuntu2204",
+      "ubuntu2404",
+      "rbe_ubuntu2404",
       "macos",
       "macos_arm64",
-      "ubuntu2004_arm64",
+      "ubuntu2404_arm64",
       "windows_arm64",
     ]
   flag_combo:
@@ -19,7 +19,8 @@ matrix:
       ["--@rules_dotnet//dotnet/settings:strict_deps=true"],
       ["--@rules_dotnet//dotnet/settings:strict_deps=false"],
     ]
-  e2e_working_directory: ["e2e/net8.0", "e2e/net9.0", "e2e/net10.0", "e2e/net11.0", "e2e/web_sdk"]
+  e2e_working_directory:
+    ["e2e/net8.0", "e2e/net9.0", "e2e/net10.0", "e2e/net11.0", "e2e/web_sdk"]
 
 tasks:
   test_all:
