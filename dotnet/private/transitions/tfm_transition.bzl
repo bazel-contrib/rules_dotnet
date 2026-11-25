@@ -27,6 +27,7 @@ load(
     "TRIMMED",
     "platform_to_rid",
     "rid_compatability_transition_outputs",
+    "strict_framework_references",
 )
 
 def _ready_to_run(settings, attr, transitioned_tfm, runtime_identifier):
@@ -136,7 +137,7 @@ def _publish_binary_impl(settings, attr):
         # its packs, and only when the frameworks of the binary's dependencies
         # count too. Otherwise the binary keeps the configuration it has
         # outside a publish. NativeAOT compiles the runtime in.
-        ALL_SHARED_FRAMEWORKS: (attr.self_contained or attr.ready_to_run) and not attr.native_aot and not settings[STRICT_FRAMEWORK_REFERENCES],
+        ALL_SHARED_FRAMEWORKS: (attr.self_contained or attr.ready_to_run) and not attr.native_aot and not strict_framework_references(attr.strict_framework_references, settings[STRICT_FRAMEWORK_REFERENCES]),
     })
 
     if attr.native_aot:

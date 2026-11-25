@@ -43,6 +43,7 @@ load(
 )
 load("//dotnet/private/sdk:packs.bzl", "WASM_RID", "WINDOWS_ONLY_FRAMEWORKS")
 load("//dotnet/private/sdk/runtime_packs:runtime_pack.bzl", "runtime_pack_of_frameworks")
+load("//dotnet/private/transitions:common.bzl", "strict_framework_references")
 load("//dotnet/private/transitions:tfm_transition.bzl", "publish_binary_transition", "tfm_transition")
 
 def _binary(ctx):
@@ -160,8 +161,9 @@ def _check_runtime(ctx, publish):
         for framework in publish.binary_info.runtime_frameworks
         if framework not in publish.binary_info.own_frameworks
     ]
-    if ctx.attr._strict_framework_references[BuildSettingInfo].value and (ctx.attr.self_contained or ctx.attr.ready_to_run) and missing:
-        fail("{}: {} runs on {}, which one of its dependencies references, but a {} publish only takes the runtime packs of the shared frameworks the binary references itself. Add {} to the `framework_references` of {}, or take the frameworks of dependencies too with --@rules_dotnet//dotnet/settings:strict_framework_references=false.".format(
+    strict = strict_framework_references(ctx.attr.strict_framework_references, ctx.attr._strict_framework_references[BuildSettingInfo].value)
+    if strict and (ctx.attr.self_contained or ctx.attr.ready_to_run) and missing:
+        fail("{}: {} runs on {}, which one of its dependencies references, but a {} publish only takes the runtime packs of the shared frameworks the binary references itself. Add {} to the `framework_references` of {}, or take the frameworks of dependencies too with `strict_framework_references = 0` on the publish or --@rules_dotnet//dotnet/settings:strict_framework_references=false.".format(
             ctx.label,
             binary,
             ", ".join(missing),
@@ -924,8 +926,19 @@ Mirrors MSBuild's `<EnableCompressionInSingleFile>true</EnableCompressionInSingl
 Requires `single_file`.""",
             default = False,
         ),
+        "strict_framework_references": attr.int(
+            doc = """Whether a self-contained or ReadyToRun publish only takes the runtime packs of the shared frameworks its binary references itself.
+
+`1` takes only those, and fails when a dependency references another shared
+framework. `0` takes those of the binary's dependencies too, as MSBuild does
+unless `DisableTransitiveFrameworkReferences` is set, at the cost of fetching
+the runtime packs of every shared framework. `-1`, the default, follows
+`--@rules_dotnet//dotnet/settings:strict_framework_references`.""",
+            default = -1,
+            values = [-1, 0, 1],
+        ),
         "_strict_framework_references": attr.label(
-            doc = "Whether the publish only takes the shared frameworks the binary references itself",
+            doc = "Whether the publish only takes the shared frameworks the binary references itself, unless `strict_framework_references` says otherwise",
             default = "//dotnet/settings:strict_framework_references",
         ),
         "_apphost_shimmer": attr.label(
@@ -950,6 +963,7 @@ _NOT_FOR_WASM = [
     "include_native_libraries_for_self_extract",
     "enable_compression_in_single_file",
     "roll_forward_behavior",
+    "strict_framework_references",
 ]
 
 # Settings only a WebAssembly publish has, declared on the macro itself.

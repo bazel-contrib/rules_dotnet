@@ -253,12 +253,17 @@ the frameworks the binary lists itself, and fails if a dependency needs another
 one. This is stricter than MSBuild, where a `FrameworkReference` flows through
 project and package references unless
 `<DisableTransitiveFrameworkReferences>true</DisableTransitiveFrameworkReferences>`
-is set. To publish the frameworks of dependencies as well, use the following
+is set. To publish the frameworks of dependencies as well, set
+`strict_framework_references = 0` on the `publish_binary`, or use the following
 flag, or add it to your `.bazelrc` to make it the default:
 
 ```
 --@rules_dotnet//dotnet/settings:strict_framework_references=false
 ```
+
+Such a publish fetches the runtime packs of every shared framework for its
+runtime identifier, since which of them the dependencies reference is only known
+after the packs are picked, and ships those the binary runs on.
 
 `nuget_pack` records a library's framework references in the package, so that
 its consumers get them too.
