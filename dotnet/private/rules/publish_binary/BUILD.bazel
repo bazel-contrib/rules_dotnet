@@ -21,10 +21,11 @@ bool_setting(
     visibility = ["//visibility:public"],
 )
 
-# Whether the publish ships the runtime or compiles against it. Its binary then
-# takes the runtime packs of every shared framework, since only the publish can
-# tell which of them the binary's dependencies reference. Only the binary keeps
-# it; see //dotnet/private/transitions:tfm_transition.
+# Whether the binary takes the runtime packs of every shared framework: set when
+# a publish ships the runtime or compiles against it and framework references
+# are not strict, since only the publish can tell which of them the binary's
+# dependencies reference. Only the binary keeps it; see
+# //dotnet/private/transitions:tfm_transition.
 bool_setting(
     name = "all_shared_frameworks",
     build_setting_default = False,

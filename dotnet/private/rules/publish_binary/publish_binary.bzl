@@ -5,7 +5,7 @@ Rule for assembling the publish output of a .NET binary.
 load("@bazel_skylib//lib:dicts.bzl", "dicts")
 load("@bazel_skylib//lib:paths.bzl", "paths")
 load("@bazel_skylib//rules:common_settings.bzl", "BuildSettingInfo")
-load("//dotnet/private:common.bzl", "generate_depsjson", "generate_runtimeconfig", "is_from_nuget_package", "netframework_runtime_identifier", "select_runtime_variants", "tfm_to_semver", "tfm_version", "to_rlocation_path")
+load("//dotnet/private:common.bzl", "generate_depsjson", "generate_runtimeconfig", "is_from_nuget_package", "netframework_runtime_identifier", "select_runtime_variants", "shared_framework_of_runtime_pack", "tfm_to_semver", "tfm_version", "to_rlocation_path")
 load(
     "//dotnet/private:providers.bzl",
     "DotnetAssemblyCompileInfo",
@@ -170,6 +170,20 @@ def _check_runtime(ctx, publish):
             binary,
         ))
 
+    # Otherwise the runtime packs are those of every shared framework with one
+    # for the runtime identifier, which need not include each the binary runs
+    # on. NativeAOT compiles the runtime in instead.
+    if (ctx.attr.self_contained or ctx.attr.ready_to_run) and not ctx.attr.native_aot:
+        packed = [shared_framework_of_runtime_pack(pack.name) for pack in publish.binary_info.runtime_pack_info.assembly_runtime_infos]
+        unpacked = [framework for framework in publish.binary_info.runtime_frameworks if framework not in packed]
+        if unpacked:
+            fail("{}: {} runs on {}, which has no runtime pack for {} and runtime identifier {}.".format(
+                ctx.label,
+                binary,
+                ", ".join(unpacked),
+                publish.binary_framework,
+                publish.binary_info.runtime_pack_info.runtime_identifier,
+            ))
 
 def _native_aot_publish(ctx, publish):
     """One native executable, with what it loads or serves at run time beside it."""
@@ -614,7 +628,9 @@ def _ready_to_run_images(ctx, publish, assembly_files, runtime_pack_files):
         A struct of `replace`, the image of each assembly keyed by the
         assembly's path, and `extra`, images published besides.
     """
-    framework = ready_to_run_framework(publish.binary_info.runtime_pack_info)
+    # The shared frameworks the binary runs on, as each target below it
+    # compiled its images against those it runs on.
+    framework = ready_to_run_framework(publish.binary_info.runtime_pack_info, publish.binary_info.runtime_frameworks)
 
     # Runtime pack assemblies already ship as ReadyToRun images; only a
     # composite image, which has to cover the framework, recompiles them.

@@ -1466,8 +1466,18 @@ def runtime_frameworks(assembly_runtime_info, transitive_runtime_deps):
 
     return [framework for framework in SHARED_FRAMEWORKS if framework in frameworks]
 
-def _shared_framework_of_runtime_pack(pack_id):
-    """The shared framework a runtime pack carries: Microsoft.NETCore.App for Microsoft.NETCore.App.Runtime.win-x64."""
+def shared_framework_of_runtime_pack(pack_id):
+    """The shared framework a runtime pack carries.
+
+    Microsoft.NETCore.App for Microsoft.NETCore.App.Runtime.win-x64 and for
+    Microsoft.NETCore.App.Runtime.Mono.browser-wasm.
+
+    Args:
+        pack_id: The id of the runtime pack.
+
+    Returns:
+        The name of the shared framework.
+    """
     return pack_id.partition(".Runtime.")[0]
 
 # For runtimeconfig.json spec see https://github.com/dotnet/sdk/blob/main/documentation/specs/runtime-configuration-file.md
@@ -1498,7 +1508,7 @@ def generate_runtimeconfig(target_framework, frameworks, is_self_contained, roll
     if is_self_contained:
         # Named as the host knows them: `Microsoft.NETCore.App`, not the runtime pack.
         base["runtimeOptions"]["includedFrameworks"] = [
-            {"name": _shared_framework_of_runtime_pack(assembly_runtime_info.name), "version": assembly_runtime_info.version}
+            {"name": shared_framework_of_runtime_pack(assembly_runtime_info.name), "version": assembly_runtime_info.version}
             for assembly_runtime_info in runtime_pack_info.assembly_runtime_infos
         ]
     else:

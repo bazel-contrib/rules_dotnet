@@ -9,10 +9,12 @@ bool_flag(
     visibility = ["//visibility:public"],
 )
 
-# Whether a binary runs only on the shared frameworks it references itself
-# (the default), or on those its dependencies reference too. A self-contained
-# or ReadyToRun `publish_binary` fails when strict and a dependency references
-# another one. See docs/README.md#shared-frameworks.
+# Whether a self-contained or ReadyToRun `publish_binary` only takes the runtime
+# packs of the shared frameworks its binary references itself (the default),
+# and fails when a dependency references another one. When false, it takes
+# those its dependencies reference too, which costs fetching the runtime packs
+# of every shared framework. A binary runs on the frameworks of its
+# dependencies either way. See docs/README.md#shared-frameworks.
 bool_flag(
     name = "strict_framework_references",
     build_setting_default = True,

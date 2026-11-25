@@ -1,5 +1,6 @@
 ".Net Runtime Pack"
 
+load("//dotnet/private:common.bzl", "shared_framework_of_runtime_pack")
 load("//dotnet/private:providers.bzl", "DotnetAssemblyRuntimeInfo", "DotnetRuntimePackInfo", "NuGetInfo")
 load("//dotnet/private/sdk:framework_list.bzl", "framework_assembly_key")
 load("//dotnet/private/sdk:packs.bzl", "NETCORE_FRAMEWORK")
@@ -67,11 +68,11 @@ def runtime_pack_of_frameworks(runtime_pack_info, frameworks):
     Returns:
         A DotnetRuntimePackInfo of the packs of those frameworks alone.
     """
+    kept_frameworks = [NETCORE_FRAMEWORK] + list(frameworks)
     kept = [
         i
         for (i, runtime_info) in enumerate(runtime_pack_info.all_assembly_runtime_infos)
-        # Microsoft.AspNetCore.App for Microsoft.AspNetCore.App.Runtime.linux-x64.
-        if runtime_info.name.partition(".Runtime.")[0] in [NETCORE_FRAMEWORK] + frameworks
+        if shared_framework_of_runtime_pack(runtime_info.name) in kept_frameworks
     ]
     if len(kept) == len(runtime_pack_info.all_assembly_runtime_infos):
         return runtime_pack_info

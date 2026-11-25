@@ -15,15 +15,17 @@ READY_TO_RUN_FRAMEWORK = "//dotnet/private/rules/ready_to_run:framework"
 READY_TO_RUN_SHARED_FRAMEWORKS = "//dotnet/private/rules/ready_to_run:shared_frameworks"
 
 # Set on the edge from a publish to its binary: that the binary is the one
-# published, the native compiler the publish asks it for, and whether the
-# publish trims it, and whether it needs the runtime packs of every shared
-# framework. See //dotnet/private/rules/publish_binary.
+# published, the native compiler the publish asks it for, whether the publish
+# trims it, and whether it takes the runtime packs of every shared framework.
+# See //dotnet/private/rules/publish_binary.
 PUBLISHED = "//dotnet/private/rules/publish_binary:published"
 ALL_SHARED_FRAMEWORKS = "//dotnet/private/rules/publish_binary:all_shared_frameworks"
 NATIVE_COMPILER = "//dotnet/private/rules/publish_binary:native_compiler"
 TRIMMED = "//dotnet/private/rules/publish_binary:trimmed"
 
-# Whether a binary only takes the shared frameworks it references itself.
+# Whether a publish only takes the shared frameworks its binary references
+# itself. publish_binary_transition folds it into ALL_SHARED_FRAMEWORKS, which
+# is all that the transitions below the publish read.
 STRICT_FRAMEWORK_REFERENCES = "//dotnet/settings:strict_framework_references"
 
 # What every transition but the publish's leaves them at.
