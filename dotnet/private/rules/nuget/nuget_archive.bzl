@@ -129,7 +129,9 @@ def _process_group_with_tfm(groups, group_name, file):
         groups["resource_assemblies"].setdefault(tfm, []).append(file)
         return
 
-    if file.endswith(".dll"):
+    # Like NuGet, only a DLL directly in the framework folder is an assembly. One
+    # in a subfolder is something else.
+    if file.endswith(".dll") and len(parts) == 3:
         group.append(file)
 
 # A package supports a framework when it brings anything for it, assemblies or
