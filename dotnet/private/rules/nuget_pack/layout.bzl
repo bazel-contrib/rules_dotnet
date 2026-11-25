@@ -486,7 +486,7 @@ def tool_layout(tfm, binary_info, runtime_info, assembly_files, depsjson, runtim
 
     files = [
         (prefix + path, file)
-        for (path, file) in publish_layout(None, binary_info, assembly_files, [], False)
+        for (path, file) in publish_layout(binary_info, assembly_files, [])
     ]
     files.append((prefix + depsjson.basename, depsjson))
     files.append((prefix + runtimeconfig.basename, runtimeconfig))

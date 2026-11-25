@@ -263,7 +263,7 @@ def _managed_files(ctx, publish):
 
     assembly_files = collect_assembly_files(ctx.label, publish.assembly_info, publish.transitive_runtime_deps, depsjson_struct)
     runtime_pack_files = _runtime_pack_files(publish.runtime_pack_info, depsjson_struct)
-    layout = publish_layout(publish.runtime_identifier, publish.binary_info, assembly_files, runtime_pack_files, ctx.attr.self_contained)
+    layout = publish_layout(publish.binary_info, assembly_files, runtime_pack_files)
 
     # Before any ReadyToRun or copy action is declared, so that a collision
     # names the targets at fault rather than surfacing as conflicting actions.

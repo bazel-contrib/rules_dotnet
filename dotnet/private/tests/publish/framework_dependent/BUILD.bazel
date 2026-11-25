@@ -2,8 +2,24 @@ load("@rules_pkg//pkg:tar.bzl", "pkg_tar")
 load("@rules_shell//shell:sh_test.bzl", "sh_test")
 load(
     "//dotnet:defs.bzl",
+    "csharp_binary",
+    "import_library",
     "publish_binary",
 )
+load(":tests.bzl", "framework_dependent_test_suite")
+
+framework_dependent_test_suite(name = "framework_dependent_test_suite")
+
+# The runtime identifier a publish is for on each host, which names the
+# directory it is put in.
+_RUNTIME_IDENTIFIERS = {
+    "//dotnet/private:linux-x64": "linux-x64",
+    "//dotnet/private:linux-arm64": "linux-arm64",
+    "//dotnet/private:osx-x64": "osx-x64",
+    "//dotnet/private:osx-arm64": "osx-arm64",
+    "//dotnet/private:windows-x64": "win-x64",
+    "//dotnet/private:windows-arm64": "win-arm64",
+}
 
 publish_binary(
     name = "framework_dependent",
@@ -23,16 +39,10 @@ pkg_tar(
     include_runfiles = True,
     mode = "0755",
     package_dir = "/",
-    strip_prefix = select(
-        {
-            "//dotnet/private:linux-x64": "framework_dependent/publish/linux-x64",
-            "//dotnet/private:linux-arm64": "framework_dependent/publish/linux-arm64",
-            "//dotnet/private:osx-x64": "framework_dependent/publish/osx-x64",
-            "//dotnet/private:osx-arm64": "framework_dependent/publish/osx-arm64",
-            "//dotnet/private:windows-x64": "framework_dependent/publish/win-x64",
-            "//dotnet/private:windows-arm64": "framework_dependent/publish/win-arm64",
-        },
-    ),
+    strip_prefix = select({
+        config: "framework_dependent/publish/" + rid
+        for (config, rid) in _RUNTIME_IDENTIFIERS.items()
+    }),
 )
 
 sh_test(
@@ -40,10 +50,84 @@ sh_test(
     srcs = [
         "test.sh",
     ],
-    args = ["$(DOTNET_BIN)"],
+    args = [
+        "$(DOTNET_BIN)",
+        "$(rootpath :tar)",
+        "app_to_publish",
+    ],
     data = [
         ":tar",
         "//dotnet:resolved_toolchain",
     ],
     toolchains = ["//dotnet:resolved_toolchain"],
+)
+
+# An app whose only native library is built here. The one above also loads
+# LibGit2Sharp's, which puts their `runtimes/<rid>/native/` folder on the
+# host's search path and so would find a first party library put there too.
+csharp_binary(
+    name = "native_only_app",
+    srcs = ["NativeMain.cs"],
+    target_frameworks = ["net10.0"],
+    deps = ["//dotnet/private/tests/publish/app_to_publish:lib_with_native"],
+)
+
+publish_binary(
+    name = "native_only",
+    binary = ":native_only_app",
+    roll_forward_behavior = "Major",
+    self_contained = False,
+    target_framework = "net10.0",
+)
+
+pkg_tar(
+    name = "native_only_tar",
+    srcs = [":native_only"],
+    mode = "0755",
+    package_dir = "/",
+    strip_prefix = select({
+        config: "native_only/publish/" + rid
+        for (config, rid) in _RUNTIME_IDENTIFIERS.items()
+    }),
+)
+
+sh_test(
+    name = "native_only_test",
+    srcs = [
+        "test.sh",
+    ],
+    args = [
+        "$(DOTNET_BIN)",
+        "$(rootpath :native_only_tar)",
+        "native_only_app",
+    ],
+    data = [
+        ":native_only_tar",
+        "//dotnet:resolved_toolchain",
+    ],
+    toolchains = ["//dotnet:resolved_toolchain"],
+)
+
+# A placeholder, never built or loaded: an `import_library` written by hand
+# for a native library that is no NuGet package's, as one checked into the
+# repository would be.
+import_library(
+    name = "handwritten_native",
+    library_name = "HandwrittenNative",
+    native = ["handwritten/libhandwritten.so"],
+    version = "1.0.0",
+)
+
+# A native library of each origin: built here, imported by hand and from a
+# NuGet package.
+csharp_binary(
+    name = "native_layout_app",
+    srcs = ["NativeMain.cs"],
+    tags = ["manual"],
+    target_frameworks = ["net10.0"],
+    deps = [
+        ":handwritten_native",
+        "//dotnet/private/tests/publish/app_to_publish:lib_with_native",
+        "@paket.rules_dotnet_dev_nuget_packages//libgit2sharp",
+    ],
 )

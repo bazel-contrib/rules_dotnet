@@ -22,6 +22,7 @@ import_library(
     name = "lib_with_native",
     library_name = "native",
     native = [":native"],
+    visibility = ["//dotnet/private/tests/publish:__subpackages__"],
 )
 
 csharp_binary(

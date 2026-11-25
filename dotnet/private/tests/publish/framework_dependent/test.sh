@@ -1,5 +1,9 @@
 #! /usr/bin/env bash
 
+# Unpacks a framework-dependent publish and runs it outside of Bazel.
+#
+# Usage: test.sh <dotnet binary> <publish tarball> <executable name>
+
 set -eou pipefail
 
 # Unset the runfiles related envs to make sure that runfiles work outside of Bazel
@@ -19,17 +23,19 @@ DOTNET_ROOT="../${TOOLCHAIN_LOCATION#'external/'}/"
 export DOTNET_ROOT
 ls -la ./../_main/dotnet/private/tests/publish
 
+TARBALL="$2"
+APP="$3"
+
 if [[ "$OSTYPE" == "linux-gnu"* ]]; then
-    tar -xvf ./dotnet/private/tests/publish/framework_dependent/tar.tar
-    ./app_to_publish
+    tar -xvf "$TARBALL"
+    "./$APP"
 elif [[ "$OSTYPE" == "darwin"* ]]; then
-    tar -xvf ./dotnet/private/tests/publish/framework_dependent/tar.tar
-    ./app_to_publish
+    tar -xvf "$TARBALL"
+    "./$APP"
 elif [[ "$OSTYPE" == "msys" ]] || [[ "$OSTYPE" == "cygwin" ]] || [[ "$OSTYPE" == "win32" ]]; then
-    tar -xvf ./dotnet/private/tests/publish/framework_dependent/tar.tar
-    ./app_to_publish.exe
+    tar -xvf "$TARBALL"
+    "./$APP.exe"
 else
     echo "Could not figure out which OS is running the test"
     exit 1
 fi
-
