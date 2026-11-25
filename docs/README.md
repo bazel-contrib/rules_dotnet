@@ -246,9 +246,9 @@ csharp_library(
 
 A target only compiles against the frameworks it lists itself, so list a
 framework on every target whose code uses it. A binary runs on the frameworks
-of all its dependencies, NuGet packages included. A self-contained or
-ReadyToRun `publish_binary` only takes the runtime packs of the frameworks the
-binary lists itself, and fails if a dependency needs another one.
+of all its dependencies, NuGet packages included, and a self-contained
+`publish_binary` ships the runtime packs of all of them, as `dotnet publish`
+does.
 
 `nuget_pack` records a library's framework references in the package, so that
 its consumers get them too.

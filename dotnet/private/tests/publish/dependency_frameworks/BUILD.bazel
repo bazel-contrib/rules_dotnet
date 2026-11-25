@@ -1,0 +1,80 @@
+load("@rules_pkg//pkg:tar.bzl", "pkg_tar")
+load("@rules_shell//shell:sh_test.bzl", "sh_test")
+load(
+    "//dotnet:defs.bzl",
+    "csharp_binary",
+    "csharp_library",
+    "publish_binary",
+)
+
+csharp_library(
+    name = "lib",
+    srcs = ["Lib.cs"],
+    framework_references = ["Microsoft.AspNetCore.App"],
+    nullable = "enable",
+    target_frameworks = ["net10.0"],
+)
+
+# References no shared framework itself: only its dependency does.
+csharp_binary(
+    name = "app",
+    srcs = ["Main.cs"],
+    target_frameworks = ["net10.0"],
+    deps = [":lib"],
+)
+
+publish_binary(
+    name = "self_contained",
+    binary = ":app",
+    self_contained = True,
+    target_framework = "net10.0",
+)
+
+publish_binary(
+    name = "ready_to_run",
+    binary = ":app",
+    ready_to_run = True,
+    self_contained = True,
+    target_framework = "net10.0",
+)
+
+# Nothing this binary depends on references a shared framework.
+publish_binary(
+    name = "no_shared_frameworks",
+    binary = "//dotnet/private/tests/publish/app_to_publish",
+    self_contained = True,
+    target_framework = "net10.0",
+)
+
+[
+    pkg_tar(
+        name = publish + "_tar",
+        srcs = [":" + publish],
+        include_runfiles = True,
+        mode = "0755",
+        package_dir = "/" + publish,
+        strip_prefix = select({
+            "//dotnet/private:linux-x64": publish + "/publish/linux-x64",
+            "//dotnet/private:linux-arm64": publish + "/publish/linux-arm64",
+            "//dotnet/private:osx-x64": publish + "/publish/osx-x64",
+            "//dotnet/private:osx-arm64": publish + "/publish/osx-arm64",
+            "//dotnet/private:windows-x64": publish + "/publish/win-x64",
+            "//dotnet/private:windows-arm64": publish + "/publish/win-arm64",
+        }),
+    )
+    for publish in [
+        "self_contained",
+        "ready_to_run",
+        "no_shared_frameworks",
+    ]
+]
+
+sh_test(
+    name = "dependency_frameworks_test",
+    srcs = ["test.sh"],
+    data = [
+        ":no_shared_frameworks_tar",
+        ":ready_to_run_tar",
+        ":self_contained_tar",
+    ],
+)

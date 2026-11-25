@@ -27,7 +27,15 @@ load(
     _DEFAULT_TARGET_FRAMEWORK = "DEFAULT_TARGET_FRAMEWORK",
     _FRAMEWORK_COMPATIBILITY = "FRAMEWORK_COMPATIBILITY",
 )
-load("//dotnet/private/sdk:packs.bzl", "FRAMEWORK_REFERENCES", "NETCORE_FRAMEWORK", "SHARED_FRAMEWORKS", "WINDOWS_ONLY_FRAMEWORKS")
+load(
+    "//dotnet/private/sdk:packs.bzl",
+    "FRAMEWORK_REFERENCES",
+    "NETCORE_FRAMEWORK",
+    "RUNTIME_PACK_LOOKUP_TABLE",
+    "SHARED_FRAMEWORKS",
+    "WINDOWS_ONLY_FRAMEWORKS",
+    "frameworks_key",
+)
 load("//dotnet/private/sdk:rids.bzl", "RUNTIME_GRAPH")
 
 def _collect_transitive():
@@ -743,6 +751,25 @@ def get_highest_compatible_runtime_identifier(incoming_rid, rids):
             return compatible_rid
 
     return None
+
+def shipped_shared_frameworks(target_framework, runtime_identifier):
+    """The shared frameworks that ship a runtime pack for a framework and runtime identifier.
+
+    Args:
+      target_framework: The target framework.
+      runtime_identifier: The runtime identifier.
+
+    Returns:
+      The shared frameworks, as `resolve_framework_references` returns them.
+    """
+    frameworks = {}
+    for framework in SHARED_FRAMEWORKS:
+        candidate = frameworks | {framework: None}
+        rids = RUNTIME_PACK_LOOKUP_TABLE[frameworks_key(candidate, profiles = False)].get(base_framework(target_framework), {})
+        if get_highest_compatible_runtime_identifier(runtime_identifier, rids.keys()):
+            frameworks = candidate
+
+    return frameworks
 
 def get_nuget_relative_path(file):
     """Returns NuGet package relative path of a file that is part of a NuGet package

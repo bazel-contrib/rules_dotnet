@@ -41,6 +41,7 @@ load(
     "ready_to_run_references",
 )
 load("//dotnet/private/sdk:packs.bzl", "WASM_RID", "WINDOWS_ONLY_FRAMEWORKS")
+load("//dotnet/private/sdk/runtime_packs:runtime_pack.bzl", "runtime_pack_of_frameworks")
 load("//dotnet/private/transitions:tfm_transition.bzl", "publish_binary_transition", "tfm_transition")
 
 def _binary(ctx):
@@ -127,8 +128,9 @@ def _publish_inputs(ctx):
         # framework the publish asked for.
         binary_framework = compile_info.target_framework,
         runtime_identifier = ctx.attr.runtime_identifier or binary_info.runtime_pack_info.runtime_identifier,
-        # Only a self-contained publish ships the runtime.
-        runtime_pack_info = binary_info.runtime_pack_info if ctx.attr.self_contained else None,
+        # Only a self-contained publish ships the runtime: the shared frameworks
+        # the binary and its dependencies reference, as MSBuild publishes them.
+        runtime_pack_info = runtime_pack_of_frameworks(binary_info.runtime_pack_info, binary_info.runtime_frameworks) if ctx.attr.self_contained else None,
     )
 
 def _check_runtime(ctx, publish):
@@ -149,22 +151,6 @@ def _check_runtime(ctx, publish):
             ctx.attr.runtime_identifier or "<host>",
         ))
 
-    # The runtime packs are those of the shared frameworks the binary
-    # references itself, not those its dependencies bring in.
-    missing = [
-        framework
-        for framework in publish.binary_info.runtime_frameworks
-        if framework not in publish.binary_info.packed_frameworks
-    ]
-    if (ctx.attr.self_contained or ctx.attr.ready_to_run) and missing:
-        fail("{}: {} runs on {}, which one of its dependencies references, but a {} publish only takes the runtime packs of the shared frameworks the binary references itself. Add {} to the `framework_references` of {}.".format(
-            ctx.label,
-            binary,
-            ", ".join(missing),
-            "self-contained" if ctx.attr.self_contained else "ReadyToRun",
-            " and ".join(["\"{}\"".format(framework) for framework in missing]),
-            binary,
-        ))
 
 def _native_aot_publish(ctx, publish):
     """One native executable, with what it loads or serves at run time beside it."""
