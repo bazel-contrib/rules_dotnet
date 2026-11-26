@@ -126,6 +126,7 @@ filegroup(
     srcs = glob(
         [
             "sdk/{sdk_version}/Microsoft.Build.Tasks.Core.dll",
+            "sdk/{sdk_version}/System.CodeDom.dll",
             "sdk/{sdk_version}/System.Resources.Extensions.dll",
         ],
         allow_empty = True,
