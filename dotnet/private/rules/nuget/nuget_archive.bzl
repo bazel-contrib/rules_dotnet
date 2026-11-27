@@ -156,6 +156,11 @@ def _process_build_file(groups, file):
         return
 
     if parts[1].lower() == ".netframework":
+        # `build/.NETFramework/v4.0/Profile/Client/`: a subset profile whose
+        # assemblies duplicate the full framework's.
+        if len(parts) > 4 and parts[3].lower() == "profile":
+            return
+
         # `build/.NETFramework/<version>/<assembly>.dll`: no `ref`/`lib`
         # segment, and the assemblies are references.
         tfm = _normalize_tfm(parts[2].replace("v", "net").replace(".", ""))

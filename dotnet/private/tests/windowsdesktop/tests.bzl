@@ -387,22 +387,22 @@ def windowsdesktop_tests():
         expected_message_fragments = ["only compiled for .NET Core 3.0 and later or .NET Framework 3.5 and later"],
     )
 
-    # PresentationBuildTasks cannot compile XAML against the net35 or net40
-    # targeting packs, though both embed `wpf_resources`.
+    # PresentationBuildTasks cannot compile XAML against the net35 targeting
+    # pack, in MSBuild either, though net35 embeds `wpf_resources`.
     csharp_library(
-        name = "xaml_sources_on_net40",
+        name = "xaml_sources_on_net35",
         srcs = [
             "wpf/Page.xaml",
             "wpf/Wpf.cs",
         ],
         tags = ["manual"],
-        target_frameworks = ["net40"],
+        target_frameworks = ["net35"],
     )
 
     _failure_test(
-        name = "xaml_sources_on_net40_test",
-        target_under_test = ":xaml_sources_on_net40",
-        expected_message_fragments = ["XAML sources are only compiled for .NET Core 3.0 and later or .NET Framework 4.5 and later"],
+        name = "xaml_sources_on_net35_test",
+        target_under_test = ":xaml_sources_on_net35",
+        expected_message_fragments = ["XAML sources are only compiled for .NET Core 3.0 and later or .NET Framework 4.0 and later"],
     )
 
     csharp_library(
@@ -418,7 +418,7 @@ def windowsdesktop_tests():
     _failure_test(
         name = "xaml_sources_on_netstandard_test",
         target_under_test = ":xaml_sources_on_netstandard",
-        expected_message_fragments = ["XAML sources are only compiled for .NET Core 3.0 and later or .NET Framework 4.5 and later"],
+        expected_message_fragments = ["XAML sources are only compiled for .NET Core 3.0 and later or .NET Framework 4.0 and later"],
     )
 
     publish_binary(

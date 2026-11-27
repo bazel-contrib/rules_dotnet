@@ -56,6 +56,20 @@ csharp_library(
     wpf_resources = ["icons/Icons/app.txt"],
 )
 
+# The earliest .NET Framework that compiles XAML. Its targeting pack also ships
+# the Client profile, whose assemblies must not be referenced alongside the
+# full framework's.
+csharp_library(
+    name = "controls_net40",
+    srcs = [
+        "controls/Badge.xaml",
+        "controls/Badge.xaml.cs",
+    ],
+    out = "XamlControls",
+    langversion = "10.0",
+    target_frameworks = ["net40"],
+)
+
 csharp_library(
     name = "icons_net48",
     srcs = ["icons/Icons.cs"],
@@ -110,6 +124,7 @@ csharp_nunit_test(
     srcs = ["XamlTests.cs"],
     data = [
         ":controls",
+        ":controls_net40",
         ":controls_net48",
         ":icons",
         ":icons_net48",

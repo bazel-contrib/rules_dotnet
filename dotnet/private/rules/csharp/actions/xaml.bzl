@@ -30,11 +30,11 @@ _APPLICATION_DEFINITION = "App.xaml"
 _TASKS_ASSEMBLY = "PresentationBuildTasks.dll"
 
 # The first .NET Framework versions that compile WPF XAML and embed WPF
-# resources. PresentationBuildTasks resolves the WPF types of .NET Framework 4
-# and later, which the net35 targeting pack lacks (it has no System.Xaml.dll).
-# The net40 targeting pack also ships its Client profile, whose assemblies are
-# referenced alongside the full ones; the markup compiler cannot load both.
-_NETFX_XAML_MINIMUM = struct(tfm = "net45", name = "4.5")
+# resources. The WindowsDesktop SDK's PresentationBuildTasks, which MSBuild also
+# runs for .NET Framework, expects the WPF types of .NET Framework 4 and fails
+# on net35 (MC1000: "Known type value 275='IAddChildInternal' is not a valid
+# known type"), though the SDK nominally supports 3.0 and later.
+_NETFX_XAML_MINIMUM = struct(tfm = "net40", name = "4.0")
 _NETFX_RESOURCES_MINIMUM = struct(tfm = "net35", name = "3.5")
 
 # What Microsoft.WinFX.targets passes as `OutputType`.

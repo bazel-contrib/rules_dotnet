@@ -98,6 +98,14 @@ public sealed class XamlResourceTests
     }
 
     [Test]
+    public void ANetFramework40LibraryEmbedsItsBaml()
+    {
+        Assert.That(
+            GeneratedResources("controls_net40/net40/XamlControls.dll", "XamlControls.g.resources"),
+            Is.EqualTo(new[] { "controls/badge.baml" }));
+    }
+
+    [Test]
     public void ANetFrameworkLibraryEmbedsItsBaml()
     {
         Assert.That(
