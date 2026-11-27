@@ -444,6 +444,77 @@ TESTS = [
         ],
     ),
     nuget_resolution_test(
+        name = "a_dll_in_a_subfolder_of_the_framework_folder_is_not_an_assembly",
+        # Microsoft.TestPlatform.TestHost ships native Windows DLLs beside its
+        # assemblies. Referencing them fails the compile with CS0009.
+        files = [
+            "lib/net8.0/testhost.dll",
+            "lib/net8.0/x64/msdia140.dll",
+            "lib/net8.0/x86/msdia140.dll",
+        ],
+        target_framework = "net8.0",
+        expected_libs = ["lib/net8.0/testhost.dll"],
+        expected_refs = ["lib/net8.0/testhost.dll"],
+    ),
+    nuget_resolution_test(
+        name = "a_dll_in_a_subfolder_of_a_rid_framework_folder_is_not_an_assembly",
+        files = [
+            "lib/net8.0/A.dll",
+            "runtimes/win-x64/lib/net8.0/A.dll",
+            "runtimes/win-x64/lib/net8.0/x64/msdia140.dll",
+        ],
+        target_framework = "net8.0",
+        runtime_identifier = "win-x64",
+        expected_libs = ["runtimes/win-x64/lib/net8.0/A.dll"],
+        expected_refs = ["lib/net8.0/A.dll"],
+    ),
+    nuget_resolution_test(
+        name = "a_dll_in_a_subfolder_of_the_ref_framework_folder_is_not_an_assembly",
+        files = [
+            "lib/net8.0/A.dll",
+            "ref/net8.0/A.dll",
+            "ref/net8.0/x64/native.dll",
+        ],
+        target_framework = "net8.0",
+        expected_libs = ["lib/net8.0/A.dll"],
+        expected_refs = ["ref/net8.0/A.dll"],
+    ),
+    nuget_resolution_test(
+        name = "a_satellite_assembly_sits_exactly_one_folder_below_the_framework_folder",
+        # Only `de` is a locale folder. A resources DLL directly in the framework
+        # folder is an ordinary assembly, and one two folders down is neither.
+        files = [
+            "lib/net8.0/A.dll",
+            "lib/net8.0/B.resources.dll",
+            "lib/net8.0/de/A.resources.dll",
+            "lib/net8.0/x64/de/A.resources.dll",
+            "lib/net8.0/x64/native.dll",
+        ],
+        target_framework = "net8.0",
+        expected_libs = [
+            "lib/net8.0/A.dll",
+            "lib/net8.0/B.resources.dll",
+        ],
+        expected_refs = [
+            "lib/net8.0/A.dll",
+            "lib/net8.0/B.resources.dll",
+        ],
+        expected_resource_assemblies = ["lib/net8.0/de/A.resources.dll"],
+    ),
+    nuget_resolution_test(
+        name = "assembly_extensions_match_case_insensitively",
+        files = [
+            "lib/net8.0/A.DLL",
+            "lib/net8.0/de/A.Resources.Dll",
+            "runtimes/win-x64/lib/net8.0/A.DLL",
+        ],
+        target_framework = "net8.0",
+        runtime_identifier = "win-x64",
+        expected_libs = ["runtimes/win-x64/lib/net8.0/A.DLL"],
+        expected_refs = ["lib/net8.0/A.DLL"],
+        expected_resource_assemblies = ["lib/net8.0/de/A.Resources.Dll"],
+    ),
+    nuget_resolution_test(
         name = "native_libraries_are_keyed_by_rid_alone_on_linux",
         files = [
             "lib/netstandard2.0/A.dll",
@@ -794,6 +865,20 @@ TESTS = [
         expected_runtime_targets = {
             "runtimes/unix/lib/netcoreapp2.1/A.dll": "unix runtime",
             "runtimes/win/lib/netcoreapp2.1/A.dll": "win runtime",
+        },
+    ),
+    nuget_resolution_test(
+        name = "a_portable_app_skips_dlls_in_a_subfolder_of_a_rid_framework_folder",
+        files = [
+            "lib/net8.0/A.dll",
+            "runtimes/win-x64/lib/net8.0/A.dll",
+            "runtimes/win-x64/lib/net8.0/x64/msdia140.dll",
+        ],
+        target_framework = "net8.0",
+        portable = True,
+        expected_libs = ["lib/net8.0/A.dll"],
+        expected_runtime_targets = {
+            "runtimes/win-x64/lib/net8.0/A.dll": "win-x64 runtime",
         },
     ),
     nuget_resolution_test(
