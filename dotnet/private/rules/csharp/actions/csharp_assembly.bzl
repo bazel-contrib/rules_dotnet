@@ -18,7 +18,6 @@ load(
     "get_framework_version_info",
     "is_core_framework",
     "is_greater_or_equal_framework",
-    "is_netframework",
     "resolve_tristate",
     "target_platform",
     "use_highentropyva",
@@ -41,7 +40,7 @@ load("//dotnet/private/rules/csharp/actions:scoped_css.bzl", "scoped_css_action"
 load("//dotnet/private/rules/csharp/actions:sdk_analyzers.bzl", "sdk_analyzer_compile_inputs")
 load(
     "//dotnet/private/rules/csharp/actions:xaml.bzl",
-    "check_wpf",
+    "check_wpf_resources",
     "generated_code",
     "xaml_pass1",
     "xaml_pass2",
@@ -778,15 +777,13 @@ def _xaml(compilation, *, partitioned, srcs, analyzer_inputs, frameworks, wpf_re
         `code` and the `resources` the assembly embeds.
     """
     c = compilation
-    is_core = is_core_framework(c.target_framework)
-    is_netfx_wpf = is_netframework(c.target_framework) and is_greater_or_equal_framework(c.target_framework, "net35")
 
     if not partitioned.xaml:
         if not wpf_resources:
             return None
 
         # The resources are embedded even without XAML.
-        check_wpf(c.label, frameworks, is_core, "`wpf_resources`", target_framework_is_netfx = is_netfx_wpf)
+        check_wpf_resources(c.label, frameworks, c.target_framework)
         return xaml_pass2(
             c.actions,
             c.label,
@@ -803,7 +800,7 @@ def _xaml(compilation, *, partitioned, srcs, analyzer_inputs, frameworks, wpf_re
             toolchain = c.toolchain,
         )
 
-    plan = xaml_plan(c.label, partitioned.xaml, frameworks, is_core, target_framework_is_netfx = is_netfx_wpf)
+    plan = xaml_plan(c.label, partitioned.xaml, frameworks, c.target_framework)
     references = depset(transitive = [c.refs, c.framework_files])
     pass1 = xaml_pass1(
         c.actions,

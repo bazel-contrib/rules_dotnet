@@ -257,13 +257,26 @@ def resolve_enforce_code_style_in_build(ctx):
 
 # Assemblies that must not be handed to the compiler or PresentationBuildTasks as references.
 # See https://github.com/bazel-contrib/rules_dotnet/issues/405
-UNREFERENCEABLE_ASSEMBLIES = ("System.EnterpriseServices.Thunk.dll", "System.EnterpriseServices.Wrapper.dll")
+_UNREFERENCEABLE_ASSEMBLIES = ("System.EnterpriseServices.Thunk.dll", "System.EnterpriseServices.Wrapper.dll")
+
+def referenceable_path(assembly):
+    """The path of a reference assembly, or None for one no tool may be handed.
+
+    Args:
+      assembly: A reference assembly.
+
+    Returns:
+      Its path, or None.
+    """
+    return None if assembly.path.endswith(_UNREFERENCEABLE_ASSEMBLIES) else assembly.path
 
 def _format_ref(assembly):
-    return None if assembly.path.endswith(UNREFERENCEABLE_ASSEMBLIES) else "-r:" + assembly.path
+    path = referenceable_path(assembly)
+    return None if path == None else "-r:" + path
 
 def _format_quoted_ref(assembly):
-    return None if assembly.path.endswith(UNREFERENCEABLE_ASSEMBLIES) else "-r:\"" + assembly.path + "\""
+    path = referenceable_path(assembly)
+    return None if path == None else "-r:\"" + path + "\""
 
 def format_ref_arg(args, refs, quote = False):
     """Adds a `-r:` argument for each reference assembly to `args`.

@@ -343,8 +343,8 @@ CSHARP_COMMON_ATTRS = dicts.add(
         "srcs": attr.label_list(
             doc = "The source files: C#; with a `project_sdk` that compiles Razor, Razor components " +
                   "and pages (`.razor`, `.cshtml`) and their scoped CSS (`.razor.css`); and with WPF " +
-                  "in `framework_references`, XAML (`.xaml`), where `App.xaml` at the root of the " +
-                  "package is the application definition.",
+                  "in `framework_references`, or on .NET Framework 4.5 and later, XAML (`.xaml`), " +
+                  "where `App.xaml` at the root of the package is the application definition.",
             allow_files = [".cs", ".razor", ".cshtml", ".css", ".xaml"],
             cfg = default_transition,
         ),
@@ -414,7 +414,8 @@ CSHARP_COMMON_ATTRS = dicts.add(
 
             A file in this package or below is addressed by its path relative to
             the package, and any other file by its file name; two resources with
-            the same name fail the build. Needs WPF in `framework_references`.""",
+            the same name fail the build. Needs WPF in `framework_references`, or
+            .NET Framework 3.5 or later.""",
             allow_files = True,
             default = [],
             cfg = default_transition,
