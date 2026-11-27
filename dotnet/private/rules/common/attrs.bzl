@@ -370,9 +370,8 @@ CSHARP_COMMON_ATTRS = dicts.add(
         "implicit_usings": attr.bool(
             doc = """Generate the .NET SDK's implicit `global using` directives for this target, matching MSBuild's `ImplicitUsings`.
 
-            The namespaces are the `Using` items of the registered SDK's own props files, evaluated for this
-            target's framework, `project_sdk` and `framework_references` (`UseWPF` and `UseWindowsForms`), so
-            they match what `dotnet build` generates with the same SDK, and may change when the SDK does.
+            The namespaces are the ones `dotnet build` generates with the same SDK for this target's
+            framework, `project_sdk` and `framework_references`, so they may change when the SDK does.
             Requires C# 10 or later.""",
             mandatory = False,
             default = False,

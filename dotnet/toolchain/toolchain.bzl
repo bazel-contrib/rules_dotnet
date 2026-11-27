@@ -288,10 +288,9 @@ framework.""",
             mandatory = True,
         ),
         "implicit_usings": attr.string(
-            doc = """The `Using` items of the SDK's props files, as JSON, which `implicit_usings` on the C# rules evaluates.
+            doc = """The SDK's implicit usings, for `implicit_usings` on the C# rules. Set by the SDK repository.
 
-The SDK repository reads them out of the SDK; see `//dotnet/private/sdk:implicit_usings.bzl`.
-Empty for a toolchain that does not provide them, which then cannot build targets with `implicit_usings`.""",
+A toolchain without them cannot build targets with `implicit_usings`.""",
         ),
         "_strict_deps": attr.label(
             doc = "Whether to use strict deps or not",
