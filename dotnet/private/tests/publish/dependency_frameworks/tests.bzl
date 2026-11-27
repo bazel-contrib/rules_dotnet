@@ -29,6 +29,59 @@ def _strict_publish_fails_impl(env, target):
         matching.str_matches("*runs on Microsoft.AspNetCore.App, which one of its dependencies references*"),
     )
 
+def _strict_native_aot_publish_fails(name):
+    # NativeAOT compiles the frameworks in whether or not the publish is
+    # self-contained.
+    publish_binary(
+        name = name + "_publish",
+        binary = ":app",
+        native_aot = True,
+        strict_framework_references = True,
+        tags = ["manual"],
+        target_framework = "net10.0",
+    )
+
+    analysis_test(
+        name = name,
+        impl = _strict_native_aot_publish_fails_impl,
+        target = name + "_publish",
+        expect_failure = True,
+    )
+
+def _strict_native_aot_publish_fails_impl(env, target):
+    env.expect.that_target(target).failures().contains_predicate(
+        matching.str_matches("*runs on Microsoft.AspNetCore.App, which one of its dependencies references, but a NativeAOT publish*"),
+    )
+
+def _native_aot_compiles_in_dependency_frameworks(name):
+    publish_binary(
+        name = name + "_publish",
+        binary = ":app",
+        native_aot = True,
+        self_contained = True,
+        strict_framework_references = False,
+        tags = ["manual"],
+        target_framework = "net10.0",
+    )
+
+    analysis_test(
+        name = name,
+        impl = _native_aot_compiles_in_dependency_frameworks_impl,
+        target = name + "_publish",
+    )
+
+def _native_aot_compiles_in_dependency_frameworks_impl(env, target):
+    # The runtime pack of a framework only a dependency references is taken,
+    # and compiled in.
+    references = [
+        arg.rpartition("/")[2]
+        for action in target[TestingAspectInfo].actions
+        if action.mnemonic == "Ilc"
+        for arg in action.argv
+        if arg.startswith("-r:")
+    ]
+    env.expect.that_collection(references).contains("Microsoft.AspNetCore.Http.Abstractions.dll")
+
 def _missing_runtime_pack(name):
     # .NET Core 3.1 only shipped Microsoft.WindowsDesktop.App for win-x64, so
     # there is no pack to take for win-arm64 even when the publish takes the
@@ -138,6 +191,8 @@ def dependency_frameworks_test_suite(name):
         name = name,
         tests = [
             _strict_publish_fails,
+            _strict_native_aot_publish_fails,
+            _native_aot_compiles_in_dependency_frameworks,
             _missing_runtime_pack,
             _strict_publish_shares_binary,
             _ready_to_run_references,
