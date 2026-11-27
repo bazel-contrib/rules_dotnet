@@ -1,6 +1,7 @@
 using Lib;
 using NUnit.Framework;
 using System.Linq;
+using System.Resources;
 
 [TestFixture]
 public sealed class LibTests {
@@ -15,6 +16,12 @@ public sealed class LibTests {
     [Test]
     public void CanSeeInternals() {
         Assert.AreEqual(42, Stuff.NonPublicMethod());
+    }
+
+    [Test]
+    public void CanReadResxResource() {
+        var resources = new ResourceManager("lib.Strings", typeof(Stuff).Assembly);
+        Assert.AreEqual("Hello", resources.GetString("Hello"));
     }
 }
 
