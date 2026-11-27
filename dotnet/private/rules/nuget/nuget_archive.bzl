@@ -124,14 +124,18 @@ def _process_group_with_tfm(groups, group_name, file):
     if file.endswith("_._"):
         return
 
-    # lib/<tfm>/<locale>/<assembly>.resources.dll
-    if group_name == "lib" and file.endswith(".resources.dll"):
+    # NuGet matches file extensions case insensitively.
+    lower = file.lower()
+
+    # lib/<tfm>/<locale>/<assembly>.resources.dll: exactly one folder, the
+    # locale, between the framework folder and the satellite assembly.
+    if group_name == "lib" and len(parts) == 4 and lower.endswith(".resources.dll"):
         groups["resource_assemblies"].setdefault(tfm, []).append(file)
         return
 
     # Like NuGet, only a DLL directly in the framework folder is an assembly. One
     # in a subfolder is something else.
-    if file.endswith(".dll") and len(parts) == 3:
+    if lower.endswith(".dll") and len(parts) == 3:
         group.append(file)
 
 # A package supports a framework when it brings anything for it, assemblies or
@@ -260,10 +264,12 @@ def _process_portable_runtimes_file(group, parts, file):
     if parts[2] == "native" and len(parts) > 3 and not file.endswith("_._"):
         group["native"].append(file)
 
-    if parts[2] == "lib" and len(parts) > 4:
+    # As with `lib/<tfm>/`, only a file directly in the framework folder counts.
+    if parts[2] == "lib" and len(parts) == 5:
         tfm = _normalize_tfm(parts[3])
+        lower = file.lower()
 
-        if tfm != None and (file.endswith("_._") or (file.endswith(".dll") and not file.endswith(".resources.dll"))):
+        if tfm != None and (file.endswith("_._") or (lower.endswith(".dll") and not lower.endswith(".resources.dll"))):
             group["lib"][file] = tfm
 
 def _folding_rank(source_rid, portable_rid):
@@ -329,7 +335,8 @@ def _process_runtimes_file(groups, file):
 
         # As with `lib/<tfm>/`, only a DLL directly in the framework folder is an
         # assembly.
-        if len(parts) == 5 and file.endswith(".dll") and not file.endswith(".resources.dll"):
+        lower = file.lower()
+        if len(parts) == 5 and lower.endswith(".dll") and not lower.endswith(".resources.dll"):
             files.append(file)
 
 # `tools/<tfm>/any/...`

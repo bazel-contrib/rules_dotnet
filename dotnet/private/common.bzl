@@ -328,7 +328,7 @@ def _friend_irefs(name, internals):
     }
 
 def _ref_assembly_name(file):
-    return file.basename.replace(".dll", "").lower()
+    return file.basename.lower().replace(".dll", "")
 
 def _references_dependency(assembly, pack, superseded):
     """Whether to compile against a dependency rather than the targeting pack's copy of it.
