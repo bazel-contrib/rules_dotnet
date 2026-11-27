@@ -457,6 +457,18 @@ TESTS = [
         expected_refs = ["lib/net8.0/testhost.dll"],
     ),
     nuget_resolution_test(
+        name = "a_dll_in_a_subfolder_of_a_rid_framework_folder_is_not_an_assembly",
+        files = [
+            "lib/net8.0/A.dll",
+            "runtimes/win-x64/lib/net8.0/A.dll",
+            "runtimes/win-x64/lib/net8.0/x64/msdia140.dll",
+        ],
+        target_framework = "net8.0",
+        runtime_identifier = "win-x64",
+        expected_libs = ["runtimes/win-x64/lib/net8.0/A.dll"],
+        expected_refs = ["lib/net8.0/A.dll"],
+    ),
+    nuget_resolution_test(
         name = "native_libraries_are_keyed_by_rid_alone_on_linux",
         files = [
             "lib/netstandard2.0/A.dll",

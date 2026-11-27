@@ -327,7 +327,9 @@ def _process_runtimes_file(groups, file):
         # nothing here, not that it says nothing about the RID.
         files = entry["lib"].setdefault(tfm, [])
 
-        if file.endswith(".dll") and not file.endswith(".resources.dll"):
+        # As with `lib/<tfm>/`, only a DLL directly in the framework folder is an
+        # assembly.
+        if len(parts) == 5 and file.endswith(".dll") and not file.endswith(".resources.dll"):
             files.append(file)
 
 # `tools/<tfm>/any/...`
