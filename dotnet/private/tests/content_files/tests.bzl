@@ -360,7 +360,7 @@ def _conflicting_libraries(name):
 
     analysis_test(
         name = name,
-        impl = _conflict_test_impl,
+        impl = _dependency_conflict_test_impl,
         target = name + "_target_under_test",
         expect_failure = True,
     )
@@ -426,22 +426,27 @@ def _normalized_conflict_test_impl(env, target):
         matching.str_matches("*would stage both*/content/settings.json*/conflict/settings.json*\"config/settings.json\"*"),
     )
 
-def _conflicting_with_binary(name):
-    # A library's content file must not silently lose to the binary's own.
+def _library_with_default_settings(name):
+    """A library that ships `conflict/settings.json` at `content/settings.json`."""
     dotnet_content_files(
-        name = name + "_lib_content",
+        name = name + "_content",
         srcs = ["conflict/settings.json"],
         prefix = "content",
         strip_prefix = "conflict",
     )
     util.helper_target(
         csharp_library,
-        name = name + "_lib",
+        name = name,
         srcs = ["Main.cs"],
-        out = name + "_lib_dll",
-        content_files = [name + "_lib_content"],
+        out = name + "_dll",
+        content_files = [name + "_content"],
         target_frameworks = ["net6.0"],
     )
+
+def _binary_overrides_library(name):
+    # A binary's own content file replaces a library's at the same path, as on
+    # an MSBuild build (`CopyConflictingTransitiveContent=false`).
+    _library_with_default_settings(name + "_lib")
 
     util.helper_target(
         csharp_binary,
@@ -454,14 +459,112 @@ def _conflicting_with_binary(name):
 
     analysis_test(
         name = name,
-        impl = _conflict_test_impl,
+        impl = _binary_override_test_impl,
+        target = name + "_target_under_test",
+    )
+
+def _binary_override_test_impl(env, target):
+    tfm = get_target_tfm(target)
+    package = target.label.package
+    staged = env.expect.that_target(target).action_generating(
+        "{}/{}/{}/content/settings.json".format(package, target.label.name, tfm),
+    )
+    staged.inputs().contains("{}/content/settings.json".format(package))
+    staged.inputs().not_contains("{}/conflict/settings.json".format(package))
+
+def _test_overrides_library(name):
+    # The common case: a test replaces the default settings a library ships.
+    _library_with_default_settings(name + "_lib")
+
+    util.helper_target(
+        csharp_test,
+        name = name + "_target_under_test",
+        srcs = ["Main.cs"],
+        content_files = ["content/settings.json"],
+        deps = [name + "_lib"],
+        target_frameworks = ["net6.0"],
+    )
+
+    analysis_test(
+        name = name,
+        impl = _binary_override_test_impl,
+        target = name + "_target_under_test",
+    )
+
+def _publish_overrides_library(name):
+    # A publish ships the binary's own file, not the library's. MSBuild's
+    # publish fails here (NETSDK1152) unless `ErrorOnDuplicatePublishOutputFiles`
+    # is off; a publish shipping something else than the build is worse.
+    _library_with_default_settings(name + "_lib")
+
+    util.helper_target(
+        csharp_binary,
+        name = name + "_binary",
+        srcs = ["Main.cs"],
+        content_files = ["content/settings.json"],
+        deps = [name + "_lib"],
+        target_frameworks = ["net6.0"],
+    )
+
+    util.helper_target(
+        publish_binary,
+        name = name + "_target_under_test",
+        binary = name + "_binary",
+        roll_forward_behavior = "Major",
+        self_contained = False,
+        target_framework = "net6.0",
+    )
+
+    analysis_test(
+        name = name,
+        impl = _publish_override_test_impl,
+        target = name + "_target_under_test",
+    )
+
+def _publish_override_test_impl(env, target):
+    rid = get_target_rid(target)
+    tfm = "net6.0"
+    package = target.label.package
+    binary = target.label.name.removesuffix("_target_under_test")
+    staged = env.expect.that_target(target).action_generating(
+        "{}/{}/publish/{}/content/settings.json".format(package, target.label.name, rid),
+    )
+    staged.inputs().contains("{}/{}_binary/{}/content/settings.json".format(package, binary, tfm))
+    staged.inputs().not_contains("{}/{}_lib/{}/content/settings.json".format(package, binary, tfm))
+
+def _library_does_not_hide_its_dependency(name):
+    # A library's own content file does not hide its dependency's from the
+    # binary: MSBuild still copies both there, through the transitive project
+    # reference, and fails to publish. The binary has to choose.
+    _library_with_default_settings(name + "_base")
+    util.helper_target(
+        csharp_library,
+        name = name + "_lib",
+        srcs = ["Main.cs"],
+        out = name + "_lib_dll",
+        content_files = ["content/settings.json"],
+        deps = [name + "_base"],
+        target_frameworks = ["net6.0"],
+    )
+
+    util.helper_target(
+        csharp_binary,
+        name = name + "_target_under_test",
+        srcs = ["Main.cs"],
+        deps = [name + "_lib"],
+        target_frameworks = ["net6.0"],
+    )
+
+    analysis_test(
+        name = name,
+        impl = _dependency_conflict_test_impl,
         target = name + "_target_under_test",
         expect_failure = True,
     )
 
-def _conflict_test_impl(env, target):
+def _dependency_conflict_test_impl(env, target):
     env.expect.that_target(target).failures().contains_predicate(
-        matching.str_matches("*would be staged at*already taken by*"),
+        matching.str_matches("*would be staged at*already taken by*or list the file*own `content_files`*"),
     )
 
 def _content_files_test_impl(env, target):
@@ -526,7 +629,10 @@ def content_files_test_suite(name):
             _conflicting_libraries,
             _conflicting_own_content_files,
             _conflicting_normalized_destinations,
-            _conflicting_with_binary,
+            _binary_overrides_library,
+            _test_overrides_library,
+            _publish_overrides_library,
+            _library_does_not_hide_its_dependency,
             _cross_package,
             _content_files_rule_csharp,
             _content_files_rule_fsharp,

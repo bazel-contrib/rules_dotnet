@@ -1733,9 +1733,18 @@ def collect_transitive_content_files(label, assembly_info, transitive_runtime_de
     """Collects the content files a target inherits from its dependencies.
 
     Every content file lands at its `dest` next to the consuming assembly, so two
-    different files cannot share one. Rather than let whichever dependency comes
-    first win, a clash fails the build and names both sides. The same source file
-    reaching the same `dest` through several libraries is not a clash.
+    different files cannot share one. The consuming target's own `content_files`
+    take precedence: a dependency's file at the same `dest` is left out, so an
+    app or test can replace a default that a library ships. That is what MSBuild
+    does on build (`CopyConflictingTransitiveContent=false`).
+
+    Any other clash fails the build and names both sides, rather than letting
+    whichever dependency comes first win. That covers two dependencies, and a
+    dependency and a path the target writes itself. A library's own
+    `content_files` do not hide its dependencies' files from its dependents,
+    because MSBuild's don't either: the transitive project reference still brings
+    them in. The same source file reaching the same `dest` through several
+    libraries is not a clash.
 
     Args:
         label: The `Label` of the consuming target, for error messages.
@@ -1749,14 +1758,17 @@ def collect_transitive_content_files(label, assembly_info, transitive_runtime_de
         without the ones `assembly_info` stages itself.
     """
 
+    # The target's own content files replace a dependency's at the same path.
+    overridden = {entry.dest: True for entry in assembly_info.content_files}
+
     # dest -> (source File or None, who put it there)
     claimed = {path: (None, "an output of %s itself" % label) for path in reserved}
-    for entry in assembly_info.content_files:
-        claimed[entry.dest] = (entry.src, "the `content_files` of %s" % label)
 
     inherited = []
     for dep in transitive_runtime_deps:
         for entry in dep.content_files:
+            if entry.dest in overridden:
+                continue
             if entry.dest not in claimed:
                 claimed[entry.dest] = (entry.src, "the `content_files` of its dependency `%s`" % dep.name)
                 inherited.append(entry)
@@ -1766,13 +1778,14 @@ def collect_transitive_content_files(label, assembly_info, transitive_runtime_de
             if src != entry.src:
                 fail(("%s: the content file %s of its dependency `%s` would be staged at %r, " +
                       "but that path is already taken by %s%s. Give one of them another " +
-                      "destination, for example with `dotnet_content_files`.") % (
+                      "destination, for example with `dotnet_content_files`%s.") % (
                     label,
                     entry.src.short_path,
                     dep.name,
                     entry.dest,
                     owner,
                     " (%s)" % src.short_path if src else "",
+                    "" if src == None else (", or list the file %s should have at %r in its own `content_files`" % (label, entry.dest)),
                 ))
 
     return inherited
