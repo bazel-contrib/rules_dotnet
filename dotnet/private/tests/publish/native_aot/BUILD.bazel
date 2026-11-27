@@ -88,6 +88,16 @@ publish_binary(
     binary = "//dotnet/private/tests/publish/native_aot/web",
     native_aot = True,
     self_contained = True,
+    # ld64.lld cannot link this app for macOS x64. Once __eh_frame outgrows the
+    # signed 20-bit addends ld-prime can store inline, ilc puts local anchor
+    # symbols in the middle of FDEs (dotnet/runtime#124721), which lld rejects
+    # as "symbol lreloc_anchor0 at misaligned offset" before crashing. Apple's
+    # ld, which the SDK uses, links the same object. On arm64 the unwind info
+    # goes through compact unwind instead, so __eh_frame stays small.
+    target_compatible_with = select({
+        "//dotnet/private:osx-x64": ["@platforms//:incompatible"],
+        "//conditions:default": [],
+    }),
     target_framework = "net10.0",
 )
 
