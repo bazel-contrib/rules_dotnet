@@ -162,19 +162,20 @@ one_file_per_path_test(
     target_under_test = ":duplicate_native_names_native_aot",
 )
 
-# The same two natives keep their RID folders in a framework-dependent publish,
-# so nothing collides and the publish is expected to succeed.
+# A framework-dependent publish puts them beside the main DLL too: they name no
+# NuGet package, so the deps.json lists them as `native` assets, which the host
+# looks for there. As above, one of them is published.
 publish_binary(
-    name = "native_names_by_rid",
+    name = "duplicate_native_names_framework_dependent",
     binary = ":native_app",
     tags = ["manual"],
     target_framework = "net10.0",
 )
 
 publish_succeeds_test(
-    name = "native_names_by_rid_test",
+    name = "duplicate_native_names_framework_dependent_test",
     size = "small",
-    target_under_test = ":native_names_by_rid",
+    target_under_test = ":duplicate_native_names_framework_dependent",
 )
 
 # Two packages that ship the same assembly file name, which is what a package
