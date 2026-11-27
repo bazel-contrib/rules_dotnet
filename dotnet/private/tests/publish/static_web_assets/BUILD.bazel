@@ -58,7 +58,7 @@ sh_test(
 
 # A NativeAOT publish keeps nothing managed, so it copies the tree beside the
 # executable rather than building the publish layout the rule above goes
-# through. Managed-only and free of ASP.NET Core so that ILC can compile it.
+# through. Free of ASP.NET Core, which native_aot/web covers.
 csharp_binary(
     name = "aot_app_to_publish",
     srcs = ["AotProgram.cs"],

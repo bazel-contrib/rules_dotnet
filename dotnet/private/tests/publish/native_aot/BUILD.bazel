@@ -78,3 +78,38 @@ sh_test(
         "//conditions:default": [],
     }),
 )
+
+# An ASP.NET Core minimal API, in the shape of the `webapiaot` template. ilc
+# compiles Microsoft.AspNetCore.App in from its runtime pack, beside the
+# NativeAOT pack's own Microsoft.NETCore.App. The executable serves, and calls,
+# its own endpoints.
+publish_binary(
+    name = "web_publish",
+    binary = "//dotnet/private/tests/publish/native_aot/web",
+    native_aot = True,
+    self_contained = True,
+    target_framework = "net10.0",
+)
+
+pkg_tar(
+    name = "web_tar",
+    srcs = [":web_publish"],
+    include_runfiles = True,
+    mode = "0755",
+    package_dir = "/",
+    strip_prefix = select({
+        "//dotnet/private:linux-arm64": "web_publish/aot/linux-arm64",
+        "//dotnet/private:linux-x64": "web_publish/aot/linux-x64",
+        "//dotnet/private:osx-arm64": "web_publish/aot/osx-arm64",
+        "//dotnet/private:osx-x64": "web_publish/aot/osx-x64",
+        "//dotnet/private:windows-arm64": "web_publish/aot/win-arm64",
+        "//dotnet/private:windows-x64": "web_publish/aot/win-x64",
+    }),
+)
+
+sh_test(
+    name = "web_test",
+    size = "small",
+    srcs = ["web_test.sh"],
+    data = [":web_tar"],
+)

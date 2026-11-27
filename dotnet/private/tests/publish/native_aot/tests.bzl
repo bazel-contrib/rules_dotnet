@@ -41,8 +41,24 @@ def _matches_the_sdk_test_impl(env, target):
         "/DEBUG:NONE",
     ])
 
+def _compiles_in_shared_frameworks_test(name):
+    analysis_test(
+        name = name,
+        impl = _compiles_in_shared_frameworks_test_impl,
+        target = ":web_publish",
+    )
+
+def _compiles_in_shared_frameworks_test_impl(env, target):
+    references = [arg.rpartition("/")[2] for arg in _argv(target, "Ilc") if arg.startswith("-r:")]
+
+    # Microsoft.AspNetCore.App comes from its runtime pack, and Microsoft.NETCore.App
+    # from the NativeAOT pack alone, not from its runtime pack as well.
+    env.expect.that_collection(references).contains_at_least(["Microsoft.AspNetCore.dll", "System.Private.CoreLib.dll"])
+    env.expect.that_int(len([ref for ref in references if ref == "System.Private.CoreLib.dll"])).equals(1)
+    env.expect.that_int(len([ref for ref in references if ref == "System.Runtime.dll"])).equals(1)
+
 def native_aot_test_suite(name):
     test_suite(
         name = name,
-        tests = [_matches_the_sdk_test],
+        tests = [_matches_the_sdk_test, _compiles_in_shared_frameworks_test],
     )

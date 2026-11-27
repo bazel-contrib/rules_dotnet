@@ -40,7 +40,7 @@ load(
     "ready_to_run_framework",
     "ready_to_run_references",
 )
-load("//dotnet/private/sdk:packs.bzl", "WASM_RID", "WINDOWS_ONLY_FRAMEWORKS")
+load("//dotnet/private/sdk:packs.bzl", "NETCORE_FRAMEWORK", "WASM_RID", "WINDOWS_ONLY_FRAMEWORKS")
 load("//dotnet/private/sdk/runtime_packs:runtime_pack.bzl", "runtime_pack_of_frameworks")
 load("//dotnet/private/transitions:tfm_transition.bzl", "publish_binary_transition", "tfm_transition")
 
@@ -189,11 +189,23 @@ def _native_aot_publish(ctx, publish):
     assembly_info = publish.assembly_info
     parts = [assembly_info] + publish.transitive_runtime_deps
 
+    # The NativeAOT pack replaces Microsoft.NETCore.App, but every other shared
+    # framework the binary runs on, such as Microsoft.AspNetCore.App, is
+    # compiled in from its runtime pack, as the SDK does. Without them ilc
+    # cannot resolve the framework and compiles code that throws instead.
+    frameworks = runtime_pack_of_frameworks(publish.binary_info.runtime_pack_info, publish.binary_info.runtime_frameworks)
+    framework_libs = [
+        lib
+        for pack in frameworks.assembly_runtime_infos
+        if shared_framework_of_runtime_pack(pack.name) != NETCORE_FRAMEWORK
+        for lib in pack.libs
+    ]
+
     executable = native_aot_executable(
         ctx,
         _native_tools(ctx),
         publish.binary_info.dll,
-        [lib for part in parts for lib in part.libs],
+        framework_libs + [lib for part in parts for lib in part.libs],
         publish.runtime_identifier,
         ctx.attr.target_framework,
         publish.binary_framework,
