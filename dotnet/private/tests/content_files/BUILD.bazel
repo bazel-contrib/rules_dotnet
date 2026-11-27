@@ -56,3 +56,29 @@ csharp_nunit_test(
     target_frameworks = ["net6.0"],
     deps = [":library_with_content"],
 )
+
+# End-to-end runtime test for overriding a library's content file: the library ships
+# `conflict/settings.json` at `content/settings.json`, the test lists its own
+# `content/settings.json`, and the test's file is the one next to its assembly.
+dotnet_content_files(
+    name = "library_default_settings",
+    srcs = ["conflict/settings.json"],
+    prefix = "content",
+    strip_prefix = "conflict",
+)
+
+csharp_library(
+    name = "library_with_default_settings",
+    srcs = ["Main.cs"],
+    out = "library_with_default_settings_dll",
+    content_files = [":library_default_settings"],
+    target_frameworks = ["net6.0"],
+)
+
+csharp_nunit_test(
+    name = "content_files_override_runtime_test",
+    srcs = ["ContentFilesOverrideTest.cs"],
+    content_files = ["content/settings.json"],
+    target_frameworks = ["net6.0"],
+    deps = [":library_with_default_settings"],
+)

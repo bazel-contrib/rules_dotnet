@@ -45,8 +45,11 @@ COMMON_ATTRS = {
         paths, list a [`dotnet_content_files`](#dotnet_content_files) target instead.
 
         A library's content files are also copied next to every binary, test and publish that
-        depends on it, at the same paths. The build fails if two different files would land on
-        the same path.""",
+        depends on it, at the same paths. A target's own content file replaces a dependency's at
+        the same path, as on an MSBuild build, so an app or test can override a default that a
+        library ships. Any other two different files landing on the same path fail the build,
+        including a library's own file and one from its dependencies: as in MSBuild, the library's
+        file does not hide its dependency's from the app, so the app has to list the one it wants.""",
         allow_files = True,
         default = [],
         allow_empty = True,
