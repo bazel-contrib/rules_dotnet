@@ -6,8 +6,8 @@ using System.IO;
 // framework-dependent path builds: it is copied beside the executable instead,
 // and this is what checks it arrives there intact.
 //
-// Managed-only and free of ASP.NET Core, because ILC has to be able to compile
-// it. Serving the tree is covered by the framework-dependent test.
+// Free of ASP.NET Core, which native_aot/web covers. Serving the tree is
+// covered by the framework-dependent test.
 public static class Program
 {
     private const string Manifest = "aot_app_to_publish.staticwebassets.endpoints.json";

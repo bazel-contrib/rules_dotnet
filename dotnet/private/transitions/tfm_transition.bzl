@@ -131,11 +131,12 @@ def _publish_binary_impl(settings, attr):
         READY_TO_RUN_FRAMEWORK: attr.target_framework if attr.ready_to_run and not attr.ready_to_run_composite else "",
         # NativeAOT is the only publish of a .NET binary that trims it.
         TRIMMED: attr.native_aot,
-        # Only a publish that ships the runtime or compiles against it needs
-        # its packs, and only when the frameworks of the binary's dependencies
-        # count too. Otherwise the binary keeps the configuration it has
-        # outside a publish. NativeAOT compiles the runtime in.
-        ALL_SHARED_FRAMEWORKS: (attr.self_contained or attr.ready_to_run) and not attr.native_aot and not attr.strict_framework_references,
+        # Only a publish that ships the runtime, compiles against it or compiles
+        # it in needs its packs, and only when the frameworks of the binary's
+        # dependencies count too. Otherwise the binary keeps the configuration
+        # it has outside a publish. NativeAOT compiles in every shared
+        # framework but Microsoft.NETCore.App from its runtime pack.
+        ALL_SHARED_FRAMEWORKS: (attr.self_contained or attr.ready_to_run or attr.native_aot) and not attr.strict_framework_references,
     })
 
     if attr.native_aot:

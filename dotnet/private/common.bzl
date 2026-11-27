@@ -1166,8 +1166,8 @@ def select_runtime_variants(transitive_runtime_deps):
         return transitive_runtime_deps
     return [dep for (index, dep) in enumerate(transitive_runtime_deps) if index not in dropped]
 
-def _runtime_pack_conflicts(runtime_pack_info, transitive_runtime_deps):
-    """Decides, for each assembly the runtime pack and a dependency both ship, which copy the app gets.
+def _runtime_pack_conflicts(packs, transitive_runtime_deps):
+    """Decides, for each assembly the runtime packs and a dependency both ship, which copy the app gets.
 
     One copy per name, the newest. As in MSBuild, a dependency replaces the
     pack's copy only when it is newer, and one that sets no version is never
@@ -1175,7 +1175,7 @@ def _runtime_pack_conflicts(runtime_pack_info, transitive_runtime_deps):
     too, so that exactly one copy is published.
 
     Args:
-        runtime_pack_info: The `DotnetRuntimePackInfo` of a self-contained app.
+        packs: The `DotnetAssemblyRuntimeInfo`s of the runtime packs, at least one.
         transitive_runtime_deps: The app's `DotnetAssemblyRuntimeInfo`s.
 
     Returns:
@@ -1185,10 +1185,10 @@ def _runtime_pack_conflicts(runtime_pack_info, transitive_runtime_deps):
     """
 
     # Every pack of a runtime release shares the release's version.
-    pack_version = runtime_pack_info.assembly_runtime_infos[0].version
+    pack_version = packs[0].version
     pack_assemblies = {
         _lib_assembly_name(lib): None
-        for info in runtime_pack_info.assembly_runtime_infos
+        for info in packs
         for lib in info.libs
     }
 
@@ -1204,6 +1204,44 @@ def _runtime_pack_conflicts(runtime_pack_info, transitive_runtime_deps):
             winners[name] = "{}/{}".format(dep.name, dep.version)
 
     return winners
+
+def resolve_runtime_pack_conflicts(packs, transitive_runtime_deps):
+    """Keeps one copy of each assembly that runtime packs and dependencies both ship.
+
+    The copy a self-contained publish ships, by the rule `generate_depsjson`
+    applies: a dependency replaces a pack's copy only when it is newer.
+
+    Args:
+        packs: The `DotnetAssemblyRuntimeInfo`s of the runtime packs.
+        transitive_runtime_deps: The app's `DotnetAssemblyRuntimeInfo`s.
+
+    Returns:
+        A struct of `pack_libs`, the packs' assemblies no dependency replaces,
+        and `dependency_libs`, the dependencies' assemblies no pack or newer
+        dependency replaces.
+    """
+    if not packs:
+        return struct(
+            pack_libs = [],
+            dependency_libs = [lib for dep in transitive_runtime_deps for lib in dep.libs],
+        )
+
+    conflicts = _runtime_pack_conflicts(packs, transitive_runtime_deps)
+
+    return struct(
+        pack_libs = [
+            lib
+            for pack in packs
+            for lib in pack.libs
+            if conflicts.get(_lib_assembly_name(lib)) == None
+        ],
+        dependency_libs = [
+            lib
+            for dep in transitive_runtime_deps
+            if conflicts.get(dep.name.lower(), "{}/{}".format(dep.name, dep.version)) == "{}/{}".format(dep.name, dep.version)
+            for lib in dep.libs
+        ],
+    )
 
 def _depsjson_library(runtime_dep, library_name, use_relative_paths):
     """The `libraries` entry of a dependency."""
@@ -1327,7 +1365,7 @@ def generate_depsjson(
 
     pack_conflicts = {}
     if is_self_contained:
-        pack_conflicts = _runtime_pack_conflicts(runtime_pack_info, transitive_runtime_deps)
+        pack_conflicts = _runtime_pack_conflicts(runtime_pack_info.assembly_runtime_infos, transitive_runtime_deps)
 
         for assembly_runtime_info in runtime_pack_info.assembly_runtime_infos:
             runtime_pack_name = "runtimepack.{}/{}".format(assembly_runtime_info.name, assembly_runtime_info.version)

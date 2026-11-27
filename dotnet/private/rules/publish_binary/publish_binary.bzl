@@ -4,7 +4,7 @@ Rule for assembling the publish output of a .NET binary.
 
 load("@bazel_skylib//lib:dicts.bzl", "dicts")
 load("@bazel_skylib//lib:paths.bzl", "paths")
-load("//dotnet/private:common.bzl", "generate_depsjson", "generate_runtimeconfig", "is_from_nuget_package", "netframework_runtime_identifier", "select_runtime_variants", "shared_framework_of_runtime_pack", "tfm_to_semver", "tfm_version", "to_rlocation_path")
+load("//dotnet/private:common.bzl", "generate_depsjson", "generate_runtimeconfig", "is_from_nuget_package", "netframework_runtime_identifier", "resolve_runtime_pack_conflicts", "select_runtime_variants", "shared_framework_of_runtime_pack", "tfm_to_semver", "tfm_version", "to_rlocation_path")
 load(
     "//dotnet/private:providers.bzl",
     "DotnetAssemblyCompileInfo",
@@ -40,7 +40,7 @@ load(
     "ready_to_run_framework",
     "ready_to_run_references",
 )
-load("//dotnet/private/sdk:packs.bzl", "WASM_RID", "WINDOWS_ONLY_FRAMEWORKS")
+load("//dotnet/private/sdk:packs.bzl", "NETCORE_FRAMEWORK", "WASM_RID", "WINDOWS_ONLY_FRAMEWORKS")
 load("//dotnet/private/sdk/runtime_packs:runtime_pack.bzl", "runtime_pack_of_frameworks")
 load("//dotnet/private/transitions:tfm_transition.bzl", "publish_binary_transition", "tfm_transition")
 
@@ -128,11 +128,22 @@ def _publish_inputs(ctx):
         # framework the publish asked for.
         binary_framework = compile_info.target_framework,
         runtime_identifier = ctx.attr.runtime_identifier or binary_info.runtime_pack_info.runtime_identifier,
-        # Only a self-contained publish ships the runtime: the shared frameworks
-        # the binary runs on, which `_check_runtime` holds to its own when
-        # framework references are strict.
-        runtime_pack_info = runtime_pack_of_frameworks(binary_info.runtime_pack_info, binary_info.runtime_frameworks) if ctx.attr.self_contained else None,
+        # Only a self-contained publish ships the runtime, and only it and
+        # NativeAOT, which compiles in every shared framework but
+        # Microsoft.NETCore.App from its pack, take the runtime packs: those of
+        # the shared frameworks the binary runs on, which `_check_runtime`
+        # holds to its own when framework references are strict.
+        runtime_pack_info = runtime_pack_of_frameworks(binary_info.runtime_pack_info, binary_info.runtime_frameworks) if ctx.attr.self_contained or ctx.attr.native_aot else None,
     )
+
+def _takes_runtime_packs(attr):
+    """Whether the publish ships, compiles against or compiles in the runtime packs."""
+    return attr.self_contained or attr.ready_to_run or attr.native_aot
+
+def _publish_kind(attr):
+    if attr.native_aot:
+        return "NativeAOT"
+    return "self-contained" if attr.self_contained else "ReadyToRun"
 
 def _check_runtime(ctx, publish):
     """Checks that the publish can target, and ship, the runtime the binary runs on."""
@@ -159,20 +170,21 @@ def _check_runtime(ctx, publish):
         for framework in publish.binary_info.runtime_frameworks
         if framework not in publish.binary_info.own_frameworks
     ]
-    if ctx.attr.strict_framework_references and (ctx.attr.self_contained or ctx.attr.ready_to_run) and missing:
+    if ctx.attr.strict_framework_references and _takes_runtime_packs(ctx.attr) and missing:
         fail("{}: {} runs on {}, which one of its dependencies references, but a {} publish only takes the runtime packs of the shared frameworks the binary references itself. Add {} to the `framework_references` of {}, or take the frameworks of dependencies too with `strict_framework_references = False` on the publish or --@rules_dotnet//dotnet/settings:strict_framework_references=false.".format(
             ctx.label,
             binary,
             ", ".join(missing),
-            "self-contained" if ctx.attr.self_contained else "ReadyToRun",
+            _publish_kind(ctx.attr),
             " and ".join(["\"{}\"".format(framework) for framework in missing]),
             binary,
         ))
 
     # Otherwise the runtime packs are those of every shared framework with one
     # for the runtime identifier, which need not include each the binary runs
-    # on. NativeAOT compiles the runtime in instead.
-    if (ctx.attr.self_contained or ctx.attr.ready_to_run) and not ctx.attr.native_aot:
+    # on. NativeAOT needs them too: it compiles in every shared framework but
+    # Microsoft.NETCore.App from its runtime pack.
+    if _takes_runtime_packs(ctx.attr):
         packed = [shared_framework_of_runtime_pack(pack.name) for pack in publish.binary_info.runtime_pack_info.assembly_runtime_infos]
         unpacked = [framework for framework in publish.binary_info.runtime_frameworks if framework not in packed]
         if unpacked:
@@ -189,11 +201,26 @@ def _native_aot_publish(ctx, publish):
     assembly_info = publish.assembly_info
     parts = [assembly_info] + publish.transitive_runtime_deps
 
+    # The NativeAOT pack replaces Microsoft.NETCore.App, but every other shared
+    # framework the binary runs on, such as Microsoft.AspNetCore.App, is
+    # compiled in from its runtime pack, as the SDK does. Without them ilc
+    # cannot resolve the framework and compiles code that throws instead. ilc
+    # keeps the first reference of each name, so a dependency and a pack never
+    # both pass one: as in a self-contained publish, the newer copy wins.
+    references = resolve_runtime_pack_conflicts(
+        [
+            pack
+            for pack in publish.runtime_pack_info.assembly_runtime_infos
+            if shared_framework_of_runtime_pack(pack.name) != NETCORE_FRAMEWORK
+        ],
+        publish.transitive_runtime_deps,
+    )
+
     executable = native_aot_executable(
         ctx,
         _native_tools(ctx),
         publish.binary_info.dll,
-        [lib for part in parts for lib in part.libs],
+        assembly_info.libs + references.pack_libs + references.dependency_libs,
         publish.runtime_identifier,
         ctx.attr.target_framework,
         publish.binary_framework,
@@ -895,10 +922,12 @@ inlined across assembly boundaries. Requires `ready_to_run` and
 
 The output is one self-contained executable with no IL and no JIT, so there is
 no `deps.json`, `runtimeconfig.json` or apphost; native libraries, app
-settings, content files and static web assets still sit beside it. Implies
-trimming. Needs a C/C++ toolchain registered for the target platform, and a
-binary built for .NET 10 or later. Cannot be combined with `ready_to_run` or
-`single_file`.""",
+settings, content files and static web assets still sit beside it. Shared
+frameworks beyond Microsoft.NETCore.App, such as ASP.NET Core, are compiled in
+from their runtime packs, which `strict_framework_references` picks as for a
+self-contained publish. Implies trimming. Needs a C/C++ toolchain registered
+for the target platform, and a binary built for .NET 10 or later. Cannot be
+combined with `ready_to_run` or `single_file`.""",
             default = False,
         ),
         "single_file": attr.bool(
@@ -925,7 +954,7 @@ Requires `single_file`.""",
             default = False,
         ),
         "strict_framework_references": attr.bool(
-            doc = """Whether a self-contained or ReadyToRun publish only takes the runtime packs of the shared frameworks its binary references itself.
+            doc = """Whether a self-contained, ReadyToRun or NativeAOT publish only takes the runtime packs of the shared frameworks its binary references itself.
 
 `True` takes only those, and fails when a dependency references another shared
 framework. `False` takes those of the binary's dependencies too, as MSBuild

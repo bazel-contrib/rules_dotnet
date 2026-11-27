@@ -248,10 +248,10 @@ A target only compiles against the frameworks it lists itself, so list a
 framework on every target whose code uses it. A binary runs on the frameworks
 of all its dependencies, NuGet packages included.
 
-A self-contained or ReadyToRun `publish_binary` only takes the runtime packs of
-the frameworks the binary lists itself, and fails if a dependency needs another
-one. This is stricter than MSBuild, where a `FrameworkReference` flows through
-project and package references unless
+A self-contained, ReadyToRun or NativeAOT `publish_binary` only takes the
+runtime packs of the frameworks the binary lists itself, and fails if a
+dependency needs another one. This is stricter than MSBuild, where a
+`FrameworkReference` flows through project and package references unless
 `<DisableTransitiveFrameworkReferences>true</DisableTransitiveFrameworkReferences>`
 is set. To publish the frameworks of dependencies as well, set
 `strict_framework_references = False` on the `publish_binary`, or use the following
@@ -263,7 +263,8 @@ flag, or add it to your `.bazelrc` to make it the default:
 
 Such a publish fetches the runtime packs of every shared framework for its
 runtime identifier, since which of them the dependencies reference is only known
-after the packs are picked, and ships those the binary runs on.
+after the packs are picked, and ships, or with NativeAOT compiles in, those the
+binary runs on.
 
 `nuget_pack` records a library's framework references in the package, so that
 its consumers get them too.
@@ -327,6 +328,8 @@ will do their best to guide if needed.
 
 `publish_binary(native_aot = True)` compiles the application ahead of time to a
 single native executable. The binary has to be built for .NET 10 or later.
+Shared frameworks beyond Microsoft.NETCore.App, such as ASP.NET Core, are
+compiled in from their runtime packs.
 
 NativeAOT links native code, so it needs a registered **C/C++ toolchain**.
 Builds that do not publish with NativeAOT do not need one.

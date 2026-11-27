@@ -1,0 +1,9 @@
+load("//dotnet:defs.bzl", "csharp_binary")
+
+csharp_binary(
+    name = "web",
+    srcs = ["Program.cs"],
+    project_sdk = "web",
+    target_frameworks = ["net10.0"],
+    visibility = ["//dotnet/private/tests/publish/native_aot:__pkg__"],
+)
