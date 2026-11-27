@@ -74,10 +74,31 @@ csharp_library(
 )
 
 csharp_library(
+    name = "netfx_win_helper_compiled",
+    srcs = ["PrivateDep.cs"],
+    out = "WinHelper",
+    generate_documentation_file = False,
+    langversion = "10.0",
+    target_frameworks = ["net48"],
+)
+
+import_library(
+    name = "netfx_win_helper",
+    library_name = "WinHelper",
+    libs = select({
+        "//dotnet:rid_win": [":netfx_win_helper_compiled"],
+        "//conditions:default": [],
+    }),
+    refs = [":netfx_win_helper_compiled"],
+    version = "1.0.0",
+)
+
+csharp_library(
     name = "netfx_lib",
     srcs = ["NetFxLib.cs"],
     target_frameworks = ["net48"],
     deps = [
+        ":netfx_win_helper",
         "@paket.rules_dotnet_dev_nuget_packages//rocksdb",
     ],
 )

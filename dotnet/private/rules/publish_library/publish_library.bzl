@@ -20,6 +20,7 @@ load(
 load(
     "//dotnet/private/rules/common:publish_layout.bzl",
     "collect_assembly_files",
+    "publish_content_files",
     "publish_layout",
     "reject_conflicting_paths",
 )
@@ -49,10 +50,8 @@ def _publish_library_transition_impl(settings, attr):
     incoming_rid = settings["//dotnet:rid"]
     if attr.runtime_identifier:
         rid = attr.runtime_identifier
-    elif incoming_rid != "base":
-        rid = incoming_rid
     else:
-        rid = platform_to_rid()
+        rid = incoming_rid if incoming_rid != "base" else platform_to_rid()
         if is_netframework(tfm):
             rid = netframework_runtime_identifier(rid)
 
@@ -102,21 +101,42 @@ def _excluded_names(ctx, library, runtime_info):
 
     return excluded
 
-def _dependency_layers(transitive_runtime_deps):
+def _dependency_layers(transitive_runtime_deps, portable = False):
     """The layer of each dependency's files, keyed by path."""
     layers = {}
 
     for dep in transitive_runtime_deps:
         layer = "third_party" if is_from_nuget_package(dep) else "first_party"
         files = dep.libs + dep.native + dep.resource_assemblies + dep.data
-        portable = get_portable_assets(dep, True)
-        if portable:
-            files = files + portable.libs + [asset.file for asset in portable.runtime_targets]
+        portable_assets = get_portable_assets(dep, portable)
+        if portable_assets:
+            files = files + portable_assets.libs + [asset.file for asset in portable_assets.runtime_targets]
 
         for file in files:
             layers[file.path] = layer
 
     return layers
+
+def _dedupe_files(files):
+    return {file.path: file for file in files}.values()
+
+def _netfx_assembly_files(label, assembly_info, transitive_runtime_deps):
+    """The files a .NET Framework library publish copies.
+
+    .NET Framework has no deps.json and does not probe `runtimes/<rid>/`:
+    managed and native dependencies resolved for the Windows runtime
+    identifier go beside the library, as `netfx.bzl` stages them.
+    """
+    parts = [assembly_info] + transitive_runtime_deps
+    return struct(
+        libs = _dedupe_files([file for part in parts for file in part.libs]),
+        resource_assemblies = _dedupe_files([file for part in parts for file in part.resource_assemblies]),
+        native = _dedupe_files([file for part in parts for file in part.native]),
+        runtime_targets = [],
+        data = _dedupe_files([file for part in parts for file in part.data]),
+        appsetting_files = assembly_info.appsetting_files.to_list(),
+        content_files = publish_content_files(label, assembly_info, transitive_runtime_deps),
+    )
 
 def _publish_output_groups(ctx, subdir, entries, dependency_layers):
     """Declares the `publish_dir` directory and `<layer>_layer` directories."""
@@ -159,8 +179,9 @@ def _publish_library_impl(ctx):
     compile_info = library[DotnetAssemblyCompileInfo]
     runtime_info = library[DotnetAssemblyRuntimeInfo]
     target_framework = ctx.attr.target_framework
+    is_netfx = is_netframework(target_framework)
     runtime_identifier = ctx.attr.runtime_identifier or None
-    portable = runtime_identifier == None
+    portable = runtime_identifier == None and not is_netfx
 
     if compile_info.target_framework == None:
         fail("{}: {} is an imported assembly. `publish_library` publishes a csharp_library or fsharp_library.".format(
@@ -182,17 +203,18 @@ def _publish_library_impl(ctx):
     if not runtime_info.libs:
         fail("{}: {} builds no assembly to publish".format(ctx.label, library.label))
 
-    if is_netframework(target_framework) and runtime_identifier and not runtime_identifier.startswith("win"):
+    if is_netfx and runtime_identifier and not runtime_identifier.startswith("win"):
         fail(("{}: {} targets .NET Framework, which only runs on Windows, so it cannot be " +
               "published for runtime identifier {}. Set `runtime_identifier` to a Windows " +
               "one, such as win-x64, or leave it unset.").format(ctx.label, library.label, repr(runtime_identifier)))
 
     excluded_names = _excluded_names(ctx, library, runtime_info)
-    transitive_runtime_deps = select_runtime_variants([
+    unexcluded_deps = [
         dep
         for dep in runtime_info.deps.to_list()
         if dep.name not in excluded_names
-    ])
+    ]
+    transitive_runtime_deps = unexcluded_deps if is_netfx else select_runtime_variants(unexcluded_deps)
 
     windows_only = [framework for framework in runtime_frameworks(runtime_info, transitive_runtime_deps) if framework in WINDOWS_ONLY_FRAMEWORKS]
     if windows_only and runtime_identifier and not runtime_identifier.startswith("win"):
@@ -205,30 +227,34 @@ def _publish_library_impl(ctx):
     if portable:
         _reject_runtime_specific_natives(runtime_info, transitive_runtime_deps, ctx.label)
 
-    depsjson_struct = generate_depsjson(
-        ctx,
-        target_framework = target_framework,
-        is_self_contained = False,
-        target_assembly_runtime_info = runtime_info,
-        transitive_runtime_deps = transitive_runtime_deps,
-        portable = portable,
-    )
+    depsjson_struct = None
+    if is_netfx:
+        assembly_files = _netfx_assembly_files(ctx.label, runtime_info, transitive_runtime_deps)
+    else:
+        depsjson_struct = generate_depsjson(
+            ctx,
+            target_framework = target_framework,
+            is_self_contained = False,
+            target_assembly_runtime_info = runtime_info,
+            transitive_runtime_deps = transitive_runtime_deps,
+            portable = portable,
+        )
 
-    if excluded_names:
-        for target_fragment in depsjson_struct["targets"].values()[0].values():
-            target_fragment["dependencies"] = {
-                name: version
-                for (name, version) in target_fragment.get("dependencies", {}).items()
-                if name not in excluded_names
-            }
+        if excluded_names:
+            for target_fragment in depsjson_struct["targets"].values()[0].values():
+                target_fragment["dependencies"] = {
+                    name: version
+                    for (name, version) in target_fragment.get("dependencies", {}).items()
+                    if name not in excluded_names
+                }
 
-    assembly_files = collect_assembly_files(
-        ctx.label,
-        runtime_info,
-        transitive_runtime_deps,
-        depsjson_struct,
-        portable = portable,
-    )
+        assembly_files = collect_assembly_files(
+            ctx.label,
+            runtime_info,
+            transitive_runtime_deps,
+            depsjson_struct,
+            portable = portable,
+        )
     layout = publish_layout(None, assembly_files, [])
     reject_conflicting_paths(layout, ctx.label, content_files = assembly_files.content_files)
 
@@ -262,7 +288,7 @@ def _publish_library_impl(ctx):
         ctx,
         subdir,
         entries,
-        _dependency_layers(transitive_runtime_deps),
+        _dependency_layers(transitive_runtime_deps, portable = portable),
     )
 
     return [
@@ -280,16 +306,20 @@ publish_library = rule(
 Produces the flat publish layout of `dotnet publish` on a class library (and
 `<EnableDynamicLoading>true</EnableDynamicLoading>` on .NET Core / .NET 5+):
 the library's assembly and its transitive runtime dependencies at the root,
-satellite resource assemblies under `<locale>/`, and native libraries under
-`runtimes/<rid>/native/` (plus `runtimes/<rid>/lib/<tfm>/` when portable).
+satellite resource assemblies under `<locale>/`, and NuGet native libraries under
+`runtimes/<rid>/native/` on .NET (plus `runtimes/<rid>/lib/<tfm>/` when portable),
+or flat at the root on .NET Framework.
 Unlike `publish_binary`, `publish_library` is not executable and emits no
 apphost shim or `runtimeconfig.json`, as a library runs inside an existing host
 process.
 
-When `runtime_identifier` is omitted, the publish is portable and carries every
-runtime identifier's assets from NuGet packages under `runtimes/<rid>/`. When
-`runtime_identifier` is set, only that runtime's assets (including
-workspace-built native libraries) are included.
+When `runtime_identifier` is omitted on .NET / .NET Standard, the publish is
+portable and carries every runtime identifier's assets from NuGet packages under
+`runtimes/<rid>/`. On .NET Framework, omitting `runtime_identifier` resolves a
+Windows runtime identifier matching the target platform architecture and stages
+managed and native dependencies flat at the publish root. When `runtime_identifier`
+is set, only that runtime's assets (including workspace-built native libraries)
+are included.
 
 For plugins and add-ins that load into a host application (`AssemblyLoadContext`
 on .NET Core, `AppDomain` on .NET Framework, VSIX extensions, MSBuild tasks),
@@ -316,9 +346,10 @@ provides, matching MSBuild's `<ProjectReference Private="false" ExcludeAssets="r
             mandatory = True,
         ),
         "runtime_identifier": attr.string(
-            doc = """The runtime identifier to publish for. When unset, the publish is
-            portable and carries every runtime identifier's assets from NuGet packages
-            under `runtimes/<rid>/`.""",
+            doc = """The runtime identifier to publish for. When unset on .NET / .NET Standard,
+            the publish is portable and carries every runtime identifier's assets from NuGet
+            packages under `runtimes/<rid>/`; on .NET Framework, a Windows runtime identifier
+            matching the target platform architecture is used.""",
             default = "",
         ),
         "exclude_deps": attr.label_list(

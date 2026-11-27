@@ -501,9 +501,12 @@ publish_library(
 )
 ```
 
-- When `runtime_identifier` is omitted, the publish is portable and carries
-  every runtime identifier's assets from NuGet packages under `runtimes/<rid>/`.
-  When `runtime_identifier` is set, only that runtime's assets (including
+- When `runtime_identifier` is omitted on .NET / .NET Standard, the publish is
+  portable and carries every runtime identifier's assets from NuGet packages
+  under `runtimes/<rid>/`. On .NET Framework (which has no `deps.json` and does
+  not probe `runtimes/<rid>/`), managed and native dependencies for the Windows
+  runtime identifier are staged flat at the publish root. When
+  `runtime_identifier` is set, only that runtime's assets (including
   workspace-built native libraries) are included.
 - `exclude_deps` excludes the runtime closures of dependencies that the host
   process already provides (mirroring `<ProjectReference Private="false"

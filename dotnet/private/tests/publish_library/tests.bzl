@@ -228,15 +228,50 @@ def _netframework_no_deps_json_test(name):
 def _netframework_no_deps_json_test_impl(env, target):
     paths = _publish_relative_paths(target, "net48")
 
-    # .NET Framework publishes the managed DLLs and portable native runtimes,
-    # without emitting a .deps.json file.
+    # .NET Framework resolves a Windows RID even when `runtime_identifier` is
+    # omitted, staging RID-specific managed libraries flat at the root without
+    # emitting `runtimes/<rid>/` directories or a `.deps.json` file.
     env.expect.that_collection(paths).contains_at_least([
         "netfx_lib.dll",
+        "WinHelper.dll",
         "RocksDbSharp.dll",
-        "runtimes/win-x64/native/rocksdb.dll",
     ])
     env.expect.that_collection(paths).contains_none_of([
         "netfx_lib.deps.json",
+    ])
+    for path in paths:
+        if path.startswith("runtimes/"):
+            env.fail(".NET Framework publish placed {} under runtimes/, which AppDomain will not probe".format(path))
+
+def _netframework_rid_flattens_natives_test(name):
+    publish_library(
+        name = name + "_publish",
+        library = ":netfx_lib",
+        runtime_identifier = "win-x64",
+        tags = ["manual"],
+        target_framework = "net48",
+    )
+
+    analysis_test(
+        name = name,
+        impl = _netframework_rid_flattens_natives_test_impl,
+        target = name + "_publish",
+    )
+
+def _netframework_rid_flattens_natives_test_impl(env, target):
+    paths = _publish_relative_paths(target, "win-x64")
+
+    # Both managed and NuGet native dependencies are staged flat at the publish
+    # root on .NET Framework.
+    env.expect.that_collection(paths).contains_at_least([
+        "netfx_lib.dll",
+        "WinHelper.dll",
+        "RocksDbSharp.dll",
+        "rocksdb.dll",
+    ])
+    env.expect.that_collection(paths).contains_none_of([
+        "netfx_lib.deps.json",
+        "runtimes/win-x64/native/rocksdb.dll",
     ])
 
 def _netframework_rejects_non_windows_rid_test(name):
@@ -353,6 +388,7 @@ def publish_library_test_suite(name):
             _imported_library_fails_test,
             _wrong_target_framework_fails_test,
             _netframework_no_deps_json_test,
+            _netframework_rid_flattens_natives_test,
             _netframework_rejects_non_windows_rid_test,
             _windows_desktop_rejects_non_windows_rid_test,
             _include_deps_json_false_test,
