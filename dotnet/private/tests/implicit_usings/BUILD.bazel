@@ -1,0 +1,29 @@
+load("@bazel_lib//:bzl_library.bzl", "bzl_library")
+load(":tests.bzl", "implicit_usings_test_suite")
+load(":unit_tests.bzl", "implicit_usings_unit_test_suite")
+
+implicit_usings_test_suite(name = "implicit_usings_test_suite")
+
+implicit_usings_unit_test_suite(name = "implicit_usings_unit_test")
+
+bzl_library(
+    name = "tests",
+    srcs = ["tests.bzl"],
+    visibility = ["//dotnet:__subpackages__"],
+    deps = [
+        "//dotnet:defs",
+        "@bazel_skylib//lib:unittest",
+        "@rules_testing//lib:analysis_test_bzl",
+    ],
+)
+
+bzl_library(
+    name = "unit_tests",
+    srcs = ["unit_tests.bzl"],
+    visibility = ["//dotnet:__subpackages__"],
+    deps = [
+        "//dotnet/private:msbuild_condition",
+        "//dotnet/private/sdk:implicit_usings",
+        "@bazel_skylib//lib:unittest",
+    ],
+)

@@ -98,6 +98,32 @@ csharp_library(
 )
 ```
 
+### Implicit and global usings
+
+Set `implicit_usings = True` on C# targets to generate the .NET SDK's ambient
+`global using` directives (matching MSBuild's `<ImplicitUsings>enable</ImplicitUsings>`
+for the target's `project_sdk` and `framework_references`), and use
+`global_usings` / `excluded_global_usings` to add or remove namespaces
+(`<Using Include="..." />` / `<Using Remove="..." />`):
+
+```starlark
+csharp_library(
+    name = "lib",
+    srcs = glob(["**/*.cs"], exclude = ["bin/**", "obj/**"]),
+    implicit_usings = True,
+    global_usings = ["System.Text.Json"],
+    excluded_global_usings = ["System.Net.Http"],
+    target_frameworks = ["net10.0"],
+)
+```
+
+The implicit namespaces are the ones `dotnet build` generates with the same
+SDK, so they can change when the SDK does.
+
+`global using` directives require C# 10 or later; set `langversion = "10.0"` (or
+newer) when using `implicit_usings` or `global_usings` on older target
+frameworks such as `net48`.
+
 ## Resources and localization
 
 `resources` works like MSBuild's `EmbeddedResource`. `.resx` files are compiled,

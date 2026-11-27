@@ -367,6 +367,27 @@ CSHARP_COMMON_ATTRS = dicts.add(
             default = "disable",
             values = ["disable", "enable", "warnings", "annotations"],
         ),
+        "implicit_usings": attr.bool(
+            doc = """Generate the .NET SDK's implicit `global using` directives for this target, matching MSBuild's `ImplicitUsings`.
+
+            The namespaces are the ones `dotnet build` generates with the same SDK for this target's
+            framework, `project_sdk` and `framework_references`, so they may change when the SDK does.
+            Requires C# 10 or later.""",
+            mandatory = False,
+            default = False,
+        ),
+        "global_usings": attr.string_list(
+            doc = """Additional namespaces to import with `global using`, matching MSBuild's `<Using Include="..." />`.
+
+            May be used on its own or alongside `implicit_usings = True`. Requires C# 10 or later.""",
+            mandatory = False,
+            default = [],
+        ),
+        "excluded_global_usings": attr.string_list(
+            doc = """Namespaces to omit from the generated `global using` directives, matching MSBuild's `<Using Remove="..." />`.""",
+            mandatory = False,
+            default = [],
+        ),
         "run_analyzers": attr.bool(
             doc = "Whether the compiler runs analyzers and source generators.",
             mandatory = False,

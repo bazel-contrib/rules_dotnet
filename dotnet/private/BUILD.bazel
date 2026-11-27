@@ -162,6 +162,12 @@ bzl_library(
 )
 
 bzl_library(
+    name = "msbuild_condition",
+    srcs = ["msbuild_condition.bzl"],
+    visibility = ["//dotnet:__subpackages__"],
+)
+
+bzl_library(
     name = "xml",
     srcs = ["xml.bzl"],
     visibility = ["//dotnet:__subpackages__"],

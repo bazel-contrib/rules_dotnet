@@ -5,6 +5,7 @@ bzl_library(
     srcs = ["csharp_assembly.bzl"],
     visibility = ["//dotnet:__subpackages__"],
     deps = [
+        ":global_usings",
         ":razor",
         ":scoped_css",
         ":sdk_analyzers",
@@ -16,6 +17,18 @@ bzl_library(
         "//dotnet/private/rules/common:resx",
         "//dotnet/private/sdk:packs",
         "@bazel_skylib//lib:structs",
+    ],
+)
+
+bzl_library(
+    name = "global_usings",
+    srcs = ["global_usings.bzl"],
+    visibility = ["//dotnet:__subpackages__"],
+    deps = [
+        "//dotnet/private:common",
+        "//dotnet/private:msbuild_condition",
+        "//dotnet/private/sdk:implicit_usings",
+        "//dotnet/private/sdk:packs",
     ],
 )
 
