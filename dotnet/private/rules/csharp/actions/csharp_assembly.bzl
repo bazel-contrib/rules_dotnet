@@ -27,6 +27,7 @@ load(
     "//dotnet/private:providers.bzl",
     "DotnetAssemblyCompileInfo",
     "DotnetAssemblyRuntimeInfo",
+    "DotnetCSharpAnalyzerInfo",
     "StaticWebAssetsInfo",
 )
 load("//dotnet/private/rules/common:compiler_action.bzl", "run_compiler")
@@ -481,8 +482,8 @@ def AssemblyAction(
         excluded_global_usings: Namespaces to exclude from the generated `global using` directives.
 
     Returns:
-        The compile and runtime providers, and the static web assets the compile
-        generated.
+        The compile and runtime providers, the static web assets the compile
+        generated, and `DotnetCSharpAnalyzerInfo`.
     """
     is_any_analyzer = is_analyzer or is_language_specific_analyzer
     if is_any_analyzer and target_framework != "netstandard2.0":
@@ -687,10 +688,11 @@ def AssemblyAction(
             dll_name = assembly_name,
             others = internals_visible_to,
         )
+        compile_srcs = srcs + [internals_visible_to_cs]
 
         _compile(
             compilation,
-            srcs = srcs + [internals_visible_to_cs],
+            srcs = compile_srcs,
             analyzers_csharp = analyzer_inputs.analyzers_csharp,
             analyzer_configs = analyzer_inputs.analyzer_configs,
             out_dll = out_dll,
@@ -709,9 +711,10 @@ def AssemblyAction(
             xaml = xaml,
         )
     else:
+        compile_srcs = srcs
         _compile(
             compilation,
-            srcs = srcs,
+            srcs = compile_srcs,
             analyzers_csharp = analyzer_inputs.analyzers_csharp,
             analyzer_configs = analyzer_inputs.analyzer_configs,
             out_dll = out_dll,
@@ -732,6 +735,44 @@ def AssemblyAction(
             subpath = scoped_css.bundle.basename,
             scoped_css_bundle = True,
         ))
+
+    analyzer_info = DotnetCSharpAnalyzerInfo(
+        assembly_name = assembly_name,
+        out_dll_name = out_dll.basename,
+        target = target,
+        target_framework = target_framework,
+        project_sdk = project_sdk,
+        srcs = depset(compile_srcs),
+        xaml_code = xaml.code if xaml else None,
+        refs = irefs,
+        framework_files = framework_files,
+        analyzers = compilation.analyzers,
+        analyzers_csharp = depset(
+            razor.analyzers if razor else [],
+            transitive = [analyzer_inputs.ref_only_analyzers_csharp],
+        ),
+        analyzer_configs = depset(
+            (razor.configs if razor else []) + analyzer_inputs.ref_only_analyzer_configs,
+        ),
+        additionalfiles = depset(
+            (razor.additionalfiles if razor else []) + additionalfiles,
+        ),
+        compile_data = compilation.compile_data,
+        resources = resources,
+        keyfile = keyfile,
+        langversion = langversion,
+        nullable = nullable,
+        allow_unsafe_blocks = allow_unsafe_blocks,
+        defines = depset(["TRACE", "DEBUG" if debug else "RELEASE"] + compilation.defines).to_list(),
+        subsystem_version = get_framework_version_info(target_framework),
+        warning_level = warning_level,
+        nowarn = nowarn,
+        treat_warnings_as_errors = treat_warnings_as_errors,
+        warnings_as_errors = warnings_as_errors,
+        warnings_not_as_errors = warnings_not_as_errors,
+        compiler_options = compiler_options,
+        interceptors_namespaces = list(compilation.interceptors_namespaces),
+    )
 
     return (DotnetAssemblyCompileInfo(
         name = assembly_name,
@@ -779,7 +820,7 @@ def AssemblyAction(
             for dep in deps
             if not _runs_only_in_the_compiler(dep)
         },
-    ), generated_web_assets)
+    ), generated_web_assets, analyzer_info)
 
 def _xaml(compilation, *, partitioned, srcs, analyzer_inputs, frameworks, wpf_resources, out_dir, assembly_name, root_namespace, tool):
     """Compiles WPF XAML as Microsoft.WinFX.targets does. See xaml.bzl.

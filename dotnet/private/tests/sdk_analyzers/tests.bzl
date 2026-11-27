@@ -7,8 +7,88 @@ The expectations are what MSBuild resolves for the same project (`dotnet msbuild
 """
 
 load("@bazel_skylib//lib:unittest.bzl", "analysistest", "asserts")
-load("//dotnet:defs.bzl", "csharp_library")
+load(
+    "//dotnet:defs.bzl",
+    "DotnetAssemblyCompileInfo",
+    "DotnetCSharpAnalyzerInfo",
+    "csharp_binary",
+    "csharp_library",
+    "sdk_analyzer_compile_inputs",
+)
 load("//dotnet/private/tests:utils.bzl", "only_action")
+
+def _csharp_analyzer_info_test_impl(ctx):
+    env = analysistest.begin(ctx)
+    target = analysistest.target_under_test(env)
+
+    asserts.true(env, DotnetAssemblyCompileInfo in target, "Expected DotnetAssemblyCompileInfo provider on C# target")
+    asserts.true(env, DotnetCSharpAnalyzerInfo in target, "Expected DotnetCSharpAnalyzerInfo provider on C# target")
+    info = target[DotnetCSharpAnalyzerInfo]
+    asserts.equals(env, ctx.attr.expected_assembly_name, info.assembly_name)
+    asserts.equals(env, ctx.attr.expected_assembly_name + ".dll", info.out_dll_name)
+    asserts.equals(env, ctx.attr.expected_target, info.target)
+    asserts.equals(env, "net10.0", info.target_framework)
+    asserts.equals(env, ctx.attr.expected_project_sdk, info.project_sdk)
+
+    src_basenames = [f.basename for f in info.srcs.to_list()]
+    asserts.true(env, ctx.attr.expected_src in src_basenames, "Expected {} in info.srcs: {}".format(ctx.attr.expected_src, src_basenames))
+    asserts.true(env, len(info.framework_files.to_list()) > 0, "Expected non-empty framework_files")
+
+    # DotnetCSharpAnalyzerInfo excludes the SDK's built-in analyzers and globalconfigs so
+    # external lint aspects can layer `sdk_analyzer_compile_inputs` with their own settings,
+    # while still keeping targeting-pack and dependency source generators/analyzers.
+    analyzer_basenames = [f.basename for f in info.analyzers_csharp.to_list()]
+    for sdk_analyzer in _NET_ANALYZERS + _CODE_STYLE_ANALYZERS + _WEB_ANALYZERS:
+        asserts.false(env, sdk_analyzer in analyzer_basenames, "Expected SDK analyzer {} not in info.analyzers_csharp: {}".format(sdk_analyzer, analyzer_basenames))
+    asserts.true(env, "System.Text.Json.SourceGeneration.dll" in analyzer_basenames, "Expected System.Text.Json generator in info.analyzers_csharp: {}".format(analyzer_basenames))
+    if ctx.attr.expected_project_sdk == "web":
+        asserts.true(env, "Microsoft.AspNetCore.App.SourceGenerators.dll" in analyzer_basenames, "Expected ASP.NET Core generator in info.analyzers_csharp: {}".format(analyzer_basenames))
+
+    config_basenames = [f.basename for f in info.analyzer_configs.to_list()]
+    asserts.false(env, "analysislevel_10_default.globalconfig" in config_basenames, "Expected SDK globalconfig not in info.analyzer_configs: {}".format(config_basenames))
+
+    for symbol in ctx.attr.expected_defines:
+        asserts.true(env, symbol in info.defines, "Expected {} in info.defines: {}".format(symbol, info.defines))
+    for symbol in ctx.attr.unexpected_defines:
+        asserts.false(env, symbol in info.defines, "Expected {} not in info.defines: {}".format(symbol, info.defines))
+
+    empty_sdk_inputs = sdk_analyzer_compile_inputs(
+        toolchain = None,
+        target_framework = info.target_framework,
+        project_sdk = info.project_sdk,
+        enable_net_analyzers = False,
+        enforce_code_style_in_build = False,
+        analysis_mode = "default",
+    )
+    asserts.equals(env, [], empty_sdk_inputs.analyzers)
+    asserts.equals(env, [], empty_sdk_inputs.analyzer_configs)
+
+    return analysistest.end(env)
+
+_ANALYZER_INFO_ATTRS = {
+    "expected_assembly_name": attr.string(mandatory = True),
+    "expected_target": attr.string(mandatory = True),
+    "expected_project_sdk": attr.string(mandatory = True),
+    "expected_src": attr.string(mandatory = True),
+    "expected_defines": attr.string_list(),
+    "unexpected_defines": attr.string_list(),
+}
+
+csharp_analyzer_info_dbg_test = analysistest.make(
+    _csharp_analyzer_info_test_impl,
+    attrs = _ANALYZER_INFO_ATTRS,
+    config_settings = {
+        "//command_line_option:compilation_mode": "dbg",
+    },
+)
+
+csharp_analyzer_info_opt_test = analysistest.make(
+    _csharp_analyzer_info_test_impl,
+    attrs = _ANALYZER_INFO_ATTRS,
+    config_settings = {
+        "//command_line_option:compilation_mode": "opt",
+    },
+)
 
 _NET_ANALYZERS = [
     "Microsoft.CodeAnalysis.NetAnalyzers.dll",
@@ -159,3 +239,45 @@ def sdk_analyzers_tests():
             expected_analyzers = _NET_ANALYZERS,
             unexpected_analyzers = _WEB_ANALYZERS,
         )
+
+    csharp_analyzer_info_dbg_test(
+        name = "csharp_analyzer_info_lib_test",
+        target_under_test = ":web_sdk_analyzers_lib",
+        expected_assembly_name = "web_sdk_analyzers_lib",
+        expected_target = "library",
+        expected_project_sdk = "web",
+        expected_src = "Sample.cs",
+        expected_defines = ["TRACE", "DEBUG", "NET10_0"],
+        unexpected_defines = ["RELEASE"],
+    )
+
+    csharp_binary(
+        name = "sdk_analyzers_bin",
+        srcs = ["Program.cs"],
+        defines = ["CUSTOM_SYM"],
+        enable_net_analyzers = "true",
+        target_frameworks = ["net10.0"],
+        tags = ["manual"],
+    )
+
+    csharp_analyzer_info_dbg_test(
+        name = "csharp_analyzer_info_bin_dbg_test",
+        target_under_test = ":sdk_analyzers_bin",
+        expected_assembly_name = "sdk_analyzers_bin",
+        expected_target = "exe",
+        expected_project_sdk = "default",
+        expected_src = "Program.cs",
+        expected_defines = ["TRACE", "DEBUG", "NET10_0", "CUSTOM_SYM"],
+        unexpected_defines = ["RELEASE"],
+    )
+
+    csharp_analyzer_info_opt_test(
+        name = "csharp_analyzer_info_bin_opt_test",
+        target_under_test = ":sdk_analyzers_bin",
+        expected_assembly_name = "sdk_analyzers_bin",
+        expected_target = "exe",
+        expected_project_sdk = "default",
+        expected_src = "Program.cs",
+        expected_defines = ["TRACE", "RELEASE", "NET10_0", "CUSTOM_SYM"],
+        unexpected_defines = ["DEBUG"],
+    )

@@ -485,6 +485,24 @@ Mark .NET Framework tests with
   cover the version the application references. MSBuild replaces it with the
   one it generates and warns (MSB3836).
 
+## Code analysis and external linters
+
+`csharp_library`, `csharp_binary`, and `csharp_test` enable the .NET SDK's
+built-in Roslyn analyzers when `enable_net_analyzers` or
+`enforce_code_style_in_build` is set on the target or via
+`--@rules_dotnet//dotnet/settings:enable_net_analyzers` and
+`--@rules_dotnet//dotnet/settings:enforce_code_style_in_build`.
+
+External Bazel aspects (such as `aspect_rules_lint`) can also run Roslyn
+analyzers or code fixers out-of-band without enabling them on regular builds.
+Every C# target provides `DotnetCSharpAnalyzerInfo` (loaded from
+`@rules_dotnet//dotnet:defs.bzl`) with its resolved sources, reference and
+targeting-pack assemblies, non-SDK analyzers/source generators, analyzer
+configs, and compiler options. Aspects can combine those inputs with
+`sdk_analyzer_compile_inputs` from `@rules_dotnet//dotnet:defs.bzl` to apply
+their own `enable_net_analyzers`, `enforce_code_style_in_build`, and
+`analysis_mode` policy at lint time.
+
 ## Container images
 
 The output from `publish_binary` can easily be used to build container images.

@@ -4,6 +4,11 @@ Load the rules from here rather than from `//dotnet/private`.
 """
 
 load(
+    "//dotnet/private:providers.bzl",
+    _DotnetAssemblyCompileInfo = "DotnetAssemblyCompileInfo",
+    _DotnetCSharpAnalyzerInfo = "DotnetCSharpAnalyzerInfo",
+)
+load(
     "//dotnet/private/rules/blazor:app.bzl",
     _blazor_wasm_app = "blazor_wasm_app",
 )
@@ -38,6 +43,10 @@ load(
 load(
     "//dotnet/private/rules/csharp:test.bzl",
     _csharp_test = "csharp_test",
+)
+load(
+    "//dotnet/private/rules/csharp/actions:sdk_analyzers.bzl",
+    _sdk_analyzer_compile_inputs = "sdk_analyzer_compile_inputs",
 )
 load(
     "//dotnet/private/rules/fsharp:binary.bzl",
@@ -167,6 +176,9 @@ def fsharp_test(name, **kwargs):
     """
     _fsharp_test(name = name, embed_sources = _embed_sources_or_flag(kwargs.pop("embed_sources", None)), **kwargs)
 
+DotnetAssemblyCompileInfo = _DotnetAssemblyCompileInfo
+DotnetCSharpAnalyzerInfo = _DotnetCSharpAnalyzerInfo
+sdk_analyzer_compile_inputs = _sdk_analyzer_compile_inputs
 csharp_nunit_test = _csharp_nunit_test
 fsharp_nunit_test = _fsharp_nunit_test
 publish_binary = _publish_binary

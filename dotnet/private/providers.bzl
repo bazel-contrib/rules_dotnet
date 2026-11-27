@@ -1,4 +1,38 @@
 "Providers"
+DotnetCSharpAnalyzerInfo = provider(
+    doc = """Resolved C# compilation inputs and options for a target, allowing external aspects (such as `rules_lint`) to run Roslyn analyzers or code fixers.""",
+    fields = {
+        "assembly_name": "string: The logical name of the assembly.",
+        "out_dll_name": "string: The output DLL filename (e.g. `MyLib.dll`).",
+        "target": "string: The compiler `/target:` kind (`library`, `exe`, `winexe`, or `module`).",
+        "target_framework": "string: The target framework moniker (e.g. `net10.0`).",
+        "project_sdk": "string: The project SDK (`default`, `web`, `razor`, or `blazorwasm`).",
+        "srcs": "depset[File]: C# source files compiled into the assembly (including generated AssemblyInfo/InternalsVisibleTo sources).",
+        "xaml_code": "File: Directory (TreeArtifact) containing WPF XAML pass-2 outputs (including generated `.g.cs` files), or `None`.",
+        "refs": "depset[File]: Direct and transitive reference assemblies (including internals-visible reference assemblies).",
+        "framework_files": "depset[File]: Targeting pack reference assemblies for `target_framework` and `project_sdk`.",
+        "analyzers": "depset[File]: Language-agnostic Roslyn analyzer and source generator DLLs from dependencies.",
+        "analyzers_csharp": "depset[File]: C# Roslyn analyzer and source generator DLLs from dependencies (plus Razor generators when applicable). Excludes the .NET SDK's built-in analyzers so external lint aspects can layer `sdk_analyzer_compile_inputs` with their own analysis settings.",
+        "analyzer_configs": "depset[File]: Explicit `.editorconfig` and `.globalconfig` files for the target (plus Razor/scoped CSS configs when applicable). Excludes SDK analysis-level globalconfigs; see `sdk_analyzer_compile_inputs`.",
+        "additionalfiles": "depset[File]: Additional files passed to analyzers and source generators (including `.razor`/`.cshtml` files when applicable).",
+        "compile_data": "depset[File]: Direct and transitive compile-time data files.",
+        "resources": "list[File]: Managed resource files embedded into the assembly.",
+        "keyfile": "File: Strong-name key file (`/keyfile:`), or `None`.",
+        "langversion": "string: Effective C# language version.",
+        "nullable": "string: Nullable context option (`enable`, `warnings`, `annotations`, or `disable`).",
+        "allow_unsafe_blocks": "bool: Whether `/unsafe+` is enabled.",
+        "defines": "list[string]: Effective preprocessor symbols (`/d:` / `/define:`), including configuration (`TRACE`, `DEBUG`/`RELEASE`) and framework preprocessor symbols.",
+        "subsystem_version": "string: Subsystem version (`/subsystemversion:`), or `None`.",
+        "warning_level": "int: Compiler warning level (`/warn:`).",
+        "nowarn": "list[string]: Suppressed diagnostic IDs (`/nowarn:`).",
+        "treat_warnings_as_errors": "bool: Whether `/warnaserror+` is enabled on the target.",
+        "warnings_as_errors": "list[string]: Specific diagnostic IDs promoted to errors.",
+        "warnings_not_as_errors": "list[string]: Specific diagnostic IDs excluded from warnings-as-errors.",
+        "compiler_options": "list[string]: Additional raw compiler flags.",
+        "interceptors_namespaces": "list[string]: Namespaces allowed to contain interceptors.",
+    },
+)
+
 DotnetAssemblyCompileInfo = provider(
     doc = "Compilation information for a .Net assembly.",
     fields = {
