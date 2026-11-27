@@ -14,6 +14,21 @@ csharp_library(
     target_frameworks = ["net10.0-windows"],
 )
 
+# .NET Framework targeting packs include WPF, and C++/CLI thunk assemblies
+# (`System.EnterpriseServices.Wrapper.dll`, `System.EnterpriseServices.Thunk.dll`)
+# that PresentationBuildTasks must skip just as csc does. Named as `controls`
+# is, which `xaml_app_net48` references by assembly name.
+csharp_library(
+    name = "controls_net48",
+    srcs = [
+        "controls/Badge.xaml",
+        "controls/Badge.xaml.cs",
+    ],
+    out = "XamlControls",
+    langversion = "10.0",
+    target_frameworks = ["net48"],
+)
+
 # Generated files are named by their path in the package.
 genrule(
     name = "generated_theme",
@@ -41,6 +56,29 @@ csharp_library(
     wpf_resources = ["icons/Icons/app.txt"],
 )
 
+# The earliest .NET Framework that compiles XAML. Its targeting pack also ships
+# the Client profile, whose assemblies must not be referenced alongside the
+# full framework's.
+csharp_library(
+    name = "controls_net40",
+    srcs = [
+        "controls/Badge.xaml",
+        "controls/Badge.xaml.cs",
+    ],
+    out = "XamlControls",
+    langversion = "10.0",
+    target_frameworks = ["net40"],
+)
+
+csharp_library(
+    name = "icons_net48",
+    srcs = ["icons/Icons.cs"],
+    out = "XamlIcons",
+    langversion = "10.0",
+    target_frameworks = ["net48"],
+    wpf_resources = ["icons/Icons/app.txt"],
+)
+
 csharp_binary(
     name = "xaml_app",
     srcs = [
@@ -61,13 +99,37 @@ csharp_binary(
     deps = [":controls"],
 )
 
+csharp_binary(
+    name = "xaml_app_net48",
+    srcs = [
+        "App.xaml",
+        "App.xaml.cs",
+        "Converters.cs",
+        "Views/MainWindow.xaml",
+        "Views/MainWindow.xaml.cs",
+        ":generated_theme",
+    ],
+    langversion = "10.0",
+    target_frameworks = ["net48"],
+    winexe = True,
+    wpf_resources = [
+        "Assets/greeting.txt",
+        ":generated_asset",
+    ],
+    deps = [":controls_net48"],
+)
+
 csharp_nunit_test(
     name = "xaml_resources_test",
     srcs = ["XamlTests.cs"],
     data = [
         ":controls",
+        ":controls_net40",
+        ":controls_net48",
         ":icons",
+        ":icons_net48",
         ":xaml_app",
+        ":xaml_app_net48",
     ],
     target_frameworks = ["net10.0"],
     deps = ["//tools/runfiles"],

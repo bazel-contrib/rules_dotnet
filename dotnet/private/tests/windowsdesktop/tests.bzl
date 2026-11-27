@@ -88,15 +88,15 @@ def _unit_test_impl(ctx):
     asserts.equals(env, "Shared.xaml", package_path(file("../other/lib/Shared.xaml"), there))
 
     # App.xaml at the package root is the application definition, in any repository.
-    plan = xaml_plan(there, [file("../other/app/App.xaml"), file("../other/app/Page.xaml")], {"Microsoft.WindowsDesktop.App": ["WPF"]}, True)
+    plan = xaml_plan(there, [file("../other/app/App.xaml"), file("../other/app/Page.xaml")], {"Microsoft.WindowsDesktop.App": ["WPF"]}, "net10.0")
     asserts.equals(env, "../other/app/App.xaml", plan.application.short_path)
     asserts.equals(env, ["../other/app/Page.xaml"], [page.short_path for page in plan.pages])
-    outside = xaml_plan(here, [file("lib/App.xaml")], {"Microsoft.WindowsDesktop.App": None}, True)
+    outside = xaml_plan(here, [file("lib/App.xaml")], {"Microsoft.WindowsDesktop.App": None}, "net10.0")
     asserts.equals(env, None, outside.application, "only the package's own App.xaml")
 
     # A generated file does not collide with a source file of the same name
     # below the package root.
-    distinct = xaml_plan(here, [file("app/Themes/Theme.xaml"), generated("app/Themes/Theme.xaml")], {"Microsoft.WindowsDesktop.App": None}, True)
+    distinct = xaml_plan(here, [file("app/Themes/Theme.xaml"), generated("app/Themes/Theme.xaml")], {"Microsoft.WindowsDesktop.App": None}, "net10.0")
     asserts.equals(env, 2, len(distinct.pages))
 
     # NuGet compares framework reference names case-insensitively.
@@ -357,6 +357,68 @@ def windowsdesktop_tests():
         name = "wpf_without_windows_framework_test",
         target_under_test = ":wpf_without_windows_framework",
         expected_message_fragments = ["use net10.0-windows rather than net10.0", "NETSDK1136"],
+    )
+
+    csharp_library(
+        name = "xaml_on_netstandard",
+        srcs = ["wpf/Wpf.cs"],
+        tags = ["manual"],
+        target_frameworks = ["netstandard2.0"],
+        wpf_resources = ["wpf/Wpf.cs"],
+    )
+
+    _failure_test(
+        name = "xaml_on_netstandard_test",
+        target_under_test = ":xaml_on_netstandard",
+        expected_message_fragments = ["only compiled for .NET Core 3.0 and later or .NET Framework 3.5 and later"],
+    )
+
+    csharp_library(
+        name = "xaml_on_net20",
+        srcs = ["wpf/Wpf.cs"],
+        tags = ["manual"],
+        target_frameworks = ["net20"],
+        wpf_resources = ["wpf/Wpf.cs"],
+    )
+
+    _failure_test(
+        name = "xaml_on_net20_test",
+        target_under_test = ":xaml_on_net20",
+        expected_message_fragments = ["only compiled for .NET Core 3.0 and later or .NET Framework 3.5 and later"],
+    )
+
+    # PresentationBuildTasks cannot compile XAML against the net35 targeting
+    # pack, in MSBuild either, though net35 embeds `wpf_resources`.
+    csharp_library(
+        name = "xaml_sources_on_net35",
+        srcs = [
+            "wpf/Page.xaml",
+            "wpf/Wpf.cs",
+        ],
+        tags = ["manual"],
+        target_frameworks = ["net35"],
+    )
+
+    _failure_test(
+        name = "xaml_sources_on_net35_test",
+        target_under_test = ":xaml_sources_on_net35",
+        expected_message_fragments = ["XAML sources are only compiled for .NET Core 3.0 and later or .NET Framework 4.0 and later"],
+    )
+
+    csharp_library(
+        name = "xaml_sources_on_netstandard",
+        srcs = [
+            "wpf/Page.xaml",
+            "wpf/Wpf.cs",
+        ],
+        tags = ["manual"],
+        target_frameworks = ["netstandard2.0"],
+    )
+
+    _failure_test(
+        name = "xaml_sources_on_netstandard_test",
+        target_under_test = ":xaml_sources_on_netstandard",
+        expected_message_fragments = ["XAML sources are only compiled for .NET Core 3.0 and later or .NET Framework 4.0 and later"],
     )
 
     publish_binary(

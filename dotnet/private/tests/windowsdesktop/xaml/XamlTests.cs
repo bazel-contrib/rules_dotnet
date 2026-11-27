@@ -39,19 +39,46 @@ public sealed class XamlResourceTests
         return reader.Cast<System.Collections.DictionaryEntry>().Select(entry => (string)entry.Key).OrderBy(key => key).ToArray();
     }
 
+    private static readonly string[] AppResources =
+    {
+        "app.baml",
+        "assets/generated.txt",
+        "assets/greeting.txt",
+        "themes/generated.baml",
+        "views/mainwindow.baml",
+    };
+
     [Test]
     public void TheAppEmbedsItsBamlAndResources()
     {
         Assert.That(
             GeneratedResources("xaml_app/net10.0-windows/xaml_app.dll", "xaml_app.g.resources"),
-            Is.EqualTo(new[]
-            {
-                "app.baml",
-                "assets/generated.txt",
-                "assets/greeting.txt",
-                "themes/generated.baml",
-                "views/mainwindow.baml",
-            }));
+            Is.EqualTo(AppResources));
+    }
+
+    [Test]
+    public void ANetFrameworkAppEmbedsItsBamlAndResources()
+    {
+        Assert.That(
+            GeneratedResources("xaml_app_net48/net48/xaml_app_net48.exe", "xaml_app_net48.g.resources"),
+            Is.EqualTo(AppResources));
+    }
+
+    // App.xaml generates the entry point.
+    [Test]
+    public void ANetFrameworkAppHasAnEntryPoint()
+    {
+        using var stream = File.OpenRead(Runfiles.Rlocation($"{Package}/xaml_app_net48/net48/xaml_app_net48.exe"));
+        using var pe = new PEReader(stream);
+        Assert.That(pe.PEHeaders.CorHeader!.EntryPointTokenOrRelativeVirtualAddress, Is.Not.Zero);
+    }
+
+    [Test]
+    public void ANetFrameworkLibraryWithoutXamlEmbedsItsResources()
+    {
+        Assert.That(
+            GeneratedResources("icons_net48/net48/XamlIcons.dll", "XamlIcons.g.resources"),
+            Is.EqualTo(new[] { "icons/icons/app.txt" }));
     }
 
     [Test]
@@ -67,6 +94,22 @@ public sealed class XamlResourceTests
     {
         Assert.That(
             GeneratedResources("controls/net10.0-windows/XamlControls.dll", "XamlControls.g.resources"),
+            Is.EqualTo(new[] { "controls/badge.baml" }));
+    }
+
+    [Test]
+    public void ANetFramework40LibraryEmbedsItsBaml()
+    {
+        Assert.That(
+            GeneratedResources("controls_net40/net40/XamlControls.dll", "XamlControls.g.resources"),
+            Is.EqualTo(new[] { "controls/badge.baml" }));
+    }
+
+    [Test]
+    public void ANetFrameworkLibraryEmbedsItsBaml()
+    {
+        Assert.That(
+            GeneratedResources("controls_net48/net48/XamlControls.dll", "XamlControls.g.resources"),
             Is.EqualTo(new[] { "controls/badge.baml" }));
     }
 }

@@ -289,7 +289,10 @@ As in MSBuild, a `-windows` target can depend on targets and NuGet packages
 built for the plain framework, defines the `WINDOWS` preprocessor symbol, and
 cannot be a dependency of a plain framework target. Target frameworks for a
 specific Windows version, such as `net8.0-windows10.0.19041.0`, are not
-supported.
+supported. .NET Framework targeting packs already include Windows Forms and
+WPF, so .NET Framework targets need no `framework_references` for them: they
+compile `.xaml` sources from .NET Framework 4.0 (`net40`) and embed
+`wpf_resources` from .NET Framework 3.5 (`net35`).
 
 Windows Forms and WPF code builds and publishes on any host, but only runs on
 Windows, so `publish_binary` needs a `win-*` `runtime_identifier`. They do not

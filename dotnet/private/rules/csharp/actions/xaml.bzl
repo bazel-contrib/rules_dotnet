@@ -15,12 +15,27 @@ file is. Its BAML is still embedded under its `package_path`, the URI WPF
 loads it by.
 """
 
+load(
+    "//dotnet/private:common.bzl",
+    "is_core_framework",
+    "is_greater_or_equal_framework",
+    "is_netframework",
+    "referenceable_path",
+)
 load("//dotnet/private/sdk:packs.bzl", "WINDOWSDESKTOP_FRAMEWORK")
 
 # The application definition a C# project picks up implicitly.
 _APPLICATION_DEFINITION = "App.xaml"
 
 _TASKS_ASSEMBLY = "PresentationBuildTasks.dll"
+
+# The first .NET Framework versions that compile WPF XAML and embed WPF
+# resources. The WindowsDesktop SDK's PresentationBuildTasks, which MSBuild also
+# runs for .NET Framework, expects the WPF types of .NET Framework 4 and fails
+# on net35 (MC1000: "Known type value 275='IAddChildInternal' is not a valid
+# known type"), though the SDK nominally supports 3.0 and later.
+_NETFX_XAML_MINIMUM = struct(tfm = "net40", name = "4.0")
+_NETFX_RESOURCES_MINIMUM = struct(tfm = "net35", name = "3.5")
 
 # What Microsoft.WinFX.targets passes as `OutputType`.
 _OUTPUT_TYPES = {
@@ -56,23 +71,42 @@ def _uses_wpf(frameworks):
     profiles = frameworks[WINDOWSDESKTOP_FRAMEWORK]
     return profiles == None or "WPF" in profiles
 
-def check_wpf(label, frameworks, target_framework_is_core, what):
-    """Fails unless a target that compiles WPF XAML or resources references WPF.
+def _check_wpf(label, frameworks, target_framework, what, netfx_minimum):
+    """Fails unless a target that compiles WPF XAML or resources can reference WPF.
+
+    .NET Framework targeting packs include WPF; .NET Core and .NET need it in
+    `framework_references`.
 
     Args:
       label: The label of the target.
       frameworks: Its shared frameworks, as `resolve_framework_references` returns them.
-      target_framework_is_core: Whether it is built for .NET Core or .NET.
+      target_framework: Its target framework.
       what: What it has, for the message.
+      netfx_minimum: The first .NET Framework that compiles `what`.
     """
-    if not target_framework_is_core:
-        fail("%s: %s are only compiled for .NET Core 3.0 and later." % (label, what))
+    if is_netframework(target_framework):
+        supported = is_greater_or_equal_framework(target_framework, netfx_minimum.tfm)
+    else:
+        supported = is_core_framework(target_framework)
 
-    if not _uses_wpf(frameworks):
+    if not supported:
+        fail("%s: %s are only compiled for .NET Core 3.0 and later or .NET Framework %s and later." % (label, what, netfx_minimum.name))
+
+    if not is_netframework(target_framework) and not _uses_wpf(frameworks):
         fail(
             "%s has %s but does not reference WPF: add \"Microsoft.WindowsDesktop.App.WPF\" " % (label, what) +
             "or \"Microsoft.WindowsDesktop.App\" to its `framework_references`.",
         )
+
+def check_wpf_resources(label, frameworks, target_framework):
+    """Fails unless a target with `wpf_resources` but no XAML can reference WPF.
+
+    Args:
+      label: The label of the target.
+      frameworks: Its shared frameworks, as `resolve_framework_references` returns them.
+      target_framework: Its target framework.
+    """
+    _check_wpf(label, frameworks, target_framework, "`wpf_resources`", _NETFX_RESOURCES_MINIMUM)
 
 def package_path(file, label):
     """A file's path relative to the package, or its file name if it is outside it.
@@ -103,19 +137,19 @@ def _path_in_package(file, label):
 
     return path
 
-def xaml_plan(label, xaml_srcs, frameworks, target_framework_is_core):
+def xaml_plan(label, xaml_srcs, frameworks, target_framework):
     """Checks a target's XAML sources and splits them into the application definition and the pages.
 
     Args:
       label: The label of the target.
       xaml_srcs: The `.xaml` files among its `srcs`.
       frameworks: Its shared frameworks, as `resolve_framework_references` returns them.
-      target_framework_is_core: Whether it is built for .NET Core or .NET.
+      target_framework: Its target framework.
 
     Returns:
       A struct of the `application` definition, or None, and the `pages`.
     """
-    check_wpf(label, frameworks, target_framework_is_core, "XAML sources")
+    _check_wpf(label, frameworks, target_framework, "XAML sources", _NETFX_XAML_MINIMUM)
     _check_unique_names(
         label,
         [(src, _compiled_path(src, label) + ".baml") for src in xaml_srcs],
@@ -191,7 +225,7 @@ def _common_args(actions, label, tasks, assembly_name, root_namespace, target, r
     args.add("--assembly-name", assembly_name)
     args.add("--root-namespace", root_namespace)
     args.add("--output-type", _OUTPUT_TYPES[target])
-    args.add_all(references, before_each = "--reference")
+    args.add_all(references, map_each = referenceable_path, before_each = "--reference")
 
     return args
 
