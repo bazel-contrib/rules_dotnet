@@ -12,6 +12,10 @@ load(
 
 _SRCS = ["Sample.cs"]
 
+# The namespaces below are what `dotnet msbuild -getItem:Using` gives for the
+# same project with the SDK that MODULE.bazel registers, 11.0.100. A newer SDK
+# may change them, as SDK 11 added System.Net.Http.Json for net11.0.
+
 _DEFAULT_SDK_USINGS = [
     "System",
     "System.Collections.Generic",
@@ -66,6 +70,8 @@ _WINDOWSDESKTOP_USINGS = sorted(_WPF_USINGS + [
     "System.Drawing",
     "System.Windows.Forms",
 ])
+
+_NET11_DEFAULT_SDK_USINGS = sorted(_DEFAULT_SDK_USINGS + ["System.Net.Http.Json"])
 
 def _failure_test_impl(ctx):
     env = analysistest.begin(ctx)
@@ -298,6 +304,66 @@ def _all_excluded_writes_no_file_test(name):
 def _all_excluded_writes_no_file_test_impl(env, target):
     _expect_global_usings(env, target, [])
 
+def _net11_default_sdk_test(name):
+    csharp_library(
+        name = name + "_lib",
+        srcs = _SRCS,
+        implicit_usings = True,
+        target_frameworks = ["net11.0"],
+        tags = ["manual"],
+    )
+    analysis_test(name = name, impl = _net11_default_sdk_test_impl, target = name + "_lib")
+
+def _net11_default_sdk_test_impl(env, target):
+    _expect_global_usings(env, target, _NET11_DEFAULT_SDK_USINGS)
+
+def _net11_blazorwasm_sdk_test(name):
+    csharp_library(
+        name = name + "_lib",
+        srcs = _SRCS,
+        implicit_usings = True,
+        project_sdk = "blazorwasm",
+        target_frameworks = ["net11.0"],
+        tags = ["manual"],
+    )
+    analysis_test(name = name, impl = _net11_blazorwasm_sdk_test_impl, target = name + "_lib")
+
+def _net11_blazorwasm_sdk_test_impl(env, target):
+    _expect_global_usings(env, target, sorted(_NET11_DEFAULT_SDK_USINGS + [
+        "Microsoft.Extensions.Configuration",
+        "Microsoft.Extensions.DependencyInjection",
+        "Microsoft.Extensions.Logging",
+    ]))
+
+def _net11_wpf_keeps_http_json_test(name):
+    csharp_library(
+        name = name + "_lib",
+        srcs = _SRCS,
+        framework_references = ["Microsoft.WindowsDesktop.App.WPF"],
+        implicit_usings = True,
+        target_frameworks = ["net11.0-windows"],
+        tags = ["manual"],
+    )
+    analysis_test(name = name, impl = _net11_wpf_keeps_http_json_test_impl, target = name + "_lib")
+
+def _net11_wpf_keeps_http_json_test_impl(env, target):
+    # WPF removes System.IO and System.Net.Http, but not System.Net.Http.Json.
+    _expect_global_usings(env, target, sorted(_WPF_USINGS + ["System.Net.Http.Json"]))
+
+def _netstandard_test(name):
+    csharp_library(
+        name = name + "_lib",
+        srcs = _SRCS,
+        implicit_usings = True,
+        langversion = "10.0",
+        target_frameworks = ["netstandard2.0"],
+        tags = ["manual"],
+    )
+    analysis_test(name = name, impl = _netstandard_test_impl, target = name + "_lib")
+
+def _netstandard_test_impl(env, target):
+    _expect_global_usings(env, target, _DEFAULT_SDK_USINGS)
+
 # buildifier: disable=unnamed-macro
 def implicit_usings_test_suite(name):
     """Defines analysis and execution tests for C# implicit and global usings.
@@ -321,6 +387,10 @@ def implicit_usings_test_suite(name):
             _explicit_global_usings_only_test,
             _include_and_exclude_test,
             _all_excluded_writes_no_file_test,
+            _net11_default_sdk_test,
+            _net11_blazorwasm_sdk_test,
+            _net11_wpf_keeps_http_json_test,
+            _netstandard_test,
         ],
     )
 
@@ -348,6 +418,30 @@ def implicit_usings_test_suite(name):
         name = "invalid_global_using_fails_test",
         expected_message = "invalid namespace \"System.IO;\" in `global_usings`",
         target_under_test = ":invalid_global_using_lib",
+    )
+
+    for (suffix, entry) in [("static", "static System.Math"), ("alias", "Json = System.Text.Json")]:
+        csharp_library(
+            name = "invalid_global_using_{}_lib".format(suffix),
+            srcs = _SRCS,
+            global_usings = [entry],
+            tags = ["manual"],
+            target_frameworks = ["net10.0"],
+        )
+        _failure_test(
+            name = "invalid_global_using_{}_fails_test".format(suffix),
+            expected_message = "invalid namespace {} in `global_usings`".format(repr(entry)),
+            target_under_test = ":invalid_global_using_{}_lib".format(suffix),
+        )
+
+    # Compiles only if System.Net.Http.Json is implicit, as it is for net11.0.
+    csharp_library(
+        name = "net11_lib",
+        srcs = ["Net11Library.cs"],
+        implicit_usings = True,
+        nullable = "enable",
+        target_frameworks = ["net11.0"],
+        treat_warnings_as_errors = True,
     )
 
     csharp_library(

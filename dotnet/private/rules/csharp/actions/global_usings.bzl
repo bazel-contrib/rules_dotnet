@@ -1,70 +1,84 @@
 """Implicit and explicit global `using` directives for C# compilations.
 
-Mirrors the .NET SDK's `GenerateGlobalUsings` target and task:
-  * `Microsoft.NET.Sdk.CSharp.props`
-  * `Microsoft.NET.Sdk.Web` (`Targets/Sdk.Server.props`)
-  * `Microsoft.NET.Sdk.BlazorWebAssembly` (`Sdk/Sdk.props`)
-  * `Microsoft.NET.Sdk.WindowsDesktop.WindowsForms.props`
-  * `Microsoft.NET.Sdk.WindowsDesktop.WPF.props`
-  * `Microsoft.NET.GenerateGlobalUsings.targets`
+Mirrors the .NET SDK's `GenerateGlobalUsings` target. The implicit usings are
+the `Using` items of the SDK's own props files, which the toolchain reads out of
+the SDK (see `//dotnet/private/sdk:implicit_usings.bzl`), evaluated here against
+the properties MSBuild would give the target.
 """
 
-load("//dotnet/private:common.bzl", "is_netframework")
-load("//dotnet/private/sdk:packs.bzl", "BLAZORWASM_SDK", "WEB_SDK", "WINDOWSDESKTOP_FRAMEWORK")
+load("//dotnet/private:common.bzl", "is_core_framework", "is_netframework", "is_standard_framework", "tfm_version")
+load("//dotnet/private:msbuild_condition.bzl", "evaluate_condition")
+load("//dotnet/private/sdk:implicit_usings.bzl", "SDK_IMPLICIT_USINGS_BASE_PROPS", "SDK_IMPLICIT_USINGS_PROPS")
+load("//dotnet/private/sdk:packs.bzl", "WINDOWSDESKTOP_FRAMEWORK")
 
-# Always included by Microsoft.NET.Sdk.CSharp.props when ImplicitUsings is on.
-# System.Net.Http is gated on `'$(TargetFrameworkIdentifier)' != '.NETFramework'`.
-_BASE_SDK_IMPLICIT_USINGS = [
-    "System",
-    "System.Collections.Generic",
-    "System.IO",
-    "System.Linq",
-    "System.Threading",
-    "System.Threading.Tasks",
-]
-
-_EXTRA_SDK_IMPLICIT_USINGS = {
-    BLAZORWASM_SDK: [
-        "Microsoft.Extensions.Configuration",
-        "Microsoft.Extensions.DependencyInjection",
-        "Microsoft.Extensions.Logging",
-    ],
-    WEB_SDK: [
-        "System.Net.Http.Json",
-        "Microsoft.AspNetCore.Builder",
-        "Microsoft.AspNetCore.Hosting",
-        "Microsoft.AspNetCore.Http",
-        "Microsoft.AspNetCore.Routing",
-        "Microsoft.Extensions.Configuration",
-        "Microsoft.Extensions.DependencyInjection",
-        "Microsoft.Extensions.Hosting",
-        "Microsoft.Extensions.Logging",
-    ],
-}
-
-_WINFORMS_IMPLICIT_USINGS = [
-    "System.Drawing",
-    "System.Windows.Forms",
-]
-
-# Microsoft.NET.Sdk.WindowsDesktop.WPF.props removes System.IO (conflicts with
-# System.Windows.Shapes.Path) and System.Net.Http when UseWPF is enabled.
-_WPF_REMOVED_IMPLICIT_USINGS = {
-    "System.IO": None,
-    "System.Net.Http": None,
-}
-
-def _uses_windows_forms(frameworks):
+def _uses_profile(frameworks, profile):
     if WINDOWSDESKTOP_FRAMEWORK not in frameworks:
         return False
     profiles = frameworks[WINDOWSDESKTOP_FRAMEWORK]
-    return profiles == None or "WindowsForms" in profiles
+    return profiles == None or profile in profiles
 
-def _uses_wpf(frameworks):
-    if WINDOWSDESKTOP_FRAMEWORK not in frameworks:
-        return False
-    profiles = frameworks[WINDOWSDESKTOP_FRAMEWORK]
-    return profiles == None or "WPF" in profiles
+def _target_framework_identifier(target_framework):
+    if is_core_framework(target_framework):
+        return ".NETCoreApp"
+    if is_netframework(target_framework):
+        return ".NETFramework"
+    if is_standard_framework(target_framework):
+        return ".NETStandard"
+    return ""
+
+def _properties(target_framework, frameworks):
+    """The MSBuild properties the SDK's `Using` conditions read, lower cased."""
+    return {
+        "implicitusings": "enable",
+        "language": "C#",
+        "targetframeworkidentifier": _target_framework_identifier(target_framework),
+        "targetframeworkversion": "v" + ".".join([str(part) for part in tfm_version(target_framework)]),
+        "usewindowsforms": "true" if _uses_profile(frameworks, "WindowsForms") else "",
+        "usewpf": "true" if _uses_profile(frameworks, "WPF") else "",
+    }
+
+def _sdk_implicit_usings(label, toolchain, project_sdk, target_framework, frameworks):
+    """Evaluates the SDK's `Using` items in import order, applying each `Remove` to what came before."""
+    sdk_props = toolchain.implicit_usings
+    sdk_version = toolchain.dotnetinfo.sdk_version
+    if sdk_props == None:
+        fail("{}: `implicit_usings` needs a toolchain that reads them from the SDK, and the .NET SDK {} toolchain does not.".format(label, sdk_version))
+    if SDK_IMPLICIT_USINGS_BASE_PROPS not in sdk_props:
+        fail("{}: `implicit_usings` reads the SDK's Sdks/{}, which .NET SDK {} does not have.".format(label, SDK_IMPLICIT_USINGS_BASE_PROPS, sdk_version))
+
+    properties = _properties(target_framework, frameworks)
+    usings = {}
+    for path in SDK_IMPLICIT_USINGS_PROPS[project_sdk]:
+        props = sdk_props.get(path)
+        if not props:
+            continue
+        if props["unsupported"]:
+            fail("{}: `implicit_usings` cannot read Sdks/{} of .NET SDK {}: {}".format(label, path, sdk_version, props["unsupported"]))
+
+        for item in props["items"]:
+            applies = True
+            for condition in item["conditions"]:
+                result, error = evaluate_condition(condition, properties)
+                if error:
+                    fail("{}: `implicit_usings` cannot evaluate the condition {} in Sdks/{} of .NET SDK {}: {}".format(
+                        label,
+                        repr(condition),
+                        path,
+                        sdk_version,
+                        error,
+                    ))
+                if not result:
+                    applies = False
+                    break
+
+            if not applies:
+                continue
+            if item["op"] == "include":
+                usings[item["namespace"]] = None
+            else:
+                usings.pop(item["namespace"], None)
+
+    return usings.keys()
 
 def _supports_global_usings(langversion):
     normalized = langversion.lower()
@@ -77,9 +91,24 @@ def _supports_global_usings(langversion):
         return int(major_str) >= 10
     return True
 
+# What cannot appear in a namespace name. Identifiers may use any Unicode
+# letter, so this rejects rather than allows. It rules out `static X`,
+# `Alias = X` and `X;`, which would otherwise end up in the directive.
+_NOT_IN_NAMESPACE = " \t\r\n;=,:<>()[]{}\"'`/\\!#$%^&*+-?|~"
+
+def _is_namespace(name):
+    """Whether `name` is a dotted name such as `System.Text.Json`."""
+    for part in name.split("."):
+        if not part or part[0].isdigit():
+            return False
+        for char in part.elems():
+            if char in _NOT_IN_NAMESPACE:
+                return False
+    return True
+
 def _validate_global_usings(label, attr_name, entries):
     for ns in entries:
-        if not ns or ns != ns.strip() or ns.startswith("global using ") or any([ch in ns for ch in (";", "\n", "\r")]):
+        if not _is_namespace(ns):
             fail("{}: invalid namespace {} in `{}`; pass bare namespace names such as \"System.Text.Json\".".format(
                 label,
                 repr(ns),
@@ -88,17 +117,23 @@ def _validate_global_usings(label, attr_name, entries):
 
 def resolve_global_usings(
         *,
-        label = None,
+        label,
+        toolchain,
         project_sdk,
         target_framework,
         implicit_usings,
         frameworks = {},
         global_usings = [],
         excluded_global_usings = []):
-    """Resolves the ordered, deduplicated global `using` namespaces for a C# target.
+    """Resolves the sorted, deduplicated global `using` namespaces for a C# target.
+
+    The SDK's items come first, then `global_usings`, so that a namespace an SDK
+    props file removes can be added back, as `<Using Include>` in a project file
+    can. `excluded_global_usings` removes from both, as `<Using Remove>` does.
 
     Args:
-        label: The target's `Label`, used in validation error messages.
+        label: The target's `Label`, used in error messages.
+        toolchain: The `dotnet_toolchain` `ToolchainInfo`.
         project_sdk: The target's `project_sdk` attribute.
         target_framework: The target's TFM.
         implicit_usings: Whether to include the .NET SDK's implicit usings.
@@ -107,34 +142,24 @@ def resolve_global_usings(
         excluded_global_usings: Namespaces to drop (`<Using Remove="..." />`).
 
     Returns:
-        A sorted list of unique global `using` entries.
+        A sorted list of unique namespaces.
     """
     _validate_global_usings(label, "global_usings", global_usings)
     _validate_global_usings(label, "excluded_global_usings", excluded_global_usings)
 
     candidates = []
     if implicit_usings:
-        candidates.extend(_BASE_SDK_IMPLICIT_USINGS)
-        if not is_netframework(target_framework):
-            candidates.append("System.Net.Http")
-        candidates.extend(_EXTRA_SDK_IMPLICIT_USINGS.get(project_sdk, []))
-        if _uses_windows_forms(frameworks):
-            candidates.extend(_WINFORMS_IMPLICIT_USINGS)
-        if _uses_wpf(frameworks):
-            candidates = [ns for ns in candidates if ns not in _WPF_REMOVED_IMPLICIT_USINGS]
-
+        candidates.extend(_sdk_implicit_usings(label, toolchain, project_sdk, target_framework, frameworks))
     candidates.extend(global_usings)
-    if not candidates:
-        return []
 
     excluded = {ns: None for ns in excluded_global_usings}
-    kept = {ns: None for ns in candidates if ns and ns not in excluded}
-    return sorted(kept.keys())
+    return sorted({ns: None for ns in candidates if ns not in excluded}.keys())
 
 def write_global_usings_csharp(
         actions,
         *,
         label,
+        toolchain,
         out_dir,
         assembly_name,
         langversion,
@@ -147,12 +172,13 @@ def write_global_usings_csharp(
     """Writes `<assembly>.GlobalUsings.g.cs` when global usings are present.
 
     Matches `GenerateGlobalUsings` in `Microsoft.NET.Build.Tasks`: emits
-    `// <auto-generated/>` followed by sorted `global using <ns>;` lines so code
-    style analyzers (`IDE0005`) ignore unused implicit imports.
+    `// <auto-generated/>` followed by sorted `global using <ns>;` lines,
+    so code style analyzers (`IDE0005`) ignore unused implicit imports.
 
     Args:
         actions: `ctx.actions`.
         label: The target's `Label`.
+        toolchain: The `dotnet_toolchain` `ToolchainInfo`.
         out_dir: The target's per-TFM output directory.
         assembly_name: The assembly name without extension.
         langversion: The resolved C# language version for `target_framework`.
@@ -168,6 +194,7 @@ def write_global_usings_csharp(
     """
     usings = resolve_global_usings(
         label = label,
+        toolchain = toolchain,
         project_sdk = project_sdk,
         target_framework = target_framework,
         implicit_usings = implicit_usings,

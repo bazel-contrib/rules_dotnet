@@ -140,6 +140,7 @@ def _dotnet_toolchain_impl(ctx):
         msbuild_tasks = ctx.attr.msbuild_tasks,
         wpf_build_tasks = ctx.attr.wpf_build_tasks,
         msbuild_dlls = ctx.attr.msbuild_dlls,
+        implicit_usings = json.decode(ctx.attr.implicit_usings) if ctx.attr.implicit_usings else None,
         strict_deps = ctx.attr._strict_deps,
         invariant_globalization = ctx.attr._invariant_globalization,
         icu = ctx.attr._icu[0],
@@ -285,6 +286,12 @@ framework.""",
         "fsharp_default_version": attr.string(
             doc = "The default F# version used by the current dotnet SDK",
             mandatory = True,
+        ),
+        "implicit_usings": attr.string(
+            doc = """The `Using` items of the SDK's props files, as JSON, which `implicit_usings` on the C# rules evaluates.
+
+The SDK repository reads them out of the SDK; see `//dotnet/private/sdk:implicit_usings.bzl`.
+Empty for a toolchain that does not provide them, which then cannot build targets with `implicit_usings`.""",
         ),
         "_strict_deps": attr.label(
             doc = "Whether to use strict deps or not",

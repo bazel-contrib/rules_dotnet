@@ -26,6 +26,8 @@ bzl_library(
     visibility = ["//dotnet:__subpackages__"],
     deps = [
         "//dotnet/private:common",
+        "//dotnet/private:msbuild_condition",
+        "//dotnet/private/sdk:implicit_usings",
         "//dotnet/private/sdk:packs",
     ],
 )

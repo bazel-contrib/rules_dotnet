@@ -54,7 +54,10 @@ bzl_library(
     name = "repositories",
     srcs = ["repositories.bzl"],
     visibility = ["//visibility:public"],
-    deps = ["//dotnet/private:toolchains_repo"],
+    deps = [
+        "//dotnet/private:toolchains_repo",
+        "//dotnet/private/sdk:implicit_usings",
+    ],
 )
 
 bzl_library(

@@ -117,6 +117,10 @@ csharp_library(
 )
 ```
 
+The implicit namespaces are read out of the registered SDK's props files, so
+they are the ones `dotnet build` generates with the same SDK, and can change
+when the SDK does: SDK 11, for one, adds `System.Net.Http.Json` for `net11.0`.
+
 `global using` directives require C# 10 or later; set `langversion = "10.0"` (or
 newer) when using `implicit_usings` or `global_usings` on older target
 frameworks such as `net48`.

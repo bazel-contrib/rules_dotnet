@@ -571,6 +571,7 @@ def AssemblyAction(
     global_usings_cs = write_global_usings_csharp(
         actions,
         label = label,
+        toolchain = toolchain,
         out_dir = out_dir,
         assembly_name = assembly_name,
         langversion = langversion,
