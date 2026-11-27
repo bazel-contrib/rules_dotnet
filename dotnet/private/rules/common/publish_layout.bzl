@@ -1,8 +1,8 @@
 """The file layout of a framework-dependent or self-contained publish.
 
-Shared by `publish_binary`, which copies the layout into a directory, and
-`nuget_pack`, which puts the same tree under `tools/<tfm>/any/` in a tool
-package.
+Shared by `publish_binary` and `publish_library`, which copy the layout into a
+directory, and `nuget_pack`, which puts the same tree under `tools/<tfm>/any/`
+in a tool package.
 """
 
 load("//dotnet/private:common.bzl", "collect_transitive_content_files", "get_portable_assets", "runtime_target_path", "select_runtime_variants")
@@ -14,7 +14,7 @@ def publish_layout(binary_info, assembly_files, runtime_pack_files):
     tree and the assets the deps.json lists in `runtimeTargets`.
 
     Args:
-      binary_info: The `DotnetBinaryInfo` of the binary.
+      binary_info: The `DotnetBinaryInfo` of the binary, or None when publishing a library.
       assembly_files: The struct `collect_assembly_files` returns.
       runtime_pack_files: The runtime pack's files, as structs of `libs`, `native`
         and `data`; empty unless the publish is self-contained.
@@ -22,13 +22,13 @@ def publish_layout(binary_info, assembly_files, runtime_pack_files):
     Returns:
       A list of `(path, File)` pairs, the path relative to the publish directory.
     """
-    layout = [(binary_info.dll.basename, binary_info.dll)]
+    layout = [(binary_info.dll.basename, binary_info.dll)] if binary_info else []
 
     for file in assembly_files.libs + assembly_files.appsetting_files:
         layout.append((file.basename, file))
 
     # `app_config`, as `<assembly>.dll.config`.
-    if binary_info.app_config:
+    if binary_info and binary_info.app_config:
         layout.append((binary_info.app_config.basename, binary_info.app_config))
 
     # Content files keep their path relative to the assembly.
@@ -55,8 +55,9 @@ def publish_layout(binary_info, assembly_files, runtime_pack_files):
 
     # Static web assets keep the shape the binary gave them: `wwwroot/...`, with
     # the endpoint manifest beside the assembly.
-    for entry in binary_info.static_web_files:
-        layout.append((entry.publish_path, entry.file))
+    if binary_info:
+        for entry in binary_info.static_web_files:
+            layout.append((entry.publish_path, entry.file))
 
     return layout
 
