@@ -82,34 +82,48 @@ func (r *Resolver) Resolve(c *config.Config, ix *resolve.RuleIndex, rc *repo.Rem
 	}
 
 	for _, imp := range input.imports {
-		depLabels, resolved := r.resolveNamespace(c, ix, cfg, imp, from)
-		if !resolved && own[imp] {
+		if override, ok := r.resolveOverride(cfg, imp); ok {
+			deps[override] = true
 			continue
 		}
-		if !resolved {
-			// using static fallback to enclosing namespaces
-			for ns := parentNamespace(imp); ns != ""; ns = parentNamespace(ns) {
-				depLabels, resolved = r.resolveNamespace(c, ix, cfg, ns, from)
-				if resolved {
-					break
-				}
+		if depLabels, ok := r.findWorkspaceRules(c, ix, imp, from); ok {
+			for _, dep := range depLabels {
+				deps[dep] = true
 			}
+			continue
 		}
-		if !resolved {
-			if isSdkProvidedNamespace(imp, ru.AttrString("project_sdk")) {
-				// Provided by the .NET SDK targeting pack.
+		if own[imp] {
+			continue
+		}
+		if isTestFrameworkProvidedNamespace(imp, ru.Kind()) {
+			// Provided by the test rule macro's injected framework deps.
+			continue
+		}
+		if len(cfg.TargetFrameworks()) > 0 {
+			id, err := r.lang.nugetIndex.Resolve(imp)
+			if err != nil {
+				log.Fatalf("%v: set a '# gazelle:%s' directive to resolve the ambiguity", err, dotnetconfig.DotnetResolve)
+			}
+			if id != "" {
+				deps[cfg.NugetLabel(id)] = true
 				continue
 			}
-			msg := fmt.Sprintf("unresolved C# import %q for %s", imp, from)
-			if cfg.UnresolvedImports() == "error" {
-				log.Fatalf("%s: set a '# gazelle:%s %s <label>' directive to resolve it", msg, dotnetconfig.DotnetResolve, imp)
+		}
+		if depLabels, ok := r.resolveParentWorkspace(c, ix, imp, from); ok {
+			for _, dep := range depLabels {
+				deps[dep] = true
 			}
-			log.Printf("warning: %s", msg)
 			continue
 		}
-		for _, dep := range depLabels {
-			deps[dep] = true
+		if isSdkProvidedNamespace(imp, ru.AttrString("project_sdk")) {
+			// Provided by the .NET SDK targeting pack.
+			continue
 		}
+		msg := fmt.Sprintf("unresolved C# import %q for %s", imp, from)
+		if cfg.UnresolvedImports() == "error" {
+			log.Fatalf("%s: set a '# gazelle:%s %s <label>' directive to resolve it", msg, dotnetconfig.DotnetResolve, imp)
+		}
+		log.Printf("warning: %s", msg)
 	}
 
 	sorted := make([]string, 0, len(deps))
@@ -123,50 +137,75 @@ func (r *Resolver) Resolve(c *config.Config, ix *resolve.RuleIndex, rc *repo.Rem
 	}
 }
 
-// resolveNamespace maps one imported namespace to Bazel labels, in order:
-// dotnet_resolve override, workspace rule index, NuGet package. The boolean
-// reports whether the namespace was handled. A workspace match is handled even
-// when every match is a self import and the returned label slice is empty.
-func (r *Resolver) resolveNamespace(c *config.Config, ix *resolve.RuleIndex, cfg *dotnetconfig.Config, ns string, from label.Label) ([]string, bool) {
-	if override, ok := cfg.ResolveOverride(ns); ok {
-		return []string{override}, true
-	}
-
-	matches := ix.FindRulesByImportWithConfig(c, resolve.ImportSpec{Lang: languageName, Imp: ns}, languageName)
-	if len(matches) > 0 {
-		var depLabels []string
-		for _, m := range matches {
-			if m.IsSelfImport(from) {
-				continue
-			}
-			l := m.Label
-			if l.Repo == c.RepoName {
-				// FindRulesByImportWithConfig stamps labels with the
-				// workspace's canonical repo name. Drop it before the
-				// same-package check so an in-workspace label relativizes
-				// to ":name" and deduplicates against the generate-time
-				// sibling dep instead of appearing twice in deps.
-				l.Repo = ""
-			}
-			if l.Repo == "" && l.Pkg == from.Pkg {
-				l = label.Label{Name: l.Name, Relative: true}
-			}
-			depLabels = append(depLabels, l.String())
-		}
-		return depLabels, true
-	}
-
-	if len(cfg.TargetFrameworks()) > 0 {
-		id, err := r.lang.nugetIndex.Resolve(ns)
-		if err != nil {
-			log.Fatalf("%v: set a '# gazelle:%s' directive to resolve the ambiguity", err, dotnetconfig.DotnetResolve)
-		}
-		if id != "" {
-			return []string{cfg.NugetLabel(id)}, true
+// resolveOverride walks imp and its enclosing namespaces to find an explicit
+// # gazelle:dotnet_resolve override.
+func (r *Resolver) resolveOverride(cfg *dotnetconfig.Config, imp string) (string, bool) {
+	for ns := imp; ns != ""; ns = parentNamespace(ns) {
+		if override, ok := cfg.ResolveOverride(ns); ok {
+			return override, true
 		}
 	}
+	return "", false
+}
 
+// resolveParentWorkspace walks enclosing namespaces of imp in the RuleIndex
+// for `using static` imports against workspace targets.
+func (r *Resolver) resolveParentWorkspace(c *config.Config, ix *resolve.RuleIndex, imp string, from label.Label) ([]string, bool) {
+	for ns := parentNamespace(imp); ns != ""; ns = parentNamespace(ns) {
+		if depLabels, ok := r.findWorkspaceRules(c, ix, ns, from); ok {
+			return depLabels, true
+		}
+	}
 	return nil, false
+}
+
+func (r *Resolver) findWorkspaceRules(c *config.Config, ix *resolve.RuleIndex, ns string, from label.Label) ([]string, bool) {
+	matches := ix.FindRulesByImportWithConfig(c, resolve.ImportSpec{Lang: languageName, Imp: ns}, languageName)
+	if len(matches) == 0 {
+		return nil, false
+	}
+	var depLabels []string
+	for _, m := range matches {
+		if m.IsSelfImport(from) {
+			continue
+		}
+		l := m.Label
+		if l.Repo == c.RepoName {
+			// FindRulesByImportWithConfig stamps labels with the
+			// workspace's canonical repo name. Drop it before the
+			// same-package check so an in-workspace label relativizes
+			// to ":name" and deduplicates against the generate-time
+			// sibling dep instead of appearing twice in deps.
+			l.Repo = ""
+		}
+		if l.Repo == "" && l.Pkg == from.Pkg {
+			l = label.Label{Name: l.Name, Relative: true}
+		}
+		depLabels = append(depLabels, l.String())
+	}
+	return depLabels, true
+}
+
+// hasNamespacePrefix reports whether ns equals base or is a dot-delimited
+// sub-namespace (or static type import) under base.
+func hasNamespacePrefix(ns, base string) bool {
+	return ns == base || strings.HasPrefix(ns, base+".")
+}
+
+// isTestFrameworkProvidedNamespace reports whether ns is implicitly supplied
+// by the test rule macro's injected framework dependencies for ruleKind.
+func isTestFrameworkProvidedNamespace(ns, ruleKind string) bool {
+	switch ruleKind {
+	case "csharp_nunit_test":
+		return hasNamespacePrefix(ns, "NUnit.Framework") || hasNamespacePrefix(ns, "NUnitLite")
+	case "csharp_xunit_test":
+		return hasNamespacePrefix(ns, "Xunit")
+	case "csharp_mstest_test":
+		return hasNamespacePrefix(ns, "Microsoft.VisualStudio.TestTools.UnitTesting") ||
+			hasNamespacePrefix(ns, "Microsoft.Testing.Platform")
+	default:
+		return false
+	}
 }
 
 // isWebBackedSdk reports whether projectSdk links against the

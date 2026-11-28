@@ -373,3 +373,211 @@ func TestResolveWebSdkNamespaces(t *testing.T) {
 		}
 	})
 }
+
+func TestResolveTestFrameworkNamespaces(t *testing.T) {
+	nugetLock := `{"version": 1, "inputHash": "1", "frameworks": {"net10.0": {"packages": [` +
+		`{"id": "NUnit", "version": "4.0.0", "sha512": "sha512-AAAA", "urls": ["https://feed/nunit.nupkg"]},` +
+		`{"id": "xunit", "version": "2.9.0", "sha512": "sha512-BBBB", "urls": ["https://feed/xunit.nupkg"]},` +
+		`{"id": "MSTest.TestFramework", "version": "4.0.0", "sha512": "sha512-CCCC", "urls": ["https://feed/mstest.nupkg"]}` +
+		`]}}}`
+
+	newEnv := func(t *testing.T, directives string, withNuget bool) (*csharpLang, *config.Config, *resolve.RuleIndex) {
+		t.Helper()
+		l, c, dir := setupLang(t, directives, "src", "src/tests")
+		if withNuget {
+			writeFile(t, dir, "nuget_resolve.json", nugetLock)
+			idx, err := nuget.LoadIndex(filepath.Join(dir, "nuget_resolve.json"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			l.nugetIndex = idx
+		}
+		ix := resolve.NewRuleIndex(func(r *rule.Rule, pkgRel string) resolve.Resolver { return l.Resolver })
+		ix.Finish()
+		return l, c, ix
+	}
+
+	testCases := []struct {
+		kind    string
+		imports []string
+	}{
+		{
+			kind: "csharp_nunit_test",
+			imports: []string{
+				"NUnit.Framework",
+				"NUnit.Framework.Legacy",
+				"NUnit.Framework.Assert",
+				"NUnitLite",
+				"NUnitLite.AutoRun",
+			},
+		},
+		{
+			kind: "csharp_xunit_test",
+			imports: []string{
+				"Xunit",
+				"Xunit.Sdk",
+				"Xunit.Assert",
+			},
+		},
+		{
+			kind: "csharp_mstest_test",
+			imports: []string{
+				"Microsoft.VisualStudio.TestTools.UnitTesting",
+				"Microsoft.VisualStudio.TestTools.UnitTesting.Assert",
+				"Microsoft.Testing.Platform",
+				"Microsoft.Testing.Platform.Builder",
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run("implicit/"+tc.kind, func(t *testing.T) {
+			l, c, ix := newEnv(t, net10Directive, true)
+
+			var buf bytes.Buffer
+			origOut := log.Writer()
+			log.SetOutput(&buf)
+			defer log.SetOutput(origOut)
+
+			r := rule.NewRule(tc.kind, "sample_test")
+			input := resolveInput{imports: tc.imports, own: []string{"Sample.Tests"}}
+			l.Resolver.Resolve(c, ix, nil, r, input, label.New("", "src/tests", "sample_test"))
+
+			if buf.Len() > 0 {
+				t.Errorf("unexpected warnings for %s: %s", tc.kind, buf.String())
+			}
+			if got := r.AttrStrings("deps"); len(got) != 0 {
+				t.Errorf("deps for %s = %v, want empty (implicit test framework must take precedence over NuGet)", tc.kind, got)
+			}
+		})
+	}
+
+	t.Run("non-test rules still resolve NuGet and warn on unresolved test framework", func(t *testing.T) {
+		for _, kind := range []string{"csharp_library", "csharp_binary"} {
+			l, c, ix := newEnv(t, net10Directive, true)
+
+			var buf bytes.Buffer
+			origOut := log.Writer()
+			log.SetOutput(&buf)
+			defer log.SetOutput(origOut)
+
+			r := rule.NewRule(kind, "helper")
+			input := resolveInput{
+				imports: []string{"NUnit.Framework", "Microsoft.VisualStudio.TestTools.UnitTesting"},
+				own:     []string{"Helper"},
+			}
+			l.Resolver.Resolve(c, ix, nil, r, input, label.New("", "src/tests", "helper"))
+
+			wantDeps := []string{"@nuget.net10.0//nunit"}
+			if got := r.AttrStrings("deps"); !reflect.DeepEqual(got, wantDeps) {
+				t.Errorf("%s deps = %v, want %v", kind, got, wantDeps)
+			}
+			if !bytes.Contains(buf.Bytes(), []byte(`unresolved C# import "Microsoft.VisualStudio.TestTools.UnitTesting"`)) {
+				t.Errorf("%s expected unresolved warning for MSTest namespace, got: %q", kind, buf.String())
+			}
+		}
+	})
+
+	t.Run("explicit dotnet_resolve wins over implicit test framework including using static", func(t *testing.T) {
+		directives := net10Directive + "# gazelle:dotnet_resolve NUnit.Framework @custom//nunit\n"
+		l, c, ix := newEnv(t, directives, true)
+
+		var buf bytes.Buffer
+		origOut := log.Writer()
+		log.SetOutput(&buf)
+		defer log.SetOutput(origOut)
+
+		for _, imp := range []string{"NUnit.Framework", "NUnit.Framework.Assert"} {
+			r := rule.NewRule("csharp_nunit_test", "sample_nunit_test")
+			input := resolveInput{imports: []string{imp}, own: []string{"Sample.Tests"}}
+			l.Resolver.Resolve(c, ix, nil, r, input, label.New("", "src/tests", "sample_nunit_test"))
+
+			wantDeps := []string{"@custom//nunit"}
+			if got := r.AttrStrings("deps"); !reflect.DeepEqual(got, wantDeps) {
+				t.Errorf("import %q deps = %v, want %v", imp, got, wantDeps)
+			}
+		}
+		if buf.Len() > 0 {
+			t.Errorf("unexpected warnings: %s", buf.String())
+		}
+	})
+
+	t.Run("dot boundary prevents prefix false positives", func(t *testing.T) {
+		cases := []struct {
+			kind string
+			imp  string
+		}{
+			{"csharp_xunit_test", "XunitExtensions"},
+			{"csharp_nunit_test", "NUnit.FrameworkExtra"},
+			{"csharp_mstest_test", "Microsoft.VisualStudio.TestTools.UnitTestingExtra"},
+		}
+		for _, tc := range cases {
+			l, c, ix := newEnv(t, net10Directive, false)
+
+			var buf bytes.Buffer
+			origOut := log.Writer()
+			log.SetOutput(&buf)
+			defer log.SetOutput(origOut)
+
+			r := rule.NewRule(tc.kind, "sample_test")
+			input := resolveInput{imports: []string{tc.imp}, own: []string{"Sample.Tests"}}
+			l.Resolver.Resolve(c, ix, nil, r, input, label.New("", "src/tests", "sample_test"))
+
+			wantMsg := `unresolved C# import "` + tc.imp + `"`
+			if !bytes.Contains(buf.Bytes(), []byte(wantMsg)) {
+				t.Errorf("%s import %q: expected warning %q, got %q", tc.kind, tc.imp, wantMsg, buf.String())
+			}
+		}
+	})
+
+	t.Run("cross-framework imports are not suppressed", func(t *testing.T) {
+		cases := []struct {
+			kind string
+			imp  string
+		}{
+			{"csharp_nunit_test", "Xunit"},
+			{"csharp_mstest_test", "NUnit.Framework"},
+			{"csharp_xunit_test", "Microsoft.VisualStudio.TestTools.UnitTesting"},
+		}
+		for _, tc := range cases {
+			l, c, ix := newEnv(t, net10Directive, false)
+
+			var buf bytes.Buffer
+			origOut := log.Writer()
+			log.SetOutput(&buf)
+			defer log.SetOutput(origOut)
+
+			r := rule.NewRule(tc.kind, "sample_test")
+			input := resolveInput{imports: []string{tc.imp}, own: []string{"Sample.Tests"}}
+			l.Resolver.Resolve(c, ix, nil, r, input, label.New("", "src/tests", "sample_test"))
+
+			wantMsg := `unresolved C# import "` + tc.imp + `"`
+			if !bytes.Contains(buf.Bytes(), []byte(wantMsg)) {
+				t.Errorf("%s import %q: expected warning %q, got %q", tc.kind, tc.imp, wantMsg, buf.String())
+			}
+		}
+	})
+}
+
+func TestResolveExactNuGetNotShadowedByWorkspaceParentNamespace(t *testing.T) {
+	l, c, dir := setupLang(t, net10Directive, "src", "src/acme", "src/app")
+	writeFile(t, dir, "nuget_resolve.json", `{"version": 1, "inputHash": "1", "frameworks": {"net10.0": {"packages": [{"id": "Acme.Logging", "version": "1.0.0", "sha512": "sha512-AAAA", "urls": ["https://feed/acme.logging.nupkg"]}]}}}`)
+	idx, err := nuget.LoadIndex(filepath.Join(dir, "nuget_resolve.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	l.nugetIndex = idx
+
+	ix := resolve.NewRuleIndex(func(r *rule.Rule, pkgRel string) resolve.Resolver { return l.Resolver })
+	indexLibrary(t, l, c, ix, "src/acme", "acme", "Acme")
+	ix.Finish()
+
+	r := rule.NewRule("csharp_library", "app")
+	input := resolveInput{imports: []string{"Acme.Logging"}, own: []string{"App"}}
+	l.Resolver.Resolve(c, ix, nil, r, input, label.New("", "src/app", "app"))
+
+	want := []string{"@nuget.net10.0//acme.logging"}
+	if got := r.AttrStrings("deps"); !reflect.DeepEqual(got, want) {
+		t.Errorf("deps = %v, want %v (workspace parent namespace must not shadow exact NuGet package)", got, want)
+	}
+}
