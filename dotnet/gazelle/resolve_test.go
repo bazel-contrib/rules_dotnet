@@ -100,6 +100,62 @@ func TestResolveOverride(t *testing.T) {
 	}
 }
 
+func TestResolveOverrideMultipleLabels(t *testing.T) {
+	directives := "# gazelle:dotnet_target_frameworks net10.0\n" +
+		"# gazelle:dotnet_resolve MediatR @nuget.net10.0//mediatr.contracts @nuget.net10.0//mediatr @nuget.net10.0//mediatr\n"
+	l, c, _ := setupLang(t, directives, "src", "src/app")
+
+	ix := resolve.NewRuleIndex(func(r *rule.Rule, pkgRel string) resolve.Resolver { return l.Resolver })
+	ix.Finish()
+
+	want := []string{"@nuget.net10.0//mediatr", "@nuget.net10.0//mediatr.contracts"}
+
+	for _, imp := range []string{"MediatR", "MediatR.Pipeline"} {
+		t.Run("import="+imp, func(t *testing.T) {
+			r := rule.NewRule("csharp_library", "app")
+			r.SetAttr("deps", []string{"@nuget.net10.0//mediatr"})
+			input := resolveInput{imports: []string{imp}, own: []string{"App"}}
+			l.Resolver.Resolve(c, ix, nil, r, input, label.New("", "src/app", "app"))
+
+			if got := r.AttrStrings("deps"); !reflect.DeepEqual(got, want) {
+				t.Errorf("deps for %q = %v, want %v", imp, got, want)
+			}
+		})
+	}
+}
+
+func TestResolveOverrideChildReplacesParent(t *testing.T) {
+	directives := "# gazelle:dotnet_target_frameworks net10.0\n" +
+		"# gazelle:dotnet_resolve MediatR @a//mediatr @a//mediatr.contracts\n"
+	l, c, dir := setupLang(t, directives, "src", "src/other")
+
+	childFile, err := rule.LoadData(
+		filepath.Join(dir, "src/app/BUILD.bazel"),
+		"src/app",
+		[]byte("# gazelle:dotnet_resolve MediatR @custom//mediatr\n"),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	l.Configure(c, "src/app", childFile)
+
+	ix := resolve.NewRuleIndex(func(r *rule.Rule, pkgRel string) resolve.Resolver { return l.Resolver })
+	ix.Finish()
+
+	appRule := rule.NewRule("csharp_library", "app")
+	l.Resolver.Resolve(c, ix, nil, appRule, resolveInput{imports: []string{"MediatR"}, own: []string{"App"}}, label.New("", "src/app", "app"))
+	if got := appRule.AttrStrings("deps"); !reflect.DeepEqual(got, []string{"@custom//mediatr"}) {
+		t.Errorf("src/app deps = %v, want [@custom//mediatr]", got)
+	}
+
+	otherRule := rule.NewRule("csharp_library", "other")
+	l.Resolver.Resolve(c, ix, nil, otherRule, resolveInput{imports: []string{"MediatR"}, own: []string{"Other"}}, label.New("", "src/other", "other"))
+	wantParent := []string{"@a//mediatr", "@a//mediatr.contracts"}
+	if got := otherRule.AttrStrings("deps"); !reflect.DeepEqual(got, wantParent) {
+		t.Errorf("src/other deps = %v, want %v", got, wantParent)
+	}
+}
+
 func TestResolveKeepsExistingDepsAndSimplifiesSamePackage(t *testing.T) {
 	l, c, _ := setupLang(t, "# gazelle:dotnet_target_frameworks net10.0\n", "src", "src/calculator")
 

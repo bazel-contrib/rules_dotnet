@@ -82,8 +82,10 @@ func (r *Resolver) Resolve(c *config.Config, ix *resolve.RuleIndex, rc *repo.Rem
 	}
 
 	for _, imp := range input.imports {
-		if override, ok := r.resolveOverride(cfg, imp); ok {
-			deps[override] = true
+		if overrides, ok := r.resolveOverride(cfg, imp); ok {
+			for _, override := range overrides {
+				deps[override] = true
+			}
 			continue
 		}
 		if depLabels, ok := r.findWorkspaceRules(c, ix, imp, from); ok {
@@ -139,13 +141,13 @@ func (r *Resolver) Resolve(c *config.Config, ix *resolve.RuleIndex, rc *repo.Rem
 
 // resolveOverride walks imp and its enclosing namespaces to find an explicit
 // # gazelle:dotnet_resolve override.
-func (r *Resolver) resolveOverride(cfg *dotnetconfig.Config, imp string) (string, bool) {
+func (r *Resolver) resolveOverride(cfg *dotnetconfig.Config, imp string) ([]string, bool) {
 	for ns := imp; ns != ""; ns = parentNamespace(ns) {
-		if override, ok := cfg.ResolveOverride(ns); ok {
-			return override, true
+		if overrides, ok := cfg.ResolveOverride(ns); ok {
+			return overrides, true
 		}
 	}
-	return "", false
+	return nil, false
 }
 
 // resolveParentWorkspace walks enclosing namespaces of imp in the RuleIndex
