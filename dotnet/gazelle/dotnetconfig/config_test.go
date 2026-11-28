@@ -157,6 +157,9 @@ func TestNewChildInheritsAndIsolates(t *testing.T) {
 	if err := root.AddResolve("Acme.Widget @acme//widget"); err != nil {
 		t.Fatal(err)
 	}
+	if err := root.AddResolve("MediatR @nuget.net10.0//mediatr @nuget.net10.0//mediatr.contracts"); err != nil {
+		t.Fatal(err)
+	}
 
 	child := root.NewChild()
 	if got := child.TargetFrameworks(); !reflect.DeepEqual(got, []string{"net10.0"}) {
@@ -165,14 +168,21 @@ func TestNewChildInheritsAndIsolates(t *testing.T) {
 	if got := child.Visibility(); !reflect.DeepEqual(got, []string{"//visibility:private"}) {
 		t.Errorf("child Visibility() = %v, want [//visibility:private]", got)
 	}
-	if lbl, ok := child.ResolveOverride("Acme.Widget"); !ok || lbl != "@acme//widget" {
-		t.Errorf("child ResolveOverride() = %q, %v; want @acme//widget, true", lbl, ok)
+	if lbls, ok := child.ResolveOverride("Acme.Widget"); !ok || !reflect.DeepEqual(lbls, []string{"@acme//widget"}) {
+		t.Errorf("child ResolveOverride(Acme.Widget) = %v, %v; want [@acme//widget], true", lbls, ok)
+	}
+	wantMediatr := []string{"@nuget.net10.0//mediatr", "@nuget.net10.0//mediatr.contracts"}
+	if lbls, ok := child.ResolveOverride("MediatR"); !ok || !reflect.DeepEqual(lbls, wantMediatr) {
+		t.Errorf("child ResolveOverride(MediatR) = %v, %v; want %v, true", lbls, ok, wantMediatr)
 	}
 
 	// Mutating the child must not leak into the parent.
 	child.SetTargetFrameworks("net9.0")
 	child.AddVisibility("//other:__pkg__")
 	if err := child.AddResolve("Other.Ns //other"); err != nil {
+		t.Fatal(err)
+	}
+	if err := child.AddResolve("MediatR @custom//mediatr"); err != nil {
 		t.Fatal(err)
 	}
 	if got := root.TargetFrameworks(); !reflect.DeepEqual(got, []string{"net10.0"}) {
@@ -184,18 +194,49 @@ func TestNewChildInheritsAndIsolates(t *testing.T) {
 	if _, ok := root.ResolveOverride("Other.Ns"); ok {
 		t.Error("root ResolveOverride(Other.Ns) = true after child mutation, want false")
 	}
+	if lbls, ok := root.ResolveOverride("MediatR"); !ok || !reflect.DeepEqual(lbls, wantMediatr) {
+		t.Errorf("root ResolveOverride(MediatR) = %v, %v after child override; want %v, true", lbls, ok, wantMediatr)
+	}
+	if lbls, ok := child.ResolveOverride("MediatR"); !ok || !reflect.DeepEqual(lbls, []string{"@custom//mediatr"}) {
+		t.Errorf("child ResolveOverride(MediatR) = %v, %v after override; want [@custom//mediatr], true", lbls, ok)
+	}
 }
 
-func TestAddResolveValidation(t *testing.T) {
+func TestAddResolveValidationAndMultipleLabels(t *testing.T) {
 	c := New("/repo")
-	if err := c.AddResolve("justonefield"); err == nil {
-		t.Error("AddResolve(justonefield) = nil error, want error")
-	}
-	if err := c.AddResolve("a b c"); err == nil {
-		t.Error("AddResolve(a b c) = nil error, want error")
-	}
 	if err := c.AddResolve("Ns //label"); err != nil {
-		t.Errorf("AddResolve(Ns //label) = %v, want nil", err)
+		t.Fatalf("AddResolve(Ns //label) = %v, want nil", err)
+	}
+	for _, invalid := range []string{"", "   ", "justonefield", "MediatR   "} {
+		if err := c.AddResolve(invalid); err == nil {
+			t.Errorf("AddResolve(%q) = nil error, want error", invalid)
+		}
+	}
+	if lbls, ok := c.ResolveOverride("Ns"); !ok || !reflect.DeepEqual(lbls, []string{"//label"}) {
+		t.Errorf("ResolveOverride(Ns) after invalid calls = %v, %v; want [//label], true", lbls, ok)
+	}
+
+	if err := c.AddResolve("MediatR @nuget.net10.0//mediatr @nuget.net10.0//mediatr.contracts"); err != nil {
+		t.Fatalf("AddResolve(MediatR ...) = %v, want nil", err)
+	}
+	want := []string{"@nuget.net10.0//mediatr", "@nuget.net10.0//mediatr.contracts"}
+	lbls, ok := c.ResolveOverride("MediatR")
+	if !ok || !reflect.DeepEqual(lbls, want) {
+		t.Fatalf("ResolveOverride(MediatR) = %v, %v; want %v, true", lbls, ok, want)
+	}
+
+	// Mutating the returned slice must not corrupt stored config state.
+	lbls[0] = "@mutated//bad"
+	if got, ok := c.ResolveOverride("MediatR"); !ok || !reflect.DeepEqual(got, want) {
+		t.Errorf("ResolveOverride(MediatR) after caller mutation = %v, %v; want %v, true", got, ok, want)
+	}
+
+	// A later directive for the same namespace replaces the previous list.
+	if err := c.AddResolve("MediatR @other//mediatr"); err != nil {
+		t.Fatalf("AddResolve(MediatR replacement) = %v, want nil", err)
+	}
+	if got, ok := c.ResolveOverride("MediatR"); !ok || !reflect.DeepEqual(got, []string{"@other//mediatr"}) {
+		t.Errorf("ResolveOverride(MediatR) after replacement = %v, %v; want [@other//mediatr], true", got, ok)
 	}
 }
 

@@ -4,7 +4,6 @@ package dotnetconfig
 
 import (
 	"fmt"
-	"maps"
 	"path"
 	"strings"
 )
@@ -17,8 +16,8 @@ const (
 	// DotnetNugetRepoPrefix sets the repository prefix of NuGet labels.
 	// Defaults to "nuget.".
 	DotnetNugetRepoPrefix = "dotnet_nuget_repo_prefix"
-	// DotnetResolve maps a namespace to a Bazel label:
-	// "# gazelle:dotnet_resolve <namespace> <label>". Repeatable.
+	// DotnetResolve maps a namespace to one or more Bazel labels:
+	// "# gazelle:dotnet_resolve <namespace> <label> [<label>...]". Repeatable.
 	DotnetResolve = "dotnet_resolve"
 	// DotnetTestFramework forces the test framework of detected test files:
 	// "nunit", "xunit" or "mstest". Empty means auto-detect.
@@ -61,7 +60,7 @@ type Config struct {
 	repoRoot                 string
 	targetFrameworks         []string
 	nugetRepoPrefix          string
-	resolves                 map[string]string
+	resolves                 map[string][]string
 	testFramework            string
 	generateBinary           bool
 	projectSdk               string
@@ -80,7 +79,7 @@ func New(repoRoot string) *Config {
 	return &Config{
 		repoRoot:                 repoRoot,
 		nugetRepoPrefix:          "nuget.",
-		resolves:                 map[string]string{},
+		resolves:                 map[string][]string{},
 		generateBinary:           true,
 		projectSdk:               "default",
 		nullable:                 "",
@@ -97,7 +96,10 @@ func New(repoRoot string) *Config {
 func (c *Config) NewChild() *Config {
 	child := *c
 	child.targetFrameworks = append([]string(nil), c.targetFrameworks...)
-	child.resolves = maps.Clone(c.resolves)
+	child.resolves = make(map[string][]string, len(c.resolves))
+	for ns, labels := range c.resolves {
+		child.resolves[ns] = append([]string(nil), labels...)
+	}
 	child.visibility = append([]string(nil), c.visibility...)
 	return &child
 }
@@ -122,20 +124,23 @@ func (c *Config) NugetRepoPrefix() string { return c.nugetRepoPrefix }
 // SetNugetRepoPrefix sets the repository prefix for NuGet labels.
 func (c *Config) SetNugetRepoPrefix(prefix string) { c.nugetRepoPrefix = prefix }
 
-// AddResolve parses "<namespace> <label>" and records the override.
+// AddResolve parses "<namespace> <label> [<label>...]" and records the override.
 func (c *Config) AddResolve(value string) error {
 	parts := strings.Fields(value)
-	if len(parts) != 2 {
-		return fmt.Errorf("expected \"<namespace> <label>\", got %q", value)
+	if len(parts) < 2 {
+		return fmt.Errorf("expected \"<namespace> <label> [<label>...]\", got %q", value)
 	}
-	c.resolves[parts[0]] = parts[1]
+	c.resolves[parts[0]] = append([]string(nil), parts[1:]...)
 	return nil
 }
 
-// ResolveOverride returns the label override for namespace, if any.
-func (c *Config) ResolveOverride(namespace string) (string, bool) {
-	l, ok := c.resolves[namespace]
-	return l, ok
+// ResolveOverride returns the label overrides for namespace, if any.
+func (c *Config) ResolveOverride(namespace string) ([]string, bool) {
+	labels, ok := c.resolves[namespace]
+	if !ok {
+		return nil, false
+	}
+	return append([]string(nil), labels...), true
 }
 
 // TestFramework returns the forced test framework, "" for auto-detect.
