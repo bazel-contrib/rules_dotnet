@@ -13,6 +13,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 )
 
@@ -207,14 +208,53 @@ type File struct {
 	// HasEntryPoint is true for a `static ... Main(` method or top-level
 	// statements.
 	HasEntryPoint bool
+	// DeclaredTypes lists the sorted, deduplicated type names declared in the
+	// file (class, struct, interface, enum, record, delegate).
+	DeclaredTypes []string
+	// ReferencedNames lists the sorted, deduplicated identifier and
+	// dot-separated name chains found outside comments, strings, using, and
+	// namespace directives.
+	ReferencedNames []string
 }
 
 var (
-	namespaceRe  = regexp.MustCompile(`^namespace\s+([A-Za-z_][A-Za-z0-9_.]*)`)
-	usingRe      = regexp.MustCompile(`^using\s+(static\s+)?(?:[A-Za-z_][A-Za-z0-9_]*\s*=\s*)?([A-Za-z_][A-Za-z0-9_.]*)\s*;`)
-	entryPointRe = regexp.MustCompile(`\bstatic\s+(?:async\s+)?(?:void|int|Task|Task<int>|ValueTask|ValueTask<int>)\s+Main\s*\(`)
-	typeDeclRe   = regexp.MustCompile(`\b(?:class|struct|interface|record|enum|delegate)\s+[A-Za-z_]`)
+	namespaceRe    = regexp.MustCompile(`^namespace[ \t]+([A-Za-z_][A-Za-z0-9_.]*)(.*)`)
+	globalUsingRe  = regexp.MustCompile(`^global[ \t]+(using[ \t]+.*)`)
+	usingRe        = regexp.MustCompile(`^using\s+(static\s+)?(?:[A-Za-z_][A-Za-z0-9_]*\s*=\s*)?([A-Za-z_][A-Za-z0-9_.]*)\s*;`)
+	entryPointRe   = regexp.MustCompile(`\bstatic\s+(?:async\s+)?(?:void|int|Task|Task<int>|ValueTask|ValueTask<int>)\s+Main\s*\(`)
+	typeDeclRe     = regexp.MustCompile(`\b(?:class|struct|interface|record|enum|delegate)\s+[A-Za-z_]`)
+	typeDeclNameRe = regexp.MustCompile(`\b(?:class|struct|interface|enum|record(?:[ \t]+(?:class|struct))?)[ \t]+([A-Za-z_][A-Za-z0-9_]*)`)
+	delegateNameRe = regexp.MustCompile(`\bdelegate[ \t]+(?:\([^)\n;]+\)|[^({\n;]+)[ \t]+([A-Za-z_][A-Za-z0-9_]*)[ \t]*(?:<[^>]+>)?[ \t]*\(`)
+	fileScopedRe   = regexp.MustCompile(`\bfile[ \t]+(?:(?:abstract|sealed|static|partial|readonly|ref|unsafe|new)[ \t]+)*(?:class|struct|interface|enum|record(?:[ \t]+(?:class|struct))?|delegate)\b`)
+	refChainRe     = regexp.MustCompile(`\b[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*\b`)
 )
+
+// csharpKeywords are reserved and common contextual C# keywords excluded from
+// declared type names and single-segment referenced names.
+var csharpKeywords = map[string]bool{
+	"abstract": true, "as": true, "async": true, "await": true, "base": true,
+	"bool": true, "break": true, "byte": true, "case": true, "catch": true,
+	"char": true, "checked": true, "class": true, "const": true, "continue": true,
+	"decimal": true, "default": true, "delegate": true, "do": true, "double": true,
+	"dynamic": true, "else": true, "enum": true, "event": true, "explicit": true,
+	"extern": true, "false": true, "file": true, "finally": true, "fixed": true,
+	"float": true, "for": true, "foreach": true, "from": true, "get": true,
+	"global": true, "goto": true, "if": true, "implicit": true, "in": true,
+	"init": true, "int": true, "interface": true, "internal": true, "is": true,
+	"let": true, "lock": true, "long": true, "nameof": true, "namespace": true,
+	"new": true, "nint": true, "not": true, "notnull": true, "nuint": true,
+	"null": true, "object": true, "operator": true, "or": true, "orderby": true,
+	"out": true, "override": true, "params": true, "partial": true, "private": true,
+	"protected": true, "public": true, "readonly": true, "record": true, "ref": true,
+	"required": true, "return": true, "sbyte": true, "scoped": true, "sealed": true,
+	"select": true, "set": true, "short": true, "sizeof": true, "stackalloc": true,
+	"static": true, "string": true, "struct": true, "switch": true, "this": true,
+	"throw": true, "true": true, "try": true, "typeof": true, "uint": true,
+	"ulong": true, "unchecked": true, "unmanaged": true, "unsafe": true, "ushort": true,
+	"using": true, "value": true, "var": true, "virtual": true, "void": true,
+	"volatile": true, "when": true, "where": true, "while": true, "with": true,
+	"yield": true,
+}
 
 // frameworkMarkers is ordered by detection precedence: a file is attributed
 // to the first framework whose using directive or attributes appear.
@@ -247,12 +287,38 @@ func Parse(name, src string) (*File, error) {
 
 	f := &File{Name: name, Framework: FrameworkNone}
 
+	refSet := map[string]bool{}
+	declaredSet := map[string]bool{}
+	braceDepth := 0
+	topLevelDepth := 0
+
+	extractTopLevelTypes := func(segment string) {
+		for _, stmt := range strings.Split(segment, ";") {
+			if fileScopedRe.MatchString(stmt) {
+				continue
+			}
+			for _, m := range typeDeclNameRe.FindAllStringSubmatch(stmt, -1) {
+				if !csharpKeywords[m[1]] {
+					declaredSet[m[1]] = true
+				}
+			}
+			for _, m := range delegateNameRe.FindAllStringSubmatch(stmt, -1) {
+				if !csharpKeywords[m[1]] {
+					declaredSet[m[1]] = true
+				}
+			}
+		}
+	}
+
 	for _, line := range strings.Split(blanked, "\n") {
 		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "#") {
+			continue
+		}
 		global := false
-		if strings.HasPrefix(trimmed, "global using ") {
+		if m := globalUsingRe.FindStringSubmatch(trimmed); m != nil {
 			global = true
-			trimmed = strings.TrimPrefix(trimmed, "global ")
+			trimmed = m[1]
 		}
 		if m := usingRe.FindStringSubmatch(trimmed); m != nil {
 			f.Usings = append(f.Usings, Using{
@@ -262,11 +328,66 @@ func Parse(name, src string) (*File, error) {
 			})
 			continue
 		}
-		if f.Namespace == "" {
-			if m := namespaceRe.FindStringSubmatch(trimmed); m != nil {
+		if m := namespaceRe.FindStringSubmatch(trimmed); m != nil {
+			if f.Namespace == "" {
 				f.Namespace = m[1]
 			}
+			rest := strings.TrimSpace(m[2])
+			if strings.HasPrefix(rest, ";") {
+				topLevelDepth = braceDepth
+				trimmed = strings.TrimSpace(strings.TrimPrefix(rest, ";"))
+			} else {
+				topLevelDepth = braceDepth + 1
+				trimmed = rest
+			}
+			if trimmed == "" {
+				continue
+			}
 		}
+		for _, match := range refChainRe.FindAllString(trimmed, -1) {
+			if !strings.Contains(match, ".") && csharpKeywords[match] {
+				continue
+			}
+			refSet[match] = true
+		}
+
+		segStart := 0
+		for i := 0; i < len(trimmed); i++ {
+			switch trimmed[i] {
+			case '{':
+				if braceDepth == topLevelDepth && i > segStart {
+					extractTopLevelTypes(trimmed[segStart:i])
+				}
+				braceDepth++
+				segStart = i + 1
+			case '}':
+				if braceDepth == topLevelDepth && i > segStart {
+					extractTopLevelTypes(trimmed[segStart:i])
+				}
+				if braceDepth > 0 {
+					braceDepth--
+				}
+				segStart = i + 1
+			}
+		}
+		if braceDepth == topLevelDepth && segStart < len(trimmed) {
+			extractTopLevelTypes(trimmed[segStart:])
+		}
+	}
+
+	if len(declaredSet) > 0 {
+		f.DeclaredTypes = make([]string, 0, len(declaredSet))
+		for name := range declaredSet {
+			f.DeclaredTypes = append(f.DeclaredTypes, name)
+		}
+		sort.Strings(f.DeclaredTypes)
+	}
+	if len(refSet) > 0 {
+		f.ReferencedNames = make([]string, 0, len(refSet))
+		for ref := range refSet {
+			f.ReferencedNames = append(f.ReferencedNames, ref)
+		}
+		sort.Strings(f.ReferencedNames)
 	}
 
 	usingSet := map[string]bool{}

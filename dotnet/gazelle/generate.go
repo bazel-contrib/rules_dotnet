@@ -153,11 +153,16 @@ func (l *csharpLang) GenerateRules(args language.GenerateArgs) language.Generate
 	}
 	libName := sanitizeName(dirName)
 
+	claimed := claimedManualSrcs(args.File, libName, args.Config.AliasMap)
+
 	var prodFiles []*parser.File
 	testFiles := map[parser.Framework][]*parser.File{}
 	var entryFiles []*parser.File
 
 	for _, f := range files {
+		if claimed[f.Name] {
+			continue
+		}
 		switch {
 		case f.Framework != parser.FrameworkNone:
 			fw := f.Framework
@@ -198,10 +203,12 @@ func (l *csharpLang) GenerateRules(args language.GenerateArgs) language.Generate
 			lib.SetAttr("internals_visible_to", ivt)
 		}
 		lib.SetPrivateAttr(namespacesKey, namespacesOf(prodFiles))
+		lib.SetPrivateAttr(typesKey, typesOf(prodFiles))
 		res.Gen = append(res.Gen, lib)
 		res.Imports = append(res.Imports, resolveInput{
 			imports: usingNamespaces(prodFiles),
 			own:     namespacesOf(prodFiles),
+			refs:    referencedNames(prodFiles),
 		})
 	}
 
@@ -231,6 +238,7 @@ func (l *csharpLang) GenerateRules(args language.GenerateArgs) language.Generate
 		res.Imports = append(res.Imports, resolveInput{
 			imports: usingNamespaces(files),
 			own:     namespacesOf(files),
+			refs:    referencedNames(files),
 		})
 	}
 
@@ -246,10 +254,12 @@ func (l *csharpLang) GenerateRules(args language.GenerateArgs) language.Generate
 		// test (or another package) can resolve a using directive to the
 		// binary target.
 		r.SetPrivateAttr(namespacesKey, namespacesOf([]*parser.File{f}))
+		r.SetPrivateAttr(typesKey, typesOf([]*parser.File{f}))
 		res.Gen = append(res.Gen, r)
 		res.Imports = append(res.Imports, resolveInput{
 			imports: usingNamespaces([]*parser.File{f}),
 			own:     namespacesOf([]*parser.File{f}),
+			refs:    referencedNames([]*parser.File{f}),
 		})
 	}
 
@@ -354,5 +364,68 @@ func namesOf(files []*parser.File) []string {
 	for i, f := range files {
 		out[i] = f.Name
 	}
+	return out
+}
+
+// claimedManualSrcs returns the set of .cs file names already listed in srcs
+// of existing hand-written csharp_library rules in file (any csharp_library
+// whose name differs from the generated default libName).
+func claimedManualSrcs(file *rule.File, libName string, aliasedKinds map[string]string) map[string]bool {
+	claimed := map[string]bool{}
+	if file == nil {
+		return claimed
+	}
+	for _, r := range file.Rules {
+		kind := r.Kind()
+		if kind != "csharp_library" && aliasedKinds[kind] != "csharp_library" {
+			continue
+		}
+		if r.Name() == libName {
+			continue
+		}
+		for _, src := range r.AttrStrings("srcs") {
+			claimed[src] = true
+		}
+	}
+	return claimed
+}
+
+// typesOf returns the sorted, deduplicated fully-qualified type names declared
+// by files ("Namespace.TypeName"). Files without a declared namespace are
+// skipped so unnamespaced helper types (e.g. in top-level-statement binaries)
+// do not pollute the global scope for the entire workspace.
+func typesOf(files []*parser.File) []string {
+	seen := map[string]bool{}
+	var out []string
+	for _, f := range files {
+		if f.Namespace == "" {
+			continue
+		}
+		for _, t := range f.DeclaredTypes {
+			fq := f.Namespace + "." + t
+			if !seen[fq] {
+				seen[fq] = true
+				out = append(out, fq)
+			}
+		}
+	}
+	sort.Strings(out)
+	return out
+}
+
+// referencedNames returns the sorted, deduplicated union of ReferencedNames
+// across files.
+func referencedNames(files []*parser.File) []string {
+	seen := map[string]bool{}
+	var out []string
+	for _, f := range files {
+		for _, ref := range f.ReferencedNames {
+			if !seen[ref] {
+				seen[ref] = true
+				out = append(out, ref)
+			}
+		}
+	}
+	sort.Strings(out)
 	return out
 }

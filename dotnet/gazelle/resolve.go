@@ -3,10 +3,12 @@ package gazelle
 import (
 	"fmt"
 	"log"
+	"path/filepath"
 	"sort"
 	"strings"
 
 	"github.com/bazel-contrib/rules_dotnet/dotnet/gazelle/dotnetconfig"
+	"github.com/bazel-contrib/rules_dotnet/dotnet/gazelle/private/parser"
 	"github.com/bazelbuild/bazel-gazelle/config"
 	"github.com/bazelbuild/bazel-gazelle/label"
 	"github.com/bazelbuild/bazel-gazelle/repo"
@@ -21,6 +23,9 @@ type resolveInput struct {
 	imports []string
 	// own are the namespaces declared by the rule's sources, sorted.
 	own []string
+	// refs are the identifier and dotted-name chains referenced in the rule's
+	// sources outside comments, strings, using, and namespace directives.
+	refs []string
 }
 
 // Resolver satisfies resolve.Resolver for C#.
@@ -36,21 +41,50 @@ func NewResolver(lang *csharpLang) *Resolver {
 // Name implements resolve.Resolver.
 func (*Resolver) Name() string { return languageName }
 
-// Imports implements resolve.Resolver. Every generated csharp_library and
-// csharp_binary is indexed by the namespaces its sources declare; other
-// rules — and binaries without the private attr, e.g. hand-written ones —
-// are not indexed.
+// Imports implements resolve.Resolver. Generated csharp_library and
+// csharp_binary rules are indexed by the namespaces and fully-qualified types
+// their sources declare. Hand-written csharp_library rules (without private
+// attrs) are indexed by parsing their .cs srcs relative to the BUILD file's
+// directory.
 func (r *Resolver) Imports(c *config.Config, ru *rule.Rule, f *rule.File) []resolve.ImportSpec {
-	if ru.Kind() != "csharp_library" && ru.Kind() != "csharp_binary" {
+	kind := ru.Kind()
+	if c != nil {
+		if aliased, ok := c.AliasMap[kind]; ok {
+			kind = aliased
+		}
+	}
+	if kind != "csharp_library" && kind != "csharp_binary" {
 		return nil
 	}
 	namespaces, _ := ru.PrivateAttr(namespacesKey).([]string)
-	if len(namespaces) == 0 {
+	types, _ := ru.PrivateAttr(typesKey).([]string)
+
+	if kind == "csharp_library" && len(namespaces) == 0 && len(types) == 0 && f != nil {
+		dir := filepath.Dir(f.Path)
+		var parsed []*parser.File
+		for _, src := range ru.AttrStrings("srcs") {
+			if !strings.HasSuffix(src, ".cs") {
+				continue
+			}
+			pf, err := parser.ParseFile(filepath.Join(dir, src))
+			if err != nil {
+				continue
+			}
+			parsed = append(parsed, pf)
+		}
+		namespaces = namespacesOf(parsed)
+		types = typesOf(parsed)
+	}
+
+	if len(namespaces) == 0 && len(types) == 0 {
 		return nil
 	}
-	specs := make([]resolve.ImportSpec, 0, len(namespaces))
+	specs := make([]resolve.ImportSpec, 0, len(namespaces)+len(types))
 	for _, ns := range namespaces {
 		specs = append(specs, resolve.ImportSpec{Lang: languageName, Imp: ns})
+	}
+	for _, typ := range types {
+		specs = append(specs, resolve.ImportSpec{Lang: typeLanguageName, Imp: typ})
 	}
 	return specs
 }
@@ -128,6 +162,33 @@ func (r *Resolver) Resolve(c *config.Config, ix *resolve.RuleIndex, rc *repo.Rem
 		log.Printf("warning: %s", msg)
 	}
 
+	if len(input.refs) > 0 {
+		scopes := enclosingScopes(input.own)
+		checked := map[string]bool{}
+		for _, ref := range input.refs {
+			for _, prefix := range dotPrefixes(ref) {
+				if checked[prefix] {
+					continue
+				}
+				checked[prefix] = true
+				for _, scope := range scopes {
+					fq := prefix
+					if scope != "" {
+						fq = scope + "." + prefix
+					} else if !strings.Contains(fq, ".") {
+						continue
+					}
+					if depLabels, ok := r.findWorkspaceRulesBySpec(c, ix, resolve.ImportSpec{Lang: typeLanguageName, Imp: fq}, from); ok {
+						for _, dep := range depLabels {
+							deps[dep] = true
+						}
+						break
+					}
+				}
+			}
+		}
+	}
+
 	sorted := make([]string, 0, len(deps))
 	for d := range deps {
 		sorted = append(sorted, d)
@@ -162,7 +223,11 @@ func (r *Resolver) resolveParentWorkspace(c *config.Config, ix *resolve.RuleInde
 }
 
 func (r *Resolver) findWorkspaceRules(c *config.Config, ix *resolve.RuleIndex, ns string, from label.Label) ([]string, bool) {
-	matches := ix.FindRulesByImportWithConfig(c, resolve.ImportSpec{Lang: languageName, Imp: ns}, languageName)
+	return r.findWorkspaceRulesBySpec(c, ix, resolve.ImportSpec{Lang: languageName, Imp: ns}, from)
+}
+
+func (r *Resolver) findWorkspaceRulesBySpec(c *config.Config, ix *resolve.RuleIndex, spec resolve.ImportSpec, from label.Label) ([]string, bool) {
+	matches := ix.FindRulesByImportWithConfig(c, spec, languageName)
 	if len(matches) == 0 {
 		return nil, false
 	}
@@ -186,6 +251,45 @@ func (r *Resolver) findWorkspaceRules(c *config.Config, ix *resolve.RuleIndex, n
 		depLabels = append(depLabels, l.String())
 	}
 	return depLabels, true
+}
+
+// enclosingScopes returns own namespaces, all their enclosing parent
+// namespaces ordered deepest-first (then lexically), and "" (global scope)
+// last, deduplicated.
+func enclosingScopes(own []string) []string {
+	seen := map[string]bool{}
+	var scopes []string
+	for _, ns := range own {
+		for cur := ns; cur != ""; cur = parentNamespace(cur) {
+			if !seen[cur] {
+				seen[cur] = true
+				scopes = append(scopes, cur)
+			}
+		}
+	}
+	sort.Slice(scopes, func(i, j int) bool {
+		di := strings.Count(scopes[i], ".")
+		dj := strings.Count(scopes[j], ".")
+		if di != dj {
+			return di > dj
+		}
+		return scopes[i] < scopes[j]
+	})
+	scopes = append(scopes, "")
+	return scopes
+}
+
+// dotPrefixes returns all dot-delimited prefixes of chain:
+// "A.B.C" -> ["A", "A.B", "A.B.C"].
+func dotPrefixes(chain string) []string {
+	var out []string
+	for i := 0; i < len(chain); i++ {
+		if chain[i] == '.' {
+			out = append(out, chain[:i])
+		}
+	}
+	out = append(out, chain)
+	return out
 }
 
 // hasNamespacePrefix reports whether ns equals base or is a dot-delimited

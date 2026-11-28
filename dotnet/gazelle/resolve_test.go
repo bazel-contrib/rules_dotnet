@@ -637,3 +637,289 @@ func TestResolveExactNuGetNotShadowedByWorkspaceParentNamespace(t *testing.T) {
 		t.Errorf("deps = %v, want %v (workspace parent namespace must not shadow exact NuGet package)", got, want)
 	}
 }
+
+func indexLibraryWithTypes(t *testing.T, l *csharpLang, c *config.Config, ix *resolve.RuleIndex, pkg, name string, namespaces, types []string) {
+	t.Helper()
+	f := rule.EmptyFile(pkg+"/BUILD.bazel", pkg)
+	r := rule.NewRule("csharp_library", name)
+	r.SetPrivateAttr(namespacesKey, namespaces)
+	r.SetPrivateAttr(typesKey, types)
+	ix.AddRule(c, r, f)
+}
+
+func TestResolveImplicitParentNamespaceType(t *testing.T) {
+	l, c, _ := setupLang(t, net10Directive, "common", "common/Agrifirm.Common", "common/Agrifirm.Common/HealthChecks", "common/Agrifirm.Common/HealthChecks/Dapr")
+
+	ix := resolve.NewRuleIndex(func(r *rule.Rule, pkgRel string) resolve.Resolver { return l.Resolver })
+	indexLibraryWithTypes(t, l, c, ix,
+		"common/Agrifirm.Common", "agrifirm_common",
+		[]string{"Agrifirm.Common"},
+		[]string{"Agrifirm.Common.DependencyInjectionExtensions"},
+	)
+	indexLibraryWithTypes(t, l, c, ix,
+		"common/Agrifirm.Common/HealthChecks", "healthchecks",
+		[]string{"Agrifirm.Common.HealthChecks"},
+		[]string{"Agrifirm.Common.HealthChecks.ICustomHealthCheck"},
+	)
+	ix.Finish()
+
+	r := rule.NewRule("csharp_library", "dapr")
+	input := resolveInput{
+		own:  []string{"Agrifirm.Common.HealthChecks.Dapr"},
+		refs: []string{"DaprSideCarHealthCheck", "ICustomHealthCheck"},
+	}
+	l.Resolver.Resolve(c, ix, nil, r, input, label.New("", "common/Agrifirm.Common/HealthChecks/Dapr", "dapr"))
+
+	want := []string{"//common/Agrifirm.Common/HealthChecks:healthchecks"}
+	if got := r.AttrStrings("deps"); !reflect.DeepEqual(got, want) {
+		t.Errorf("deps = %v, want %v (must resolve parent type without pulling unreferenced grandparent)", got, want)
+	}
+}
+
+func TestResolveImplicitRelativeAndFullyQualifiedNames(t *testing.T) {
+	l, c, _ := setupLang(t, net10Directive,
+		"common",
+		"common/Agrifirm.Common",
+		"common/Agrifirm.Common/Configuration",
+		"common/Agrifirm.Common/Tenant",
+		"other",
+		"other/app",
+	)
+
+	ix := resolve.NewRuleIndex(func(r *rule.Rule, pkgRel string) resolve.Resolver { return l.Resolver })
+	indexLibraryWithTypes(t, l, c, ix,
+		"common/Agrifirm.Common", "constants",
+		[]string{"Agrifirm.Common"},
+		[]string{"Agrifirm.Common.CoreConstants"},
+	)
+	indexLibraryWithTypes(t, l, c, ix,
+		"common/Agrifirm.Common", "agrifirm_common",
+		[]string{"Agrifirm.Common"},
+		[]string{"Agrifirm.Common.DependencyInjectionExtensions"},
+	)
+	indexLibraryWithTypes(t, l, c, ix,
+		"common/Agrifirm.Common/Tenant", "tenant_enum",
+		[]string{"Agrifirm.Common.Tenant"},
+		[]string{"Agrifirm.Common.Tenant.Tenant"},
+	)
+	indexLibraryWithTypes(t, l, c, ix,
+		"common/Agrifirm.Common/Tenant", "tenant",
+		[]string{"Agrifirm.Common.Tenant"},
+		[]string{"Agrifirm.Common.Tenant.TenantContext"},
+	)
+	ix.Finish()
+
+	t.Run("relative sibling and enclosing type", func(t *testing.T) {
+		r := rule.NewRule("csharp_library", "configuration")
+		input := resolveInput{
+			own: []string{"Agrifirm.Common.Configuration"},
+			refs: []string{
+				"CoreConstants.Authentication.B2cAgrifirm",
+				"Tenant.Tenant",
+				"Tenant.Tenant.Agrifirm",
+			},
+		}
+		l.Resolver.Resolve(c, ix, nil, r, input, label.New("", "common/Agrifirm.Common/Configuration", "configuration"))
+
+		want := []string{
+			"//common/Agrifirm.Common/Tenant:tenant_enum",
+			"//common/Agrifirm.Common:constants",
+		}
+		if got := r.AttrStrings("deps"); !reflect.DeepEqual(got, want) {
+			t.Errorf("deps = %v, want %v", got, want)
+		}
+	})
+
+	t.Run("grandparent-relative qualified name", func(t *testing.T) {
+		r := rule.NewRule("csharp_library", "tenant")
+		input := resolveInput{
+			own:  []string{"Agrifirm.Common.Tenant"},
+			refs: []string{"Common.Tenant.Tenant.Agrifirm"},
+		}
+		l.Resolver.Resolve(c, ix, nil, r, input, label.New("", "common/Agrifirm.Common/Tenant", "tenant"))
+
+		want := []string{":tenant_enum"}
+		if got := r.AttrStrings("deps"); !reflect.DeepEqual(got, want) {
+			t.Errorf("deps = %v, want %v", got, want)
+		}
+	})
+
+	t.Run("fully qualified name without using", func(t *testing.T) {
+		r := rule.NewRule("csharp_library", "app")
+		input := resolveInput{
+			own:  []string{"Other.App"},
+			refs: []string{"Agrifirm.Common.Tenant.Tenant"},
+		}
+		l.Resolver.Resolve(c, ix, nil, r, input, label.New("", "other/app", "app"))
+
+		want := []string{"//common/Agrifirm.Common/Tenant:tenant_enum"}
+		if got := r.AttrStrings("deps"); !reflect.DeepEqual(got, want) {
+			t.Errorf("deps = %v, want %v", got, want)
+		}
+	})
+}
+
+func TestResolveImplicitSameNamespaceSplitTarget(t *testing.T) {
+	l, c, _ := setupLang(t, net10Directive, "common", "common/Agrifirm.Common", "common/Agrifirm.Common/Tenant")
+
+	ix := resolve.NewRuleIndex(func(r *rule.Rule, pkgRel string) resolve.Resolver { return l.Resolver })
+	indexLibraryWithTypes(t, l, c, ix,
+		"common/Agrifirm.Common/Tenant", "tenant_enum",
+		[]string{"Agrifirm.Common.Tenant"},
+		[]string{"Agrifirm.Common.Tenant.Tenant"},
+	)
+	indexLibraryWithTypes(t, l, c, ix,
+		"common/Agrifirm.Common/Tenant", "tenant",
+		[]string{"Agrifirm.Common.Tenant"},
+		[]string{"Agrifirm.Common.Tenant.TenantContext"},
+	)
+	ix.Finish()
+
+	r := rule.NewRule("csharp_library", "tenant")
+	input := resolveInput{
+		own:  []string{"Agrifirm.Common.Tenant"},
+		refs: []string{"Tenant", "TenantContext"},
+	}
+	l.Resolver.Resolve(c, ix, nil, r, input, label.New("", "common/Agrifirm.Common/Tenant", "tenant"))
+
+	want := []string{":tenant_enum"}
+	if got := r.AttrStrings("deps"); !reflect.DeepEqual(got, want) {
+		t.Errorf("deps = %v, want %v", got, want)
+	}
+}
+
+func TestImportsIndexesHandWrittenLibraryFromDisk(t *testing.T) {
+	l, c, dir := setupLang(t, net10Directive, "common", "common/Tenant")
+	writeFile(t, filepath.Join(dir, "common/Tenant"), "Tenant.cs", "namespace Agrifirm.Common.Tenant;\npublic enum Tenant { A }\n")
+
+	f := rule.EmptyFile(filepath.Join(dir, "common/Tenant/BUILD.bazel"), "common/Tenant")
+	r := rule.NewRule("csharp_library", "tenant_enum")
+	r.SetAttr("srcs", []string{"Tenant.cs"})
+
+	specs := l.Resolver.Imports(c, r, f)
+	want := []resolve.ImportSpec{
+		{Lang: languageName, Imp: "Agrifirm.Common.Tenant"},
+		{Lang: typeLanguageName, Imp: "Agrifirm.Common.Tenant.Tenant"},
+	}
+	if !reflect.DeepEqual(specs, want) {
+		t.Errorf("Imports() = %v, want %v", specs, want)
+	}
+}
+
+func TestImportsIgnoresMissingHandWrittenSrcs(t *testing.T) {
+	l, c, dir := setupLang(t, net10Directive, "common", "common/Gen")
+	f := rule.EmptyFile(filepath.Join(dir, "common/Gen/BUILD.bazel"), "common/Gen")
+	r := rule.NewRule("csharp_library", "gen")
+	r.SetAttr("srcs", []string{"DoesNotExist.cs"})
+
+	if specs := l.Resolver.Imports(c, r, f); len(specs) != 0 {
+		t.Errorf("Imports() = %v, want empty", specs)
+	}
+}
+
+func TestResolveExplicitUsingStillReturnsAllSplitProviders(t *testing.T) {
+	l, c, _ := setupLang(t, net10Directive, "common", "common/Agrifirm.Common", "common/Agrifirm.Common/Tenant", "src", "src/app")
+
+	ix := resolve.NewRuleIndex(func(r *rule.Rule, pkgRel string) resolve.Resolver { return l.Resolver })
+	indexLibraryWithTypes(t, l, c, ix,
+		"common/Agrifirm.Common/Tenant", "tenant_enum",
+		[]string{"Agrifirm.Common.Tenant"},
+		[]string{"Agrifirm.Common.Tenant.Tenant"},
+	)
+	indexLibraryWithTypes(t, l, c, ix,
+		"common/Agrifirm.Common/Tenant", "tenant",
+		[]string{"Agrifirm.Common.Tenant"},
+		[]string{"Agrifirm.Common.Tenant.TenantContext"},
+	)
+	ix.Finish()
+
+	r := rule.NewRule("csharp_library", "app")
+	input := resolveInput{
+		imports: []string{"Agrifirm.Common.Tenant"},
+		own:     []string{"App"},
+	}
+	l.Resolver.Resolve(c, ix, nil, r, input, label.New("", "src/app", "app"))
+
+	want := []string{
+		"//common/Agrifirm.Common/Tenant:tenant",
+		"//common/Agrifirm.Common/Tenant:tenant_enum",
+	}
+	if got := r.AttrStrings("deps"); !reflect.DeepEqual(got, want) {
+		t.Errorf("deps = %v, want %v", got, want)
+	}
+}
+
+func TestResolveImplicitInnermostScopeShadowsParent(t *testing.T) {
+	l, c, _ := setupLang(t, net10Directive, "pkg", "pkg/sub")
+
+	ix := resolve.NewRuleIndex(func(r *rule.Rule, pkgRel string) resolve.Resolver { return l.Resolver })
+	indexLibraryWithTypes(t, l, c, ix,
+		"pkg", "parent",
+		[]string{"Acme"},
+		[]string{"Acme.Extensions"},
+	)
+	indexLibraryWithTypes(t, l, c, ix,
+		"pkg/sub", "sub",
+		[]string{"Acme.Sub"},
+		[]string{"Acme.Sub.Extensions"},
+	)
+	ix.Finish()
+
+	r := rule.NewRule("csharp_library", "sub")
+	input := resolveInput{
+		own:  []string{"Acme.Sub"},
+		refs: []string{"Extensions.Init"},
+	}
+	l.Resolver.Resolve(c, ix, nil, r, input, label.New("", "pkg/sub", "sub"))
+
+	if got := r.AttrStrings("deps"); len(got) != 0 {
+		t.Errorf("deps = %v, want empty (self type in Acme.Sub must shadow Acme.Extensions)", got)
+	}
+}
+
+func TestResolveImplicitMultiNamespaceScopeOrder(t *testing.T) {
+	l, c, _ := setupLang(t, net10Directive, "pkg", "pkg/sub")
+
+	ix := resolve.NewRuleIndex(func(r *rule.Rule, pkgRel string) resolve.Resolver { return l.Resolver })
+	indexLibraryWithTypes(t, l, c, ix,
+		"pkg", "parent",
+		[]string{"A"},
+		[]string{"A.Widget"},
+	)
+	indexLibraryWithTypes(t, l, c, ix,
+		"pkg/sub", "sub",
+		[]string{"A.B", "A.C"},
+		[]string{"A.C.Widget"},
+	)
+	ix.Finish()
+
+	r := rule.NewRule("csharp_library", "sub")
+	input := resolveInput{
+		own:  []string{"A.B", "A.C"},
+		refs: []string{"Widget"},
+	}
+	l.Resolver.Resolve(c, ix, nil, r, input, label.New("", "pkg/sub", "sub"))
+
+	if got := r.AttrStrings("deps"); len(got) != 0 {
+		t.Errorf("deps = %v, want empty (deeper scope A.C must be checked before parent A)", got)
+	}
+}
+
+func TestImportsRespectsAliasMap(t *testing.T) {
+	l, c, dir := setupLang(t, net10Directive, "common", "common/Tenant")
+	c.AliasMap = map[string]string{"custom_csharp_library": "csharp_library"}
+	writeFile(t, filepath.Join(dir, "common/Tenant"), "Tenant.cs", "namespace Agrifirm.Common.Tenant;\npublic enum Tenant { A }\n")
+
+	f := rule.EmptyFile(filepath.Join(dir, "common/Tenant/BUILD.bazel"), "common/Tenant")
+	r := rule.NewRule("custom_csharp_library", "tenant_enum")
+	r.SetAttr("srcs", []string{"Tenant.cs"})
+
+	specs := l.Resolver.Imports(c, r, f)
+	want := []resolve.ImportSpec{
+		{Lang: languageName, Imp: "Agrifirm.Common.Tenant"},
+		{Lang: typeLanguageName, Imp: "Agrifirm.Common.Tenant.Tenant"},
+	}
+	if !reflect.DeepEqual(specs, want) {
+		t.Errorf("Imports() = %v, want %v", specs, want)
+	}
+}

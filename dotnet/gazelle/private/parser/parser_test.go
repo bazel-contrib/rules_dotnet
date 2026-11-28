@@ -251,3 +251,175 @@ func TestParseFile(t *testing.T) {
 		t.Errorf("ParseFile() = %+v, want Name=A.cs Namespace=FromDisk", f)
 	}
 }
+
+func TestParseDeclaredTypes(t *testing.T) {
+	tests := []struct {
+		name string
+		src  string
+		want []string
+	}{
+		{
+			name: "class interface enum struct record delegate",
+			src: `namespace Foo.Bar;
+public class MyClass {}
+public interface IMyInterface {}
+public enum MyEnum { A, B }
+public struct MyStruct {}
+public record MyRecord(int X);
+public record class MyRecordClass(int X);
+public record struct MyRecordStruct(int X);
+public delegate Task<int> MyDelegate(string s);
+`,
+			want: []string{
+				"IMyInterface",
+				"MyClass",
+				"MyDelegate",
+				"MyEnum",
+				"MyRecord",
+				"MyRecordClass",
+				"MyRecordStruct",
+				"MyStruct",
+			},
+		},
+		{
+			name: "generic constraints across newlines are not declared types",
+			src: `namespace Foo;
+public class Box<T, U>
+    where T : class
+    where U : struct
+{
+}
+`,
+			want: []string{"Box"},
+		},
+		{
+			name: "comments and strings are ignored",
+			src: `namespace Foo;
+// public class FakeComment {}
+public class Real { string s = "public enum FakeString {}"; }
+`,
+			want: []string{"Real"},
+		},
+		{
+			name: "nested types in file-scoped and block-scoped namespaces are excluded",
+			src: `namespace Agrifirm.Common
+{
+    public class CoreConstants
+    {
+        public static class ClaimTypes { }
+        public static class DataReplication { }
+        public delegate void NestedHandler();
+    }
+}
+`,
+			want: []string{"CoreConstants"},
+		},
+		{
+			name: "anonymous delegate ignored and tuple-returning delegate captured",
+			src: `namespace Foo;
+public delegate (int X, int Y) MakePoint();
+public class Runner
+{
+    public void Run() { Action a = delegate { Foo(); }; }
+}
+`,
+			want: []string{"MakePoint", "Runner"},
+		},
+		{
+			name: "preprocessor directives and file-local types are ignored",
+			src: `namespace Foo;
+#region class FakeRegion
+file class LocalHelper {}
+file sealed record LocalRec(int X);
+public class PublicType {}
+#endregion
+`,
+			want: []string{"PublicType"},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			f, err := Parse("Test.cs", tc.src)
+			if err != nil {
+				t.Fatalf("Parse() error = %v", err)
+			}
+			if !reflect.DeepEqual(f.DeclaredTypes, tc.want) {
+				t.Errorf("DeclaredTypes = %v, want %v", f.DeclaredTypes, tc.want)
+			}
+		})
+	}
+}
+
+func TestParseReferencedNames(t *testing.T) {
+	src := `using Agrifirm.Common.Other;
+namespace Agrifirm.Common.Configuration
+{
+    public class AuthenticationSettings
+    {
+        public Dictionary<Tenant.Tenant, string> Map { get; } = new();
+        public string Scheme(Tenant.Tenant tenant) =>
+            tenant == Tenant.Tenant.Agrifirm
+                ? CoreConstants.Authentication.B2cAgrifirm
+                : "CoreConstants.Fake";
+    }
+}
+`
+	f, err := Parse("AuthenticationSettings.cs", src)
+	if err != nil {
+		t.Fatalf("Parse() error = %v", err)
+	}
+	has := map[string]bool{}
+	for _, r := range f.ReferencedNames {
+		has[r] = true
+	}
+	for _, want := range []string{
+		"Tenant.Tenant",
+		"Tenant.Tenant.Agrifirm",
+		"CoreConstants.Authentication.B2cAgrifirm",
+	} {
+		if !has[want] {
+			t.Errorf("ReferencedNames missing %q; got %v", want, f.ReferencedNames)
+		}
+	}
+	for _, forbid := range []string{
+		"Agrifirm.Common.Other",
+		"Agrifirm.Common.Configuration",
+		"CoreConstants.Fake",
+		"public",
+		"class",
+		"string",
+		"namespace",
+	} {
+		if has[forbid] {
+			t.Errorf("ReferencedNames must not contain %q; got %v", forbid, f.ReferencedNames)
+		}
+	}
+}
+
+func TestParseReferencedNamesEdgeCases(t *testing.T) {
+	src := `global   using Foo.Global;
+#region Tenant
+namespace Bar.Baz { public class C : BaseType {} }
+#endregion
+`
+	f, err := Parse("Edge.cs", src)
+	if err != nil {
+		t.Fatalf("Parse() error = %v", err)
+	}
+	has := map[string]bool{}
+	for _, r := range f.ReferencedNames {
+		has[r] = true
+	}
+	if !has["BaseType"] {
+		t.Errorf("ReferencedNames missing BaseType from single-line block namespace; got %v", f.ReferencedNames)
+	}
+	for _, forbid := range []string{"Tenant", "Foo.Global", "Bar.Baz"} {
+		if has[forbid] {
+			t.Errorf("ReferencedNames must not contain %q; got %v", forbid, f.ReferencedNames)
+		}
+	}
+	if len(f.Usings) != 1 || f.Usings[0].Namespace != "Foo.Global" || !f.Usings[0].Global {
+		t.Errorf("Usings = %+v, want single global using Foo.Global", f.Usings)
+	}
+}

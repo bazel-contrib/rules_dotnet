@@ -877,3 +877,124 @@ csharp_library(
 		}
 	})
 }
+
+func TestGenerateExcludesManualLibrarySrcs(t *testing.T) {
+	l, c, dir := setupLang(t, net10Directive, "src")
+	existing, err := rule.LoadData(filepath.Join(dir, "src/tenant/BUILD.bazel"), "src/tenant", []byte(`
+csharp_library(
+    name = "tenant_enum",
+    srcs = ["Tenant.cs"],
+)
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	l.Configure(c, "src/tenant", existing)
+
+	pkgDir := filepath.Join(dir, "src", "tenant")
+	writeFile(t, pkgDir, "Tenant.cs", "namespace Acme.Tenant;\npublic enum Tenant { A }\n")
+	writeFile(t, pkgDir, "TenantContext.cs", "namespace Acme.Tenant;\npublic class TenantContext { public Tenant Current { get; set; } }\n")
+
+	res := l.GenerateRules(language.GenerateArgs{
+		Config:       c,
+		Dir:          pkgDir,
+		Rel:          "src/tenant",
+		RegularFiles: []string{"Tenant.cs", "TenantContext.cs"},
+		File:         existing,
+	})
+	if len(res.Gen) != 1 || len(res.Imports) != 1 {
+		t.Fatalf("GenerateRules() = %d rules, %d imports; want 1, 1", len(res.Gen), len(res.Imports))
+	}
+	lib := res.Gen[0]
+	if got, want := lib.AttrStrings("srcs"), []string{"TenantContext.cs"}; !reflect.DeepEqual(got, want) {
+		t.Errorf("srcs = %v, want %v", got, want)
+	}
+	if got, want := lib.PrivateAttr(typesKey).([]string), []string{"Acme.Tenant.TenantContext"}; !reflect.DeepEqual(got, want) {
+		t.Errorf("typesKey = %v, want %v", got, want)
+	}
+	inp := res.Imports[0].(resolveInput)
+	foundTenant := false
+	for _, r := range inp.refs {
+		if r == "Tenant" {
+			foundTenant = true
+			break
+		}
+	}
+	if !foundTenant {
+		t.Errorf("resolveInput.refs = %v, want to contain %q", inp.refs, "Tenant")
+	}
+}
+
+func TestGenerateAllSrcsClaimedByManualLibrary(t *testing.T) {
+	l, c, dir := setupLang(t, net10Directive, "src")
+	existing, err := rule.LoadData(filepath.Join(dir, "src/common/BUILD.bazel"), "src/common", []byte(`
+csharp_library(
+    name = "constants",
+    srcs = ["CoreConstants.cs"],
+)
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	l.Configure(c, "src/common", existing)
+
+	pkgDir := filepath.Join(dir, "src", "common")
+	writeFile(t, pkgDir, "CoreConstants.cs", "namespace Acme.Common;\npublic class CoreConstants {}\n")
+
+	res := l.GenerateRules(language.GenerateArgs{
+		Config:       c,
+		Dir:          pkgDir,
+		Rel:          "src/common",
+		RegularFiles: []string{"CoreConstants.cs"},
+		File:         existing,
+	})
+	if len(res.Gen) != 0 {
+		t.Errorf("Gen = %d rules, want 0", len(res.Gen))
+	}
+	if len(res.Empty) != 0 {
+		t.Errorf("Empty = %d rules, want 0 (must not delete hand-written library)", len(res.Empty))
+	}
+}
+
+func TestGenerateManualLibraryClaimsTestAndEntryPointFiles(t *testing.T) {
+	l, c, dir := setupLang(t, net10Directive, "src")
+	existing, err := rule.LoadData(filepath.Join(dir, "src/helpers/BUILD.bazel"), "src/helpers", []byte(`
+csharp_library(
+    name = "test_helpers",
+    srcs = ["TestBase.cs", "Script.cs"],
+)
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	l.Configure(c, "src/helpers", existing)
+
+	pkgDir := filepath.Join(dir, "src", "helpers")
+	writeFile(t, pkgDir, "TestBase.cs", "using NUnit.Framework;\nnamespace Acme.Helpers;\npublic abstract class TestBase { [SetUp] public void Init() {} }\n")
+	writeFile(t, pkgDir, "Script.cs", "Console.WriteLine(\"hi\");\n")
+
+	res := l.GenerateRules(language.GenerateArgs{
+		Config:       c,
+		Dir:          pkgDir,
+		Rel:          "src/helpers",
+		RegularFiles: []string{"Script.cs", "TestBase.cs"},
+		File:         existing,
+	})
+	if len(res.Gen) != 0 {
+		t.Errorf("Gen = %d rules, want 0 (claimed files must not also generate test/binary rules)", len(res.Gen))
+	}
+}
+
+func TestGenerateSkipsUnnamespacedTypesFromTypesKey(t *testing.T) {
+	l, c, dir := setupLang(t, net10Directive, "src", "src/tool")
+	pkgDir := filepath.Join(dir, "src", "tool")
+	writeFile(t, pkgDir, "Program.cs", "Console.WriteLine(\"run\");\nrecord Config(string Url);\n")
+
+	res := generate(t, l, c, dir, "src/tool", "Program.cs")
+	if len(res.Gen) != 1 {
+		t.Fatalf("Gen = %d rules, want 1", len(res.Gen))
+	}
+	if types, _ := res.Gen[0].PrivateAttr(typesKey).([]string); len(types) != 0 {
+		t.Errorf("typesKey for unnamespaced binary = %v, want empty", types)
+	}
+}
