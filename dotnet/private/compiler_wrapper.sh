@@ -22,5 +22,30 @@ if [[ $(basename "$COMPILER") == "fsc.dll" ]]; then
 fi
 PATHMAP="$PATHMAP_FLAG:$PWD=."
 
+# fsc sizes the PE debug directory from the absolute pdb path before the
+# pathmap applies, so the pdb path needs a root whose length does not follow
+# the exec root. macOS has no /proc/self/cwd: a symlink in a mktemp directory
+# has a fixed-length name, and the pathmap hides its random part.
+if [[ $(basename "$COMPILER") == "fsc.dll" ]]; then
+  if [[ -d /proc/self/cwd ]]; then
+    ROOT=/proc/self/cwd
+  else
+    LINK_DIR=$(mktemp -d /tmp/dx_fsc.XXXXXXXX)
+    trap 'rm -f "$LINK_DIR/r"; rmdir "$LINK_DIR"' EXIT
+    ln -s "$PWD" "$LINK_DIR/r"
+    ROOT="$LINK_DIR/r"
+  fi
+  for arg in "$@"; do
+    if [[ "$arg" == @* ]]; then
+      while IFS= read -r line; do
+        if [[ "$line" == --pdb:* && "$line" != --pdb:/* ]]; then
+          set -- "$@" "--pdb:$ROOT/${line#--pdb:}"
+        fi
+      done <"${arg#@}"
+    fi
+  done
+  PATHMAP="$PATHMAP,$ROOT=."
+fi
+
 # shellcheck disable=SC2145
 ./"$@" "$PATHMAP"
