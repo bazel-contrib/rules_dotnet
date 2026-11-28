@@ -17,6 +17,9 @@ func TestDefaults(t *testing.T) {
 	if got := c.ProjectSdk(); got != "default" {
 		t.Errorf("ProjectSdk() = %q, want %q", got, "default")
 	}
+	if c.ProjectSdkConfigured() {
+		t.Error("ProjectSdkConfigured() = true, want false")
+	}
 	if got := c.UnresolvedImports(); got != "warn" {
 		t.Errorf("UnresolvedImports() = %q, want %q", got, "warn")
 	}
@@ -255,5 +258,27 @@ func TestParentForPackage(t *testing.T) {
 	cfgs["src"] = child
 	if got := cfgs.ParentForPackage("src/app"); got != child {
 		t.Error("ParentForPackage(src/app) != child config")
+	}
+}
+
+func TestProjectSdkConfiguredAndInheritance(t *testing.T) {
+	root := New("/repo")
+	if root.ProjectSdkConfigured() {
+		t.Fatal("root ProjectSdkConfigured() = true before SetProjectSdk")
+	}
+	root.SetProjectSdk("default")
+	if !root.ProjectSdkConfigured() || root.ProjectSdk() != "default" {
+		t.Errorf("root ProjectSdk = (%q, %v), want (default, true)", root.ProjectSdk(), root.ProjectSdkConfigured())
+	}
+	child := root.NewChild()
+	if !child.ProjectSdkConfigured() || child.ProjectSdk() != "default" {
+		t.Errorf("child ProjectSdk = (%q, %v), want (default, true)", child.ProjectSdk(), child.ProjectSdkConfigured())
+	}
+	child.SetProjectSdk("web")
+	if root.ProjectSdk() != "default" {
+		t.Errorf("root ProjectSdk mutated to %q", root.ProjectSdk())
+	}
+	if child.ProjectSdk() != "web" {
+		t.Errorf("child ProjectSdk = %q, want web", child.ProjectSdk())
 	}
 }

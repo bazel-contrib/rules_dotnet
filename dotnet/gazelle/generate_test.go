@@ -5,6 +5,7 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/bazel-contrib/rules_dotnet/dotnet/gazelle/private/nuget"
 	"github.com/bazelbuild/bazel-gazelle/config"
 	"github.com/bazelbuild/bazel-gazelle/language"
 	"github.com/bazelbuild/bazel-gazelle/merger"
@@ -644,4 +645,235 @@ custom_csharp_library(
 	} else if value := got.AttrBool("implicit_usings"); value {
 		t.Error("merged implicit_usings = True, want explicit False")
 	}
+}
+
+func TestGenerateAutoDetectsWebProjectSdk(t *testing.T) {
+	l, c, dir := setupLang(t, net10Directive, "src", "src/web", "src/headers", "src/client", "src/override", "src/own", "src/forced", "src/bintest")
+	writeFile(t, dir, "nuget_resolve.json", `{"version": 1, "inputHash": "1", "frameworks": {"net10.0": {"packages": [{"id": "Microsoft.AspNetCore.SignalR.Client", "version": "10.0.0", "sha512": "sha512-AAAA", "urls": ["https://feed/signalr.nupkg"]}]}}}`)
+	idx, err := nuget.LoadIndex(filepath.Join(dir, "nuget_resolve.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	l.nugetIndex = idx
+
+	// Shared-framework ASP.NET Core import -> auto-detected as "web".
+	writeFile(t, filepath.Join(dir, "src", "web"), "Middleware.cs", `using Microsoft.AspNetCore.Http;
+namespace Web;
+public class Middleware {}
+`)
+	res := generate(t, l, c, dir, "src/web", "Middleware.cs")
+	if got := res.Gen[0].AttrString("project_sdk"); got != "web" {
+		t.Errorf("web library project_sdk = %q, want web", got)
+	}
+
+	// Microsoft.Net.Http.Headers -> auto-detected as "web".
+	writeFile(t, filepath.Join(dir, "src", "headers"), "Auth.cs", `using Microsoft.Net.Http.Headers;
+namespace Headers;
+public class Auth {}
+`)
+	res = generate(t, l, c, dir, "src/headers", "Auth.cs")
+	if got := res.Gen[0].AttrString("project_sdk"); got != "web" {
+		t.Errorf("headers library project_sdk = %q, want web", got)
+	}
+
+	// NuGet-backed Microsoft.AspNetCore.* import only -> stays "default".
+	writeFile(t, filepath.Join(dir, "src", "client"), "Client.cs", `using Microsoft.AspNetCore.SignalR.Client;
+namespace Client;
+public class Client {}
+`)
+	res = generate(t, l, c, dir, "src/client", "Client.cs")
+	if got := res.Gen[0].AttrString("project_sdk"); got != "default" {
+		t.Errorf("signalr client project_sdk = %q, want default", got)
+	}
+
+	// dotnet_resolve override (exact or parent namespace) suppresses "web".
+	overrideFile, err := rule.LoadData(filepath.Join(dir, "src/override/BUILD.bazel"), "src/override", []byte(
+		"# gazelle:dotnet_resolve Microsoft.AspNetCore.Custom @custom//pkg\n"+
+			"# gazelle:dotnet_resolve Microsoft.AspNetCore.Parent @parent//pkg\n",
+	))
+	if err != nil {
+		t.Fatal(err)
+	}
+	l.Configure(c, "src/override", overrideFile)
+	writeFile(t, filepath.Join(dir, "src", "override"), "UseOverride.cs", `using Microsoft.AspNetCore.Custom;
+using Microsoft.AspNetCore.Parent.Child;
+namespace Override;
+public class UseOverride {}
+`)
+	res = generate(t, l, c, dir, "src/override", "UseOverride.cs")
+	if got := res.Gen[0].AttrString("project_sdk"); got != "default" {
+		t.Errorf("override library project_sdk = %q, want default", got)
+	}
+
+	// Self-declared Microsoft.AspNetCore.* namespace does not trigger "web".
+	writeFile(t, filepath.Join(dir, "src", "own"), "Own.cs", `using Microsoft.AspNetCore.OwnNs;
+namespace Microsoft.AspNetCore.OwnNs;
+public class Own {}
+`)
+	res = generate(t, l, c, dir, "src/own", "Own.cs")
+	if got := res.Gen[0].AttrString("project_sdk"); got != "default" {
+		t.Errorf("self-declared namespace project_sdk = %q, want default", got)
+	}
+
+	// Explicit # gazelle:dotnet_project_sdk directive always wins over auto-detection.
+	forcedFile, err := rule.LoadData(filepath.Join(dir, "src/forced/BUILD.bazel"), "src/forced", []byte("# gazelle:dotnet_project_sdk default\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	l.Configure(c, "src/forced", forcedFile)
+	writeFile(t, filepath.Join(dir, "src", "forced"), "Middleware.cs", `using Microsoft.AspNetCore.Http;
+namespace Forced;
+public class Middleware {}
+`)
+	res = generate(t, l, c, dir, "src/forced", "Middleware.cs")
+	if got := res.Gen[0].AttrString("project_sdk"); got != "default" {
+		t.Errorf("explicit default directive project_sdk = %q, want default", got)
+	}
+
+	// Binary and test targets auto-detect "web" independently.
+	writeFile(t, filepath.Join(dir, "src", "bintest"), "Program.cs", `using Microsoft.AspNetCore.Builder;
+var app = WebApplication.Create();
+`)
+	writeFile(t, filepath.Join(dir, "src", "bintest"), "WebTests.cs", `using Microsoft.AspNetCore.Http;
+using NUnit.Framework;
+namespace BinTest;
+[TestFixture]
+public class WebTests {}
+`)
+	res = generate(t, l, c, dir, "src/bintest", "Program.cs", "WebTests.cs")
+	if len(res.Gen) != 2 {
+		t.Fatalf("bintest generated %d rules, want 2", len(res.Gen))
+	}
+	for _, r := range res.Gen {
+		if got := r.AttrString("project_sdk"); got != "web" {
+			t.Errorf("%s %s project_sdk = %q, want web", r.Kind(), r.Name(), got)
+		}
+	}
+}
+
+func TestGenerateMergesProjectSdkSafely(t *testing.T) {
+	t.Run("upgrades default to web and respects keep", func(t *testing.T) {
+		l, c, dir := setupLang(t, net10Directive, "src", "src/upgrade", "src/kept")
+
+		// Existing default -> upgraded to web.
+		existing, err := rule.LoadData(filepath.Join(dir, "src/upgrade/BUILD.bazel"), "src/upgrade", []byte(`
+csharp_library(
+    name = "upgrade",
+    srcs = ["Middleware.cs"],
+    project_sdk = "default",
+)
+`))
+		if err != nil {
+			t.Fatal(err)
+		}
+		writeFile(t, filepath.Join(dir, "src", "upgrade"), "Middleware.cs", `using Microsoft.AspNetCore.Http;
+namespace Upgrade;
+public class Middleware {}
+`)
+		res := l.GenerateRules(language.GenerateArgs{
+			Config:       c,
+			Dir:          filepath.Join(dir, "src", "upgrade"),
+			Rel:          "src/upgrade",
+			RegularFiles: []string{"Middleware.cs"},
+			File:         existing,
+		})
+		merger.MergeFile(existing, nil, res.Gen, merger.PreResolve, l.Kinds(), c.AliasMap)
+		if got := existing.Rules[0].AttrString("project_sdk"); got != "web" {
+			t.Errorf("upgraded project_sdk = %q, want web", got)
+		}
+
+		// Existing default with # keep -> preserved.
+		kept, err := rule.LoadData(filepath.Join(dir, "src/kept/BUILD.bazel"), "src/kept", []byte(`
+csharp_library(
+    name = "kept",
+    srcs = ["Middleware.cs"],
+    project_sdk = "default", # keep
+)
+`))
+		if err != nil {
+			t.Fatal(err)
+		}
+		writeFile(t, filepath.Join(dir, "src", "kept"), "Middleware.cs", `using Microsoft.AspNetCore.Http;
+namespace Kept;
+public class Middleware {}
+`)
+		res = l.GenerateRules(language.GenerateArgs{
+			Config:       c,
+			Dir:          filepath.Join(dir, "src", "kept"),
+			Rel:          "src/kept",
+			RegularFiles: []string{"Middleware.cs"},
+			File:         kept,
+		})
+		merger.MergeFile(kept, nil, res.Gen, merger.PreResolve, l.Kinds(), c.AliasMap)
+		if got := kept.Rules[0].AttrString("project_sdk"); got != "default" {
+			t.Errorf("kept project_sdk = %q, want default", got)
+		}
+	})
+
+	t.Run("preserves existing razor blazorwasm and manual web without directive", func(t *testing.T) {
+		for _, tc := range []struct {
+			name        string
+			existingSdk string
+			src         string
+		}{
+			{"razor_no_web_using", "razor", calculatorSrc},
+			{"razor_with_web_using", "razor", "using Microsoft.AspNetCore.Http;\nnamespace R;\npublic class C {}\n"},
+			{"blazorwasm_no_web_using", "blazorwasm", calculatorSrc},
+			{"web_implicit_usings", "web", calculatorSrc},
+		} {
+			t.Run(tc.name, func(t *testing.T) {
+				l, c, dir := setupLang(t, net10Directive, "src", "src/pkg")
+				existing, err := rule.LoadData(filepath.Join(dir, "src/pkg/BUILD.bazel"), "src/pkg", []byte(`
+csharp_library(
+    name = "pkg",
+    srcs = ["Code.cs"],
+    project_sdk = "`+tc.existingSdk+`",
+)
+`))
+				if err != nil {
+					t.Fatal(err)
+				}
+				writeFile(t, filepath.Join(dir, "src", "pkg"), "Code.cs", tc.src)
+				res := l.GenerateRules(language.GenerateArgs{
+					Config:       c,
+					Dir:          filepath.Join(dir, "src", "pkg"),
+					Rel:          "src/pkg",
+					RegularFiles: []string{"Code.cs"},
+					File:         existing,
+				})
+				merger.MergeFile(existing, nil, res.Gen, merger.PreResolve, l.Kinds(), c.AliasMap)
+				if got := existing.Rules[0].AttrString("project_sdk"); got != tc.existingSdk {
+					t.Errorf("project_sdk = %q, want %q preserved", got, tc.existingSdk)
+				}
+			})
+		}
+	})
+
+	t.Run("explicit directive overrides existing project_sdk", func(t *testing.T) {
+		l, c, dir := setupLang(t, net10Directive, "src")
+		existing, err := rule.LoadData(filepath.Join(dir, "src/pkg/BUILD.bazel"), "src/pkg", []byte(`
+# gazelle:dotnet_project_sdk razor
+csharp_library(
+    name = "pkg",
+    srcs = ["Code.cs"],
+    project_sdk = "default",
+)
+`))
+		if err != nil {
+			t.Fatal(err)
+		}
+		l.Configure(c, "src/pkg", existing)
+		writeFile(t, filepath.Join(dir, "src", "pkg"), "Code.cs", calculatorSrc)
+		res := l.GenerateRules(language.GenerateArgs{
+			Config:       c,
+			Dir:          filepath.Join(dir, "src", "pkg"),
+			Rel:          "src/pkg",
+			RegularFiles: []string{"Code.cs"},
+			File:         existing,
+		})
+		merger.MergeFile(existing, nil, res.Gen, merger.PreResolve, l.Kinds(), c.AliasMap)
+		if got := existing.Rules[0].AttrString("project_sdk"); got != "razor" {
+			t.Errorf("explicit directive project_sdk = %q, want razor", got)
+		}
+	})
 }

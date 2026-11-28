@@ -96,8 +96,8 @@ func (r *Resolver) Resolve(c *config.Config, ix *resolve.RuleIndex, rc *repo.Rem
 			}
 		}
 		if !resolved {
-			if imp == "System" || strings.HasPrefix(imp, "System.") {
-				// Provided by the base class library.
+			if isSdkProvidedNamespace(imp, ru.AttrString("project_sdk")) {
+				// Provided by the .NET SDK targeting pack.
 				continue
 			}
 			msg := fmt.Sprintf("unresolved C# import %q for %s", imp, from)
@@ -167,6 +167,39 @@ func (r *Resolver) resolveNamespace(c *config.Config, ix *resolve.RuleIndex, cfg
 	}
 
 	return nil, false
+}
+
+// isWebBackedSdk reports whether projectSdk links against the
+// Microsoft.AspNetCore.App targeting pack.
+func isWebBackedSdk(projectSdk string) bool {
+	switch projectSdk {
+	case "web", "razor", "blazorwasm":
+		return true
+	default:
+		return false
+	}
+}
+
+// isWebSdkNamespace reports whether ns is a namespace provided by the
+// Microsoft.AspNetCore.App shared framework.
+func isWebSdkNamespace(ns string) bool {
+	return ns == "Microsoft.AspNetCore" ||
+		strings.HasPrefix(ns, "Microsoft.AspNetCore.") ||
+		ns == "Microsoft.Net.Http.Headers" ||
+		strings.HasPrefix(ns, "Microsoft.Net.Http.Headers.")
+}
+
+// isSdkProvidedNamespace reports whether ns is provided by the .NET SDK
+// targeting packs for projectSdk (base class library, plus ASP.NET Core
+// shared framework for web-backed SDKs).
+func isSdkProvidedNamespace(ns, projectSdk string) bool {
+	if ns == "System" || strings.HasPrefix(ns, "System.") {
+		return true
+	}
+	if isWebBackedSdk(projectSdk) && isWebSdkNamespace(ns) {
+		return true
+	}
+	return false
 }
 
 // parentNamespace strips the last dot segment: "A.B.C" -> "A.B", "A" -> "".

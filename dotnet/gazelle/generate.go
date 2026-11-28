@@ -50,17 +50,14 @@ func setNullableAndImplicitUsingsAttrs(r *rule.Rule, cfg *dotnetconfig.Config) m
 	return configured
 }
 
-// mergeNullableAndImplicitUsingsAttrs applies explicit directives to the one
-// existing rule matched by kind and name. Gazelle otherwise preserves existing
-// non-mergeable scalars. A stub containing only configured attributes keeps
-// unset attributes untouched and delegates # keep handling to MergeRules.
-func mergeNullableAndImplicitUsingsAttrs(generated *rule.Rule, file *rule.File, cfg *dotnetconfig.Config, aliasedKinds map[string]string) {
+// mergeScalarAttrs applies explicit directives (nullable, implicit_usings,
+// project_sdk) and safe auto-detected project_sdk upgrades ("default" -> "web")
+// to the one existing rule matched by kind and name. Gazelle otherwise
+// preserves existing non-mergeable scalars. A stub containing only the
+// attributes to update keeps other attributes untouched and delegates # keep
+// handling to MergeRules.
+func mergeScalarAttrs(generated *rule.Rule, file *rule.File, cfg *dotnetconfig.Config, aliasedKinds map[string]string) {
 	if file == nil {
-		return
-	}
-	override := rule.NewRule(generated.Kind(), generated.Name())
-	mergeable := setNullableAndImplicitUsingsAttrs(override, cfg)
-	if len(mergeable) == 0 {
 		return
 	}
 
@@ -77,7 +74,21 @@ func mergeNullableAndImplicitUsingsAttrs(generated *rule.Rule, file *rule.File, 
 		}
 		existing = candidate
 	}
-	if existing != nil {
+	if existing == nil {
+		return
+	}
+
+	override := rule.NewRule(generated.Kind(), generated.Name())
+	mergeable := setNullableAndImplicitUsingsAttrs(override, cfg)
+
+	genSdk := generated.AttrString("project_sdk")
+	existingSdk := existing.AttrString("project_sdk")
+	if cfg.ProjectSdkConfigured() || (genSdk == "web" && (existingSdk == "" || existingSdk == "default")) {
+		override.SetAttr("project_sdk", genSdk)
+		mergeable["project_sdk"] = true
+	}
+
+	if len(mergeable) > 0 {
 		rule.MergeRules(override, existing, mergeable, file.Path)
 	}
 }
@@ -174,7 +185,7 @@ func (l *csharpLang) GenerateRules(args language.GenerateArgs) language.Generate
 		lib := rule.NewRule("csharp_library", libName)
 		lib.SetAttr("srcs", namesOf(prodFiles))
 		lib.SetAttr("target_frameworks", cfg.TargetFrameworks())
-		lib.SetAttr("project_sdk", cfg.ProjectSdk())
+		lib.SetAttr("project_sdk", l.projectSdkFor(cfg, prodFiles))
 		lib.SetAttr("visibility", cfg.Visibility())
 		setNullableAndImplicitUsingsAttrs(lib, cfg)
 		if len(testTargetNames) > 0 {
@@ -202,7 +213,7 @@ func (l *csharpLang) GenerateRules(args language.GenerateArgs) language.Generate
 		r := rule.NewRule(testKindFor(fw), testTargetNames[fw])
 		r.SetAttr("srcs", namesOf(files))
 		r.SetAttr("target_frameworks", cfg.TargetFrameworks())
-		r.SetAttr("project_sdk", cfg.ProjectSdk())
+		r.SetAttr("project_sdk", l.projectSdkFor(cfg, files))
 		r.SetAttr("visibility", cfg.Visibility())
 		setNullableAndImplicitUsingsAttrs(r, cfg)
 		switch {
@@ -228,7 +239,7 @@ func (l *csharpLang) GenerateRules(args language.GenerateArgs) language.Generate
 		r := rule.NewRule("csharp_binary", name)
 		r.SetAttr("srcs", []string{f.Name})
 		r.SetAttr("target_frameworks", cfg.TargetFrameworks())
-		r.SetAttr("project_sdk", cfg.ProjectSdk())
+		r.SetAttr("project_sdk", l.projectSdkFor(cfg, []*parser.File{f}))
 		r.SetAttr("visibility", cfg.Visibility())
 		setNullableAndImplicitUsingsAttrs(r, cfg)
 		// Binaries advertise their namespaces like libraries do, so a
@@ -243,9 +254,48 @@ func (l *csharpLang) GenerateRules(args language.GenerateArgs) language.Generate
 	}
 
 	for _, generated := range res.Gen {
-		mergeNullableAndImplicitUsingsAttrs(generated, args.File, cfg, args.Config.AliasMap)
+		mergeScalarAttrs(generated, args.File, cfg, args.Config.AliasMap)
 	}
 	return res
+}
+
+// hasResolveOverride reports whether ns or any enclosing namespace has an
+// explicit dotnet_resolve override, matching Resolver.Resolve's parent walk.
+func hasResolveOverride(cfg *dotnetconfig.Config, ns string) bool {
+	for cur := ns; cur != ""; cur = parentNamespace(cur) {
+		if _, ok := cfg.ResolveOverride(cur); ok {
+			return true
+		}
+	}
+	return false
+}
+
+// projectSdkFor returns the project_sdk value for a generated target. An
+// explicit dotnet_project_sdk directive always wins; otherwise, targets whose
+// sources import an ASP.NET Core shared-framework namespace not declared by
+// the target itself and not backed by a resolve override or NuGet package are
+// upgraded to "web".
+func (l *csharpLang) projectSdkFor(cfg *dotnetconfig.Config, files []*parser.File) string {
+	if cfg.ProjectSdkConfigured() {
+		return cfg.ProjectSdk()
+	}
+	own := map[string]bool{}
+	for _, ns := range namespacesOf(files) {
+		own[ns] = true
+	}
+	for _, imp := range usingNamespaces(files) {
+		if !isWebSdkNamespace(imp) || own[imp] {
+			continue
+		}
+		if hasResolveOverride(cfg, imp) {
+			continue
+		}
+		if id, err := l.nugetIndex.Resolve(imp); err == nil && id != "" {
+			continue
+		}
+		return "web"
+	}
+	return cfg.ProjectSdk()
 }
 
 func isCsharpKind(kind string) bool {

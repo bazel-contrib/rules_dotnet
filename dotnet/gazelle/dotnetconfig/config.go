@@ -27,7 +27,8 @@ const (
 	// Defaults to "true".
 	DotnetGenerateBinary = "dotnet_generate_binary"
 	// DotnetProjectSdk sets the project_sdk attr of generated targets.
-	// Defaults to "default".
+	// Defaults to "default", or auto-detects "web" when sources import
+	// ASP.NET Core shared-framework namespaces and this directive is unset.
 	DotnetProjectSdk = "dotnet_project_sdk"
 	// DotnetNullable sets the nullable attr of generated C# targets.
 	// Valid values are "disable", "enable", "warnings" and "annotations".
@@ -64,6 +65,7 @@ type Config struct {
 	testFramework            string
 	generateBinary           bool
 	projectSdk               string
+	projectSdkConfigured     bool
 	nullable                 string
 	nullableConfigured       bool
 	implicitUsings           bool
@@ -158,8 +160,15 @@ func (c *Config) SetGenerateBinary(v bool) { c.generateBinary = v }
 // ProjectSdk returns the project_sdk attr value for generated targets.
 func (c *Config) ProjectSdk() string { return c.projectSdk }
 
+// ProjectSdkConfigured reports whether dotnet_project_sdk was explicitly set
+// by a directive.
+func (c *Config) ProjectSdkConfigured() bool { return c.projectSdkConfigured }
+
 // SetProjectSdk sets the project_sdk attr value for generated targets.
-func (c *Config) SetProjectSdk(v string) { c.projectSdk = v }
+func (c *Config) SetProjectSdk(v string) {
+	c.projectSdk = v
+	c.projectSdkConfigured = true
+}
 
 // Nullable returns the nullable value and whether a directive configured it.
 // The empty, unconfigured state is distinct from the rule default "disable".

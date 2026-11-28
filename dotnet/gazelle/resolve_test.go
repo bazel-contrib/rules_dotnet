@@ -310,3 +310,66 @@ func TestResolveTestAgainstSiblingBinary(t *testing.T) {
 		t.Errorf("deps = %v, want %v (same-package binary label, relativized)", got, want)
 	}
 }
+
+func TestResolveWebSdkNamespaces(t *testing.T) {
+	l, c, dir := setupLang(t, net10Directive, "src", "src/web")
+	writeFile(t, dir, "nuget_resolve.json", `{"version": 1, "inputHash": "1", "frameworks": {"net10.0": {"packages": [{"id": "Microsoft.AspNetCore.Authentication.JwtBearer", "version": "10.0.0", "sha512": "sha512-AAAA", "urls": ["https://feed/jwt.nupkg"]}]}}}`)
+	idx, err := nuget.LoadIndex(filepath.Join(dir, "nuget_resolve.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	l.nugetIndex = idx
+
+	ix := resolve.NewRuleIndex(func(r *rule.Rule, pkgRel string) resolve.Resolver { return l.Resolver })
+	ix.Finish()
+
+	for _, sdk := range []string{"web", "razor", "blazorwasm"} {
+		t.Run("sdk="+sdk, func(t *testing.T) {
+			var buf bytes.Buffer
+			origOut := log.Writer()
+			log.SetOutput(&buf)
+			defer log.SetOutput(origOut)
+
+			r := rule.NewRule("csharp_library", "web")
+			r.SetAttr("project_sdk", sdk)
+			input := resolveInput{
+				imports: []string{
+					"Microsoft.AspNetCore.Authentication.JwtBearer",
+					"Microsoft.AspNetCore.Builder",
+					"Microsoft.AspNetCore.Http",
+					"Microsoft.AspNetCore.Mvc",
+					"Microsoft.Net.Http.Headers",
+				},
+				own: []string{"Web"},
+			}
+			l.Resolver.Resolve(c, ix, nil, r, input, label.New("", "src/web", "web"))
+
+			if buf.Len() > 0 {
+				t.Errorf("unexpected unresolved warnings for project_sdk=%q: %s", sdk, buf.String())
+			}
+			want := []string{"@nuget.net10.0//microsoft.aspnetcore.authentication.jwtbearer"}
+			if got := r.AttrStrings("deps"); !reflect.DeepEqual(got, want) {
+				t.Errorf("deps = %v, want %v", got, want)
+			}
+		})
+	}
+
+	t.Run("sdk=default warns on aspnetcore shared framework", func(t *testing.T) {
+		var buf bytes.Buffer
+		origOut := log.Writer()
+		log.SetOutput(&buf)
+		defer log.SetOutput(origOut)
+
+		r := rule.NewRule("csharp_library", "lib")
+		r.SetAttr("project_sdk", "default")
+		input := resolveInput{
+			imports: []string{"Microsoft.AspNetCore.Http"},
+			own:     []string{"Lib"},
+		}
+		l.Resolver.Resolve(c, ix, nil, r, input, label.New("", "src/web", "lib"))
+
+		if !bytes.Contains(buf.Bytes(), []byte(`unresolved C# import "Microsoft.AspNetCore.Http"`)) {
+			t.Errorf("expected unresolved warning for default SDK, got: %q", buf.String())
+		}
+	})
+}
