@@ -800,6 +800,9 @@ func TestImportsIndexesHandWrittenLibraryFromDisk(t *testing.T) {
 	want := []resolve.ImportSpec{
 		{Lang: languageName, Imp: "Agrifirm.Common.Tenant"},
 		{Lang: typeLanguageName, Imp: "Agrifirm.Common.Tenant.Tenant"},
+		{Lang: nsConsumerLanguageName, Imp: "Agrifirm"},
+		{Lang: nsConsumerLanguageName, Imp: "Agrifirm.Common"},
+		{Lang: nsConsumerLanguageName, Imp: "Agrifirm.Common.Tenant"},
 	}
 	if !reflect.DeepEqual(specs, want) {
 		t.Errorf("Imports() = %v, want %v", specs, want)
@@ -918,8 +921,231 @@ func TestImportsRespectsAliasMap(t *testing.T) {
 	want := []resolve.ImportSpec{
 		{Lang: languageName, Imp: "Agrifirm.Common.Tenant"},
 		{Lang: typeLanguageName, Imp: "Agrifirm.Common.Tenant.Tenant"},
+		{Lang: nsConsumerLanguageName, Imp: "Agrifirm"},
+		{Lang: nsConsumerLanguageName, Imp: "Agrifirm.Common"},
+		{Lang: nsConsumerLanguageName, Imp: "Agrifirm.Common.Tenant"},
 	}
 	if !reflect.DeepEqual(specs, want) {
 		t.Errorf("Imports() = %v, want %v", specs, want)
+	}
+}
+
+func indexConsumer(t *testing.T, l *csharpLang, c *config.Config, ix *resolve.RuleIndex, kind, pkg, name, out string, ci consumerInfo) {
+	t.Helper()
+	f := rule.EmptyFile(pkg+"/BUILD.bazel", pkg)
+	r := rule.NewRule(kind, name)
+	if out != "" {
+		r.SetAttr("out", out)
+	}
+	r.SetPrivateAttr(consumerInfoKey, ci)
+	ix.AddRule(c, r, f)
+}
+
+func TestResolveInternalsVisibleToExplicitUsing(t *testing.T) {
+	l, c, _ := setupLang(t, net10Directive,
+		"common",
+		"common/Mail",
+		"common/Mail/Utilities",
+		"common/Mail/Models",
+		"common/Mail/Models/Requests",
+	)
+
+	ix := resolve.NewRuleIndex(func(r *rule.Rule, pkgRel string) resolve.Resolver { return l.Resolver })
+	indexConsumer(t, l, c, ix, "csharp_library", "common/Mail/Models/Requests", "requests", "", consumerInfo{
+		usings: []string{"Agrifirm.Common.Mail.Utilities"},
+		own:    []string{"Agrifirm.Common.Mail.Models.Requests"},
+		refs:   []string{"EmbeddedResourceReader.GetResource"},
+	})
+	ix.Finish()
+
+	r := rule.NewRule("csharp_library", "utilities")
+	input := resolveInput{
+		own:           []string{"Agrifirm.Common.Mail.Utilities"},
+		internalTypes: []string{"Agrifirm.Common.Mail.Utilities.EmbeddedResourceReader"},
+	}
+	l.Resolver.Resolve(c, ix, nil, r, input, label.New("", "common/Mail/Utilities", "utilities"))
+
+	want := []string{"requests"}
+	if got := r.AttrStrings("internals_visible_to"); !reflect.DeepEqual(got, want) {
+		t.Errorf("internals_visible_to = %v, want %v", got, want)
+	}
+}
+
+func TestResolveInternalsVisibleToSeparateTestTarget(t *testing.T) {
+	l, c, _ := setupLang(t, net10Directive,
+		"common",
+		"common/Auth",
+		"common/Tests",
+		"common/Tests/Auth",
+	)
+
+	ix := resolve.NewRuleIndex(func(r *rule.Rule, pkgRel string) resolve.Resolver { return l.Resolver })
+	indexConsumer(t, l, c, ix, "csharp_mstest_test", "common/Tests/Auth", "authorization_mstest_test", "", consumerInfo{
+		usings: []string{"Agrifirm.Common.Middleware.Authorization"},
+		own:    []string{"Agrifirm.Common.UnitTests.Middleware.Authorization"},
+		refs:   []string{"SalesAreaKeyUserFallbackAuthorizer"},
+	})
+	ix.Finish()
+
+	r := rule.NewRule("csharp_library", "authorization")
+	input := resolveInput{
+		own:           []string{"Agrifirm.Common.Middleware.Authorization"},
+		internalTypes: []string{"Agrifirm.Common.Middleware.Authorization.SalesAreaKeyUserFallbackAuthorizer"},
+	}
+	l.Resolver.Resolve(c, ix, nil, r, input, label.New("", "common/Auth", "authorization"))
+
+	want := []string{"authorization_mstest_test"}
+	if got := r.AttrStrings("internals_visible_to"); !reflect.DeepEqual(got, want) {
+		t.Errorf("internals_visible_to = %v, want %v", got, want)
+	}
+}
+
+func TestResolveInternalsVisibleToUsesCustomOutAssemblyName(t *testing.T) {
+	l, c, _ := setupLang(t, net10Directive, "common", "common/Util", "common/Consumer")
+
+	ix := resolve.NewRuleIndex(func(r *rule.Rule, pkgRel string) resolve.Resolver { return l.Resolver })
+	indexConsumer(t, l, c, ix, "csharp_library", "common/Consumer", "consumer_target", "Custom.Consumer", consumerInfo{
+		usings: []string{"Acme.Util"},
+		own:    []string{"Acme.Consumer"},
+		refs:   []string{"SecretHelper"},
+	})
+	ix.Finish()
+
+	r := rule.NewRule("csharp_library", "util")
+	input := resolveInput{
+		own:           []string{"Acme.Util"},
+		internalTypes: []string{"Acme.Util.SecretHelper"},
+	}
+	l.Resolver.Resolve(c, ix, nil, r, input, label.New("", "common/Util", "util"))
+
+	want := []string{"Custom.Consumer"}
+	if got := r.AttrStrings("internals_visible_to"); !reflect.DeepEqual(got, want) {
+		t.Errorf("internals_visible_to = %v, want %v", got, want)
+	}
+}
+
+func TestResolveInternalsVisibleToIgnoresNonReferencingConsumer(t *testing.T) {
+	l, c, _ := setupLang(t, net10Directive, "common", "common/Util", "common/Other")
+
+	ix := resolve.NewRuleIndex(func(r *rule.Rule, pkgRel string) resolve.Resolver { return l.Resolver })
+	indexConsumer(t, l, c, ix, "csharp_library", "common/Other", "other", "", consumerInfo{
+		usings: []string{"Acme.Util"},
+		own:    []string{"Acme.Other"},
+		refs:   []string{"PublicHelper"},
+	})
+	ix.Finish()
+
+	r := rule.NewRule("csharp_library", "util")
+	input := resolveInput{
+		own:           []string{"Acme.Util"},
+		internalTypes: []string{"Acme.Util.SecretHelper"},
+	}
+	l.Resolver.Resolve(c, ix, nil, r, input, label.New("", "common/Util", "util"))
+
+	if got := r.AttrStrings("internals_visible_to"); len(got) != 0 {
+		t.Errorf("internals_visible_to = %v, want empty", got)
+	}
+}
+
+func TestResolveInternalsVisibleToPreservesExistingEntries(t *testing.T) {
+	l, c, _ := setupLang(t, net10Directive, "common", "common/Util", "common/Req")
+
+	ix := resolve.NewRuleIndex(func(r *rule.Rule, pkgRel string) resolve.Resolver { return l.Resolver })
+	indexConsumer(t, l, c, ix, "csharp_library", "common/Req", "requests", "", consumerInfo{
+		usings: []string{"Acme.Util"},
+		own:    []string{"Acme.Req"},
+		refs:   []string{"SecretHelper"},
+	})
+	ix.Finish()
+
+	r := rule.NewRule("csharp_library", "util")
+	r.SetAttr("internals_visible_to", []string{"util_nunit_test"})
+	input := resolveInput{
+		own:           []string{"Acme.Util"},
+		internalTypes: []string{"Acme.Util.SecretHelper"},
+	}
+	l.Resolver.Resolve(c, ix, nil, r, input, label.New("", "common/Util", "util"))
+
+	want := []string{"requests", "util_nunit_test"}
+	if got := r.AttrStrings("internals_visible_to"); !reflect.DeepEqual(got, want) {
+		t.Errorf("internals_visible_to = %v, want %v", got, want)
+	}
+}
+
+func TestResolveInternalsVisibleToRelativeQualifiedRef(t *testing.T) {
+	l, c, _ := setupLang(t, net10Directive, "common", "common/Tenant", "common/Configuration")
+
+	ix := resolve.NewRuleIndex(func(r *rule.Rule, pkgRel string) resolve.Resolver { return l.Resolver })
+	indexConsumer(t, l, c, ix, "csharp_library", "common/Configuration", "configuration", "", consumerInfo{
+		own:  []string{"Agrifirm.Common.Configuration"},
+		refs: []string{"Tenant.SecretTenant"},
+	})
+	ix.Finish()
+
+	r := rule.NewRule("csharp_library", "tenant")
+	input := resolveInput{
+		own:           []string{"Agrifirm.Common.Tenant"},
+		internalTypes: []string{"Agrifirm.Common.Tenant.SecretTenant"},
+	}
+	l.Resolver.Resolve(c, ix, nil, r, input, label.New("", "common/Tenant", "tenant"))
+
+	want := []string{"configuration"}
+	if got := r.AttrStrings("internals_visible_to"); !reflect.DeepEqual(got, want) {
+		t.Errorf("internals_visible_to = %v, want %v", got, want)
+	}
+}
+
+func TestResolveInternalsVisibleToDiskIndexedTestRule(t *testing.T) {
+	l, c, dir := setupLang(t, net10Directive, "common", "common/Auth", "common/Tests", "common/Tests/Auth")
+	writeFile(t, filepath.Join(dir, "common/Tests/Auth"), "AuthTests.cs",
+		"using Agrifirm.Common.Middleware.Authorization;\nnamespace Agrifirm.Common.UnitTests.Middleware.Authorization;\npublic class AuthTests { void T() { _ = new SalesAreaKeyUserFallbackAuthorizer(); } }\n")
+
+	ix := resolve.NewRuleIndex(func(r *rule.Rule, pkgRel string) resolve.Resolver { return l.Resolver })
+	testFile := rule.EmptyFile(filepath.Join(dir, "common/Tests/Auth/BUILD.bazel"), "common/Tests/Auth")
+	testRule := rule.NewRule("csharp_mstest_test", "authorization_mstest_test")
+	testRule.SetAttr("srcs", []string{"AuthTests.cs"})
+	// No consumerInfoKey private attr — simulates partial-tree / index-only Imports().
+	ix.AddRule(c, testRule, testFile)
+	ix.Finish()
+
+	r := rule.NewRule("csharp_library", "authorization")
+	input := resolveInput{
+		own:           []string{"Agrifirm.Common.Middleware.Authorization"},
+		internalTypes: []string{"Agrifirm.Common.Middleware.Authorization.SalesAreaKeyUserFallbackAuthorizer"},
+	}
+	l.Resolver.Resolve(c, ix, nil, r, input, label.New("", "common/Auth", "authorization"))
+
+	want := []string{"authorization_mstest_test"}
+	if got := r.AttrStrings("internals_visible_to"); !reflect.DeepEqual(got, want) {
+		t.Errorf("internals_visible_to = %v, want %v", got, want)
+	}
+}
+
+func TestResolveInternalsVisibleToFQNAndUsingAlias(t *testing.T) {
+	l, c, _ := setupLang(t, net10Directive, "common", "common/Util", "other", "other/app", "other/alias")
+
+	ix := resolve.NewRuleIndex(func(r *rule.Rule, pkgRel string) resolve.Resolver { return l.Resolver })
+	indexConsumer(t, l, c, ix, "csharp_library", "other/app", "fqn_app", "", consumerInfo{
+		own:  []string{"Other.App"},
+		refs: []string{"Agrifirm.Common.Util.SecretHelper.Run"},
+	})
+	indexConsumer(t, l, c, ix, "csharp_library", "other/alias", "alias_app", "", consumerInfo{
+		usings:  []string{"Agrifirm.Common.Util"},
+		aliases: map[string]string{"U": "Agrifirm.Common.Util"},
+		own:     []string{"Other.Alias"},
+		refs:    []string{"U.SecretHelper.Run"},
+	})
+	ix.Finish()
+
+	r := rule.NewRule("csharp_library", "util")
+	input := resolveInput{
+		own:           []string{"Agrifirm.Common.Util"},
+		internalTypes: []string{"Agrifirm.Common.Util.SecretHelper"},
+	}
+	l.Resolver.Resolve(c, ix, nil, r, input, label.New("", "common/Util", "util"))
+
+	want := []string{"alias_app", "fqn_app"}
+	if got := r.AttrStrings("internals_visible_to"); !reflect.DeepEqual(got, want) {
+		t.Errorf("internals_visible_to = %v, want %v", got, want)
 	}
 }

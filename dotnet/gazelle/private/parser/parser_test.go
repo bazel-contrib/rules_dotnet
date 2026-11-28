@@ -139,7 +139,7 @@ func TestParseNamespacesAndUsings(t *testing.T) {
 			wantUsings: []Using{
 				{Namespace: "System", Global: true},
 				{Namespace: "System.Math", Static: true},
-				{Namespace: "System.IO"},
+				{Alias: "IO", Namespace: "System.IO"},
 			},
 		},
 		{
@@ -421,5 +421,63 @@ namespace Bar.Baz { public class C : BaseType {} }
 	}
 	if len(f.Usings) != 1 || f.Usings[0].Namespace != "Foo.Global" || !f.Usings[0].Global {
 		t.Errorf("Usings = %+v, want single global using Foo.Global", f.Usings)
+	}
+}
+
+func TestParseInternalTypes(t *testing.T) {
+	src := `namespace Agrifirm.Common.Mail;
+public class PublicClass
+{
+    internal class NestedInternal {}
+}
+internal static class EmbeddedResourceReader {}
+internal sealed class Authorizer(int x) {}
+internal enum ConnectionState { Connecting }
+internal delegate void InternalHandler();
+class DefaultInternalClass {}
+file class FileLocalClass {}
+`
+	f, err := Parse("Types.cs", src)
+	if err != nil {
+		t.Fatalf("Parse() error = %v", err)
+	}
+	want := []string{
+		"Authorizer",
+		"ConnectionState",
+		"DefaultInternalClass",
+		"EmbeddedResourceReader",
+		"InternalHandler",
+	}
+	if !reflect.DeepEqual(f.InternalTypes, want) {
+		t.Errorf("InternalTypes = %v, want %v", f.InternalTypes, want)
+	}
+}
+
+func TestParseMultiLineModifiersAndUsingAlias(t *testing.T) {
+	src := `using Utils = Agrifirm.Common.Mail.Utilities;
+namespace Foo;
+public
+class PublicOnNextLine {}
+public static
+class PublicStaticOnNextLine {}
+file
+class FileOnNextLine {}
+internal
+class InternalOnNextLine {}
+`
+	f, err := Parse("Multi.cs", src)
+	if err != nil {
+		t.Fatalf("Parse() error = %v", err)
+	}
+	wantDeclared := []string{"InternalOnNextLine", "PublicOnNextLine", "PublicStaticOnNextLine"}
+	if !reflect.DeepEqual(f.DeclaredTypes, wantDeclared) {
+		t.Errorf("DeclaredTypes = %v, want %v", f.DeclaredTypes, wantDeclared)
+	}
+	wantInternal := []string{"InternalOnNextLine"}
+	if !reflect.DeepEqual(f.InternalTypes, wantInternal) {
+		t.Errorf("InternalTypes = %v, want %v", f.InternalTypes, wantInternal)
+	}
+	if len(f.Usings) != 1 || f.Usings[0].Alias != "Utils" || f.Usings[0].Namespace != "Agrifirm.Common.Mail.Utilities" {
+		t.Errorf("Usings = %+v, want [{Alias:Utils Namespace:Agrifirm.Common.Mail.Utilities}]", f.Usings)
 	}
 }

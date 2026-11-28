@@ -184,6 +184,8 @@ const (
 
 // Using is a single using directive.
 type Using struct {
+	// Alias is the alias name for `using Alias = X.Y;`, or "" otherwise.
+	Alias string
 	// Namespace is the imported namespace. For `using static X.Y.Z;` it is
 	// X.Y.Z; for `using A = X.Y;` it is X.Y.
 	Namespace string
@@ -211,6 +213,10 @@ type File struct {
 	// DeclaredTypes lists the sorted, deduplicated type names declared in the
 	// file (class, struct, interface, enum, record, delegate).
 	DeclaredTypes []string
+	// InternalTypes lists the sorted, deduplicated top-level type names
+	// declared without `public` (explicit `internal` or default-internal,
+	// excluding `file`-scoped and nested types).
+	InternalTypes []string
 	// ReferencedNames lists the sorted, deduplicated identifier and
 	// dot-separated name chains found outside comments, strings, using, and
 	// namespace directives.
@@ -218,15 +224,16 @@ type File struct {
 }
 
 var (
-	namespaceRe    = regexp.MustCompile(`^namespace[ \t]+([A-Za-z_][A-Za-z0-9_.]*)(.*)`)
-	globalUsingRe  = regexp.MustCompile(`^global[ \t]+(using[ \t]+.*)`)
-	usingRe        = regexp.MustCompile(`^using\s+(static\s+)?(?:[A-Za-z_][A-Za-z0-9_]*\s*=\s*)?([A-Za-z_][A-Za-z0-9_.]*)\s*;`)
-	entryPointRe   = regexp.MustCompile(`\bstatic\s+(?:async\s+)?(?:void|int|Task|Task<int>|ValueTask|ValueTask<int>)\s+Main\s*\(`)
-	typeDeclRe     = regexp.MustCompile(`\b(?:class|struct|interface|record|enum|delegate)\s+[A-Za-z_]`)
-	typeDeclNameRe = regexp.MustCompile(`\b(?:class|struct|interface|enum|record(?:[ \t]+(?:class|struct))?)[ \t]+([A-Za-z_][A-Za-z0-9_]*)`)
-	delegateNameRe = regexp.MustCompile(`\bdelegate[ \t]+(?:\([^)\n;]+\)|[^({\n;]+)[ \t]+([A-Za-z_][A-Za-z0-9_]*)[ \t]*(?:<[^>]+>)?[ \t]*\(`)
-	fileScopedRe   = regexp.MustCompile(`\bfile[ \t]+(?:(?:abstract|sealed|static|partial|readonly|ref|unsafe|new)[ \t]+)*(?:class|struct|interface|enum|record(?:[ \t]+(?:class|struct))?|delegate)\b`)
-	refChainRe     = regexp.MustCompile(`\b[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*\b`)
+	namespaceRe      = regexp.MustCompile(`^namespace[ \t]+([A-Za-z_][A-Za-z0-9_.]*)(.*)`)
+	globalUsingRe    = regexp.MustCompile(`^global[ \t]+(using[ \t]+.*)`)
+	usingRe          = regexp.MustCompile(`^using\s+(static\s+)?(?:([A-Za-z_][A-Za-z0-9_]*)\s*=\s*)?([A-Za-z_][A-Za-z0-9_.]*)\s*;`)
+	entryPointRe     = regexp.MustCompile(`\bstatic\s+(?:async\s+)?(?:void|int|Task|Task<int>|ValueTask|ValueTask<int>)\s+Main\s*\(`)
+	typeDeclRe       = regexp.MustCompile(`\b(?:class|struct|interface|record|enum|delegate)\s+[A-Za-z_]`)
+	typeDeclNameRe   = regexp.MustCompile(`\b(?:class|struct|interface|enum|record(?:[ \t]+(?:class|struct))?)[ \t]+([A-Za-z_][A-Za-z0-9_]*)`)
+	delegateNameRe   = regexp.MustCompile(`\bdelegate[ \t]+(?:\([^)\n;]+\)|[^({\n;]+)[ \t]+([A-Za-z_][A-Za-z0-9_]*)[ \t]*(?:<[^>]+>)?[ \t]*\(`)
+	fileScopedRe     = regexp.MustCompile(`\bfile[ \t]+(?:(?:abstract|sealed|static|partial|readonly|ref|unsafe|new)[ \t]+)*(?:class|struct|interface|enum|record(?:[ \t]+(?:class|struct))?|delegate)\b`)
+	publicTypeDeclRe = regexp.MustCompile(`\bpublic[ \t]+(?:(?:abstract|sealed|static|partial|readonly|ref|unsafe|new)[ \t]+)*(?:class|struct|interface|enum|record(?:[ \t]+(?:class|struct))?|delegate)\b`)
+	refChainRe       = regexp.MustCompile(`\b[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*\b`)
 )
 
 // csharpKeywords are reserved and common contextual C# keywords excluded from
@@ -289,30 +296,56 @@ func Parse(name, src string) (*File, error) {
 
 	refSet := map[string]bool{}
 	declaredSet := map[string]bool{}
+	internalSet := map[string]bool{}
 	braceDepth := 0
 	topLevelDepth := 0
+	var topLevelBuf strings.Builder
 
-	extractTopLevelTypes := func(segment string) {
+	flushTopLevel := func() {
+		if topLevelBuf.Len() == 0 {
+			return
+		}
+		segment := topLevelBuf.String()
+		topLevelBuf.Reset()
 		for _, stmt := range strings.Split(segment, ";") {
 			if fileScopedRe.MatchString(stmt) {
 				continue
 			}
+			isPublic := publicTypeDeclRe.MatchString(stmt)
 			for _, m := range typeDeclNameRe.FindAllStringSubmatch(stmt, -1) {
 				if !csharpKeywords[m[1]] {
 					declaredSet[m[1]] = true
+					if !isPublic {
+						internalSet[m[1]] = true
+					}
 				}
 			}
 			for _, m := range delegateNameRe.FindAllStringSubmatch(stmt, -1) {
 				if !csharpKeywords[m[1]] {
 					declaredSet[m[1]] = true
+					if !isPublic {
+						internalSet[m[1]] = true
+					}
 				}
 			}
 		}
 	}
 
+	appendTopLevel := func(s string) {
+		s = strings.TrimSpace(s)
+		if s == "" {
+			return
+		}
+		if topLevelBuf.Len() > 0 {
+			topLevelBuf.WriteByte(' ')
+		}
+		topLevelBuf.WriteString(s)
+	}
+
 	for _, line := range strings.Split(blanked, "\n") {
 		trimmed := strings.TrimSpace(line)
 		if strings.HasPrefix(trimmed, "#") {
+			flushTopLevel()
 			continue
 		}
 		global := false
@@ -321,14 +354,17 @@ func Parse(name, src string) (*File, error) {
 			trimmed = m[1]
 		}
 		if m := usingRe.FindStringSubmatch(trimmed); m != nil {
+			flushTopLevel()
 			f.Usings = append(f.Usings, Using{
-				Namespace: m[2],
+				Alias:     m[2],
+				Namespace: m[3],
 				Static:    m[1] != "",
 				Global:    global,
 			})
 			continue
 		}
 		if m := namespaceRe.FindStringSubmatch(trimmed); m != nil {
+			flushTopLevel()
 			if f.Namespace == "" {
 				f.Namespace = m[1]
 			}
@@ -355,25 +391,34 @@ func Parse(name, src string) (*File, error) {
 		for i := 0; i < len(trimmed); i++ {
 			switch trimmed[i] {
 			case '{':
-				if braceDepth == topLevelDepth && i > segStart {
-					extractTopLevelTypes(trimmed[segStart:i])
+				if braceDepth == topLevelDepth {
+					appendTopLevel(trimmed[segStart:i])
+					flushTopLevel()
 				}
 				braceDepth++
 				segStart = i + 1
 			case '}':
-				if braceDepth == topLevelDepth && i > segStart {
-					extractTopLevelTypes(trimmed[segStart:i])
+				if braceDepth == topLevelDepth {
+					appendTopLevel(trimmed[segStart:i])
+					flushTopLevel()
 				}
 				if braceDepth > 0 {
 					braceDepth--
 				}
 				segStart = i + 1
+			case ';':
+				if braceDepth == topLevelDepth {
+					appendTopLevel(trimmed[segStart : i+1])
+					flushTopLevel()
+				}
+				segStart = i + 1
 			}
 		}
 		if braceDepth == topLevelDepth && segStart < len(trimmed) {
-			extractTopLevelTypes(trimmed[segStart:])
+			appendTopLevel(trimmed[segStart:])
 		}
 	}
+	flushTopLevel()
 
 	if len(declaredSet) > 0 {
 		f.DeclaredTypes = make([]string, 0, len(declaredSet))
@@ -381,6 +426,13 @@ func Parse(name, src string) (*File, error) {
 			f.DeclaredTypes = append(f.DeclaredTypes, name)
 		}
 		sort.Strings(f.DeclaredTypes)
+	}
+	if len(internalSet) > 0 {
+		f.InternalTypes = make([]string, 0, len(internalSet))
+		for name := range internalSet {
+			f.InternalTypes = append(f.InternalTypes, name)
+		}
+		sort.Strings(f.InternalTypes)
 	}
 	if len(refSet) > 0 {
 		f.ReferencedNames = make([]string, 0, len(refSet))

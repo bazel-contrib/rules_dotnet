@@ -202,13 +202,23 @@ func (l *csharpLang) GenerateRules(args language.GenerateArgs) language.Generate
 			}
 			lib.SetAttr("internals_visible_to", ivt)
 		}
-		lib.SetPrivateAttr(namespacesKey, namespacesOf(prodFiles))
+		libUsings := usingNamespaces(prodFiles)
+		libOwn := namespacesOf(prodFiles)
+		libRefs := referencedNames(prodFiles)
+		lib.SetPrivateAttr(namespacesKey, libOwn)
 		lib.SetPrivateAttr(typesKey, typesOf(prodFiles))
+		lib.SetPrivateAttr(consumerInfoKey, consumerInfo{
+			usings:  libUsings,
+			aliases: usingAliases(prodFiles),
+			own:     libOwn,
+			refs:    libRefs,
+		})
 		res.Gen = append(res.Gen, lib)
 		res.Imports = append(res.Imports, resolveInput{
-			imports: usingNamespaces(prodFiles),
-			own:     namespacesOf(prodFiles),
-			refs:    referencedNames(prodFiles),
+			imports:       libUsings,
+			own:           libOwn,
+			refs:          libRefs,
+			internalTypes: internalTypesOf(prodFiles),
 		})
 	}
 
@@ -234,11 +244,20 @@ func (l *csharpLang) GenerateRules(args language.GenerateArgs) language.Generate
 			name := sanitizeName(strings.TrimSuffix(entryFiles[0].Name, ".cs"))
 			r.SetAttr("deps", []string{":" + name})
 		}
+		testUsings := usingNamespaces(files)
+		testOwn := namespacesOf(files)
+		testRefs := referencedNames(files)
+		r.SetPrivateAttr(consumerInfoKey, consumerInfo{
+			usings:  testUsings,
+			aliases: usingAliases(files),
+			own:     testOwn,
+			refs:    testRefs,
+		})
 		res.Gen = append(res.Gen, r)
 		res.Imports = append(res.Imports, resolveInput{
-			imports: usingNamespaces(files),
-			own:     namespacesOf(files),
-			refs:    referencedNames(files),
+			imports: testUsings,
+			own:     testOwn,
+			refs:    testRefs,
 		})
 	}
 
@@ -253,13 +272,24 @@ func (l *csharpLang) GenerateRules(args language.GenerateArgs) language.Generate
 		// Binaries advertise their namespaces like libraries do, so a
 		// test (or another package) can resolve a using directive to the
 		// binary target.
-		r.SetPrivateAttr(namespacesKey, namespacesOf([]*parser.File{f}))
-		r.SetPrivateAttr(typesKey, typesOf([]*parser.File{f}))
+		binFiles := []*parser.File{f}
+		binUsings := usingNamespaces(binFiles)
+		binOwn := namespacesOf(binFiles)
+		binRefs := referencedNames(binFiles)
+		r.SetPrivateAttr(namespacesKey, binOwn)
+		r.SetPrivateAttr(typesKey, typesOf(binFiles))
+		r.SetPrivateAttr(consumerInfoKey, consumerInfo{
+			usings:  binUsings,
+			aliases: usingAliases(binFiles),
+			own:     binOwn,
+			refs:    binRefs,
+		})
 		res.Gen = append(res.Gen, r)
 		res.Imports = append(res.Imports, resolveInput{
-			imports: usingNamespaces([]*parser.File{f}),
-			own:     namespacesOf([]*parser.File{f}),
-			refs:    referencedNames([]*parser.File{f}),
+			imports:       binUsings,
+			own:           binOwn,
+			refs:          binRefs,
+			internalTypes: internalTypesOf(binFiles),
 		})
 	}
 
@@ -410,6 +440,65 @@ func typesOf(files []*parser.File) []string {
 		}
 	}
 	sort.Strings(out)
+	return out
+}
+
+// internalTypesOf returns the sorted, deduplicated fully-qualified top-level
+// internal type names declared by files ("Namespace.TypeName"), skipping files
+// without a declared namespace and excluding partial types that are declared
+// public in another file of the same target.
+func internalTypesOf(files []*parser.File) []string {
+	publicTypes := map[string]bool{}
+	for _, f := range files {
+		if f.Namespace == "" {
+			continue
+		}
+		fileInternal := map[string]bool{}
+		for _, t := range f.InternalTypes {
+			fileInternal[t] = true
+		}
+		for _, t := range f.DeclaredTypes {
+			if !fileInternal[t] {
+				publicTypes[f.Namespace+"."+t] = true
+			}
+		}
+	}
+
+	seen := map[string]bool{}
+	var out []string
+	for _, f := range files {
+		if f.Namespace == "" {
+			continue
+		}
+		for _, t := range f.InternalTypes {
+			fq := f.Namespace + "." + t
+			if publicTypes[fq] {
+				continue
+			}
+			if !seen[fq] {
+				seen[fq] = true
+				out = append(out, fq)
+			}
+		}
+	}
+	sort.Strings(out)
+	return out
+}
+
+// usingAliases returns a map of alias -> target namespace from `using A = Ns;`
+// directives across files.
+func usingAliases(files []*parser.File) map[string]string {
+	var out map[string]string
+	for _, f := range files {
+		for _, u := range f.Usings {
+			if u.Alias != "" {
+				if out == nil {
+					out = map[string]string{}
+				}
+				out[u.Alias] = u.Namespace
+			}
+		}
+	}
 	return out
 }
 

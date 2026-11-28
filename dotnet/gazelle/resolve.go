@@ -26,16 +26,40 @@ type resolveInput struct {
 	// refs are the identifier and dotted-name chains referenced in the rule's
 	// sources outside comments, strings, using, and namespace directives.
 	refs []string
+	// internalTypes are the fully-qualified top-level internal type names
+	// declared by the rule's sources (e.g. "Foo.Bar.Helper"), sorted.
+	internalTypes []string
+}
+
+// consumerInfo holds the metadata a C# target needs to be checked as a
+// consumer of another target's internal types.
+type consumerInfo struct {
+	assemblyName string
+	usings       []string
+	aliases      map[string]string
+	own          []string
+	refs         []string
+}
+
+// consumerKey identifies a workspace rule in Resolver.consumers independently
+// of c.RepoName stamping.
+type consumerKey struct {
+	pkg  string
+	name string
 }
 
 // Resolver satisfies resolve.Resolver for C#.
 type Resolver struct {
-	lang *csharpLang
+	lang      *csharpLang
+	consumers map[consumerKey]consumerInfo
 }
 
 // NewResolver creates the Resolver for l.
 func NewResolver(lang *csharpLang) *Resolver {
-	return &Resolver{lang: lang}
+	return &Resolver{
+		lang:      lang,
+		consumers: map[consumerKey]consumerInfo{},
+	}
 }
 
 // Name implements resolve.Resolver.
@@ -45,7 +69,9 @@ func (*Resolver) Name() string { return languageName }
 // csharp_binary rules are indexed by the namespaces and fully-qualified types
 // their sources declare. Hand-written csharp_library rules (without private
 // attrs) are indexed by parsing their .cs srcs relative to the BUILD file's
-// directory.
+// directory. All C# rules carrying consumer metadata are also indexed under
+// nsConsumerLanguageName so providers with internal types can populate
+// internals_visible_to during Resolve.
 func (r *Resolver) Imports(c *config.Config, ru *rule.Rule, f *rule.File) []resolve.ImportSpec {
 	kind := ru.Kind()
 	if c != nil {
@@ -53,13 +79,24 @@ func (r *Resolver) Imports(c *config.Config, ru *rule.Rule, f *rule.File) []reso
 			kind = aliased
 		}
 	}
-	if kind != "csharp_library" && kind != "csharp_binary" {
+	if !isCsharpKind(kind) {
 		return nil
 	}
-	namespaces, _ := ru.PrivateAttr(namespacesKey).([]string)
-	types, _ := ru.PrivateAttr(typesKey).([]string)
 
-	if kind == "csharp_library" && len(namespaces) == 0 && len(types) == 0 && f != nil {
+	var namespaces, types []string
+	var ci consumerInfo
+	hasConsumer := false
+
+	if kind == "csharp_library" || kind == "csharp_binary" {
+		namespaces, _ = ru.PrivateAttr(namespacesKey).([]string)
+		types, _ = ru.PrivateAttr(typesKey).([]string)
+	}
+	if attr, ok := ru.PrivateAttr(consumerInfoKey).(consumerInfo); ok {
+		ci = attr
+		hasConsumer = true
+	}
+
+	if !hasConsumer && f != nil {
 		dir := filepath.Dir(f.Path)
 		var parsed []*parser.File
 		for _, src := range ru.AttrStrings("srcs") {
@@ -72,19 +109,48 @@ func (r *Resolver) Imports(c *config.Config, ru *rule.Rule, f *rule.File) []reso
 			}
 			parsed = append(parsed, pf)
 		}
-		namespaces = namespacesOf(parsed)
-		types = typesOf(parsed)
+		if len(parsed) > 0 {
+			parsedOwn := namespacesOf(parsed)
+			if kind == "csharp_library" && len(namespaces) == 0 && len(types) == 0 {
+				namespaces = parsedOwn
+				types = typesOf(parsed)
+			}
+			ci = consumerInfo{
+				usings:  usingNamespaces(parsed),
+				aliases: usingAliases(parsed),
+				own:     parsedOwn,
+				refs:    referencedNames(parsed),
+			}
+			hasConsumer = true
+		}
 	}
 
-	if len(namespaces) == 0 && len(types) == 0 {
+	var consumerNamespaces []string
+	if hasConsumer && f != nil {
+		asmName := ru.AttrString("out")
+		if asmName == "" {
+			asmName = ru.Name()
+		}
+		ci.assemblyName = asmName
+		if r.consumers == nil {
+			r.consumers = map[consumerKey]consumerInfo{}
+		}
+		r.consumers[consumerKey{pkg: f.Pkg, name: ru.Name()}] = ci
+		consumerNamespaces = consumerLookupNamespaces(ci)
+	}
+
+	if len(namespaces) == 0 && len(types) == 0 && len(consumerNamespaces) == 0 {
 		return nil
 	}
-	specs := make([]resolve.ImportSpec, 0, len(namespaces)+len(types))
+	specs := make([]resolve.ImportSpec, 0, len(namespaces)+len(types)+len(consumerNamespaces))
 	for _, ns := range namespaces {
 		specs = append(specs, resolve.ImportSpec{Lang: languageName, Imp: ns})
 	}
 	for _, typ := range types {
 		specs = append(specs, resolve.ImportSpec{Lang: typeLanguageName, Imp: typ})
+	}
+	for _, ns := range consumerNamespaces {
+		specs = append(specs, resolve.ImportSpec{Lang: nsConsumerLanguageName, Imp: ns})
 	}
 	return specs
 }
@@ -198,6 +264,45 @@ func (r *Resolver) Resolve(c *config.Config, ix *resolve.RuleIndex, rc *repo.Rem
 	if len(sorted) > 0 {
 		ru.SetAttr("deps", sorted)
 	}
+
+	if len(input.internalTypes) > 0 {
+		ivt := map[string]bool{}
+		for _, existing := range ru.AttrStrings("internals_visible_to") {
+			ivt[existing] = true
+		}
+		for _, fqType := range input.internalTypes {
+			dot := strings.LastIndex(fqType, ".")
+			if dot <= 0 {
+				continue
+			}
+			ns := fqType[:dot]
+			typeName := fqType[dot+1:]
+			for queryNs := ns; queryNs != ""; queryNs = parentNamespace(queryNs) {
+				matches := ix.FindRulesByImportWithConfig(c, resolve.ImportSpec{Lang: nsConsumerLanguageName, Imp: queryNs}, languageName)
+				for _, m := range matches {
+					if m.IsSelfImport(from) {
+						continue
+					}
+					ci, ok := r.consumers[consumerKey{pkg: m.Label.Pkg, name: m.Label.Name}]
+					if !ok || ci.assemblyName == "" {
+						continue
+					}
+					if consumerReferencesInternalType(ci, ns, typeName) {
+						ivt[ci.assemblyName] = true
+					}
+				}
+			}
+		}
+		sortedIvt := make([]string, 0, len(ivt))
+		for a := range ivt {
+			sortedIvt = append(sortedIvt, a)
+		}
+		sort.Strings(sortedIvt)
+		ru.DelAttr("internals_visible_to")
+		if len(sortedIvt) > 0 {
+			ru.SetAttr("internals_visible_to", sortedIvt)
+		}
+	}
 }
 
 // resolveOverride walks imp and its enclosing namespaces to find an explicit
@@ -290,6 +395,88 @@ func dotPrefixes(chain string) []string {
 	}
 	out = append(out, chain)
 	return out
+}
+
+// consumerLookupNamespaces returns the sorted, deduplicated namespaces under
+// which a consumer should be indexed for reverse internals_visible_to lookup.
+func consumerLookupNamespaces(ci consumerInfo) []string {
+	seen := map[string]bool{}
+	var out []string
+	add := func(ns string) {
+		if ns != "" && !seen[ns] {
+			seen[ns] = true
+			out = append(out, ns)
+		}
+	}
+	for _, u := range ci.usings {
+		add(u)
+		// Also index parentNamespace(u) to catch `using static Ns.Type;`
+		// or `using Alias = Ns.Type;`.
+		add(parentNamespace(u))
+	}
+	for _, scope := range enclosingScopes(ci.own) {
+		add(scope)
+	}
+	for _, ref := range ci.refs {
+		if parent := parentNamespace(ref); parent != "" {
+			for _, prefix := range dotPrefixes(parent) {
+				add(prefix)
+			}
+		}
+	}
+	sort.Strings(out)
+	return out
+}
+
+// consumerReferencesInternalType reports whether ci references the internal
+// type ns.typeName via its using directives, own/enclosing namespaces, or a
+// relative/fully-qualified name.
+func consumerReferencesInternalType(ci consumerInfo, ns, typeName string) bool {
+	fq := ns + "." + typeName
+
+	// Direct match via `using static Ns.Type;` or `using Alias = Ns.Type;`.
+	directVisible := false
+	for _, u := range ci.usings {
+		if u == fq {
+			return true
+		}
+		if u == ns {
+			directVisible = true
+		}
+	}
+
+	// Build candidate prefixes in ci.refs that would resolve to ns.typeName.
+	wantPrefixes := map[string]bool{
+		fq: true,
+	}
+	for alias, target := range ci.aliases {
+		if target == ns {
+			wantPrefixes[alias+"."+typeName] = true
+		}
+	}
+	for _, scope := range enclosingScopes(ci.own) {
+		if scope == "" {
+			continue
+		}
+		if scope == ns {
+			directVisible = true
+		} else if strings.HasPrefix(ns, scope+".") {
+			relNs := strings.TrimPrefix(ns, scope+".")
+			wantPrefixes[relNs+"."+typeName] = true
+		}
+	}
+	if directVisible {
+		wantPrefixes[typeName] = true
+	}
+
+	for _, ref := range ci.refs {
+		for _, prefix := range dotPrefixes(ref) {
+			if wantPrefixes[prefix] {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // hasNamespacePrefix reports whether ns equals base or is a dot-delimited

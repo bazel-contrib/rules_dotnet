@@ -998,3 +998,50 @@ func TestGenerateSkipsUnnamespacedTypesFromTypesKey(t *testing.T) {
 		t.Errorf("typesKey for unnamespaced binary = %v, want empty", types)
 	}
 }
+
+func TestGenerateSetsInternalTypesAndConsumerInfo(t *testing.T) {
+	l, c, dir := setupLang(t, net10Directive, "src", "src/utilities", "src/global")
+
+	utilDir := filepath.Join(dir, "src", "utilities")
+	writeFile(t, utilDir, "EmbeddedResourceReader.cs", "namespace Agrifirm.Common.Mail.Utilities;\ninternal static class EmbeddedResourceReader {}\n")
+	writeFile(t, utilDir, "ReaderTests.cs", "using NUnit.Framework;\nnamespace Agrifirm.Common.Mail.Utilities.Tests;\n[TestFixture]\npublic class ReaderTests { public void T() { _ = nameof(EmbeddedResourceReader); } }\n")
+
+	res := generate(t, l, c, dir, "src/utilities", "EmbeddedResourceReader.cs", "ReaderTests.cs")
+	if len(res.Gen) != 2 || len(res.Imports) != 2 {
+		t.Fatalf("GenerateRules() = %d rules, %d imports; want 2, 2", len(res.Gen), len(res.Imports))
+	}
+	libImp := res.Imports[0].(resolveInput)
+	wantInternal := []string{"Agrifirm.Common.Mail.Utilities.EmbeddedResourceReader"}
+	if !reflect.DeepEqual(libImp.internalTypes, wantInternal) {
+		t.Errorf("lib internalTypes = %v, want %v", libImp.internalTypes, wantInternal)
+	}
+	if _, ok := res.Gen[0].PrivateAttr(consumerInfoKey).(consumerInfo); !ok {
+		t.Errorf("library missing consumerInfoKey private attr")
+	}
+	testCI, ok := res.Gen[1].PrivateAttr(consumerInfoKey).(consumerInfo)
+	if !ok {
+		t.Fatalf("test rule missing consumerInfoKey private attr")
+	}
+	if !reflect.DeepEqual(testCI.usings, []string{"NUnit.Framework"}) {
+		t.Errorf("test consumerInfo.usings = %v, want [NUnit.Framework]", testCI.usings)
+	}
+
+	globalDir := filepath.Join(dir, "src", "global")
+	writeFile(t, globalDir, "GlobalOnly.cs", "internal class GlobalOnly {}\n")
+	globalRes := generate(t, l, c, dir, "src/global", "GlobalOnly.cs")
+	if got := globalRes.Imports[0].(resolveInput).internalTypes; len(got) != 0 {
+		t.Errorf("unnamespaced internalTypes = %v, want empty", got)
+	}
+}
+
+func TestGeneratePartialTypePublicInOneFileIsNotInternal(t *testing.T) {
+	l, c, dir := setupLang(t, net10Directive, "src", "src/part")
+	pkgDir := filepath.Join(dir, "src", "part")
+	writeFile(t, pkgDir, "Foo.A.cs", "namespace Acme.Part;\npublic partial class Foo {}\n")
+	writeFile(t, pkgDir, "Foo.B.cs", "namespace Acme.Part;\npartial class Foo {}\n")
+
+	res := generate(t, l, c, dir, "src/part", "Foo.A.cs", "Foo.B.cs")
+	if got := res.Imports[0].(resolveInput).internalTypes; len(got) != 0 {
+		t.Errorf("internalTypes for public partial class = %v, want empty", got)
+	}
+}

@@ -34,7 +34,7 @@ func NewLanguage() language.Language {
 var csharpKindInfo = rule.KindInfo{
 	NonEmptyAttrs:  map[string]bool{"srcs": true, "deps": true},
 	MergeableAttrs: map[string]bool{"srcs": true},
-	ResolveAttrs:   map[string]bool{"deps": true},
+	ResolveAttrs:   map[string]bool{"deps": true, "internals_visible_to": true},
 }
 
 // csharpKinds are all rule kinds this extension generates or maintains.
