@@ -1,0 +1,25 @@
+load(
+    "//dotnet:defs.bzl",
+    "csharp_nunit_test",
+    "fsharp_library",
+)
+
+fsharp_library(
+    name = "pdbpath",
+    srcs = ["pdbpath.fs"],
+    target_frameworks = ["net6.0"],
+    deps = [
+        "@paket.rules_dotnet_dev_nuget_packages//fsharp.core",
+    ],
+)
+
+csharp_nunit_test(
+    name = "PdbPathTest",
+    srcs = ["PdbPathTest.cs"],
+    data = [":pdbpath"],
+    envs = {
+        "PDBPATH_FILES": "$(rootpaths :pdbpath)",
+    },
+    nullable = "enable",
+    target_frameworks = ["net8.0"],
+)
